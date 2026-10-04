@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: domain
 canonical: true
-last_reviewed: 2026-09-27
+last_reviewed: 2026-10-04
 publication: primary
 ---
 
@@ -105,9 +105,9 @@ promotion-delta products from immutable composition snapshots. It cannot mutate
 or persist canonical composition state.
 
 Editor and Draw structure project through `ui_composition`. Current editor
-structural commands commit through the composition transaction path; legacy
-`WorkspaceState` structures remain compatibility/test or migration inputs where
-current source still retains them, not a parallel live structural authority.
+structural commands commit through the composition transaction path; the retired
+Editor `WorkspaceState` structural predecessor has been removed rather than
+retained as a parallel compatibility authority.
 `ui_surface` remains a temporary predecessor compatibility boundary rather than a
 second structural target owner. ADR 0013 still requires its deletion after each
 maintained responsibility is mapped to RunenUI or the actual Runenwerk app/domain

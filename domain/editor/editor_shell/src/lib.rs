@@ -137,8 +137,3 @@ pub use workspace::{
     tool_surface_retention_class_from_registry_or_legacy, tool_surface_session_retention_class,
     viewport_embed_slot_for, workspace_profile_ref_for_id,
 };
-#[cfg(test)]
-pub(crate) use workspace::{
-    WorkspaceMutation, WorkspaceState, WorkspaceStateError, project_workspace_for_shell,
-    reduce_workspace,
-};

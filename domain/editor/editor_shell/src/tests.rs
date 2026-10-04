@@ -348,37 +348,6 @@ fn material_resource_binding_diagnostics_are_app_neutral_view_models() {
 }
 
 #[test]
-fn reducer_normal_mutations_do_not_reintroduce_tool_surface_kind_authority_fields() {
-    let source = include_str!("workspace/reducer.rs");
-    let enum_block = source
-        .split("pub(crate) enum WorkspaceMutation {")
-        .nth(1)
-        .and_then(|tail| tail.split("impl WorkspaceMutation").next())
-        .expect("WorkspaceMutation enum should be followed by impl block");
-
-    for forbidden in [
-        "tool_surface_kind: ToolSurfaceKind",
-        "new_tool_surface_kind: ToolSurfaceKind",
-        "locked_tool_surface_kind: Option<ToolSurfaceKind>",
-        "ReplacePanelToolSurfaceKind",
-        "LockTabStackAreaType",
-    ] {
-        assert!(
-            !enum_block
-                .lines()
-                .map(str::trim)
-                .any(|line| line == forbidden),
-            "normal reducer mutations must not carry ToolSurfaceKind authority field `{forbidden}`; use stable keys"
-        );
-    }
-
-    assert!(enum_block.contains("stable_surface_key: ToolSurfaceStableKey"));
-    assert!(enum_block.contains("locked_stable_surface_key: Option<ToolSurfaceStableKey>"));
-    assert!(!source.contains("add_panel_tab_legacy"));
-    assert!(!source.contains("replace_panel_tool_surface_kind_legacy"));
-}
-
-#[test]
 fn tool_surface_kind_usage_is_boundary_only_guard() {
     let legacy_source = include_str!("tool_suite/legacy.rs");
     assert!(legacy_source.contains("explicit compatibility boundary"));
@@ -389,11 +358,9 @@ fn tool_surface_kind_usage_is_boundary_only_guard() {
     tool_surface_kind_is_legacy_boundary_only_guard();
     panel_kind_is_structural_not_surface_identity_guard();
     surface_provider_request_requires_stable_key_guard();
-    v5_persistence_uses_stable_key_primary_identity_guard();
     tool_surface_kind_declaration_is_legacy_boundary_guard();
     public_tool_surface_kind_apis_are_legacy_labeled_guard();
     normal_tool_surface_state_does_not_use_tool_surface_kind_authority_guard();
-    normal_workspace_mutations_do_not_use_tool_surface_kind_authority_guard();
     profile_default_surfaces_do_not_use_tool_surface_kind_authority_guard();
     provider_request_does_not_require_tool_surface_kind_guard();
     shell_menu_actions_are_stable_key_only();
@@ -405,7 +372,6 @@ fn tool_surface_kind_usage_is_boundary_only_guard() {
 #[test]
 fn stable_key_authority_is_end_to_end_guard() {
     let state_source = include_str!("workspace/state.rs");
-    let reducer_source = include_str!("workspace/reducer.rs");
     let profile_source = include_str!("workspace/profile.rs");
     let projection_source = include_str!("composition/structural/projection.rs");
     let app_provider_source = include_str!(
@@ -422,16 +388,6 @@ fn stable_key_authority_is_end_to_end_guard() {
     );
     assert!(tool_surface_state.contains("pub stable_surface_key: ToolSurfaceStableKey"));
     assert!(!tool_surface_state.contains("pub tool_surface_kind: ToolSurfaceKind"));
-
-    let mutation_enum = source_block_between(
-        reducer_source,
-        "pub(crate) enum WorkspaceMutation {",
-        "impl WorkspaceMutation",
-        "WorkspaceMutation",
-    );
-    assert!(mutation_enum.contains("stable_surface_key: ToolSurfaceStableKey"));
-    assert!(mutation_enum.contains("locked_stable_surface_key: Option<ToolSurfaceStableKey>"));
-    assert!(!mutation_enum.contains("tool_surface_kind: ToolSurfaceKind"));
 
     let profile_struct = source_block_between(
         profile_source,
@@ -450,7 +406,6 @@ fn stable_key_authority_is_end_to_end_guard() {
     );
     assert!(projection_source.contains("active_stable_surface_key: Some(stable_key)"));
     surface_provider_request_requires_stable_key_guard();
-    v5_persistence_uses_stable_key_primary_identity_guard();
 
     assert!(app_provider_source.contains("composition_surface_provider_requests"));
     assert!(app_provider_source.contains("mounted_unit_id: mounted_unit.id"));
@@ -468,9 +423,7 @@ fn stable_key_authority_is_end_to_end_guard() {
 #[test]
 fn tool_surface_kind_is_legacy_boundary_only_guard() {
     let legacy_source = include_str!("tool_suite/legacy.rs");
-    let persisted_source = include_str!("workspace/persisted.rs");
     let definition_form_source = include_str!("workspace/definition_form.rs");
-    let reducer_source = include_str!("workspace/reducer.rs");
     let profile_source = include_str!("workspace/profile.rs");
     let controller_source =
         include_str!("../../../../apps/runenwerk_editor/src/shell/controller.rs");
@@ -484,18 +437,8 @@ fn tool_surface_kind_is_legacy_boundary_only_guard() {
         legacy_source.contains("The reverse stable-key to `ToolSurfaceKind` bridge exists only")
     );
 
-    assert!(persisted_source.contains("pub fn from_persisted_v1"));
-    assert!(persisted_source.contains("pub fn from_persisted_v2"));
-    assert!(persisted_source.contains("pub fn from_persisted_v3"));
-    assert!(persisted_source.contains("pub fn from_persisted_v4"));
-    assert!(persisted_source.contains("pub fn from_persisted_v5"));
-    assert!(persisted_source.contains("legacy_tool_surface_kind_for_legacy_persistence"));
-    assert!(persisted_source.contains("persisted_v5_stable_surface_key_for_surface"));
-
-    assert!(definition_form_source.contains("authored_legacy_surface_key_still_resolves"));
-    assert!(definition_form_source.contains("ToolSurfaceState::new_with_stable_key"));
-    assert!(!reducer_source.contains("add_panel_tab_legacy"));
-    assert!(!reducer_source.contains("replace_panel_tool_surface_kind_legacy"));
+    assert!(definition_form_source.contains("AuthoredToolSurfaceResolution::Legacy"));
+    assert!(definition_form_source.contains("resolve_authored_tool_surface_reference"));
     assert!(profile_source.contains("pub fn new_legacy"));
 
     assert!(controller_source.contains("mounted_unit_id"));
@@ -541,54 +484,6 @@ fn surface_provider_request_requires_stable_key_guard() {
     assert!(request_struct.contains("pub surface_route: Option<ToolSurfaceRoute>"));
     assert!(!request_struct.contains("pub tool_surface_kind: ToolSurfaceKind"));
     assert!(source.contains("pub fn stable_key(&self) -> &ToolSurfaceStableKey"));
-}
-
-#[test]
-fn v5_persistence_uses_stable_key_primary_identity_guard() {
-    let source = include_str!("workspace/persisted.rs");
-    let persisted_surface = source_block_between(
-        source,
-        "pub struct PersistedToolSurfaceStateV5 {",
-        "pub struct PersistedViewportSettingsV1",
-        "PersistedToolSurfaceStateV5",
-    );
-    let persisted_tab_stack = source_block_between(
-        source,
-        "pub struct PersistedTabStackStateV5 {",
-        "pub struct PersistedPanelInstanceStateV1",
-        "PersistedTabStackStateV5",
-    );
-    let to_persisted_v5 = source_block_between(
-        source,
-        "pub fn to_persisted_v5(&self) -> Result<PersistedWorkspaceStateV5, WorkspaceStateError> {",
-        "pub fn to_persisted_v4",
-        "to_persisted_v5",
-    );
-    let from_persisted_v5 = source_block_between(
-        source,
-        "pub fn from_persisted_v5(",
-        "fn persisted_v5_stable_surface_key_for_surface",
-        "from_persisted_v5",
-    );
-
-    assert!(persisted_surface.contains("pub stable_surface_key: String"));
-    assert!(
-        persisted_surface
-            .contains("pub legacy_tool_surface_kind: Option<PersistedToolSurfaceKindV2>")
-    );
-    assert!(!persisted_surface.contains("pub tool_surface_kind: PersistedToolSurfaceKindV2"));
-    assert!(persisted_tab_stack.contains("pub locked_stable_surface_key: Option<String>"));
-    assert!(
-        persisted_tab_stack
-            .contains("pub legacy_locked_tool_surface_kind: Option<PersistedToolSurfaceKindV2>")
-    );
-    assert!(!persisted_tab_stack.contains("pub locked_tool_surface_kind: Option"));
-    assert!(to_persisted_v5.contains("persisted_v5_stable_surface_key_for_surface(surface)?"));
-    assert!(to_persisted_v5.contains("stable_surface_key: stable_surface_key.to_string()"));
-    assert!(to_persisted_v5.contains("locked_stable_surface_key: stack"));
-    assert!(from_persisted_v5.contains("persisted_v5_tool_surface_identity"));
-    assert!(from_persisted_v5.contains("persisted_v5_tab_stack_lock_identity"));
-    assert!(from_persisted_v5.contains("ToolSurfaceState::new_with_stable_key"));
 }
 
 #[test]
@@ -644,11 +539,6 @@ fn normal_tool_surface_state_does_not_use_tool_surface_kind_authority_guard() {
     assert!(source.contains("pub fn new_with_stable_key"));
     assert!(!source.contains("pub fn new_legacy"));
     assert!(source.contains("pub panel_kind: PanelKind"));
-}
-
-#[test]
-fn normal_workspace_mutations_do_not_use_tool_surface_kind_authority_guard() {
-    reducer_normal_mutations_do_not_reintroduce_tool_surface_kind_authority_fields();
 }
 
 #[test]
