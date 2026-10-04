@@ -11,7 +11,9 @@ pub use evidence::EditorLabProductPathEvidenceCapture;
 use operations::*;
 pub use project_io::{DefinitionApplyPreview, EditorDefinitionExportPackage};
 use recipes::*;
-use session::{EditorLabOperationHistory, operation_history_document_snapshot};
+use session::EditorLabOperationHistory;
+#[cfg(test)]
+use session::operation_history_document_snapshot;
 pub use session::{EditorLabOperationHistoryEntry, EditorLabOperationHistorySnapshot};
 
 use anyhow::{Context, Result};
