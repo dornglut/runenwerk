@@ -149,9 +149,7 @@ impl SelfAuthoringWorkspaceState {
     }
 }
 
-pub(super) fn operation_history_document_snapshot(
-    document: &EditorDefinitionDocument,
-) -> String {
+pub(super) fn operation_history_document_snapshot(document: &EditorDefinitionDocument) -> String {
     ron::ser::to_string_pretty(document, PrettyConfig::default())
         .unwrap_or_else(|error| format!("snapshot serialization failed: {error}"))
 }
