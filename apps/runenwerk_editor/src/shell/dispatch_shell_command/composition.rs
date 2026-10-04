@@ -94,9 +94,7 @@ pub(super) fn commit_tab_drop(
     let unit = shell_state
         .mounted_unit_id_for_panel(panel_instance_id)
         .ok_or_else(|| {
-            EditorMutationError::runtime_rejected(
-                "docked panel has no mounted composition unit",
-            )
+            EditorMutationError::runtime_rejected("docked panel has no mounted composition unit")
         })?;
     let source_region = shell_state
         .region_id_for_tab_stack(source_tab_stack_id)
@@ -140,8 +138,7 @@ pub(super) fn commit_composition_dock(
             "stale editor composition docking projection",
         ));
     }
-    if intent.source_revision != shell_state.composition_runtime().composition().revision()
-    {
+    if intent.source_revision != shell_state.composition_runtime().composition().revision() {
         return Err(EditorMutationError::runtime_rejected(
             "stale editor composition docking revision",
         ));
@@ -211,11 +208,8 @@ pub(super) fn close_panel_tab(
     panel_instance_id: PanelInstanceId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = require_composition_shell_state(
-        shell_state.as_deref_mut(),
-        projection_epoch,
-        "close tab",
-    )?;
+    let shell_state =
+        require_composition_shell_state(shell_state.as_deref_mut(), projection_epoch, "close tab")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let unit = composition_unit_for_panel(shell_state, panel_instance_id)?;
     require_unit_source(shell_state, unit, stack)?;

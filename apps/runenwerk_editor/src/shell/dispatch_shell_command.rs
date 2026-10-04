@@ -1392,7 +1392,6 @@ fn default_scene_file_path() -> PathBuf {
     PathBuf::from(DEFAULT_EDITOR_SCENE_PATH)
 }
 
-
 fn dispatch_toolbar_command(
     app: &mut RunenwerkEditorApp,
     shell_state: Option<&mut RunenwerkEditorShellState>,
