@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-28
+last_reviewed: 2026-10-04
 publication: primary
 related_designs:
   - ../../design/accepted/sdf-first-field-world-platform-design.md
@@ -71,8 +71,8 @@ Current implemented baseline:
 - Editor MVP acceptance is closed in `docs-site/src/content/docs/apps/runenwerk-editor/execution-priority-checklist.md`.
 - Workspace profile identity exists in `domain/editor/editor_shell/src/workspace/profile.rs::WorkspaceProfile`.
 - Atomic composition-bundle persistence for editor layouts is owned by `apps/runenwerk_editor/src/persistence/workspace_layout.rs` through `CompositionBundleRepository`; legacy V1-V5 workspace files are unsupported compatibility input.
-- Structural composition authority is `domain/ui/ui_composition::CompositionState`; `RunenwerkEditorShellState` installs a validated `EditorCompositionRuntime`. `WorkspaceState` is compatibility/import/test input, not live structural authority.
-- Ordinary structural tab/stack/layout actions commit through the `ui_composition` transaction path; legacy `WorkspaceMutation`/`reduce_workspace` remain compatibility/test evidence where current source still requires them.
+- Structural composition authority is `domain/ui/ui_composition::CompositionState`; `RunenwerkEditorShellState` installs a validated `EditorCompositionRuntime`. The retired `WorkspaceState` graph is no longer retained as Editor structural compatibility or test authority.
+- Ordinary structural tab/stack/layout actions commit through the `ui_composition` transaction path. The retired `WorkspaceMutation`/`reduce_workspace` predecessor path has been deleted rather than preserved as a parallel authority.
 - Provider DTOs exist in `domain/editor/editor_shell/src/surface_provider.rs`.
 - Concrete app providers exist in `apps/runenwerk_editor/src/shell/providers/mod.rs::EditorSurfaceProviderRegistry`.
 - Retained UI substrate and widgets exist in `domain/ui/*`, including select, tree, table, tabs, toggle, numeric input, text input, scroll, split, and viewport embed.
@@ -90,7 +90,7 @@ Current implemented baseline:
 Current post-M3 gaps:
 
 - M1 implementation seams are closed, while later ADR-0025 normalization has narrowed the remaining predecessor-shaped `editor_core`: `DocumentKind` still carries the central taxonomy and `EditorSession` now retains ordered document tabs plus active switching only. Scene selection/history/persistence, dormant session mode authority, duplicate app-local document-tab runtime state, provider `DocumentId` identity, and session-local document-compatibility activation authority have been removed or moved to their explicit owners. The surviving `DocumentKind` provider/history routing is bounded migration residue. #737 is completed with a no-cut-yet disposition: no generic `EditorBinding` / `ActivationScope`, replacement taxonomy, or standalone RunenEditor extraction is justified until real multi-scope consumer pressure proves owner-defined binding/rebinding, immutable per-invocation scope capture, scope-specific history/lifecycle behavior, and stale-binding rejection.
-- M2 shell seams are closed as implementation history: tab chrome, editor type switching, new-tab allocation, close/split/duplicate/reset area commands, dynamic split composition, projected-host split resizing, and workspace layout persistence have automated coverage. Current structural mutation and persistence authority has since cut over to `ui_composition`; legacy workspace contracts remain compatibility/test inputs.
+- M2 shell seams are closed as implementation history: tab chrome, editor type switching, new-tab allocation, close/split/duplicate/reset area commands, dynamic split composition, projected-host split resizing, and workspace layout persistence have automated coverage. Current structural mutation and persistence authority has since cut over to `ui_composition`; the retired workspace-state predecessor implementation has been deleted.
 - M3 scene-authoring seams are closed: scene command intents cover child creation, subtree duplication, batch delete, SDF primitive creation, transform set/reset, and component add/remove; rotate/scale viewport tools, transform preview, retained outliner tree rows, common reflected inspector editing, SDF authoring DTOs, and normalized save/load paths have focused coverage.
 - The M3.5 UI definition/formation closeout is implemented: `domain/ui/ui_definition`, `domain/editor/editor_definition`, checked-in RON fixtures under `assets/editor/ui/`, retained formation, inert route/embed products, toolbar/menu fixture formation, normal shell chrome formation, common provider surface fixture formation, and app-owned fixture validation exist. Provider data, viewport overlays, editor mutations, and route execution remain outside `ui_definition`.
 - The M4 asset foundation exists: `domain/asset` owns asset ids, taxonomy, source/artifact descriptors, dependency graph, deterministic import plans, diagnostics, and ratification; `ProjectFileV2` migration exists in `domain/editor/editor_persistence/src/project_file.rs`; `world_sdf` owns field-product descriptors and ratification; `world_ops` owns generic product invalidation/build helpers; and the editor app owns initial catalog runtime, import jobs, field-product jobs, and first Asset Browser/Import Inspector/Field Product Viewer/SDF Brush Browser providers. M5 now adds external runtime preview, project-owned reload status classification, world_sdf runtime intake, and restart boundaries for the existing product families.

@@ -4,8 +4,6 @@ mod extension;
 mod fresh_target;
 mod identity;
 mod layout_formation;
-#[cfg(test)]
-mod legacy_import;
 mod projection;
 mod runtime;
 #[cfg(test)]

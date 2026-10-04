@@ -14,17 +14,7 @@ use crate::{
     tool_suite::{ProfileRef, ToolSurfaceRegistry, ToolSurfaceStableKey},
 };
 
-#[cfg(test)]
-use super::definition_form::{
-    WorkspaceDefinitionFormationError, form_workspace_state_from_definition_with_registry,
-};
 use super::state::{WorkspaceDefaultToolSurface, WorkspaceSurfaceIdentityError};
-#[cfg(test)]
-use super::state::{
-    WorkspaceState, WorkspaceStateError, WorkspaceToolSurfaceRegistryCompatibilityReport,
-};
-#[cfg(test)]
-use crate::{PanelHostKind, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceSplitAxis};
 
 #[id]
 pub struct WorkspaceProfileId;
@@ -81,37 +71,6 @@ impl WorkspaceLayoutTemplate {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn build_workspace_state(
-        self,
-        workspace_id: WorkspaceId,
-        allocator: &mut WorkspaceIdentityAllocator,
-    ) -> WorkspaceState {
-        match self {
-            Self::Scene | Self::CurrentFixedEditor => {
-                WorkspaceState::bootstrap_current_layout(workspace_id, allocator)
-            }
-            Self::Modelling => WorkspaceState::bootstrap_modelling_layout(workspace_id, allocator),
-            Self::EditorDesign => {
-                WorkspaceState::bootstrap_editor_design_layout(workspace_id, allocator)
-            }
-            Self::ToolWorkspace => {
-                WorkspaceState::bootstrap_tool_workspace_layout(workspace_id, allocator, &[])
-            }
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn default_graph_matches(self, workspace_state: &WorkspaceState) -> bool {
-        match self {
-            Self::Scene | Self::CurrentFixedEditor => {
-                scene_derived_default_graph_matches(workspace_state)
-            }
-            Self::Modelling => modelling_default_graph_matches(workspace_state),
-            Self::EditorDesign => workspace_state.validate_integrity().is_ok(),
-            Self::ToolWorkspace => workspace_state.validate_integrity().is_ok(),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -182,21 +141,6 @@ pub enum WorkspaceProfileRegistryBackedBuildError {
         profile_id: WorkspaceProfileId,
         tool_surface_kind: ToolSurfaceKind,
     },
-    #[cfg(test)]
-    WorkspaceCompatibility {
-        profile_id: WorkspaceProfileId,
-        report: Box<WorkspaceToolSurfaceRegistryCompatibilityReport>,
-    },
-    #[cfg(test)]
-    WorkspaceState {
-        profile_id: WorkspaceProfileId,
-        error: Box<WorkspaceStateError>,
-    },
-    #[cfg(test)]
-    WorkspaceDefinitionFormation {
-        profile_id: WorkspaceProfileId,
-        error: Box<WorkspaceDefinitionFormationError>,
-    },
     CompositionFormation {
         profile_id: WorkspaceProfileId,
         error: Box<crate::EditorCompositionRejection>,
@@ -235,27 +179,9 @@ impl fmt::Display for WorkspaceProfileRegistryBackedBuildError {
                 "workspace profile {} references {tool_surface_kind:?} without a safe stable-key mapping",
                 profile_id.raw()
             ),
-            #[cfg(test)]
-            Self::WorkspaceCompatibility { profile_id, .. } => write!(
-                f,
-                "workspace profile {} produced a workspace that is not compatible with the tool-surface registry",
-                profile_id.raw()
-            ),
-            #[cfg(test)]
-            Self::WorkspaceState { profile_id, error } => write!(
-                f,
-                "workspace profile {} failed to build workspace state: {error}",
-                profile_id.raw()
-            ),
-            #[cfg(test)]
-            Self::WorkspaceDefinitionFormation { profile_id, error } => write!(
-                f,
-                "workspace profile {} failed to form authored workspace layout: {error:?}",
-                profile_id.raw()
-            ),
             Self::CompositionFormation { profile_id, error } => write!(
                 f,
-                "workspace profile {} failed one-way composition import: {error}",
+                "workspace profile {} failed composition formation: {error}",
                 profile_id.raw()
             ),
         }
@@ -328,91 +254,6 @@ impl WorkspaceProfile {
         ))
     }
 
-    #[cfg(test)]
-    pub(crate) fn build_default_workspace_state(
-        &self,
-        workspace_id: WorkspaceId,
-        allocator: &mut WorkspaceIdentityAllocator,
-    ) -> WorkspaceState {
-        self.try_build_default_workspace_state(workspace_id, allocator)
-            .expect("compiled-in workspace profile default surfaces should keep C3 legacy metadata")
-    }
-
-    #[cfg(test)]
-    pub(crate) fn try_build_default_workspace_state(
-        &self,
-        workspace_id: WorkspaceId,
-        allocator: &mut WorkspaceIdentityAllocator,
-    ) -> Result<WorkspaceState, WorkspaceStateError> {
-        if self.default_layout_template == WorkspaceLayoutTemplate::ToolWorkspace {
-            return WorkspaceState::bootstrap_tool_workspace_layout_with_stable_surfaces(
-                workspace_id,
-                allocator,
-                &self.default_surfaces,
-            );
-        }
-        Ok(self
-            .default_layout_template
-            .build_workspace_state(workspace_id, allocator))
-    }
-
-    #[cfg(test)]
-    pub(crate) fn build_default_workspace_state_with_registry(
-        &self,
-        workspace_id: WorkspaceId,
-        allocator: &mut WorkspaceIdentityAllocator,
-        registry: &ToolSurfaceRegistry,
-    ) -> Result<WorkspaceState, WorkspaceProfileRegistryBackedBuildError> {
-        self.require_tool_surface_registry_compatibility(registry)?;
-        let workspace = match &self.layout_source {
-            WorkspaceProfileLayoutSource::Template(_) => self
-                .try_build_default_workspace_state(workspace_id, allocator)
-                .map_err(
-                    |error| WorkspaceProfileRegistryBackedBuildError::WorkspaceState {
-                        profile_id: self.id,
-                        error: Box::new(error),
-                    },
-                )?,
-            WorkspaceProfileLayoutSource::AuthoredLayout { layout, .. } => {
-                form_workspace_state_from_definition_with_registry(
-                    layout,
-                    workspace_id,
-                    allocator,
-                    registry,
-                )
-                .map_err(|error| {
-                    WorkspaceProfileRegistryBackedBuildError::WorkspaceDefinitionFormation {
-                        profile_id: self.id,
-                        error: Box::new(error),
-                    }
-                })?
-            }
-        };
-        let report = workspace.validate_tool_surface_registry_compatibility(registry);
-        if report.is_fully_compatible() {
-            Ok(workspace)
-        } else {
-            Err(
-                WorkspaceProfileRegistryBackedBuildError::WorkspaceCompatibility {
-                    profile_id: self.id,
-                    report: Box::new(report),
-                },
-            )
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn required_tool_surfaces_are_present(
-        &self,
-        workspace_state: &WorkspaceState,
-    ) -> bool {
-        self.default_surfaces.iter().all(|required_surface| {
-            workspace_state.tool_surfaces().any(|surface| {
-                surface.stable_surface_key() == required_surface.stable_surface_key()
-            })
-        })
-    }
-
     pub fn validate_tool_surface_registry_compatibility(
         &self,
         registry: &ToolSurfaceRegistry,
@@ -468,118 +309,6 @@ impl WorkspaceProfile {
         }
         Ok(())
     }
-}
-
-#[cfg(test)]
-fn scene_derived_default_graph_matches(workspace_state: &WorkspaceState) -> bool {
-    if workspace_state.validate_integrity().is_err() {
-        return false;
-    }
-
-    let Some(root) = split_host_with_axis(
-        workspace_state,
-        workspace_state.root_host_id(),
-        WorkspaceSplitAxis::Vertical,
-    ) else {
-        return false;
-    };
-    let Some(left_right) = split_host_with_axis(
-        workspace_state,
-        root.first_child,
-        WorkspaceSplitAxis::Horizontal,
-    ) else {
-        return false;
-    };
-    let Some(right_sidebar) = split_host_with_axis(
-        workspace_state,
-        left_right.second_child,
-        WorkspaceSplitAxis::Vertical,
-    ) else {
-        return false;
-    };
-
-    tab_stack_panel_kinds_by_host(workspace_state, left_right.first_child)
-        == Some(vec![PanelKind::Viewport])
-        && tab_stack_panel_kinds_by_host(workspace_state, right_sidebar.first_child)
-            == Some(vec![PanelKind::Outliner, PanelKind::EntityTable])
-        && tab_stack_panel_kinds_by_host(workspace_state, right_sidebar.second_child)
-            == Some(vec![PanelKind::Inspector])
-        && tab_stack_panel_kinds_by_host(workspace_state, root.second_child)
-            == Some(vec![PanelKind::Console])
-}
-
-#[cfg(test)]
-fn modelling_default_graph_matches(workspace_state: &WorkspaceState) -> bool {
-    if workspace_state.validate_integrity().is_err() {
-        return false;
-    }
-
-    let Some(root) = split_host_with_axis(
-        workspace_state,
-        workspace_state.root_host_id(),
-        WorkspaceSplitAxis::Vertical,
-    ) else {
-        return false;
-    };
-    let Some(left_center_right) = split_host_with_axis(
-        workspace_state,
-        root.first_child,
-        WorkspaceSplitAxis::Horizontal,
-    ) else {
-        return false;
-    };
-    let Some(center_right) = split_host_with_axis(
-        workspace_state,
-        left_center_right.second_child,
-        WorkspaceSplitAxis::Horizontal,
-    ) else {
-        return false;
-    };
-
-    tab_stack_panel_kinds_by_host(workspace_state, left_center_right.first_child)
-        == Some(vec![PanelKind::Outliner, PanelKind::EntityTable])
-        && tab_stack_panel_kinds_by_host(workspace_state, center_right.first_child)
-            == Some(vec![PanelKind::Viewport])
-        && tab_stack_panel_kinds_by_host(workspace_state, center_right.second_child)
-            == Some(vec![PanelKind::Inspector])
-        && tab_stack_panel_kinds_by_host(workspace_state, root.second_child)
-            == Some(vec![PanelKind::Console])
-}
-
-#[cfg(test)]
-fn split_host_with_axis(
-    workspace_state: &WorkspaceState,
-    host_id: crate::PanelHostId,
-    axis: WorkspaceSplitAxis,
-) -> Option<crate::SplitHostState> {
-    let host = workspace_state.host(host_id)?;
-    match host.kind {
-        PanelHostKind::SplitHost(split) if split.axis == axis => Some(split),
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-fn tab_stack_panel_kinds_by_host(
-    workspace_state: &WorkspaceState,
-    host_id: crate::PanelHostId,
-) -> Option<Vec<PanelKind>> {
-    let host = workspace_state.host(host_id)?;
-    let PanelHostKind::TabStackHost(tab_host) = host.kind else {
-        return None;
-    };
-    let stack = workspace_state.tab_stack(tab_host.tab_stack_id)?;
-    Some(
-        stack
-            .ordered_panels
-            .iter()
-            .filter_map(|panel_id| {
-                let panel = workspace_state.panel(*panel_id)?;
-                panel.active_tool_surface?;
-                Some(panel.panel_kind)
-            })
-            .collect(),
-    )
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1160,51 +889,6 @@ mod tests {
     }
 
     #[test]
-    fn stable_key_profile_builder_preserves_layout_shape() {
-        let registry = default_workspace_profile_registry();
-        let profile = registry
-            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
-            .expect("material profile should exist");
-        let mut stable_allocator = WorkspaceIdentityAllocator::new();
-        let stable_workspace_id = stable_allocator.allocate_workspace_id();
-
-        let stable_workspace =
-            profile.build_default_workspace_state(stable_workspace_id, &mut stable_allocator);
-
-        let mut actual = workspace_surface_order(&stable_workspace);
-        let mut expected = profile
-            .default_surfaces
-            .iter()
-            .map(|surface| surface.stable_surface_key().as_str().to_string())
-            .collect::<Vec<_>>();
-        actual.sort();
-        expected.sort();
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn stable_key_profile_builder_populates_tool_surface_state_authority() {
-        let registry = default_workspace_profile_registry();
-        let profile = registry
-            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
-            .expect("material profile should exist");
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-
-        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
-
-        let mut actual = workspace_surface_order(&workspace);
-        let mut expected = profile
-            .default_surfaces
-            .iter()
-            .map(|surface| surface.stable_surface_key().as_str().to_string())
-            .collect::<Vec<_>>();
-        actual.sort();
-        expected.sort();
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
     fn default_profile_all_stable_keys_registered() {
         let profile_registry = default_workspace_profile_registry();
         let tool_suite_registry = full_saveable_registry();
@@ -1225,31 +909,29 @@ mod tests {
     }
 
     #[test]
-    fn registry_free_legacy_profile_builder_is_compatibility_only() {
+    fn legacy_profile_constructor_maps_legacy_kinds_to_stable_defaults() {
         let profile = WorkspaceProfile::new_legacy(
-            TEXTURE_WORKSPACE_PROFILE_ID,
-            "Textures",
-            WorkspaceLayoutTemplate::ToolWorkspace,
-            vec![
-                ToolSurfaceKind::AssetBrowser,
-                ToolSurfaceKind::TextureViewer,
-                ToolSurfaceKind::Console,
-            ],
+            SCENE_WORKSPACE_PROFILE_ID,
+            "Legacy",
+            WorkspaceLayoutTemplate::Scene,
+            vec![ToolSurfaceKind::Outliner, ToolSurfaceKind::Inspector],
             vec![EDIT_MODE_ID],
-            vec![DocumentKind::ProceduralTexture],
+            vec![DocumentKind::Scene],
         )
-        .expect("legacy profile fixture should map stable keys");
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
+        .expect("legacy profile should map known legacy kinds");
 
-        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
-
-        assert!(workspace.validate_integrity().is_ok());
-        assert!(
-            profile
-                .default_surfaces
-                .iter()
-                .all(|surface| !surface.stable_surface_key().as_str().is_empty())
+        assert_eq!(profile.default_surfaces.len(), 2);
+        assert_eq!(profile.default_surfaces[0].panel_kind, PanelKind::Outliner);
+        assert_eq!(
+            profile.default_surfaces[0].stable_surface_key(),
+            &stable_key_for_tool_surface_kind(ToolSurfaceKind::Outliner)
+                .expect("outliner should have a stable key")
+        );
+        assert_eq!(profile.default_surfaces[1].panel_kind, PanelKind::Inspector);
+        assert_eq!(
+            profile.default_surfaces[1].stable_surface_key(),
+            &stable_key_for_tool_surface_kind(ToolSurfaceKind::Inspector)
+                .expect("inspector should have a stable key")
         );
     }
 
@@ -1269,82 +951,54 @@ mod tests {
     }
 
     #[test]
-    fn panel_kind_remains_authoritative_in_c3() {
+    fn panel_kind_remains_structural_metadata_in_profile_defaults() {
         let registry = default_workspace_profile_registry();
         let profile = registry
             .profile(TEXTURE_WORKSPACE_PROFILE_ID)
             .expect("texture profile should exist");
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
 
-        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
-
-        assert!(
-            workspace
-                .panels()
-                .any(|panel| panel.panel_kind == PanelKind::TextureViewer)
-        );
-        assert!(
-            workspace
-                .panels()
-                .any(|panel| panel.panel_kind == PanelKind::VolumeTextureViewer)
-        );
+        assert!(profile.default_surfaces.iter().any(|surface| {
+            surface.panel_kind == PanelKind::TextureViewer
+                && surface.stable_surface_key().as_str() == "runenwerk.texture.viewer_2d"
+        }));
+        assert!(profile.default_surfaces.iter().any(|surface| {
+            surface.panel_kind == PanelKind::VolumeTextureViewer
+                && surface.stable_surface_key().as_str() == "runenwerk.texture.viewer_3d"
+        }));
     }
 
     #[test]
-    fn layout_profile_builds_current_workspace_without_changing_profile_identity() {
+    fn layout_profile_preserves_profile_identity_and_layout_contract() {
         let registry = default_workspace_profile_registry();
         let profile = registry
-            .profile(SCENE_WORKSPACE_PROFILE_ID)
-            .expect("scene profile should exist");
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
+            .profile(LAYOUT_WORKSPACE_PROFILE_ID)
+            .expect("layout profile should exist");
 
-        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
-
-        assert_eq!(workspace.workspace_id(), workspace_id);
-        assert!(workspace.validate_integrity().is_ok());
-        assert_eq!(profile.id, SCENE_WORKSPACE_PROFILE_ID);
+        assert_eq!(profile.id, LAYOUT_WORKSPACE_PROFILE_ID);
+        assert_eq!(profile.default_layout_template.contract_id(), "scene");
+        assert_eq!(
+            profile.layout_source.template(),
+            WorkspaceLayoutTemplate::Scene
+        );
     }
 
     #[test]
     fn scene_and_modelling_profiles_have_distinct_layout_contracts() {
         let registry = default_workspace_profile_registry();
-        let scene_profile = registry
+        let scene = registry
             .profile(SCENE_WORKSPACE_PROFILE_ID)
             .expect("scene profile should exist");
-        let modelling_profile = registry
+        let modelling = registry
             .profile(MODELLING_WORKSPACE_PROFILE_ID)
             .expect("modelling profile should exist");
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let scene_workspace_id = allocator.allocate_workspace_id();
-        let modelling_workspace_id = allocator.allocate_workspace_id();
 
-        let scene_workspace =
-            scene_profile.build_default_workspace_state(scene_workspace_id, &mut allocator);
-        let modelling_workspace =
-            modelling_profile.build_default_workspace_state(modelling_workspace_id, &mut allocator);
-
-        assert_eq!(scene_profile.default_layout_template.contract_id(), "scene");
-        assert_eq!(
-            modelling_profile.default_layout_template.contract_id(),
-            "modelling"
+        assert_ne!(
+            scene.default_layout_template.contract_id(),
+            modelling.default_layout_template.contract_id()
         );
         assert_ne!(
-            scene_profile.default_layout_template.contract_id(),
-            modelling_profile.default_layout_template.contract_id()
-        );
-        assert!(
-            WorkspaceLayoutTemplate::Scene.default_graph_matches(&scene_workspace),
-            "scene profile should accept the scene default graph"
-        );
-        assert!(
-            WorkspaceLayoutTemplate::Modelling.default_graph_matches(&modelling_workspace),
-            "modelling profile should accept its own default graph"
-        );
-        assert!(
-            !WorkspaceLayoutTemplate::Modelling.default_graph_matches(&scene_workspace),
-            "stale scene-derived modelling layouts must not satisfy the modelling contract"
+            scene.layout_source.template(),
+            modelling.layout_source.template()
         );
     }
 
@@ -1354,28 +1008,21 @@ mod tests {
         let profile = registry
             .profile(EDITOR_DESIGN_WORKSPACE_PROFILE_ID)
             .expect("editor design profile should exist");
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
 
-        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
-
-        assert_eq!(profile.label, "Editor Design");
-        assert!(
-            profile
-                .default_surfaces
-                .iter()
-                .any(|surface| surface.stable_surface_key().as_str()
-                    == "runenwerk.editor_design.ui_canvas")
-        );
+        assert!(profile.default_surfaces.iter().any(|surface| {
+            surface.panel_kind == PanelKind::UiCanvas
+                && surface.stable_surface_key().as_str() == "runenwerk.editor_design.ui_canvas"
+        }));
+        assert!(profile.default_surfaces.iter().any(|surface| {
+            surface.panel_kind == PanelKind::DefinitionValidation
+                && surface.stable_surface_key().as_str()
+                    == "runenwerk.editor_design.definition_validation"
+        }));
         assert!(
             profile
                 .document_kind_filters
                 .contains(&DocumentKind::UiLayout)
         );
-        assert!(workspace.validate_integrity().is_ok());
-        assert!(workspace.tool_surfaces().any(|surface| {
-            surface.stable_surface_key().as_str() == "runenwerk.editor_design.definition_validation"
-        }));
     }
 
     #[test]
@@ -1401,30 +1048,6 @@ mod tests {
                 .contains(&SIMULATE_MODE_ID)
         );
         assert!(!editor_design_profile.default_modes.contains(&PLAY_MODE_ID));
-    }
-
-    #[test]
-    fn m6_profiles_build_persistable_tool_workspace_layouts() {
-        let registry = default_workspace_profile_registry();
-        let mut allocator = WorkspaceIdentityAllocator::new();
-
-        for profile in registry.profiles().filter(|profile| {
-            profile.default_layout_template == WorkspaceLayoutTemplate::ToolWorkspace
-        }) {
-            let workspace_id = allocator.allocate_workspace_id();
-            let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
-
-            assert!(
-                workspace.validate_integrity().is_ok(),
-                "{} profile should build a valid workspace",
-                profile.label
-            );
-            assert!(
-                profile.required_tool_surfaces_are_present(&workspace),
-                "{} profile should mount its default M6 surfaces",
-                profile.label
-            );
-        }
     }
 
     #[test]
@@ -1497,155 +1120,6 @@ mod tests {
     }
 
     #[test]
-    fn default_profiles_still_build_without_tool_surface_registry() {
-        let registry = default_workspace_profile_registry();
-        let mut allocator = WorkspaceIdentityAllocator::new();
-
-        for profile in registry.profiles() {
-            let workspace_id = allocator.allocate_workspace_id();
-            let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
-
-            assert!(
-                workspace.validate_integrity().is_ok(),
-                "{} profile should still build without a tool-surface registry",
-                profile.label
-            );
-        }
-    }
-
-    #[test]
-    fn registry_free_default_profile_builder_still_works() {
-        let registry = default_workspace_profile_registry();
-        let profile = registry
-            .profile(SCENE_WORKSPACE_PROFILE_ID)
-            .expect("scene profile should exist");
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-
-        let workspace = profile.build_default_workspace_state(workspace_id, &mut allocator);
-
-        assert!(workspace.validate_integrity().is_ok());
-    }
-
-    #[test]
-    fn registry_aware_default_profile_builder_preserves_stable_surface_keys() {
-        let profile_registry = default_workspace_profile_registry();
-        let profile = profile_registry
-            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
-            .expect("material profile should exist");
-        let tool_suite_registry = full_saveable_registry();
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-
-        let workspace = profile
-            .build_default_workspace_state_with_registry(
-                workspace_id,
-                &mut allocator,
-                tool_suite_registry.surfaces(),
-            )
-            .expect("full registry should build material workspace");
-
-        assert!(
-            workspace
-                .tool_surfaces()
-                .any(|surface| surface.stable_surface_key().as_str()
-                    == "runenwerk.material_lab.graph_canvas")
-        );
-        assert!(
-            workspace
-                .tool_surfaces()
-                .any(|surface| surface.stable_surface_key().as_str()
-                    == "runenwerk.material_lab.inspector")
-        );
-        assert!(workspace.tool_surfaces().any(
-            |surface| surface.stable_surface_key().as_str() == "runenwerk.material_lab.preview"
-        ));
-    }
-
-    #[test]
-    fn registry_aware_default_profile_builder_populates_stable_keys() {
-        let profile_registry = default_workspace_profile_registry();
-        let profile = profile_registry
-            .profile(TEXTURE_WORKSPACE_PROFILE_ID)
-            .expect("texture profile should exist");
-        let tool_suite_registry = full_saveable_registry();
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-
-        let workspace = profile
-            .build_default_workspace_state_with_registry(
-                workspace_id,
-                &mut allocator,
-                tool_suite_registry.surfaces(),
-            )
-            .expect("full registry should build texture workspace");
-
-        for surface in workspace.tool_surfaces() {
-            let key = surface.stable_surface_key();
-            assert!(
-                tool_suite_registry.surfaces().get(key).is_some(),
-                "stable metadata should be registered: {}",
-                key.as_str()
-            );
-        }
-    }
-
-    #[test]
-    fn registry_aware_default_profile_builder_rejects_unregistered_surface_key() {
-        let profile_registry = default_workspace_profile_registry();
-        let material_profile = profile_registry
-            .profile(MATERIAL_WORKSPACE_PROFILE_ID)
-            .expect("material profile should exist");
-        let tool_suite_registry = material_lab_registry();
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-
-        let error = material_profile
-            .build_default_workspace_state_with_registry(
-                workspace_id,
-                &mut allocator,
-                tool_suite_registry.surfaces(),
-            )
-            .expect_err("partial registry should reject non-material profile surfaces");
-
-        assert!(matches!(
-            error,
-            WorkspaceProfileRegistryBackedBuildError::UnregisteredDefaultToolSurface {
-                stable_surface_key,
-                ..
-            } if stable_surface_key.as_str() == "runenwerk.assets.browser"
-        ));
-    }
-
-    #[test]
-    fn registry_aware_builder_preserves_default_profile_surface_order() {
-        let profile_registry = default_workspace_profile_registry();
-        let procgen_profile = profile_registry
-            .profile(PROCGEN_WORKSPACE_PROFILE_ID)
-            .expect("procgen profile should exist");
-        let tool_suite_registry = full_saveable_registry();
-        let mut legacy_allocator = WorkspaceIdentityAllocator::new();
-        let legacy_workspace_id = legacy_allocator.allocate_workspace_id();
-        let legacy_workspace = procgen_profile
-            .build_default_workspace_state(legacy_workspace_id, &mut legacy_allocator);
-        let mut registry_allocator = WorkspaceIdentityAllocator::new();
-        let registry_workspace_id = registry_allocator.allocate_workspace_id();
-
-        let registry_workspace = procgen_profile
-            .build_default_workspace_state_with_registry(
-                registry_workspace_id,
-                &mut registry_allocator,
-                tool_suite_registry.surfaces(),
-            )
-            .expect("registry-aware procgen profile should build");
-
-        assert_eq!(
-            workspace_surface_order(&registry_workspace),
-            workspace_surface_order(&legacy_workspace)
-        );
-    }
-
-    #[test]
     fn placeholder_surface_remains_explicit_diagnostics_namespace_not_implemented_domain() {
         let key = stable_key_for_tool_surface_kind(ToolSurfaceKind::Placeholder)
             .expect("placeholder should have an explicit fallback key");
@@ -1666,17 +1140,6 @@ mod tests {
             .validate_tool_surface_registry_compatibility(tool_suite_registry.surfaces());
 
         assert_eq!(material_profile.default_surfaces, original_order);
-    }
-
-    fn workspace_surface_order(workspace: &WorkspaceState) -> Vec<String> {
-        workspace
-            .tab_stacks()
-            .flat_map(|stack| stack.ordered_panels.iter())
-            .filter_map(|panel_id| workspace.panel(*panel_id))
-            .filter_map(|panel| panel.active_tool_surface)
-            .filter_map(|surface_id| workspace.tool_surface(surface_id))
-            .map(|surface| surface.stable_surface_key().as_str().to_string())
-            .collect()
     }
 
     fn full_saveable_registry() -> ToolSuiteRegistry {

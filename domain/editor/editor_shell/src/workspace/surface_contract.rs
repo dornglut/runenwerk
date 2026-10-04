@@ -15,9 +15,6 @@ use crate::{
     },
 };
 
-#[cfg(test)]
-use crate::WorkspaceState;
-
 pub const OUTLINER_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(1);
 pub const VIEWPORT_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(2);
 pub const INSPECTOR_SURFACE_DEFINITION_ID: SurfaceDefinitionId = SurfaceDefinitionId::new(3);
@@ -760,14 +757,6 @@ pub fn mounted_surface_instance(tool_surface: &ToolSurfaceState) -> Option<Mount
     ))
 }
 
-#[cfg(test)]
-pub fn mounted_surface_instances(
-    workspace_state: &WorkspaceState,
-) -> impl Iterator<Item = MountedSurfaceInstance> + '_ {
-    workspace_state
-        .tool_surfaces()
-        .filter_map(mounted_surface_instance)
-}
 
 #[cfg(test)]
 mod tests {
@@ -775,7 +764,7 @@ mod tests {
     use crate::{
         EditorToolSuite, ProviderFamilyDefinition, ProviderFamilyId, ToolSuiteId,
         ToolSuiteRegistry, ToolSurfaceDefinition, ToolSurfacePersistence, ToolSurfaceRole,
-        ToolSurfaceRoute, WorkspaceId, WorkspaceIdentityAllocator,
+        ToolSurfaceRoute,
     };
 
     #[test]
@@ -787,23 +776,6 @@ mod tests {
         assert_eq!(
             tool_surface_definition_id(ToolSurfaceKind::Outliner),
             OUTLINER_SURFACE_DEFINITION_ID
-        );
-    }
-
-    #[test]
-    fn mounted_surface_instances_follow_workspace_mount_state() {
-        let mut allocator = WorkspaceIdentityAllocator::new();
-        let workspace_id = allocator.allocate_workspace_id();
-        let workspace = WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator);
-
-        let mounted = mounted_surface_instances(&workspace).collect::<Vec<_>>();
-
-        assert_eq!(workspace_id, WorkspaceId::try_from_raw(1).unwrap());
-        assert_eq!(mounted.len(), 5);
-        assert!(
-            mounted
-                .iter()
-                .any(|instance| instance.definition_id == VIEWPORT_SURFACE_DEFINITION_ID)
         );
     }
 

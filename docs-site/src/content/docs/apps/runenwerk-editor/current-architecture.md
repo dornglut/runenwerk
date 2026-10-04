@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-28
+last_reviewed: 2026-10-04
 publication: primary
 related_designs:
   - ../../design/accepted/app-neutral-ui-composition-design.md
@@ -40,8 +40,8 @@ units, transactions, history, promotion, fixtures, and persistence envelopes.
 It does not depend on editor, engine, native-window, renderer, `UiProgram`, or
 `ui_surface` contracts.
 
-`domain/editor/editor_shell/src/composition/structural` owns the editor-specific
-one-way importer, typed extension schema, diagnostics, and shell projection.
+`domain/editor/editor_shell/src/composition/structural` owns editor-specific
+layout formation, typed extension schema, diagnostics, and shell projection.
 `apps/runenwerk_editor` owns providers, sessions, storage paths, profile
 selection, target-to-presentation bindings, native-window policy, command
 execution, and the current scene persistence context.
@@ -78,10 +78,10 @@ do not route through `WorkspaceState` or `import_legacy_workspace`.
 
 Reusable shell projection DTOs and route assembly are owned by
 `composition/structural/projection.rs`. `WorkspaceState` is not a current
-formation or projection boundary for the runnable Editor. The predecessor
-`WorkspaceState` graph, reducer/projection path, legacy importer, authored-state
-former, and V1-V5 persistence DTOs are compiled only for tests that retain
-historical/parity evidence; they are not production compatibility APIs.
+formation or projection boundary for the runnable Editor. Its retired graph,
+reducer/projection path, legacy importer, authored-state former, projection
+ratification adapter, and V1-V5 persistence DTO implementation have been deleted
+rather than retained as a parallel compatibility/test authority.
 
 ## Structural Transactions
 
