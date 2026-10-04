@@ -5,7 +5,7 @@ status: active
 owner: editor
 layer: app
 canonical: true
-last_reviewed: 2026-09-25
+last_reviewed: 2026-09-28
 publication: primary
 related_designs:
   - ../../design/accepted/app-neutral-ui-composition-design.md
@@ -121,10 +121,13 @@ resolver.
 
 Toolbar and command-route availability are observed from that admitted scene
 history context, not from `SessionReality`. Material Lab, `ui_composition`, and
-self-authoring histories remain independent owner-specific histories. Later
-ActivationScope/InvocationContext work may replace the bounded document-kind
-admission with explicit context resolution; E2 does not invent that later
-coordination subsystem.
+self-authoring histories remain independent owner-specific histories. The bounded
+document-kind admission remains migration residue. Completed #737 explicitly does
+not authorize a generic `EditorBinding` / `ActivationScope` implementation: a
+future replacement requires real multi-scope Scene pressure proving owner-defined
+scope identity/lifetime, surface/session binding and rebinding, immutable
+per-invocation scope capture, scope-specific history resolution, and stale-binding
+behavior.
 
 ## Scene Persistence
 
@@ -209,11 +212,21 @@ Viewport runtime projection now rebuilds target-local layout, Tool Surface bindi
 render-state records across every live `PresentationTargetId` after primary and secondary
 UI frames are projected. Target-local rectangles remain scoped by structural presentation
 identity, while transient native window state supplies only per-target presentation metrics
-such as DPI. Secondary-window camera/picking/input product proof remains a later
-multi-window closure slice.
-ADR 0025 separately governs semantic sharing: windows may explicitly share editor
-bindings, selection contexts, history contexts, or persistence contexts, while
-activation/focus/local presentation remain independently scoped.
+such as DPI. Accepted #913 extends this to presentation-target-local direct viewport pointer
+routing, picking, camera zoom/pan/orbit, selection/gizmo/tool capture, and target-local
+focus-loss/retirement cleanup. #913 therefore closes the known primary-only interaction gap.
+The accepted multi-window design's broader semantic-sharing acceptance criteria remain
+evidence-gated rather than implying a generic binding implementation, while real-device
+resize/move/focus/DPI/visual proof belongs to product hardening.
+
+ADR 0025 separately governs the normalized semantic-sharing target. Current runtime still
+uses one `RunenwerkEditorApp` / singleton Scene semantic reality and does not implement the
+accepted design's generic `EditorBinding` / `ActivationScope` target semantics. #737 confirms
+that those semantics must not be manufactured merely to satisfy aspirational multi-window
+wording: future explicit sharing or independent activation across multiple semantic scopes
+requires real owner-defined binding/lifecycle evidence, not inference from
+`PresentationTargetId`, `MountedUnitId`, viewport, selection, history, or persistence
+identities.
 
 ## Persistence
 
@@ -254,6 +267,18 @@ Viewport tool activation is session-local state owned by the mounted-unit
 viewport target and projection epoch; stale or structurally mismatched requests
 fail closed. Picking and direct manipulation resolve the tool from that same
 viewport session, so mounted viewports do not share an active-tool authority.
+
+## Extraction Status
+
+Current `domain/editor/*` placement is not evidence that a standalone RunenEditor is
+ready. #737 completed the current extraction-readiness investigation with a no-cut-yet
+disposition: the central `DocumentKind` seam remains bounded migration/compatibility
+state, but no maintained consumer yet proves multiple Scene semantic scopes with truthful
+binding/rebinding, immutable per-invocation scope capture, scope-specific history/lifecycle,
+and stale-binding behavior. Do not introduce a generic `EditorBinding` / `ActivationScope`,
+replacement taxonomy, or standalone RunenEditor repository merely to remove that residue.
+Any future extraction still requires the separate ADR-0014 extraction gate and independent
+consumer evidence.
 
 ## Self-Authoring State
 
