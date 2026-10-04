@@ -5,18 +5,18 @@ use editor_definition::{
     EditorWorkspaceHostDefinition, EditorWorkspaceLayoutDefinition,
     EditorWorkspacePanelTabDefinition, EditorWorkspaceSplitAxisDefinition,
 };
-use ui_input::{
-    Key, KeyState, KeyboardEvent, Modifiers, PointerEvent, PointerEventKind, TextInputEvent,
-    UiInputEvent,
-};
-use ui_math::Axis;
-use ui_theme::ThemeTokens;
 use ui_composition::{
     CompositionCapabilityPolicy, CompositionLifecyclePolicy, CompositionPolicies,
     CompositionPolicyDecision, CompositionSnapshot, CompositionTargetPolicy,
     CompositionTransaction,
 };
+use ui_input::{
+    Key, KeyState, KeyboardEvent, Modifiers, PointerEvent, PointerEventKind, TextInputEvent,
+    UiInputEvent,
+};
+use ui_math::Axis;
 use ui_surface::{SessionRetentionClass, SurfaceCapabilitySet};
+use ui_theme::ThemeTokens;
 
 use crate::{
     ActiveTabDragVisualState, ActiveTabStackPopupMenu, AssetBrowserRowViewModel,
@@ -34,15 +34,15 @@ use crate::{
     SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
     ToolSurfaceCreateCandidate, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
     UiInteraction, UiInteractionResults, ViewportSurfaceAction, ViewportViewModel, WidgetId,
-    WorkspaceSplitAxis,
-    build_entity_table_panel, build_viewport_panel, label, map_interactions_to_shell_commands,
-    panel_kind_definition_key, stable_key_for_tool_surface_kind,
-    surface_widget_id, tab_active_indicator_widget_id, tab_chrome_widget_id,
-    tab_close_button_widget_id, tab_drop_zone_widget_id, tab_stack_action_menu_popup_widget_id,
-    tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
-    tab_stack_new_tab_button_widget_id, tab_stack_split_horizontal_button_widget_id,
-    tab_stack_surface_menu_popup_widget_id, tab_stack_surface_submenu_anchor_widget_id,
-    tool_surface_definition_id, tool_surface_kind_definition_key, tool_surface_kind_for_stable_key,
+    WorkspaceSplitAxis, build_entity_table_panel, build_viewport_panel, label,
+    map_interactions_to_shell_commands, panel_kind_definition_key,
+    stable_key_for_tool_surface_kind, surface_widget_id, tab_active_indicator_widget_id,
+    tab_chrome_widget_id, tab_close_button_widget_id, tab_drop_zone_widget_id,
+    tab_stack_action_menu_popup_widget_id, tab_stack_new_surface_menu_item_widget_id,
+    tab_stack_new_surface_menu_popup_widget_id, tab_stack_new_tab_button_widget_id,
+    tab_stack_split_horizontal_button_widget_id, tab_stack_surface_menu_popup_widget_id,
+    tab_stack_surface_submenu_anchor_widget_id, tool_surface_definition_id,
+    tool_surface_kind_definition_key, tool_surface_kind_for_stable_key,
     toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
     toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
@@ -50,9 +50,9 @@ use crate::{
 use crate::{
     EditorCompositionIdentityAllocator, EditorCompositionProjectionArtifact,
     EditorCompositionRuntime, EditorStructuralEditPlan, EditorToolSuite, ProjectedPanelSlot,
-    ProjectedTabStackSlot, ProjectedWorkspaceHostSlot, ProviderFamilyDefinition,
-    ProviderFamilyId, SCENE_WORKSPACE_PROFILE_ID, SuiteRef, SurfaceRef, ToolSuiteRegistry,
-    ToolSurfaceCreationPolicy, ToolSurfaceDefinition, ToolSurfaceRole, ToolSurfaceRoute,
+    ProjectedTabStackSlot, ProjectedWorkspaceHostSlot, ProviderFamilyDefinition, ProviderFamilyId,
+    SCENE_WORKSPACE_PROFILE_ID, SuiteRef, SurfaceRef, ToolSuiteRegistry, ToolSurfaceCreationPolicy,
+    ToolSurfaceDefinition, ToolSurfaceRole, ToolSurfaceRoute,
     build_editor_shell_frame_from_composition_projection_with_structural_interactions,
     build_editor_shell_frame_from_composition_projection_with_structural_interactions_and_docking_visual_state,
     form_editor_profile_composition_with_identities, panel_kind_for_tool_surface_kind,
@@ -68,8 +68,7 @@ struct TestShellComposition {
 
 impl TestShellComposition {
     fn projection(&self) -> EditorCompositionProjectionArtifact {
-        project_editor_composition(&self.runtime)
-            .expect("current test composition should project")
+        project_editor_composition(&self.runtime).expect("current test composition should project")
     }
 
     fn apply_plan(
@@ -170,7 +169,10 @@ fn scene_composition_fixture() -> TestShellComposition {
 fn single_surface_composition_fixture(kind: ToolSurfaceKind) -> TestShellComposition {
     composition_fixture(
         EditorWorkspaceLayoutDefinition {
-            id: format!("runenwerk.test.single.{}", tool_surface_kind_definition_key(kind)),
+            id: format!(
+                "runenwerk.test.single.{}",
+                tool_surface_kind_definition_key(kind)
+            ),
             label: format!("{kind:?} Test Shell"),
             root: test_stack("single", kind),
             floating_hosts: Vec::new(),
@@ -204,8 +206,8 @@ fn composition_fixture(
 }
 
 fn test_stack(id: &str, kind: ToolSurfaceKind) -> EditorWorkspaceHostDefinition {
-    let stable_key = stable_key_for_tool_surface_kind(kind)
-        .expect("test surface kind should have a stable key");
+    let stable_key =
+        stable_key_for_tool_surface_kind(kind).expect("test surface kind should have a stable key");
     EditorWorkspaceHostDefinition::TabStack {
         id: format!("{id}.stack"),
         tabs: vec![EditorWorkspacePanelTabDefinition {
@@ -218,8 +220,8 @@ fn test_stack(id: &str, kind: ToolSurfaceKind) -> EditorWorkspaceHostDefinition 
 }
 
 fn test_tool_suite_registry(kinds: &[ToolSurfaceKind]) -> ToolSuiteRegistry {
-    let provider_family =
-        ProviderFamilyId::new("runenwerk.test.shell").expect("test provider family should be valid");
+    let provider_family = ProviderFamilyId::new("runenwerk.test.shell")
+        .expect("test provider family should be valid");
     let surfaces = kinds
         .iter()
         .copied()
@@ -244,10 +246,12 @@ fn test_tool_suite_registry(kinds: &[ToolSurfaceKind]) -> ToolSuiteRegistry {
         })
         .collect();
     ToolSuiteRegistry::new(vec![EditorToolSuite::new(
-        SuiteRef::from_stable_key("runenwerk.test.shell")
-            .expect("test suite key should be valid"),
+        SuiteRef::from_stable_key("runenwerk.test.shell").expect("test suite key should be valid"),
         "Shell Tests",
-        vec![ProviderFamilyDefinition::new(provider_family, "Shell Tests")],
+        vec![ProviderFamilyDefinition::new(
+            provider_family,
+            "Shell Tests",
+        )],
         surfaces,
     )])
     .expect("test tool suite should be valid")
@@ -1459,7 +1463,6 @@ fn toolbar_separator_projects_as_centered_visible_divider() {
     );
 }
 
-
 #[test]
 fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right() {
     let fixture = scene_composition_fixture();
@@ -1493,11 +1496,17 @@ fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right
     else {
         panic!("default right sidebar should be a vertical graph split");
     };
-    let ProjectedWorkspaceHostSlot::TabStack { tab_stack: viewport, .. } = viewport.as_ref()
+    let ProjectedWorkspaceHostSlot::TabStack {
+        tab_stack: viewport,
+        ..
+    } = viewport.as_ref()
     else {
         panic!("default viewport slot should be a tab stack");
     };
-    let ProjectedWorkspaceHostSlot::TabStack { tab_stack: outliner, .. } = outliner.as_ref()
+    let ProjectedWorkspaceHostSlot::TabStack {
+        tab_stack: outliner,
+        ..
+    } = outliner.as_ref()
     else {
         panic!("default outliner slot should be a tab stack");
     };
