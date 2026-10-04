@@ -2732,10 +2732,7 @@ fn viewport_status_region_forms_scroll_overflow_and_viewport_arbitration_policy(
         viewport_surface,
         ResolvedSurfaceFrame {
             artifact: SurfacePresentationArtifact::provider(viewport_root),
-            ..surface_frame(
-                viewport_panel,
-                WidgetId(viewport_surface.raw() + 10_000),
-            )
+            ..surface_frame(viewport_panel, WidgetId(viewport_surface.raw() + 10_000))
         },
     );
 
