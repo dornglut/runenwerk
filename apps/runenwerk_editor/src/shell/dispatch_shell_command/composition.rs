@@ -15,9 +15,9 @@ use crate::shell::{EditorCompositionPolicy, RunenwerkEditorShellState};
 
 pub(super) fn undo_composition_layout(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = shell_state.as_deref_mut().ok_or_else(|| {
+    let shell_state = shell_state.ok_or_else(|| {
         EditorMutationError::runtime_rejected("missing shell state for composition undo")
     })?;
     let policy = EditorCompositionPolicy;
@@ -34,9 +34,9 @@ pub(super) fn undo_composition_layout(
 
 pub(super) fn redo_composition_layout(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = shell_state.as_deref_mut().ok_or_else(|| {
+    let shell_state = shell_state.ok_or_else(|| {
         EditorMutationError::runtime_rejected("missing shell state for composition redo")
     })?;
     let policy = EditorCompositionPolicy;
@@ -53,13 +53,13 @@ pub(super) fn redo_composition_layout(
 
 pub(super) fn set_tab_stack_active_panel(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     tab_stack_id: TabStackId,
     panel_instance_id: PanelInstanceId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
     let shell_state = require_composition_shell_state(
-        shell_state.as_deref_mut(),
+        shell_state,
         projection_epoch,
         "activate tab",
     )?;
@@ -77,13 +77,13 @@ pub(super) fn set_tab_stack_active_panel(
 }
 
 pub(super) fn commit_tab_drop(
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     panel_instance_id: PanelInstanceId,
     source_tab_stack_id: TabStackId,
     destination: TabDropDestination,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = shell_state.as_deref_mut().ok_or_else(|| {
+    let shell_state = shell_state.ok_or_else(|| {
         EditorMutationError::runtime_rejected("missing shell state for composition docking")
     })?;
     if !shell_state.is_projection_epoch_current(projection_epoch) {
@@ -126,11 +126,11 @@ pub(super) fn commit_tab_drop(
 }
 
 pub(super) fn commit_composition_dock(
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     intent: EditorDockingIntent,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = shell_state.as_deref_mut().ok_or_else(|| {
+    let shell_state = shell_state.ok_or_else(|| {
         EditorMutationError::runtime_rejected("missing shell state for composition docking")
     })?;
     if !shell_state.is_projection_epoch_current(projection_epoch) {
@@ -149,14 +149,14 @@ pub(super) fn commit_composition_dock(
 
 pub(super) fn resize_composition_split(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     split: RegionId,
     fraction: SplitFraction,
     expected_revision: StateRevision,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
     let shell_state = require_composition_shell_state(
-        shell_state.as_deref_mut(),
+        shell_state,
         projection_epoch,
         "resize composition split",
     )?;
@@ -178,13 +178,13 @@ pub(super) fn resize_composition_split(
 
 pub(super) fn create_panel_tab_stable_key(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     tab_stack_id: TabStackId,
     stable_surface_key: ToolSurfaceStableKey,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
     let shell_state = require_composition_shell_state(
-        shell_state.as_deref_mut(),
+        shell_state,
         projection_epoch,
         "create tab",
     )?;
@@ -203,13 +203,13 @@ pub(super) fn create_panel_tab_stable_key(
 
 pub(super) fn close_panel_tab(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     tab_stack_id: TabStackId,
     panel_instance_id: PanelInstanceId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
     let shell_state =
-        require_composition_shell_state(shell_state.as_deref_mut(), projection_epoch, "close tab")?;
+        require_composition_shell_state(shell_state, projection_epoch, "close tab")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let unit = composition_unit_for_panel(shell_state, panel_instance_id)?;
     require_unit_source(shell_state, unit, stack)?;
@@ -225,13 +225,13 @@ pub(super) fn close_panel_tab(
 
 pub(super) fn close_other_panel_tabs(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     tab_stack_id: TabStackId,
     keep_panel_instance_id: PanelInstanceId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
     let shell_state = require_composition_shell_state(
-        shell_state.as_deref_mut(),
+        shell_state,
         projection_epoch,
         "close other tabs",
     )?;
@@ -250,14 +250,14 @@ pub(super) fn close_other_panel_tabs(
 
 pub(super) fn split_tab_stack_area_stable_key(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     tab_stack_id: TabStackId,
     axis: WorkspaceSplitAxis,
     stable_surface_key: ToolSurfaceStableKey,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
     let shell_state = require_composition_shell_state(
-        shell_state.as_deref_mut(),
+        shell_state,
         projection_epoch,
         "split area",
     )?;
@@ -277,12 +277,12 @@ pub(super) fn split_tab_stack_area_stable_key(
 
 pub(super) fn duplicate_tab_stack_area(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     tab_stack_id: TabStackId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
     let shell_state = require_composition_shell_state(
-        shell_state.as_deref_mut(),
+        shell_state,
         projection_epoch,
         "duplicate area",
     )?;
@@ -299,12 +299,12 @@ pub(super) fn duplicate_tab_stack_area(
 
 pub(super) fn close_tab_stack_area(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     tab_stack_id: TabStackId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
     let shell_state = require_composition_shell_state(
-        shell_state.as_deref_mut(),
+        shell_state,
         projection_epoch,
         "close area",
     )?;
@@ -321,13 +321,13 @@ pub(super) fn close_tab_stack_area(
 
 pub(super) fn reset_tab_stack_area_stable_key(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     tab_stack_id: TabStackId,
     stable_surface_key: ToolSurfaceStableKey,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
     let shell_state = require_composition_shell_state(
-        shell_state.as_deref_mut(),
+        shell_state,
         projection_epoch,
         "reset area",
     )?;
@@ -346,13 +346,13 @@ pub(super) fn reset_tab_stack_area_stable_key(
 
 pub(super) fn lock_tab_stack_area_stable_key(
     app: &mut RunenwerkEditorApp,
-    mut shell_state: Option<&mut RunenwerkEditorShellState>,
+    shell_state: Option<&mut RunenwerkEditorShellState>,
     tab_stack_id: TabStackId,
     locked_stable_surface_key: Option<ToolSurfaceStableKey>,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
     let shell_state = require_composition_shell_state(
-        shell_state.as_deref_mut(),
+        shell_state,
         projection_epoch,
         "change area lock",
     )?;
