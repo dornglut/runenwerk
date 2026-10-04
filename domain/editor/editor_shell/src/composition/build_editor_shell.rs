@@ -20,6 +20,7 @@ use ui_text::{FontId, TextLineHeightPolicy};
 use ui_theme::{ThemeTokens, UiColor};
 use ui_tree::{OverlayAdornmentNode, PopupAlign, PopupFlipPolicy, PopupNode, PopupSide};
 
+use super::surface_definition_context::contrast_popup_theme;
 use crate::{
     BODY_FLOATING_SPLIT_WIDGET_ID, BODY_ROOT_WIDGET_ID, EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
     FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, MATERIAL_WORKSPACE_PROFILE_ID,
@@ -59,10 +60,6 @@ use crate::{
     UiNode, UiNodeKind, UiTree, button, button_selected, hscroll, hstack_with_policies, label,
     panel, spacer, split, vscroll, vstack_with_policies,
 };
-#[cfg(test)]
-use crate::{WorkspaceState, workspace::project_workspace_for_shell};
-
-use super::surface_definition_context::contrast_popup_theme;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RoutedShellAction {
@@ -256,15 +253,6 @@ pub struct EditorShellBuildResult {
     pub projection_artifacts: ShellProjectionArtifacts,
 }
 
-#[cfg(test)]
-pub(crate) fn build_editor_shell_frame(
-    frame_model: &EditorShellFrameModel,
-    theme: &ThemeTokens,
-    workspace_state: &WorkspaceState,
-) -> EditorShellBuildResult {
-    build_editor_shell_frame_with_docking_visual_state(frame_model, theme, workspace_state, None)
-}
-
 pub fn build_editor_shell_frame_from_composition_projection(
     frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
@@ -329,18 +317,31 @@ pub fn build_editor_shell_frame_for_target_from_composition_projection_with_dock
 }
 
 #[cfg(test)]
-pub(crate) fn build_editor_shell_frame_with_docking_visual_state(
+pub(crate) fn build_editor_shell_frame_from_composition_projection_with_structural_interactions(
     frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
-    workspace_state: &WorkspaceState,
-    docking_visual_state: Option<&DockingInteractionVisualState>,
+    composition_projection: &crate::EditorCompositionProjectionArtifact,
 ) -> EditorShellBuildResult {
-    let workspace_projection = project_workspace_for_shell(workspace_state)
-        .expect("workspace state is invalid for editor-shell projection");
     build_editor_shell_frame_from_projection(
         frame_model,
         theme,
-        &workspace_projection,
+        &composition_projection.shell,
+        None,
+        true,
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn build_editor_shell_frame_from_composition_projection_with_structural_interactions_and_docking_visual_state(
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    composition_projection: &crate::EditorCompositionProjectionArtifact,
+    docking_visual_state: Option<&DockingInteractionVisualState>,
+) -> EditorShellBuildResult {
+    build_editor_shell_frame_from_projection(
+        frame_model,
+        theme,
+        &composition_projection.shell,
         docking_visual_state,
         true,
     )

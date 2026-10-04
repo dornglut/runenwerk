@@ -30,7 +30,8 @@ pub use build_editor_shell::{
 };
 #[cfg(test)]
 pub(crate) use build_editor_shell::{
-    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
+    build_editor_shell_frame_from_composition_projection_with_structural_interactions,
+    build_editor_shell_frame_from_composition_projection_with_structural_interactions_and_docking_visual_state,
 };
 pub use build_entity_table_panel::build_entity_table_panel;
 pub use build_inspector_panel::build_inspector_panel;
