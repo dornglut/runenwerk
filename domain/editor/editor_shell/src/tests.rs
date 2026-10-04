@@ -53,8 +53,8 @@ use crate::{
     ProjectedTabStackSlot, ProjectedWorkspaceHostSlot, ProviderFamilyDefinition,
     ProviderFamilyId, SCENE_WORKSPACE_PROFILE_ID, SuiteRef, SurfaceRef, ToolSuiteRegistry,
     ToolSurfaceCreationPolicy, ToolSurfaceDefinition, ToolSurfaceRole, ToolSurfaceRoute,
-    build_editor_shell_frame_from_composition_projection,
-    build_editor_shell_frame_from_composition_projection_with_docking_visual_state,
+    build_editor_shell_frame_from_composition_projection_with_structural_interactions,
+    build_editor_shell_frame_from_composition_projection_with_structural_interactions_with_structural_interactions_and_docking_visual_state,
     form_editor_profile_composition_with_identities, panel_kind_for_tool_surface_kind,
     plan_editor_set_stack_lock, plan_editor_split_with_new_unit, project_editor_composition,
     projected_host_tab_stacks,
@@ -2563,7 +2563,7 @@ fn locked_tab_plus_menu_shows_only_compatible_create_kind() {
             tab_stack_id: viewport_stack,
             anchor_widget_id: tab_stack_new_tab_button_widget_id(viewport_stack),
         }));
-    let active_build = build_editor_shell_frame_from_composition_projection(
+    let active_build = build_editor_shell_frame_from_composition_projection_with_structural_interactions(
         &active_frame_model,
         &ThemeTokens::default(),
         &projection,
@@ -2831,7 +2831,7 @@ fn shell_frame_renders_dynamic_split_workspace_after_area_split() {
         .expect("split should create one new split host widget");
 
     let frame_model = frame_model_for_projection(&projection);
-    let build = build_editor_shell_frame_from_composition_projection(
+    let build = build_editor_shell_frame_from_composition_projection_with_structural_interactions(
         &frame_model,
         &ThemeTokens::default(),
         &projection,
@@ -2858,7 +2858,7 @@ fn build_shell_frame_for_fixture(
     fixture: &TestShellComposition,
 ) -> crate::EditorShellBuildResult {
     let projection = fixture.projection();
-    build_editor_shell_frame_from_composition_projection(frame_model, theme, &projection)
+    build_editor_shell_frame_from_composition_projection_with_structural_interactions(frame_model, theme, &projection)
 }
 
 fn build_shell_frame_with_docking_for_fixture(
@@ -2868,7 +2868,7 @@ fn build_shell_frame_with_docking_for_fixture(
     docking_visual_state: Option<&DockingInteractionVisualState>,
 ) -> crate::EditorShellBuildResult {
     let projection = fixture.projection();
-    build_editor_shell_frame_from_composition_projection_with_docking_visual_state(
+    build_editor_shell_frame_from_composition_projection_with_structural_interactions_with_structural_interactions_and_docking_visual_state(
         frame_model,
         theme,
         &projection,
@@ -2917,7 +2917,7 @@ fn mapped_surface_actions_for_route(
         frame.title.clone(),
         ThemeTokens::default().body_small_text_style(ui_text::FontId(1)),
     );
-    let build = build_editor_shell_frame_from_composition_projection(
+    let build = build_editor_shell_frame_from_composition_projection_with_structural_interactions(
         &frame_model,
         &ThemeTokens::default(),
         &projection,

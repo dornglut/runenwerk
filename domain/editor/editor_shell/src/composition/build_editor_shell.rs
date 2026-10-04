@@ -316,6 +316,37 @@ pub fn build_editor_shell_frame_for_target_from_composition_projection_with_dock
         })
 }
 
+#[cfg(test)]
+pub(crate) fn build_editor_shell_frame_from_composition_projection_with_structural_interactions(
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    composition_projection: &crate::EditorCompositionProjectionArtifact,
+) -> EditorShellBuildResult {
+    build_editor_shell_frame_from_projection(
+        frame_model,
+        theme,
+        &composition_projection.shell,
+        None,
+        true,
+    )
+}
+
+#[cfg(test)]
+pub(crate) fn build_editor_shell_frame_from_composition_projection_with_structural_interactions_and_docking_visual_state(
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    composition_projection: &crate::EditorCompositionProjectionArtifact,
+    docking_visual_state: Option<&DockingInteractionVisualState>,
+) -> EditorShellBuildResult {
+    build_editor_shell_frame_from_projection(
+        frame_model,
+        theme,
+        &composition_projection.shell,
+        docking_visual_state,
+        true,
+    )
+}
+
 fn build_editor_shell_frame_from_projection(
     frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
