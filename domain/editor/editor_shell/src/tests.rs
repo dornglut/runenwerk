@@ -54,7 +54,7 @@ use crate::{
     ProviderFamilyId, SCENE_WORKSPACE_PROFILE_ID, SuiteRef, SurfaceRef, ToolSuiteRegistry,
     ToolSurfaceCreationPolicy, ToolSurfaceDefinition, ToolSurfaceRole, ToolSurfaceRoute,
     build_editor_shell_frame_from_composition_projection_with_structural_interactions,
-    build_editor_shell_frame_from_composition_projection_with_structural_interactions_with_structural_interactions_and_docking_visual_state,
+    build_editor_shell_frame_from_composition_projection_with_structural_interactions_and_docking_visual_state,
     form_editor_profile_composition_with_identities, panel_kind_for_tool_surface_kind,
     plan_editor_set_stack_lock, plan_editor_split_with_new_unit, project_editor_composition,
     projected_host_tab_stacks,
@@ -2868,7 +2868,7 @@ fn build_shell_frame_with_docking_for_fixture(
     docking_visual_state: Option<&DockingInteractionVisualState>,
 ) -> crate::EditorShellBuildResult {
     let projection = fixture.projection();
-    build_editor_shell_frame_from_composition_projection_with_structural_interactions_with_structural_interactions_and_docking_visual_state(
+    build_editor_shell_frame_from_composition_projection_with_structural_interactions_and_docking_visual_state(
         frame_model,
         theme,
         &projection,
