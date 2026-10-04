@@ -70,7 +70,6 @@ impl WorkspaceLayoutTemplate {
             Self::EditorDesign => 1,
         }
     }
-
 }
 
 #[derive(Debug, Clone, PartialEq)]

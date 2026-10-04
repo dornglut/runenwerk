@@ -155,8 +155,9 @@ fn current_editor_formation_bypasses_workspace_state_predecessor() {
 
 #[test]
 fn composition_projection_contract_is_owned_by_structural_composition() {
-    let structural =
-        include_str!("../../../domain/editor/editor_shell/src/composition/structural/projection.rs");
+    let structural = include_str!(
+        "../../../domain/editor/editor_shell/src/composition/structural/projection.rs"
+    );
 
     for owned_contract in [
         "pub struct ProjectedPanelSlot",

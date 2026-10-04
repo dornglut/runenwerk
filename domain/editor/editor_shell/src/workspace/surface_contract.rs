@@ -757,7 +757,6 @@ pub fn mounted_surface_instance(tool_surface: &ToolSurfaceState) -> Option<Mount
     ))
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
