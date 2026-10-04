@@ -44,7 +44,7 @@ use crate::{
     tab_stack_surface_submenu_anchor_widget_id, tool_surface_definition_id,
     tool_surface_kind_definition_key, tool_surface_kind_for_stable_key,
     toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
-    toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
+    toolbar_workspace_close_widget_id,
 };
 
 use crate::{
@@ -2702,12 +2702,15 @@ fn floating_host_drop_zone_is_formed_only_as_active_workspace_target() {
 #[test]
 fn viewport_status_region_forms_scroll_overflow_and_viewport_arbitration_policy() {
     let fixture = scene_composition_fixture();
-    let (viewport_panel, viewport_surface) =
-        panel_and_surface_by_kind(&fixture, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&fixture, viewport_panel);
-    let viewport_state = workspace
-        .tool_surface(viewport_surface)
-        .expect("viewport surface should exist");
+    let projection = fixture.projection();
+    let viewport_panel = projected_panels(&projection)
+        .into_iter()
+        .find(|panel| panel.panel_kind == PanelKind::Viewport)
+        .expect("viewport panel should be projected");
+    let viewport_surface = viewport_panel
+        .active_tool_surface
+        .expect("viewport panel should mount a surface");
+    let viewport_panel_id = viewport_panel.panel_instance_id;
     let viewport_root = build_viewport_panel(
         &ViewportViewModel {
             viewport_id: Some(editor_viewport::ViewportId(7)),
@@ -2721,18 +2724,16 @@ fn viewport_status_region_forms_scroll_overflow_and_viewport_arbitration_policy(
             ..Default::default()
         },
         &ThemeTokens::default(),
-        viewport_panel,
+        viewport_panel_id,
         Some(viewport_surface),
     );
-    let mut frame_model = frame_model_for_fixture(&fixture);
+    let mut frame_model = frame_model_for_projection(&projection);
     frame_model.surfaces.insert(
         viewport_surface,
         ResolvedSurfaceFrame {
             artifact: SurfacePresentationArtifact::provider(viewport_root),
             ..surface_frame(
                 viewport_panel,
-                viewport_stack,
-                viewport_state,
                 WidgetId(viewport_surface.raw() + 10_000),
             )
         },
