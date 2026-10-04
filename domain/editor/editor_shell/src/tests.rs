@@ -1501,7 +1501,10 @@ fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right
     else {
         panic!("default outliner slot should be a tab stack");
     };
-    let ProjectedWorkspaceHostSlot::TabStack { tab_stack: inspector, .. } = inspector.as_ref()
+    let ProjectedWorkspaceHostSlot::TabStack {
+        tab_stack: inspector,
+        ..
+    } = inspector.as_ref()
     else {
         panic!("default inspector slot should be a tab stack");
     };
@@ -1518,7 +1521,10 @@ fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right
         Some(PanelKind::Outliner)
     );
     assert_eq!(
-        inspector.active_panel.as_ref().map(|panel| panel.panel_kind),
+        inspector
+            .active_panel
+            .as_ref()
+            .map(|panel| panel.panel_kind),
         Some(PanelKind::Inspector)
     );
 }
@@ -2349,12 +2355,13 @@ fn tab_stack_area_actions_project_structural_commands_without_surface_submenu() 
         tab_stack_split_horizontal_button_widget_id(viewport_stack)
     ));
 
-    let active_frame_model = frame_model_for_fixture(&fixture)
-        .with_active_tab_stack_popup_menu(Some(ActiveTabStackPopupMenu {
+    let active_frame_model = frame_model_for_fixture(&fixture).with_active_tab_stack_popup_menu(
+        Some(ActiveTabStackPopupMenu {
             kind: TabStackPopupMenuKind::AreaActions,
             tab_stack_id: viewport_stack,
             anchor_widget_id: WidgetId(99_001),
-        }));
+        }),
+    );
     let active_build =
         build_shell_frame_for_fixture(&active_frame_model, &ThemeTokens::default(), &fixture);
     let projection_epoch = active_build.projection_artifacts.projection_epoch;
@@ -2400,12 +2407,13 @@ fn tab_stack_surface_submenu_is_not_formed_for_stable_key_chrome() {
     let fixture = scene_composition_fixture();
     let (viewport_panel, _) = panel_and_surface_by_kind(&fixture, PanelKind::Viewport);
     let viewport_stack = tab_stack_by_panel(&fixture, viewport_panel);
-    let active_frame_model = frame_model_for_fixture(&fixture)
-        .with_active_tab_stack_popup_menu(Some(ActiveTabStackPopupMenu {
+    let active_frame_model = frame_model_for_fixture(&fixture).with_active_tab_stack_popup_menu(
+        Some(ActiveTabStackPopupMenu {
             kind: TabStackPopupMenuKind::SurfaceKinds,
             tab_stack_id: viewport_stack,
             anchor_widget_id: tab_stack_surface_submenu_anchor_widget_id(viewport_stack),
-        }));
+        }),
+    );
     let active_build =
         build_shell_frame_for_fixture(&active_frame_model, &ThemeTokens::default(), &fixture);
 
@@ -2531,7 +2539,6 @@ fn tab_plus_projects_create_surface_menu_and_routes_selected_kind() {
     ));
 }
 
-
 #[test]
 fn locked_tab_plus_menu_shows_only_compatible_create_kind() {
     let mut fixture = scene_composition_fixture();
@@ -2563,11 +2570,12 @@ fn locked_tab_plus_menu_shows_only_compatible_create_kind() {
             tab_stack_id: viewport_stack,
             anchor_widget_id: tab_stack_new_tab_button_widget_id(viewport_stack),
         }));
-    let active_build = build_editor_shell_frame_from_composition_projection_with_structural_interactions(
-        &active_frame_model,
-        &ThemeTokens::default(),
-        &projection,
-    );
+    let active_build =
+        build_editor_shell_frame_from_composition_projection_with_structural_interactions(
+            &active_frame_model,
+            &ThemeTokens::default(),
+            &projection,
+        );
     assert!(button_enabled(
         &active_build.tree.root,
         tab_stack_new_surface_menu_item_widget_id(viewport_stack, 0)
@@ -2791,13 +2799,11 @@ fn frame_model_surfaces_are_artifact_lookup_not_layout_authority() {
     );
 }
 
-
 #[test]
 fn shell_frame_renders_dynamic_split_workspace_after_area_split() {
     let mut fixture = scene_composition_fixture();
     let before = fixture.projection();
-    let (viewport_panel, _) =
-        panel_and_surface_by_kind_in_projection(&before, PanelKind::Viewport);
+    let (viewport_panel, _) = panel_and_surface_by_kind_in_projection(&before, PanelKind::Viewport);
     let viewport_stack = tab_stack_by_panel_in_projection(&before, viewport_panel);
     let viewport_region = region_for_tab_stack(&fixture, viewport_stack);
     let previous_stacks = projected_tab_stacks(&before)
@@ -2858,7 +2864,11 @@ fn build_shell_frame_for_fixture(
     fixture: &TestShellComposition,
 ) -> crate::EditorShellBuildResult {
     let projection = fixture.projection();
-    build_editor_shell_frame_from_composition_projection_with_structural_interactions(frame_model, theme, &projection)
+    build_editor_shell_frame_from_composition_projection_with_structural_interactions(
+        frame_model,
+        theme,
+        &projection,
+    )
 }
 
 fn build_shell_frame_with_docking_for_fixture(
@@ -2888,7 +2898,9 @@ fn frame_model_with_surface_route(
         .surfaces
         .get_mut(&routed_surface)
         .expect("routed surface should exist in frame model");
-    frame.routes.insert(widget_id, SurfaceLocalRoute::new(action));
+    frame
+        .routes
+        .insert(widget_id, SurfaceLocalRoute::new(action));
     frame.artifact.root = label(
         widget_id,
         frame.title.clone(),
@@ -2911,7 +2923,9 @@ fn mapped_surface_actions_for_route(
         .surfaces
         .get_mut(&surface_id)
         .expect("routed surface should exist in frame model");
-    frame.routes.insert(widget_id, SurfaceLocalRoute::new(action));
+    frame
+        .routes
+        .insert(widget_id, SurfaceLocalRoute::new(action));
     frame.artifact.root = label(
         widget_id,
         frame.title.clone(),
@@ -2924,7 +2938,9 @@ fn mapped_surface_actions_for_route(
     );
 
     map_interactions_to_shell_commands(
-        &UiInteractionResults { items: interactions },
+        &UiInteractionResults {
+            items: interactions,
+        },
         &build.projection_artifacts,
     )
     .into_iter()
