@@ -354,7 +354,6 @@ impl SelfAuthoringWorkspaceState {
         Err(first_diagnostic)
     }
 
-
     pub fn create_custom_workbench_package(
         &mut self,
     ) -> Result<EditorDefinitionId, UiDefinitionDiagnostic> {
@@ -502,7 +501,6 @@ impl SelfAuthoringWorkspaceState {
         }
         self.record_source_change();
     }
-
 
     pub fn select_ui_node(
         &mut self,
@@ -803,7 +801,6 @@ impl SelfAuthoringWorkspaceState {
             &layouts,
         ))
     }
-
 
     pub fn diagnostics_for_document(
         &self,
@@ -2660,7 +2657,6 @@ mod tests {
             EditorLabRollbackStatus::RolledBack
         );
     }
-
 
     #[test]
     fn retained_ui_node_and_theme_edits_stay_in_draft_documents() {
