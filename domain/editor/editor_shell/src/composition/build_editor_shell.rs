@@ -20,6 +20,7 @@ use ui_text::{FontId, TextLineHeightPolicy};
 use ui_theme::{ThemeTokens, UiColor};
 use ui_tree::{OverlayAdornmentNode, PopupAlign, PopupFlipPolicy, PopupNode, PopupSide};
 
+use super::surface_definition_context::contrast_popup_theme;
 use crate::{
     BODY_FLOATING_SPLIT_WIDGET_ID, BODY_ROOT_WIDGET_ID, EDITOR_DESIGN_WORKSPACE_PROFILE_ID,
     FLOATING_COLUMN_WIDGET_ID, FLOATING_DROP_ZONE_WIDGET_ID, MATERIAL_WORKSPACE_PROFILE_ID,
@@ -59,7 +60,6 @@ use crate::{
     UiNode, UiNodeKind, UiTree, button, button_selected, hscroll, hstack_with_policies, label,
     panel, spacer, split, vscroll, vstack_with_policies,
 };
-use super::surface_definition_context::contrast_popup_theme;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum RoutedShellAction {
