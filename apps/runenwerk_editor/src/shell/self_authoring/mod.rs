@@ -9,13 +9,13 @@ mod project_io;
 mod recipes;
 mod session;
 
+pub use apply::DefinitionApplyPreview;
 pub use documents::{
     EDITOR_DEFINITION_EXPORT_PACKAGE_KIND, EDITOR_DEFINITION_EXPORT_PACKAGE_VERSION,
     EditorDefinitionExportPackage,
 };
 pub use evidence::EditorLabProductPathEvidenceCapture;
 use operations::*;
-pub use apply::DefinitionApplyPreview;
 use recipes::*;
 use session::EditorLabOperationHistory;
 #[cfg(test)]
@@ -477,7 +477,6 @@ impl SelfAuthoringWorkspaceState {
         )
     }
 
-
     pub fn select_ui_node(
         &mut self,
         node_id: impl Into<String>,
@@ -826,7 +825,6 @@ impl SelfAuthoringWorkspaceState {
         Some(ui_definition::form_retained_ui(&normalized, &mut context))
     }
 
-
     pub fn last_scenario_evidence_packets(&self) -> &[EditorLabScenarioEvidencePacket] {
         &self.last_scenario_evidence_packets
     }
@@ -871,7 +869,6 @@ impl SelfAuthoringWorkspaceState {
         self.last_scenario_evidence_packets = packets.clone();
         Ok(packets)
     }
-
 
     fn source_revision_for_document(
         &self,
@@ -1123,7 +1120,6 @@ fn pm005_intent_descriptors(target_profile: &str) -> Vec<EditorLabValidatedInten
         ),
     ]
 }
-
 
 fn default_editor_definition_documents() -> Vec<EditorDefinitionDocument> {
     vec![
@@ -1491,7 +1487,6 @@ mod tests {
         assert!(state.selected_ui_node_id().is_some());
     }
 
-
     #[test]
     fn retained_ui_node_and_theme_edits_stay_in_draft_documents() {
         let mut state =
@@ -1766,6 +1761,4 @@ mod tests {
             EditorWorkspaceHostDefinition::Split { .. }
         ));
     }
-
-
 }
