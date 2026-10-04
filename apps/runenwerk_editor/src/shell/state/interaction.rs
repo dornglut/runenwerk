@@ -672,6 +672,7 @@ impl RunenwerkEditorShellState {
             state.docking_visual_state.active_split_preview_fraction = None;
         }
     }
+
     fn resolve_split_host_id(&self, split_kind: WorkspaceSplitKind) -> Option<PanelHostId> {
         let root = self
             .composition_projection
