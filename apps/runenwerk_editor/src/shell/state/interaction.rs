@@ -4,8 +4,8 @@ use editor_shell::{
     ActiveTabDragVisualState, BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID,
     DockDropCandidate, DockDropCandidateState, DockSplitSide, DockingInteractionVisualState,
     DockingPreviewDropTarget, EditorCompositionRuntime, EditorDockingIntent,
-    LEFT_RIGHT_SPLIT_WIDGET_ID, PanelHostId,
-    PanelInstanceId, RegionCompassViewModel, TabStackId, WidgetId, WorkspaceSplitAxis,
+    LEFT_RIGHT_SPLIT_WIDGET_ID, PanelHostId, PanelInstanceId, RegionCompassViewModel, TabStackId,
+    WidgetId, WorkspaceSplitAxis,
 };
 use ui_composition::{PresentationTargetId, RegionId, SplitFraction, StateRevision};
 use ui_math::UiPoint;
