@@ -160,7 +160,6 @@ impl SelfAuthoringWorkspaceState {
         self.selected_document_id.as_ref()
     }
 
-
     pub fn recipe_catalog_filter(&self) -> &str {
         &self.recipe_catalog_filter
     }
@@ -816,13 +815,11 @@ impl SelfAuthoringWorkspaceState {
         Some(ui_definition::form_retained_ui(&normalized, &mut context))
     }
 
-
     fn record_source_change(&mut self) {
         self.source_revision_epoch = self.source_revision_epoch.saturating_add(1);
         self.last_scenario_evidence_packets.clear();
     }
 }
-
 
 fn default_editor_definition_documents() -> Vec<EditorDefinitionDocument> {
     vec![
@@ -1311,7 +1308,6 @@ mod tests {
         assert!(ui_node_exists(&redo_template.root, &inserted_node));
         assert_eq!(state.operation_history_snapshot().undo_count, 1);
     }
-
 
     #[test]
     fn recipe_insertion_rejects_incompatible_target_without_mutating_history() {
