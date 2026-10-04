@@ -1581,13 +1581,18 @@ fn shell_chrome_stable_key_only_surfaces_do_not_fallback_to_viewport() {
 fn production_workspace_layout_readers_are_registry_aware() {
     let dispatch =
         read_workspace_source("apps/runenwerk_editor/src/shell/dispatch_shell_command.rs");
+    let workspace_io = read_workspace_source(
+        "apps/runenwerk_editor/src/shell/dispatch_shell_command/workspace_io.rs",
+    );
     let persistence =
         read_workspace_source("apps/runenwerk_editor/src/persistence/workspace_layout.rs");
 
     assert!(
-        dispatch.contains("load_editor_composition_layout")
+        workspace_io.contains("load_editor_composition_layout")
             && !dispatch.contains("read_workspace_layout_legacy_no_registry")
-            && !dispatch.contains("read_workspace_layout_with_metadata_legacy_no_registry"),
+            && !dispatch.contains("read_workspace_layout_with_metadata_legacy_no_registry")
+            && !workspace_io.contains("read_workspace_layout_legacy_no_registry")
+            && !workspace_io.contains("read_workspace_layout_with_metadata_legacy_no_registry"),
         "production shell workspace load paths must use composition layout readers",
     );
     assert!(
