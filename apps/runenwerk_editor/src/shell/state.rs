@@ -4,10 +4,9 @@ use editor_shell::{
     EditorFreshTargetRequest, EditorStructuralEditPlan, EditorWindowId, EditorWindowRegistry,
     MODELLING_WORKSPACE_PROFILE_ID, PanelHostId, PanelInstanceId, PreparedEditorCompositionCommit,
     ProfileRef, SCENE_WORKSPACE_PROFILE_ID, ShellProjectionArtifacts, TabStackId,
-    TabStackPopupMenuKind,
-    ToolSurfaceInstanceId, ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime, UiTree, WidgetId,
-    WorkspaceId, WorkspaceIdentityAllocator, WorkspaceProfileId, WorkspaceProfileRegistry,
-    WorkspaceProfileRegistryBackedBuildError,
+    TabStackPopupMenuKind, ToolSurfaceInstanceId, ToolSurfaceRegistry, ToolbarMenuKind, UiRuntime,
+    UiTree, WidgetId, WorkspaceId, WorkspaceIdentityAllocator, WorkspaceProfileId,
+    WorkspaceProfileRegistry, WorkspaceProfileRegistryBackedBuildError,
     form_editor_profile_layout_source, form_editor_profile_layout_source_with_identities,
     project_editor_composition,
 };
@@ -24,8 +23,8 @@ use crate::shell::{
 
 mod interaction;
 
-pub use interaction::{CornerAreaSplitSession, CornerSplitResizeSession, WorkspaceSplitKind};
 use interaction::TargetInteractionState;
+pub use interaction::{CornerAreaSplitSession, CornerSplitResizeSession, WorkspaceSplitKind};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EditorWindowPresentationBinding {
@@ -1216,7 +1215,6 @@ impl RunenwerkEditorShellState {
         projection_epoch == self.projection_epoch
     }
 
-
     pub fn clear_cached_projection(&mut self) {
         self.projection_epoch = self.projection_epoch.saturating_add(1);
         self.last_tree = None;
@@ -1227,9 +1225,7 @@ impl RunenwerkEditorShellState {
         self.last_projection_artifacts_by_target.clear();
         self.clear_all_tab_drags();
     }
-
 }
-
 
 #[cfg(test)]
 mod tests {
