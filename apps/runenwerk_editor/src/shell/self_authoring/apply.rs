@@ -1,5 +1,6 @@
 //! Apply preview, review, accept/reject, applied snapshot, and rollback ownership.
 
+use super::workbench::workbench_composition_package_documents;
 use super::*;
 
 #[derive(Debug, Clone)]

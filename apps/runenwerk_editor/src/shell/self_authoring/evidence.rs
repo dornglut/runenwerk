@@ -1,6 +1,7 @@
 //! UI Designer runtime-evidence capture DTOs owned by the self-authoring session.
 
 use super::*;
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Default)]
 pub struct EditorLabProductPathEvidenceCapture {
