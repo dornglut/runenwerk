@@ -20,10 +20,6 @@ mod tests;
 
 pub use commands::*;
 pub use composition::*;
-#[cfg(test)]
-pub(crate) use composition::{
-    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
-};
 pub use expression::*;
 pub use ids::*;
 pub use observation::*;

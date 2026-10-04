@@ -1,12 +1,22 @@
 use std::collections::BTreeMap;
 
 use editor_core::{ComponentTypeId, EntityId};
+use editor_definition::{
+    EditorWorkspaceHostDefinition, EditorWorkspaceLayoutDefinition,
+    EditorWorkspacePanelTabDefinition, EditorWorkspaceSplitAxisDefinition,
+};
 use ui_input::{
     Key, KeyState, KeyboardEvent, Modifiers, PointerEvent, PointerEventKind, TextInputEvent,
     UiInputEvent,
 };
 use ui_math::Axis;
 use ui_theme::ThemeTokens;
+use ui_composition::{
+    CompositionCapabilityPolicy, CompositionLifecyclePolicy, CompositionPolicies,
+    CompositionPolicyDecision, CompositionSnapshot, CompositionTargetPolicy,
+    CompositionTransaction,
+};
+use ui_surface::{SessionRetentionClass, SurfaceCapabilitySet};
 
 use crate::{
     ActiveTabDragVisualState, ActiveTabStackPopupMenu, AssetBrowserRowViewModel,
@@ -24,10 +34,9 @@ use crate::{
     SurfaceProviderAvailability, SurfaceProviderId, SurfaceRouteTable, TabStackPopupMenuKind,
     ToolSurfaceCreateCandidate, ToolSurfaceKind, ToolbarButtonViewModel, ToolbarViewModel,
     UiInteraction, UiInteractionResults, ViewportSurfaceAction, ViewportViewModel, WidgetId,
-    WorkspaceIdentityAllocator, WorkspaceMutation, WorkspaceSplitAxis, WorkspaceState,
-    build_editor_shell_frame, build_editor_shell_frame_with_docking_visual_state,
+    WorkspaceSplitAxis,
     build_entity_table_panel, build_viewport_panel, label, map_interactions_to_shell_commands,
-    panel_kind_definition_key, reduce_workspace, stable_key_for_tool_surface_kind,
+    panel_kind_definition_key, stable_key_for_tool_surface_kind,
     surface_widget_id, tab_active_indicator_widget_id, tab_chrome_widget_id,
     tab_close_button_widget_id, tab_drop_zone_widget_id, tab_stack_action_menu_popup_widget_id,
     tab_stack_new_surface_menu_item_widget_id, tab_stack_new_surface_menu_popup_widget_id,
@@ -37,6 +46,212 @@ use crate::{
     toolbar_workspace_active_indicator_widget_id, toolbar_workspace_chrome_widget_id,
     toolbar_workspace_close_widget_id, workspace_split_host_widget_id,
 };
+
+use crate::{
+    EditorCompositionIdentityAllocator, EditorCompositionProjectionArtifact,
+    EditorCompositionRuntime, EditorStructuralEditPlan, EditorToolSuite, ProjectedPanelSlot,
+    ProjectedTabStackSlot, ProjectedWorkspaceHostSlot, ProviderFamilyDefinition,
+    ProviderFamilyId, SCENE_WORKSPACE_PROFILE_ID, SuiteRef, SurfaceRef, ToolSuiteRegistry,
+    ToolSurfaceCreationPolicy, ToolSurfaceDefinition, ToolSurfaceRole, ToolSurfaceRoute,
+    build_editor_shell_frame_from_composition_projection,
+    build_editor_shell_frame_from_composition_projection_with_docking_visual_state,
+    form_editor_profile_composition_with_identities, panel_kind_for_tool_surface_kind,
+    plan_editor_set_stack_lock, plan_editor_split_with_new_unit, project_editor_composition,
+    projected_host_tab_stacks,
+};
+
+struct TestShellComposition {
+    runtime: EditorCompositionRuntime,
+    identities: EditorCompositionIdentityAllocator,
+    registry: ToolSuiteRegistry,
+}
+
+impl TestShellComposition {
+    fn projection(&self) -> EditorCompositionProjectionArtifact {
+        project_editor_composition(&self.runtime)
+            .expect("current test composition should project")
+    }
+
+    fn apply_plan(
+        &mut self,
+        plan: EditorStructuralEditPlan,
+    ) -> EditorCompositionProjectionArtifact {
+        let EditorStructuralEditPlan { change, identities } = plan;
+        let allow = AllowCompositionChange;
+        let prepared = self
+            .runtime
+            .prepare_change(change, composition_policies(&allow))
+            .expect("current structural test change should prepare");
+        let projection = self
+            .runtime
+            .commit_prepared(prepared)
+            .expect("current structural test change should commit");
+        self.identities = identities;
+        projection
+    }
+}
+
+struct AllowCompositionChange;
+
+impl CompositionLifecyclePolicy for AllowCompositionChange {
+    fn evaluate(
+        &self,
+        _: CompositionSnapshot<'_>,
+        _: &CompositionTransaction,
+    ) -> CompositionPolicyDecision {
+        CompositionPolicyDecision::Accepted
+    }
+}
+
+impl CompositionCapabilityPolicy for AllowCompositionChange {
+    fn evaluate(
+        &self,
+        _: CompositionSnapshot<'_>,
+        _: &CompositionTransaction,
+    ) -> CompositionPolicyDecision {
+        CompositionPolicyDecision::Accepted
+    }
+}
+
+impl CompositionTargetPolicy for AllowCompositionChange {
+    fn evaluate(
+        &self,
+        _: CompositionSnapshot<'_>,
+        _: &CompositionTransaction,
+    ) -> CompositionPolicyDecision {
+        CompositionPolicyDecision::Accepted
+    }
+}
+
+fn composition_policies(allow: &AllowCompositionChange) -> CompositionPolicies<'_> {
+    CompositionPolicies {
+        lifecycle: allow,
+        capability: allow,
+        target: allow,
+    }
+}
+
+fn scene_composition_fixture() -> TestShellComposition {
+    let layout = EditorWorkspaceLayoutDefinition {
+        id: "runenwerk.test.scene-shell".to_string(),
+        label: "Scene Shell".to_string(),
+        root: EditorWorkspaceHostDefinition::Split {
+            id: "root.body-console".to_string(),
+            axis: EditorWorkspaceSplitAxisDefinition::Vertical,
+            fraction: 0.78,
+            first: Box::new(EditorWorkspaceHostDefinition::Split {
+                id: "body.viewport-sidebar".to_string(),
+                axis: EditorWorkspaceSplitAxisDefinition::Horizontal,
+                fraction: 0.72,
+                first: Box::new(test_stack("viewport", ToolSurfaceKind::Viewport)),
+                second: Box::new(EditorWorkspaceHostDefinition::Split {
+                    id: "sidebar.outliner-inspector".to_string(),
+                    axis: EditorWorkspaceSplitAxisDefinition::Vertical,
+                    fraction: 0.56,
+                    first: Box::new(test_stack("outliner", ToolSurfaceKind::Outliner)),
+                    second: Box::new(test_stack("inspector", ToolSurfaceKind::Inspector)),
+                }),
+            }),
+            second: Box::new(test_stack("console", ToolSurfaceKind::Console)),
+        },
+        floating_hosts: Vec::new(),
+    };
+    composition_fixture(
+        layout,
+        &[
+            ToolSurfaceKind::Viewport,
+            ToolSurfaceKind::Outliner,
+            ToolSurfaceKind::Inspector,
+            ToolSurfaceKind::Console,
+        ],
+    )
+}
+
+fn single_surface_composition_fixture(kind: ToolSurfaceKind) -> TestShellComposition {
+    composition_fixture(
+        EditorWorkspaceLayoutDefinition {
+            id: format!("runenwerk.test.single.{}", tool_surface_kind_definition_key(kind)),
+            label: format!("{kind:?} Test Shell"),
+            root: test_stack("single", kind),
+            floating_hosts: Vec::new(),
+        },
+        &[kind],
+    )
+}
+
+fn composition_fixture(
+    layout: EditorWorkspaceLayoutDefinition,
+    kinds: &[ToolSurfaceKind],
+) -> TestShellComposition {
+    let registry = test_tool_suite_registry(kinds);
+    let mut identities = EditorCompositionIdentityAllocator::new();
+    let target_id = identities
+        .allocate_target()
+        .expect("test composition target identity should allocate");
+    let (runtime, identities) = form_editor_profile_composition_with_identities(
+        SCENE_WORKSPACE_PROFILE_ID,
+        &layout,
+        registry.surfaces(),
+        target_id,
+        identities,
+    )
+    .expect("current composition-native test layout should form");
+    TestShellComposition {
+        runtime,
+        identities,
+        registry,
+    }
+}
+
+fn test_stack(id: &str, kind: ToolSurfaceKind) -> EditorWorkspaceHostDefinition {
+    let stable_key = stable_key_for_tool_surface_kind(kind)
+        .expect("test surface kind should have a stable key");
+    EditorWorkspaceHostDefinition::TabStack {
+        id: format!("{id}.stack"),
+        tabs: vec![EditorWorkspacePanelTabDefinition {
+            id: format!("{id}.tab"),
+            label: format!("{kind:?}"),
+            tool_surface: stable_key.as_str().to_string(),
+        }],
+        active_tab: Some(format!("{id}.tab")),
+    }
+}
+
+fn test_tool_suite_registry(kinds: &[ToolSurfaceKind]) -> ToolSuiteRegistry {
+    let provider_family =
+        ProviderFamilyId::new("runenwerk.test.shell").expect("test provider family should be valid");
+    let surfaces = kinds
+        .iter()
+        .copied()
+        .map(|kind| {
+            let stable_key = stable_key_for_tool_surface_kind(kind)
+                .expect("test surface kind should have a stable key");
+            ToolSurfaceDefinition::new(
+                SurfaceRef::new(stable_key),
+                format!("{kind:?}"),
+                if kind == ToolSurfaceKind::Inspector {
+                    ToolSurfaceRole::Inspector
+                } else {
+                    ToolSurfaceRole::Primary
+                },
+                panel_kind_for_tool_surface_kind(kind),
+                provider_family.clone(),
+                ToolSurfaceRoute::ProviderOwnedLocal,
+                SurfaceCapabilitySet::new(true, true, true, false),
+                SessionRetentionClass::Restorable,
+                ToolSurfaceCreationPolicy::MultipleInstances,
+            )
+        })
+        .collect();
+    ToolSuiteRegistry::new(vec![EditorToolSuite::new(
+        SuiteRef::from_stable_key("runenwerk.test.shell")
+            .expect("test suite key should be valid"),
+        "Shell Tests",
+        vec![ProviderFamilyDefinition::new(provider_family, "Shell Tests")],
+        surfaces,
+    )])
+    .expect("test tool suite should be valid")
+}
 
 #[test]
 fn shell_graph_routing_has_no_new_domain_specific_graph_dispatch_actions() {
@@ -724,8 +939,8 @@ fn toolbar_omits_global_transform_tool_buttons() {
         },
         BTreeMap::new(),
     );
-    let workspace = sample_workspace_state();
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let fixture = scene_composition_fixture();
+    let build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
     for removed_widget in [
         crate::TOOLBAR_SELECT_BUTTON_WIDGET_ID,
         crate::TOOLBAR_TRANSLATE_BUTTON_WIDGET_ID,
@@ -811,8 +1026,8 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
         },
         BTreeMap::new(),
     );
-    let workspace = sample_workspace_state();
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let fixture = scene_composition_fixture();
+    let build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
             items: vec![
@@ -927,10 +1142,10 @@ fn top_bar_menu_and_workspace_buttons_map_to_shell_commands() {
         },
         BTreeMap::new(),
     );
-    let workspace_menu_build = build_editor_shell_frame(
+    let workspace_menu_build = build_shell_frame_for_fixture(
         &workspace_menu_frame_model,
         &ThemeTokens::default(),
-        &workspace,
+        &fixture,
     );
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
@@ -990,8 +1205,8 @@ fn toolbar_route_slots_use_app_supplied_route_actions_before_fallback() {
         "authored.apply-selected".to_string(),
         RoutedShellAction::ApplySelectedEditorDefinition,
     )]));
-    let workspace = sample_workspace_state();
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let fixture = scene_composition_fixture();
+    let build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
 
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
@@ -1040,10 +1255,10 @@ fn active_top_bar_menu_projects_as_popup_without_pushing_content_down() {
         },
         BTreeMap::new(),
     );
-    let workspace = sample_workspace_state();
+    let fixture = scene_composition_fixture();
     let theme = ThemeTokens::default();
-    let active = build_editor_shell_frame(&active_frame_model, &theme, &workspace);
-    let inactive = build_editor_shell_frame(&inactive_frame_model, &theme, &workspace);
+    let active = build_shell_frame_for_fixture(&active_frame_model, &theme, &fixture);
+    let inactive = build_shell_frame_for_fixture(&inactive_frame_model, &theme, &fixture);
     let active_layouts = ui_runtime::compute_tree_layout(
         &active.tree,
         ui_math::UiRect::new(0.0, 0.0, 1024.0, 768.0),
@@ -1210,8 +1425,8 @@ fn toolbar_separator_projects_as_centered_visible_divider() {
         },
         BTreeMap::new(),
     );
-    let workspace = sample_workspace_state();
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let fixture = scene_composition_fixture();
+    let build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
     let layouts = ui_runtime::compute_tree_layout(
         &build.tree,
         ui_math::UiRect::new(0.0, 0.0, 1024.0, 768.0),
@@ -1244,21 +1459,21 @@ fn toolbar_separator_projects_as_centered_visible_divider() {
     );
 }
 
+
 #[test]
 fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right() {
-    let workspace = sample_workspace_state();
-    let projection =
-        crate::project_workspace_for_shell(&workspace).expect("default layout should project");
-    let crate::ProjectedWorkspaceHostSlot::Split {
+    let fixture = scene_composition_fixture();
+    let projection = fixture.projection();
+    let ProjectedWorkspaceHostSlot::Split {
         axis: WorkspaceSplitAxis::Vertical,
         fraction: body_console_fraction,
         first_child: left_right,
         ..
-    } = &projection.root_host
+    } = &projection.shell.root_host
     else {
         panic!("default root host should be a vertical graph split");
     };
-    let crate::ProjectedWorkspaceHostSlot::Split {
+    let ProjectedWorkspaceHostSlot::Split {
         axis: WorkspaceSplitAxis::Horizontal,
         fraction: left_right_fraction,
         first_child: viewport,
@@ -1268,7 +1483,7 @@ fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right
     else {
         panic!("default upper body should be a horizontal graph split");
     };
-    let crate::ProjectedWorkspaceHostSlot::Split {
+    let ProjectedWorkspaceHostSlot::Split {
         axis: WorkspaceSplitAxis::Vertical,
         fraction: center_right_fraction,
         first_child: outliner,
@@ -1278,24 +1493,15 @@ fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right
     else {
         panic!("default right sidebar should be a vertical graph split");
     };
-    let crate::ProjectedWorkspaceHostSlot::TabStack {
-        tab_stack: viewport,
-        ..
-    } = viewport.as_ref()
+    let ProjectedWorkspaceHostSlot::TabStack { tab_stack: viewport, .. } = viewport.as_ref()
     else {
         panic!("default viewport slot should be a tab stack");
     };
-    let crate::ProjectedWorkspaceHostSlot::TabStack {
-        tab_stack: outliner,
-        ..
-    } = outliner.as_ref()
+    let ProjectedWorkspaceHostSlot::TabStack { tab_stack: outliner, .. } = outliner.as_ref()
     else {
         panic!("default outliner slot should be a tab stack");
     };
-    let crate::ProjectedWorkspaceHostSlot::TabStack {
-        tab_stack: inspector,
-        ..
-    } = inspector.as_ref()
+    let ProjectedWorkspaceHostSlot::TabStack { tab_stack: inspector, .. } = inspector.as_ref()
     else {
         panic!("default inspector slot should be a tab stack");
     };
@@ -1312,14 +1518,10 @@ fn default_scene_workspace_uses_viewport_left_and_hierarchy_over_inspector_right
         Some(PanelKind::Outliner)
     );
     assert_eq!(
-        inspector
-            .active_panel
-            .as_ref()
-            .map(|panel| panel.panel_kind),
+        inspector.active_panel.as_ref().map(|panel| panel.panel_kind),
         Some(PanelKind::Inspector)
     );
 }
-
 #[test]
 fn panel_and_tool_surface_definition_keys_share_workspace_vocabulary() {
     for (panel_kind, tool_surface_kind, expected_key) in [
@@ -1530,10 +1732,10 @@ fn panel_and_tool_surface_definition_keys_share_workspace_vocabulary() {
 
 #[test]
 fn provider_route_activation_maps_to_surface_local_dispatch_command() {
-    let workspace = sample_workspace_state();
-    let (panel_id, surface_id) = panel_and_surface_by_kind(&workspace, PanelKind::Outliner);
+    let fixture = scene_composition_fixture();
+    let (panel_id, surface_id) = panel_and_surface_by_kind(&fixture, PanelKind::Outliner);
     let frame_model = frame_model_with_surface_route(
-        &workspace,
+        &fixture,
         surface_id,
         WidgetId(50_000),
         SurfaceLocalAction::Outliner(OutlinerSurfaceAction::SelectEntity {
@@ -1541,7 +1743,7 @@ fn provider_route_activation_maps_to_surface_local_dispatch_command() {
         }),
     );
 
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
             items: vec![UiInteraction::Activated(WidgetId(50_000))],
@@ -1568,10 +1770,10 @@ fn provider_route_activation_maps_to_surface_local_dispatch_command() {
 
 #[test]
 fn graph_canvas_interaction_maps_to_generic_surface_interaction() {
-    let workspace = sample_workspace_state();
-    let (panel_id, surface_id) = panel_and_surface_by_kind(&workspace, PanelKind::Outliner);
+    let fixture = scene_composition_fixture();
+    let (panel_id, surface_id) = panel_and_surface_by_kind(&fixture, PanelKind::Outliner);
     let widget_id = WidgetId(50_010);
-    let mut frame_model = frame_model_for_workspace(&workspace);
+    let mut frame_model = frame_model_for_fixture(&fixture);
     let frame = frame_model
         .surfaces
         .get_mut(&surface_id)
@@ -1585,7 +1787,7 @@ fn graph_canvas_interaction_maps_to_generic_surface_interaction() {
         ThemeTokens::default().body_small_text_style(ui_text::FontId(1)),
     );
 
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
             items: vec![UiInteraction::GraphCanvasAction {
@@ -1621,10 +1823,10 @@ fn graph_canvas_interaction_maps_to_generic_surface_interaction() {
 
 #[test]
 fn graph_canvas_shortcut_actions_map_to_generic_surface_interactions() {
-    let workspace = sample_workspace_state();
-    let (panel_id, surface_id) = panel_and_surface_by_kind(&workspace, PanelKind::Outliner);
+    let fixture = scene_composition_fixture();
+    let (panel_id, surface_id) = panel_and_surface_by_kind(&fixture, PanelKind::Outliner);
     let widget_id = WidgetId(50_011);
-    let mut frame_model = frame_model_for_workspace(&workspace);
+    let mut frame_model = frame_model_for_fixture(&fixture);
     let frame = frame_model
         .surfaces
         .get_mut(&surface_id)
@@ -1638,7 +1840,7 @@ fn graph_canvas_shortcut_actions_map_to_generic_surface_interactions() {
         ThemeTokens::default().body_small_text_style(ui_text::FontId(1)),
     );
 
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
     let commands = map_interactions_to_shell_commands(
         &UiInteractionResults {
             items: vec![
@@ -1691,17 +1893,17 @@ fn graph_canvas_shortcut_actions_map_to_generic_surface_interactions() {
 
 #[test]
 fn provider_route_rejects_mismatched_structural_context() {
-    let workspace = sample_workspace_state();
-    let (_, surface_id) = panel_and_surface_by_kind(&workspace, PanelKind::Outliner);
+    let fixture = scene_composition_fixture();
+    let (_, surface_id) = panel_and_surface_by_kind(&fixture, PanelKind::Outliner);
     let frame_model = frame_model_with_surface_route(
-        &workspace,
+        &fixture,
         surface_id,
         WidgetId(50_001),
         SurfaceLocalAction::Outliner(OutlinerSurfaceAction::SelectEntity {
             entity: EntityId(42),
         }),
     );
-    let mut build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let mut build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
     build
         .projection_artifacts
         .widget_structural_context_by_id
@@ -2036,14 +2238,14 @@ fn surface_text_keyboard_toggle_and_numeric_input_map_to_typed_inspector_actions
 
 #[test]
 fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let frame_model = frame_model_for_workspace(&workspace)
+    let fixture = scene_composition_fixture();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&fixture, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&fixture, viewport_panel);
+    let frame_model = frame_model_for_fixture(&fixture)
         .with_available_tool_surface_create_candidates(create_candidates_for_kinds(&[
             ToolSurfaceKind::Viewport,
         ]));
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
     let projection_epoch = build.projection_artifacts.projection_epoch;
 
     let commands = map_interactions_to_shell_commands(
@@ -2131,12 +2333,12 @@ fn tab_chrome_maps_shell_owned_controls_to_structural_commands() {
 
 #[test]
 fn tab_stack_area_actions_project_structural_commands_without_surface_submenu() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let inactive_frame_model = frame_model_for_workspace(&workspace);
+    let fixture = scene_composition_fixture();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&fixture, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&fixture, viewport_panel);
+    let inactive_frame_model = frame_model_for_fixture(&fixture);
     let inactive_build =
-        build_editor_shell_frame(&inactive_frame_model, &ThemeTokens::default(), &workspace);
+        build_shell_frame_for_fixture(&inactive_frame_model, &ThemeTokens::default(), &fixture);
 
     assert!(!ui_tree_contains_widget(
         &inactive_build.tree.root,
@@ -2147,14 +2349,14 @@ fn tab_stack_area_actions_project_structural_commands_without_surface_submenu() 
         tab_stack_split_horizontal_button_widget_id(viewport_stack)
     ));
 
-    let active_frame_model = frame_model_for_workspace(&workspace)
+    let active_frame_model = frame_model_for_fixture(&fixture)
         .with_active_tab_stack_popup_menu(Some(ActiveTabStackPopupMenu {
             kind: TabStackPopupMenuKind::AreaActions,
             tab_stack_id: viewport_stack,
             anchor_widget_id: WidgetId(99_001),
         }));
     let active_build =
-        build_editor_shell_frame(&active_frame_model, &ThemeTokens::default(), &workspace);
+        build_shell_frame_for_fixture(&active_frame_model, &ThemeTokens::default(), &fixture);
     let projection_epoch = active_build.projection_artifacts.projection_epoch;
 
     assert!(ui_tree_contains_widget(
@@ -2195,17 +2397,17 @@ fn tab_stack_area_actions_project_structural_commands_without_surface_submenu() 
 
 #[test]
 fn tab_stack_surface_submenu_is_not_formed_for_stable_key_chrome() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let active_frame_model = frame_model_for_workspace(&workspace)
+    let fixture = scene_composition_fixture();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&fixture, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&fixture, viewport_panel);
+    let active_frame_model = frame_model_for_fixture(&fixture)
         .with_active_tab_stack_popup_menu(Some(ActiveTabStackPopupMenu {
             kind: TabStackPopupMenuKind::SurfaceKinds,
             tab_stack_id: viewport_stack,
             anchor_widget_id: tab_stack_surface_submenu_anchor_widget_id(viewport_stack),
         }));
     let active_build =
-        build_editor_shell_frame(&active_frame_model, &ThemeTokens::default(), &workspace);
+        build_shell_frame_for_fixture(&active_frame_model, &ThemeTokens::default(), &fixture);
 
     assert!(ui_tree_contains_widget(
         &active_build.tree.root,
@@ -2255,9 +2457,9 @@ fn tab_stack_surface_submenu_is_not_formed_for_stable_key_chrome() {
 
 #[test]
 fn tab_plus_projects_create_surface_menu_and_routes_selected_kind() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+    let fixture = scene_composition_fixture();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&fixture, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&fixture, viewport_panel);
     let available_kinds = vec![
         ToolSurfaceKind::Outliner,
         ToolSurfaceKind::EntityTable,
@@ -2266,10 +2468,10 @@ fn tab_plus_projects_create_surface_menu_and_routes_selected_kind() {
         ToolSurfaceKind::Console,
     ];
     let available_candidates = create_candidates_for_kinds(&available_kinds);
-    let frame_model = frame_model_for_workspace(&workspace)
+    let frame_model = frame_model_for_fixture(&fixture)
         .with_available_tool_surface_create_candidates(available_candidates);
     let inactive_build =
-        build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+        build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
 
     assert!(!ui_tree_contains_widget(
         &inactive_build.tree.root,
@@ -2299,7 +2501,7 @@ fn tab_plus_projects_create_surface_menu_and_routes_selected_kind() {
             anchor_widget_id: tab_stack_new_tab_button_widget_id(viewport_stack),
         }));
     let active_build =
-        build_editor_shell_frame(&active_frame_model, &ThemeTokens::default(), &workspace);
+        build_shell_frame_for_fixture(&active_frame_model, &ThemeTokens::default(), &fixture);
     assert!(ui_tree_contains_widget(
         &active_build.tree.root,
         tab_stack_new_surface_menu_popup_widget_id(viewport_stack)
@@ -2329,19 +2531,23 @@ fn tab_plus_projects_create_surface_menu_and_routes_selected_kind() {
     ));
 }
 
+
 #[test]
 fn locked_tab_plus_menu_shows_only_compatible_create_kind() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let workspace = reduce_workspace(
-        &workspace,
-        WorkspaceMutation::LockTabStackAreaStableKey {
-            tab_stack_id: viewport_stack,
-            locked_stable_surface_key: stable_key_for_tool_surface_kind(ToolSurfaceKind::Viewport),
-        },
+    let mut fixture = scene_composition_fixture();
+    let initial_projection = fixture.projection();
+    let (viewport_panel, _) =
+        panel_and_surface_by_kind_in_projection(&initial_projection, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel_in_projection(&initial_projection, viewport_panel);
+    let viewport_region = region_for_tab_stack(&fixture, viewport_stack);
+    let plan = plan_editor_set_stack_lock(
+        &fixture.runtime,
+        viewport_region,
+        stable_key_for_tool_surface_kind(ToolSurfaceKind::Viewport),
+        fixture.identities,
     )
-    .expect("locking viewport tab stack should succeed");
+    .expect("locking viewport tab stack should plan");
+    let projection = fixture.apply_plan(plan);
     let available_kinds = vec![
         ToolSurfaceKind::Outliner,
         ToolSurfaceKind::EntityTable,
@@ -2350,15 +2556,18 @@ fn locked_tab_plus_menu_shows_only_compatible_create_kind() {
         ToolSurfaceKind::Console,
     ];
     let available_candidates = create_candidates_for_kinds(&available_kinds);
-    let active_frame_model = frame_model_for_workspace(&workspace)
+    let active_frame_model = frame_model_for_projection(&projection)
         .with_available_tool_surface_create_candidates(available_candidates)
         .with_active_tab_stack_popup_menu(Some(ActiveTabStackPopupMenu {
             kind: TabStackPopupMenuKind::CreateSurface,
             tab_stack_id: viewport_stack,
             anchor_widget_id: tab_stack_new_tab_button_widget_id(viewport_stack),
         }));
-    let active_build =
-        build_editor_shell_frame(&active_frame_model, &ThemeTokens::default(), &workspace);
+    let active_build = build_editor_shell_frame_from_composition_projection(
+        &active_frame_model,
+        &ThemeTokens::default(),
+        &projection,
+    );
     assert!(button_enabled(
         &active_build.tree.root,
         tab_stack_new_surface_menu_item_widget_id(viewport_stack, 0)
@@ -2374,22 +2583,20 @@ fn locked_tab_plus_menu_shows_only_compatible_create_kind() {
     );
     assert!(matches!(
         commands.as_slice(),
-        [
-            ShellCommand::CreatePanelTabStableKey {
-                tab_stack_id,
-                stable_surface_key,
-                ..
-            },
-        ] if *tab_stack_id == viewport_stack && stable_surface_key.as_str() == "runenwerk.scene.viewport"
+        [ShellCommand::CreatePanelTabStableKey {
+            tab_stack_id,
+            stable_surface_key,
+            ..
+        }] if *tab_stack_id == viewport_stack
+            && stable_surface_key.as_str() == "runenwerk.scene.viewport"
     ));
 }
-
 #[test]
 fn tab_reorder_drop_slots_are_formed_with_higher_priority_than_split_previews() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let frame_model = frame_model_for_workspace(&workspace);
+    let fixture = scene_composition_fixture();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&fixture, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&fixture, viewport_panel);
+    let frame_model = frame_model_for_fixture(&fixture);
     let docking_visual_state = DockingInteractionVisualState {
         active_tab_drag: Some(ActiveTabDragVisualState {
             panel_instance_id: viewport_panel,
@@ -2405,10 +2612,10 @@ fn tab_reorder_drop_slots_are_formed_with_higher_priority_than_split_previews() 
         active_split_border_widget: None,
         active_split_preview_fraction: None,
     };
-    let build = build_editor_shell_frame_with_docking_visual_state(
+    let build = build_shell_frame_with_docking_for_fixture(
         &frame_model,
         &ThemeTokens::default(),
-        &workspace,
+        &fixture,
         Some(&docking_visual_state),
     );
     let active_zone = tab_drop_zone_widget_id(viewport_stack, 1);
@@ -2439,10 +2646,10 @@ fn tab_reorder_drop_slots_are_formed_with_higher_priority_than_split_previews() 
 
 #[test]
 fn floating_host_drop_zone_is_formed_only_as_active_workspace_target() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let frame_model = frame_model_for_workspace(&workspace);
+    let fixture = scene_composition_fixture();
+    let (viewport_panel, _) = panel_and_surface_by_kind(&fixture, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&fixture, viewport_panel);
+    let frame_model = frame_model_for_fixture(&fixture);
     let docking_visual_state = DockingInteractionVisualState {
         active_tab_drag: Some(ActiveTabDragVisualState {
             panel_instance_id: viewport_panel,
@@ -2455,10 +2662,10 @@ fn floating_host_drop_zone_is_formed_only_as_active_workspace_target() {
         active_split_border_widget: None,
         active_split_preview_fraction: None,
     };
-    let build = build_editor_shell_frame_with_docking_visual_state(
+    let build = build_shell_frame_with_docking_for_fixture(
         &frame_model,
         &ThemeTokens::default(),
-        &workspace,
+        &fixture,
         Some(&docking_visual_state),
     );
 
@@ -2477,10 +2684,10 @@ fn floating_host_drop_zone_is_formed_only_as_active_workspace_target() {
 
 #[test]
 fn viewport_status_region_forms_scroll_overflow_and_viewport_arbitration_policy() {
-    let workspace = sample_workspace_state();
+    let fixture = scene_composition_fixture();
     let (viewport_panel, viewport_surface) =
-        panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
+        panel_and_surface_by_kind(&fixture, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel(&fixture, viewport_panel);
     let viewport_state = workspace
         .tool_surface(viewport_surface)
         .expect("viewport surface should exist");
@@ -2500,7 +2707,7 @@ fn viewport_status_region_forms_scroll_overflow_and_viewport_arbitration_policy(
         viewport_panel,
         Some(viewport_surface),
     );
-    let mut frame_model = frame_model_for_workspace(&workspace);
+    let mut frame_model = frame_model_for_fixture(&fixture);
     frame_model.surfaces.insert(
         viewport_surface,
         ResolvedSurfaceFrame {
@@ -2514,7 +2721,7 @@ fn viewport_status_region_forms_scroll_overflow_and_viewport_arbitration_policy(
         },
     );
 
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
     let interaction_model = &build.projection_artifacts.interaction_model;
     let status_widget_id = surface_widget_id(viewport_surface, crate::VIEWPORT_STATUS_WIDGET_ID);
     let region = interaction_model
@@ -2564,15 +2771,15 @@ fn viewport_status_region_forms_scroll_overflow_and_viewport_arbitration_policy(
 
 #[test]
 fn frame_model_surfaces_are_artifact_lookup_not_layout_authority() {
-    let workspace = sample_workspace_state();
-    let (_, outliner_surface) = panel_and_surface_by_kind(&workspace, PanelKind::Outliner);
-    let (_, viewport_surface) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let frame_model = frame_model_with_only_surface(&workspace, viewport_surface);
+    let fixture = scene_composition_fixture();
+    let (_, outliner_surface) = panel_and_surface_by_kind(&fixture, PanelKind::Outliner);
+    let (_, viewport_surface) = panel_and_surface_by_kind(&fixture, PanelKind::Viewport);
+    let frame_model = frame_model_with_only_surface(&fixture, viewport_surface);
 
     assert!(frame_model.surface(viewport_surface).is_some());
     assert!(frame_model.surface(outliner_surface).is_none());
 
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let build = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
     assert!(
         build
             .projection_artifacts
@@ -2584,40 +2791,51 @@ fn frame_model_surfaces_are_artifact_lookup_not_layout_authority() {
     );
 }
 
+
 #[test]
 fn shell_frame_renders_dynamic_split_workspace_after_area_split() {
-    let workspace = sample_workspace_state();
-    let (viewport_panel, _) = panel_and_surface_by_kind(&workspace, PanelKind::Viewport);
-    let viewport_stack = tab_stack_by_panel(&workspace, viewport_panel);
-    let mut allocator = WorkspaceIdentityAllocator::from_seed(workspace.next_identity_seed());
-    let split_host_id = allocator.allocate_panel_host_id();
-    let first_child_host_id = allocator.allocate_panel_host_id();
-    let second_child_host_id = allocator.allocate_panel_host_id();
-    let new_tab_stack_id = allocator.allocate_tab_stack_id();
-    let new_panel_id = allocator.allocate_panel_instance_id();
-    let new_surface_id = allocator.allocate_tool_surface_instance_id();
+    let mut fixture = scene_composition_fixture();
+    let before = fixture.projection();
+    let (viewport_panel, _) =
+        panel_and_surface_by_kind_in_projection(&before, PanelKind::Viewport);
+    let viewport_stack = tab_stack_by_panel_in_projection(&before, viewport_panel);
+    let viewport_region = region_for_tab_stack(&fixture, viewport_stack);
+    let previous_stacks = projected_tab_stacks(&before)
+        .into_iter()
+        .map(|stack| stack.tab_stack_id)
+        .collect::<Vec<_>>();
+    let previous_split_widgets = split_widget_ids(&before.shell.root_host);
 
-    let split_workspace = reduce_workspace(
-        &workspace,
-        WorkspaceMutation::SplitTabStackArea {
-            tab_stack_id: viewport_stack,
-            axis: WorkspaceSplitAxis::Horizontal,
-            split_host_id,
-            first_child_host_id,
-            second_child_host_id,
-            new_tab_stack_id,
-            new_panel_id,
-            new_panel_kind: PanelKind::Inspector,
-            new_tool_surface_id: new_surface_id,
-            new_stable_surface_key: stable_key_for_tool_surface_kind(ToolSurfaceKind::Inspector)
-                .expect("inspector should have a stable key"),
-            fraction: 0.5,
-        },
+    let plan = plan_editor_split_with_new_unit(
+        &fixture.runtime,
+        viewport_region,
+        WorkspaceSplitAxis::Horizontal,
+        fixture.registry.surfaces(),
+        stable_key_for_tool_surface_kind(ToolSurfaceKind::Inspector)
+            .expect("inspector should have a stable key"),
+        fixture.identities,
     )
-    .expect("split area should produce a valid workspace graph");
-    let frame_model = frame_model_for_workspace(&split_workspace);
+    .expect("split area should plan against current composition");
+    let projection = fixture.apply_plan(plan);
+    let new_stack = projected_tab_stacks(&projection)
+        .into_iter()
+        .find(|stack| !previous_stacks.contains(&stack.tab_stack_id))
+        .expect("split should create one new tab stack");
+    let new_panel = new_stack
+        .active_panel
+        .as_ref()
+        .expect("new split stack should have an active panel");
+    let new_split_widget = split_widget_ids(&projection.shell.root_host)
+        .into_iter()
+        .find(|widget| !previous_split_widgets.contains(widget))
+        .expect("split should create one new split host widget");
 
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &split_workspace);
+    let frame_model = frame_model_for_projection(&projection);
+    let build = build_editor_shell_frame_from_composition_projection(
+        &frame_model,
+        &ThemeTokens::default(),
+        &projection,
+    );
 
     assert!(
         build
@@ -2625,33 +2843,52 @@ fn shell_frame_renders_dynamic_split_workspace_after_area_split() {
             .workspace
             .tab_button_route_by_widget_id
             .values()
-            .any(|route| route.tab_stack_id == new_tab_stack_id
-                && route.panel_instance_id == new_panel_id),
+            .any(|route| route.tab_stack_id == new_stack.tab_stack_id
+                && route.panel_instance_id == new_panel.panel_instance_id),
         "dynamic projection should route tabs in newly split areas",
     );
     assert!(
-        ui_tree_contains_widget(
-            &build.tree.root,
-            workspace_split_host_widget_id(split_host_id)
-        ),
+        ui_tree_contains_widget(&build.tree.root, new_split_widget),
         "dynamic composition should render the newly inserted split host",
     );
 }
+fn build_shell_frame_for_fixture(
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    fixture: &TestShellComposition,
+) -> crate::EditorShellBuildResult {
+    let projection = fixture.projection();
+    build_editor_shell_frame_from_composition_projection(frame_model, theme, &projection)
+}
+
+fn build_shell_frame_with_docking_for_fixture(
+    frame_model: &EditorShellFrameModel,
+    theme: &ThemeTokens,
+    fixture: &TestShellComposition,
+    docking_visual_state: Option<&DockingInteractionVisualState>,
+) -> crate::EditorShellBuildResult {
+    let projection = fixture.projection();
+    build_editor_shell_frame_from_composition_projection_with_docking_visual_state(
+        frame_model,
+        theme,
+        &projection,
+        docking_visual_state,
+    )
+}
 
 fn frame_model_with_surface_route(
-    workspace: &WorkspaceState,
+    fixture: &TestShellComposition,
     routed_surface: crate::ToolSurfaceInstanceId,
     widget_id: WidgetId,
     action: SurfaceLocalAction,
 ) -> EditorShellFrameModel {
-    let mut frame_model = frame_model_for_workspace(workspace);
+    let projection = fixture.projection();
+    let mut frame_model = frame_model_for_projection(&projection);
     let frame = frame_model
         .surfaces
         .get_mut(&routed_surface)
         .expect("routed surface should exist in frame model");
-    frame
-        .routes
-        .insert(widget_id, SurfaceLocalRoute::new(action));
+    frame.routes.insert(widget_id, SurfaceLocalRoute::new(action));
     frame.artifact.root = label(
         widget_id,
         frame.title.clone(),
@@ -2666,15 +2903,28 @@ fn mapped_surface_actions_for_route(
     action: SurfaceLocalAction,
     interactions: Vec<UiInteraction>,
 ) -> Vec<SurfaceLocalAction> {
-    let workspace = sample_workspace_state();
-    let (_, surface_id) = panel_and_surface_by_kind(&workspace, panel_kind);
-    let frame_model = frame_model_with_surface_route(&workspace, surface_id, widget_id, action);
-    let build = build_editor_shell_frame(&frame_model, &ThemeTokens::default(), &workspace);
+    let fixture = single_surface_composition_fixture(test_surface_kind_for_panel_kind(panel_kind));
+    let projection = fixture.projection();
+    let (_, surface_id) = panel_and_surface_by_kind_in_projection(&projection, panel_kind);
+    let mut frame_model = frame_model_for_projection(&projection);
+    let frame = frame_model
+        .surfaces
+        .get_mut(&surface_id)
+        .expect("routed surface should exist in frame model");
+    frame.routes.insert(widget_id, SurfaceLocalRoute::new(action));
+    frame.artifact.root = label(
+        widget_id,
+        frame.title.clone(),
+        ThemeTokens::default().body_small_text_style(ui_text::FontId(1)),
+    );
+    let build = build_editor_shell_frame_from_composition_projection(
+        &frame_model,
+        &ThemeTokens::default(),
+        &projection,
+    );
 
     map_interactions_to_shell_commands(
-        &UiInteractionResults {
-            items: interactions,
-        },
+        &UiInteractionResults { items: interactions },
         &build.projection_artifacts,
     )
     .into_iter()
@@ -2694,58 +2944,37 @@ fn keyboard_event(key: Key) -> KeyboardEvent {
 }
 
 fn frame_model_with_only_surface(
-    workspace: &WorkspaceState,
+    fixture: &TestShellComposition,
     surface_id: crate::ToolSurfaceInstanceId,
 ) -> EditorShellFrameModel {
+    let projection = fixture.projection();
     let mut frame_model = EditorShellFrameModel::new(ToolbarViewModel::default(), BTreeMap::new());
-    let panel = workspace
-        .panels()
+    let panel = projected_panels(&projection)
+        .into_iter()
         .find(|panel| panel.active_tool_surface == Some(surface_id))
         .expect("surface should be mounted");
-    let tab_stack_id = workspace
-        .tab_stacks()
-        .find(|stack| stack.ordered_panels.contains(&panel.id))
-        .map(|stack| stack.id)
-        .expect("mounted panel should belong to a tab stack");
-    let surface = workspace
-        .tool_surface(surface_id)
-        .expect("surface should exist");
     frame_model.surfaces.insert(
         surface_id,
-        surface_frame(
-            panel.id,
-            tab_stack_id,
-            surface,
-            WidgetId(surface_id.raw() + 10_000),
-        ),
+        surface_frame(panel, WidgetId(surface_id.raw() + 10_000)),
     );
     frame_model
 }
 
-fn frame_model_for_workspace(workspace: &WorkspaceState) -> EditorShellFrameModel {
+fn frame_model_for_fixture(fixture: &TestShellComposition) -> EditorShellFrameModel {
+    frame_model_for_projection(&fixture.projection())
+}
+
+fn frame_model_for_projection(
+    projection: &EditorCompositionProjectionArtifact,
+) -> EditorShellFrameModel {
     let mut surfaces = BTreeMap::new();
-    for panel in workspace.panels() {
+    for panel in projected_panels(projection) {
         let Some(surface_id) = panel.active_tool_surface else {
-            continue;
-        };
-        let Some(surface) = workspace.tool_surface(surface_id) else {
-            continue;
-        };
-        let Some(tab_stack_id) = workspace
-            .tab_stacks()
-            .find(|stack| stack.ordered_panels.contains(&panel.id))
-            .map(|stack| stack.id)
-        else {
             continue;
         };
         surfaces.insert(
             surface_id,
-            surface_frame(
-                panel.id,
-                tab_stack_id,
-                surface,
-                WidgetId(surface_id.raw() + 10_000),
-            ),
+            surface_frame(panel, WidgetId(surface_id.raw() + 10_000)),
         );
     }
     EditorShellFrameModel::new(ToolbarViewModel::default(), surfaces)
@@ -2766,25 +2995,30 @@ fn create_candidates_for_kinds(kinds: &[ToolSurfaceKind]) -> Vec<ToolSurfaceCrea
         .collect()
 }
 
-fn surface_frame(
-    panel_instance_id: PanelInstanceId,
-    tab_stack_id: crate::TabStackId,
-    surface: &crate::ToolSurfaceState,
-    root_widget_id: WidgetId,
-) -> ResolvedSurfaceFrame {
-    let tool_surface_kind = tool_surface_kind_for_stable_key(surface.stable_surface_key())
+fn surface_frame(panel: &ProjectedPanelSlot, root_widget_id: WidgetId) -> ResolvedSurfaceFrame {
+    let surface_id = panel
+        .active_tool_surface
+        .expect("projected test panel should mount a surface");
+    let stable_surface_key = panel
+        .active_stable_surface_key
+        .as_ref()
+        .expect("projected test panel should carry a stable surface key")
+        .clone();
+    let tool_surface_kind = tool_surface_kind_for_stable_key(&stable_surface_key)
         .unwrap_or(ToolSurfaceKind::Placeholder);
     ResolvedSurfaceFrame {
-        mounted_unit_id: ui_composition::MountedUnitId::new(surface.id.raw()),
+        mounted_unit_id: panel
+            .mounted_unit_id
+            .expect("projected test panel should carry a mounted-unit id"),
         content_liveness: ui_composition::ContentLiveness::Resolved,
         content_fallback: ui_composition::ContentProjectionFallback::ResolvedContent,
-        surface_instance_id: surface.id,
-        panel_instance_id,
-        tab_stack_id,
-        stable_surface_key: surface.stable_surface_key().clone(),
+        surface_instance_id: surface_id,
+        panel_instance_id: panel.panel_instance_id,
+        tab_stack_id: panel.tab_stack_id,
+        stable_surface_key,
         surface_definition_id: tool_surface_definition_id(tool_surface_kind),
         provider_id: Some(SurfaceProviderId::try_from_raw(77).unwrap()),
-        title: format!("{:?}", tool_surface_kind),
+        title: format!("{tool_surface_kind:?}"),
         artifact: SurfacePresentationArtifact::provider(label(
             root_widget_id,
             "surface",
@@ -2795,33 +3029,107 @@ fn surface_frame(
     }
 }
 
-fn sample_workspace_state() -> WorkspaceState {
-    let mut allocator = WorkspaceIdentityAllocator::new();
-    let workspace_id = allocator.allocate_workspace_id();
-    WorkspaceState::bootstrap_current_layout(workspace_id, &mut allocator)
+fn projected_tab_stacks(
+    projection: &EditorCompositionProjectionArtifact,
+) -> Vec<&ProjectedTabStackSlot> {
+    let mut stacks = projected_host_tab_stacks(&projection.shell.root_host);
+    stacks.extend(
+        projection
+            .shell
+            .floating_hosts
+            .iter()
+            .map(|floating| &floating.tab_stack),
+    );
+    stacks
+}
+
+fn projected_panels(projection: &EditorCompositionProjectionArtifact) -> Vec<&ProjectedPanelSlot> {
+    projected_tab_stacks(projection)
+        .into_iter()
+        .flat_map(|stack| stack.tabs.iter().map(|tab| &tab.panel))
+        .collect()
 }
 
 fn panel_and_surface_by_kind(
-    workspace: &WorkspaceState,
+    fixture: &TestShellComposition,
     panel_kind: PanelKind,
 ) -> (PanelInstanceId, crate::ToolSurfaceInstanceId) {
-    workspace
-        .panels()
+    panel_and_surface_by_kind_in_projection(&fixture.projection(), panel_kind)
+}
+
+fn panel_and_surface_by_kind_in_projection(
+    projection: &EditorCompositionProjectionArtifact,
+    panel_kind: PanelKind,
+) -> (PanelInstanceId, crate::ToolSurfaceInstanceId) {
+    projected_panels(projection)
+        .into_iter()
         .find(|panel| panel.panel_kind == panel_kind)
         .and_then(|panel| {
             panel
                 .active_tool_surface
-                .map(|surface_id| (panel.id, surface_id))
+                .map(|surface_id| (panel.panel_instance_id, surface_id))
         })
         .expect("expected mounted surface for panel kind")
 }
 
-fn tab_stack_by_panel(workspace: &WorkspaceState, panel_id: PanelInstanceId) -> crate::TabStackId {
-    workspace
-        .tab_stacks()
-        .find(|stack| stack.ordered_panels.contains(&panel_id))
-        .map(|stack| stack.id)
+fn tab_stack_by_panel(
+    fixture: &TestShellComposition,
+    panel_id: PanelInstanceId,
+) -> crate::TabStackId {
+    tab_stack_by_panel_in_projection(&fixture.projection(), panel_id)
+}
+
+fn tab_stack_by_panel_in_projection(
+    projection: &EditorCompositionProjectionArtifact,
+    panel_id: PanelInstanceId,
+) -> crate::TabStackId {
+    projected_panels(projection)
+        .into_iter()
+        .find(|panel| panel.panel_instance_id == panel_id)
+        .map(|panel| panel.tab_stack_id)
         .expect("panel should belong to a tab stack")
+}
+
+fn region_for_tab_stack(
+    fixture: &TestShellComposition,
+    tab_stack_id: crate::TabStackId,
+) -> ui_composition::RegionId {
+    fixture
+        .runtime
+        .extension()
+        .regions()
+        .iter()
+        .find(|region| region.tab_stack_raw == Some(tab_stack_id.raw()))
+        .map(|region| region.region_id)
+        .expect("tab stack should map to a current composition region")
+}
+
+fn split_widget_ids(host: &ProjectedWorkspaceHostSlot) -> Vec<WidgetId> {
+    match host {
+        ProjectedWorkspaceHostSlot::Split {
+            widget_id,
+            first_child,
+            second_child,
+            ..
+        } => {
+            let mut ids = vec![*widget_id];
+            ids.extend(split_widget_ids(first_child));
+            ids.extend(split_widget_ids(second_child));
+            ids
+        }
+        ProjectedWorkspaceHostSlot::TabStack { .. }
+        | ProjectedWorkspaceHostSlot::EmptyFloatingPlaceholder { .. } => Vec::new(),
+    }
+}
+
+fn test_surface_kind_for_panel_kind(panel_kind: PanelKind) -> ToolSurfaceKind {
+    match panel_kind {
+        PanelKind::EntityTable => ToolSurfaceKind::EntityTable,
+        PanelKind::Outliner => ToolSurfaceKind::Outliner,
+        PanelKind::Inspector => ToolSurfaceKind::Inspector,
+        PanelKind::Viewport => ToolSurfaceKind::Viewport,
+        other => panic!("no focused test surface fixture for {other:?}"),
+    }
 }
 
 fn assert_chrome_slot(

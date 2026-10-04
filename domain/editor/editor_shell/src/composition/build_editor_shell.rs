@@ -59,9 +59,6 @@ use crate::{
     UiNode, UiNodeKind, UiTree, button, button_selected, hscroll, hstack_with_policies, label,
     panel, spacer, split, vscroll, vstack_with_policies,
 };
-#[cfg(test)]
-use crate::{WorkspaceState, workspace::project_workspace_for_shell};
-
 use super::surface_definition_context::contrast_popup_theme;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -256,15 +253,6 @@ pub struct EditorShellBuildResult {
     pub projection_artifacts: ShellProjectionArtifacts,
 }
 
-#[cfg(test)]
-pub(crate) fn build_editor_shell_frame(
-    frame_model: &EditorShellFrameModel,
-    theme: &ThemeTokens,
-    workspace_state: &WorkspaceState,
-) -> EditorShellBuildResult {
-    build_editor_shell_frame_with_docking_visual_state(frame_model, theme, workspace_state, None)
-}
-
 pub fn build_editor_shell_frame_from_composition_projection(
     frame_model: &EditorShellFrameModel,
     theme: &ThemeTokens,
@@ -326,24 +314,6 @@ pub fn build_editor_shell_frame_for_target_from_composition_projection_with_dock
                 false,
             )
         })
-}
-
-#[cfg(test)]
-pub(crate) fn build_editor_shell_frame_with_docking_visual_state(
-    frame_model: &EditorShellFrameModel,
-    theme: &ThemeTokens,
-    workspace_state: &WorkspaceState,
-    docking_visual_state: Option<&DockingInteractionVisualState>,
-) -> EditorShellBuildResult {
-    let workspace_projection = project_workspace_for_shell(workspace_state)
-        .expect("workspace state is invalid for editor-shell projection");
-    build_editor_shell_frame_from_projection(
-        frame_model,
-        theme,
-        &workspace_projection,
-        docking_visual_state,
-        true,
-    )
 }
 
 fn build_editor_shell_frame_from_projection(
