@@ -1,7 +1,10 @@
+use std::collections::BTreeMap;
+
 use editor_shell::{
     ActiveTabDragVisualState, BODY_CONSOLE_SPLIT_WIDGET_ID, CENTER_RIGHT_SPLIT_WIDGET_ID,
     DockDropCandidate, DockDropCandidateState, DockSplitSide, DockingInteractionVisualState,
-    DockingPreviewDropTarget, EditorDockingIntent, LEFT_RIGHT_SPLIT_WIDGET_ID, PanelHostId,
+    DockingPreviewDropTarget, EditorCompositionRuntime, EditorDockingIntent,
+    LEFT_RIGHT_SPLIT_WIDGET_ID, PanelHostId,
     PanelInstanceId, RegionCompassViewModel, TabStackId, WidgetId, WorkspaceSplitAxis,
 };
 use ui_composition::{PresentationTargetId, RegionId, SplitFraction, StateRevision};
@@ -10,6 +13,18 @@ use ui_math::UiPoint;
 use super::RunenwerkEditorShellState;
 
 const TAB_DRAG_THRESHOLD_PX: f32 = 6.0;
+
+pub(super) fn initial_interaction_state_by_target(
+    runtime: &EditorCompositionRuntime,
+) -> BTreeMap<PresentationTargetId, TargetInteractionState> {
+    runtime
+        .composition()
+        .definition()
+        .targets()
+        .iter()
+        .map(|target| (target.id, TargetInteractionState::default()))
+        .collect()
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct TabDragSession {
@@ -65,6 +80,14 @@ pub struct CornerAreaSplitSession {
 }
 
 impl RunenwerkEditorShellState {
+    pub(super) fn reconcile_interaction_targets(&mut self, target_ids: &[PresentationTargetId]) {
+        self.interaction_by_target
+            .retain(|target_id, _| target_ids.contains(target_id));
+        for &target_id in target_ids {
+            self.interaction_by_target.entry(target_id).or_default();
+        }
+    }
+
     fn interaction_state(
         &self,
         target_id: PresentationTargetId,

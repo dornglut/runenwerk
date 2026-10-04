@@ -289,13 +289,8 @@ impl RunenwerkEditorShellState {
             .iter()
             .map(|target| (target.id, UiRuntime::new()))
             .collect();
-        let interaction_by_target = composition_runtime
-            .composition()
-            .definition()
-            .targets()
-            .iter()
-            .map(|target| (target.id, TargetInteractionState::default()))
-            .collect();
+        let interaction_by_target =
+            interaction::initial_interaction_state_by_target(&composition_runtime);
 
         Ok(Self {
             target_runtimes,
@@ -1179,11 +1174,9 @@ impl RunenwerkEditorShellState {
             .collect::<Vec<_>>();
         self.target_runtimes
             .retain(|target_id, _| target_ids.contains(target_id));
-        self.interaction_by_target
-            .retain(|target_id, _| target_ids.contains(target_id));
+        self.reconcile_interaction_targets(&target_ids);
         for target_id in target_ids {
             self.target_runtimes.entry(target_id).or_default();
-            self.interaction_by_target.entry(target_id).or_default();
         }
     }
 
