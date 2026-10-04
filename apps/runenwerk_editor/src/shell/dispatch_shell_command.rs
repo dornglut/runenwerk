@@ -1565,4 +1565,3 @@ fn workbench_allows_new_window(composition: RunenwerkWorkbenchComposition) -> bo
             | RunenwerkWorkbenchComposition::Constrained
     )
 }
-
