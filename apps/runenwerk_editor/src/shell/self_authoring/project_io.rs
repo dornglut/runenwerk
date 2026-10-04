@@ -1,14 +1,6 @@
-//! Project package and apply-preview DTOs for UI Designer self-authoring.
+//! Project-package persistence ownership for UI Designer self-authoring.
 
 use super::*;
-
-#[derive(Debug, Clone)]
-pub struct DefinitionApplyPreview {
-    pub document_id: EditorDefinitionId,
-    pub display_name: String,
-    pub diagnostics: Vec<UiDefinitionDiagnostic>,
-    pub summary: Vec<String>,
-}
 
 impl SelfAuthoringWorkspaceState {
     pub fn export_project_package(&self) -> EditorLabProjectPackage {
