@@ -58,11 +58,8 @@ pub(super) fn set_tab_stack_active_panel(
     panel_instance_id: PanelInstanceId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = require_composition_shell_state(
-        shell_state,
-        projection_epoch,
-        "activate tab",
-    )?;
+    let shell_state =
+        require_composition_shell_state(shell_state, projection_epoch, "activate tab")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let unit = composition_unit_for_panel(shell_state, panel_instance_id)?;
     let plan = plan_editor_activate_unit(
@@ -155,11 +152,8 @@ pub(super) fn resize_composition_split(
     expected_revision: StateRevision,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = require_composition_shell_state(
-        shell_state,
-        projection_epoch,
-        "resize composition split",
-    )?;
+    let shell_state =
+        require_composition_shell_state(shell_state, projection_epoch, "resize composition split")?;
     if shell_state.composition_runtime().composition().revision() != expected_revision {
         return Err(EditorMutationError::runtime_rejected(
             "stale editor composition resize revision",
@@ -183,11 +177,7 @@ pub(super) fn create_panel_tab_stable_key(
     stable_surface_key: ToolSurfaceStableKey,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = require_composition_shell_state(
-        shell_state,
-        projection_epoch,
-        "create tab",
-    )?;
+    let shell_state = require_composition_shell_state(shell_state, projection_epoch, "create tab")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let plan = plan_editor_create_unit(
         shell_state.composition_runtime(),
@@ -208,8 +198,7 @@ pub(super) fn close_panel_tab(
     panel_instance_id: PanelInstanceId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state =
-        require_composition_shell_state(shell_state, projection_epoch, "close tab")?;
+    let shell_state = require_composition_shell_state(shell_state, projection_epoch, "close tab")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let unit = composition_unit_for_panel(shell_state, panel_instance_id)?;
     require_unit_source(shell_state, unit, stack)?;
@@ -230,11 +219,8 @@ pub(super) fn close_other_panel_tabs(
     keep_panel_instance_id: PanelInstanceId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = require_composition_shell_state(
-        shell_state,
-        projection_epoch,
-        "close other tabs",
-    )?;
+    let shell_state =
+        require_composition_shell_state(shell_state, projection_epoch, "close other tabs")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let keep = composition_unit_for_panel(shell_state, keep_panel_instance_id)?;
     let plan = plan_editor_close_other_units(
@@ -256,11 +242,7 @@ pub(super) fn split_tab_stack_area_stable_key(
     stable_surface_key: ToolSurfaceStableKey,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = require_composition_shell_state(
-        shell_state,
-        projection_epoch,
-        "split area",
-    )?;
+    let shell_state = require_composition_shell_state(shell_state, projection_epoch, "split area")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let plan = plan_editor_split_with_new_unit(
         shell_state.composition_runtime(),
@@ -281,11 +263,8 @@ pub(super) fn duplicate_tab_stack_area(
     tab_stack_id: TabStackId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = require_composition_shell_state(
-        shell_state,
-        projection_epoch,
-        "duplicate area",
-    )?;
+    let shell_state =
+        require_composition_shell_state(shell_state, projection_epoch, "duplicate area")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let plan = plan_editor_duplicate_stack(
         shell_state.composition_runtime(),
@@ -303,11 +282,7 @@ pub(super) fn close_tab_stack_area(
     tab_stack_id: TabStackId,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = require_composition_shell_state(
-        shell_state,
-        projection_epoch,
-        "close area",
-    )?;
+    let shell_state = require_composition_shell_state(shell_state, projection_epoch, "close area")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let plan = plan_editor_close_stack(
         shell_state.composition_runtime(),
@@ -326,11 +301,7 @@ pub(super) fn reset_tab_stack_area_stable_key(
     stable_surface_key: ToolSurfaceStableKey,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = require_composition_shell_state(
-        shell_state,
-        projection_epoch,
-        "reset area",
-    )?;
+    let shell_state = require_composition_shell_state(shell_state, projection_epoch, "reset area")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let plan = plan_editor_reset_stack(
         shell_state.composition_runtime(),
@@ -351,11 +322,8 @@ pub(super) fn lock_tab_stack_area_stable_key(
     locked_stable_surface_key: Option<ToolSurfaceStableKey>,
     projection_epoch: u64,
 ) -> Result<(), EditorMutationError> {
-    let shell_state = require_composition_shell_state(
-        shell_state,
-        projection_epoch,
-        "change area lock",
-    )?;
+    let shell_state =
+        require_composition_shell_state(shell_state, projection_epoch, "change area lock")?;
     let stack = composition_region_for_stack(shell_state, tab_stack_id)?;
     let plan = plan_editor_set_stack_lock(
         shell_state.composition_runtime(),
