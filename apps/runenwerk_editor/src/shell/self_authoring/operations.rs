@@ -1,7 +1,5 @@
 //! Operation helper ownership for UI Designer self-authoring.
 
-use super::*;
-
 pub(super) fn first_text_editable_ui_node_id(
     node: &ui_definition::UiNodeDefinition,
 ) -> Option<String> {
