@@ -24,8 +24,8 @@ mod presentation;
 
 use interaction::TargetInteractionState;
 pub use interaction::{CornerAreaSplitSession, CornerSplitResizeSession, WorkspaceSplitKind};
-use presentation::{reconcile_composition_target_bindings, target_binding_rejection};
 pub use presentation::EditorWindowPresentationBinding;
+use presentation::{reconcile_composition_target_bindings, target_binding_rejection};
 
 #[derive(Debug)]
 pub struct RunenwerkEditorShellState {
