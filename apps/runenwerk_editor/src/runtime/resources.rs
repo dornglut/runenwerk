@@ -22,6 +22,11 @@ mod host;
 mod input;
 mod viewport_packet;
 
+pub use crate::runtime::viewport::{
+    EditorViewportBranchTraceSnapshot, EditorViewportCamera, EditorViewportDebugStage,
+    EditorViewportRenderState, editor_viewport_camera, editor_viewport_camera_fov_y_radians,
+    editor_viewport_camera_from_settings,
+};
 pub use host::{EditorHostResource, effective_shell_scale, scaled_shell_theme};
 pub use input::{
     EditorCameraPointerButton, EditorInputBridgeState, EditorPointerOwner,
@@ -32,11 +37,6 @@ pub use viewport_packet::{
     EditorViewportModelMeshMaterialSelection, EditorViewportModelMeshMaterialSelectionPacket,
     EditorViewportPrimitiveInstance, EditorViewportSceneProductUniform,
     EditorViewportSceneRenderPacket, model_mesh_material_selection_diagnostic,
-};
-pub use crate::runtime::viewport::{
-    EditorViewportBranchTraceSnapshot, EditorViewportCamera, EditorViewportDebugStage,
-    EditorViewportRenderState, editor_viewport_camera, editor_viewport_camera_from_settings,
-    editor_viewport_camera_fov_y_radians,
 };
 
 #[derive(Default, runen_ecs::Resource)]
@@ -453,4 +453,3 @@ mod tests {
         );
     }
 }
-

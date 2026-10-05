@@ -1080,7 +1080,10 @@ fn viewport_render_state_registry_is_the_only_live_editor_state_authority() {
     );
     let offenders = forbidden_source_markers(
         &runtime_sources,
-        &["Res<EditorViewportRenderState>", "ResMut<EditorViewportRenderState>"],
+        &[
+            "Res<EditorViewportRenderState>",
+            "ResMut<EditorViewportRenderState>",
+        ],
     );
     assert!(
         offenders.is_empty(),
@@ -1411,8 +1414,7 @@ fn viewport_tool_authority_is_mounted_session_scoped() {
     let editor_session = read_workspace_source("domain/editor/editor_core/src/session.rs");
     let session_store = read_workspace_source("apps/runenwerk_editor/src/shell/surface_session.rs");
     let dispatcher = read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/viewport.rs");
-    let input_bridge =
-        input_bridge_sources();
+    let input_bridge = input_bridge_sources();
     let picking = read_workspace_source("apps/runenwerk_editor/src/runtime/systems/picking.rs");
     let catalog = read_workspace_source("apps/runenwerk_editor/src/shell/command_catalog/mod.rs");
     let shell_command =
@@ -1799,7 +1801,9 @@ fn viewport_slot_mapping_happens_at_integration_edge() {
 fn input_bridge_sources() -> String {
     [
         read_workspace_source("apps/runenwerk_editor/src/runtime/systems/input_bridge.rs"),
-        read_workspace_source_tree_contents("apps/runenwerk_editor/src/runtime/systems/input_bridge"),
+        read_workspace_source_tree_contents(
+            "apps/runenwerk_editor/src/runtime/systems/input_bridge",
+        ),
     ]
     .join("\n")
 }

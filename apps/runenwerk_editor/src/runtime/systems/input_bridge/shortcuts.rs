@@ -333,7 +333,9 @@ pub(super) fn dispatch_viewport_shortcuts(
     }
 }
 
-pub(super) fn selected_entity_origin(app: &crate::editor_app::RunenwerkEditorApp) -> Option<[f32; 3]> {
+pub(super) fn selected_entity_origin(
+    app: &crate::editor_app::RunenwerkEditorApp,
+) -> Option<[f32; 3]> {
     let selected = app.runtime().selected_entity()?;
     let ecs_entity = app.runtime().ids().resolve_entity(selected)?;
     let transform = app

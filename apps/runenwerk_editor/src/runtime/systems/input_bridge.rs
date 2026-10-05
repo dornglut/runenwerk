@@ -41,19 +41,19 @@ use crate::shell::{
 mod shortcuts;
 mod viewport_pointer;
 
+#[cfg(test)]
+use shortcuts::{dispatch_active_editor_shortcuts, viewport_binding_for_focus};
 use shortcuts::{
     dispatch_global_shortcuts, dispatch_viewport_shortcuts, handle_viewport_tool_radial_shortcut,
     sync_active_editor_shortcut_bindings,
 };
-pub(crate) use viewport_pointer::{
-    clear_editor_viewport_interaction_for_target, dispatch_editor_viewport_input_for_target,
-};
-#[cfg(test)]
-use shortcuts::{dispatch_active_editor_shortcuts, viewport_binding_for_focus};
 #[cfg(test)]
 use viewport_pointer::{
     active_camera_viewport_binding, presentation_bounds, viewport_capture_active_for_surface,
     viewport_pointer_route,
+};
+pub(crate) use viewport_pointer::{
+    clear_editor_viewport_interaction_for_target, dispatch_editor_viewport_input_for_target,
 };
 
 #[allow(clippy::too_many_arguments)]

@@ -7,11 +7,11 @@ use scene::{LocalTransform, Vec3Value};
 use ui_math::{UiPoint, UiRect};
 
 use crate::editor_runtime::{EditorPrimitiveKind, RunenwerkEditorRuntime};
-#[cfg(test)]
-use crate::runtime::viewport::editor_viewport_camera;
 use crate::runtime::resources::{EditorHostResource, EditorViewportSceneRenderPacket};
 #[cfg(test)]
 use crate::runtime::systems::{entity_primitive, extract_viewport_scene_render_packet};
+#[cfg(test)]
+use crate::runtime::viewport::editor_viewport_camera;
 use crate::runtime::viewport::{
     EditorViewportCamera, ToolSurfaceRuntimeBindingRegistryResource,
     ViewportPickingResultsResource, ViewportRenderStateResource, viewport_scene_binding_for_widget,

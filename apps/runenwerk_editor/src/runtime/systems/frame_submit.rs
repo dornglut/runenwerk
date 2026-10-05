@@ -23,9 +23,9 @@ use crate::runtime::resources::{
 use crate::runtime::viewport::{
     EditorViewportDebugStage, EditorViewportRenderState, MountedSurfaceRegistryResource,
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
-    ViewportInstanceRegistryResource, ViewportLayoutEntry,
-    ViewportLayoutMapResource, ViewportPickingResultsResource, ViewportRenderStateEntry,
-    ViewportRenderStateResource, resolve_structural_viewport_products,
+    ViewportInstanceRegistryResource, ViewportLayoutEntry, ViewportLayoutMapResource,
+    ViewportPickingResultsResource, ViewportRenderStateEntry, ViewportRenderStateResource,
+    resolve_structural_viewport_products,
 };
 use crate::shell::RunenwerkEditorShellState;
 
