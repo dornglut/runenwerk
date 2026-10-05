@@ -47,6 +47,7 @@ pub(super) fn sync_active_editor_shortcut_bindings(
     bridge.active_shortcut_signature = signature;
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(super) fn dispatch_global_shortcuts(
     actions: &engine::plugins::ActionState,
     host: &mut EditorHostResource,

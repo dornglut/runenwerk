@@ -8,8 +8,6 @@ use editor_scene::{
 #[cfg(test)]
 use editor_shell::{EDITOR_DESIGN_WORKSPACE_PROFILE_ID, MATERIAL_WORKSPACE_PROFILE_ID};
 #[cfg(test)]
-use glam::Vec3;
-#[cfg(test)]
 use scene::{LocalTransform, Vec3Value};
 #[cfg(test)]
 use ui_theme::ThemeTokens;
