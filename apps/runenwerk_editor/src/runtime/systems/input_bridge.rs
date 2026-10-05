@@ -47,11 +47,11 @@ use shortcuts::{
     dispatch_global_shortcuts, dispatch_viewport_shortcuts, handle_viewport_tool_radial_shortcut,
     sync_active_editor_shortcut_bindings,
 };
+use viewport_pointer::presentation_bounds;
 #[cfg(test)]
 use viewport_pointer::{
     active_camera_viewport_binding, viewport_capture_active_for_surface, viewport_pointer_route,
 };
-use viewport_pointer::presentation_bounds;
 pub(crate) use viewport_pointer::{
     clear_editor_viewport_interaction_for_target, dispatch_editor_viewport_input_for_target,
 };
