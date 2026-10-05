@@ -347,13 +347,6 @@ pub(super) fn active_camera_viewport_binding(
     })
 }
 
-pub(super) fn presentation_bounds(presentation: &PrimaryPresentationMetricsResource) -> UiRect {
-    let size_px = presentation.size_px();
-    let width = size_px.0 as f32;
-    let height = size_px.1 as f32;
-    UiRect::new(0.0, 0.0, width, height)
-}
-
 pub(super) fn dispatch_viewport_pointer_down(
     host: &mut EditorHostResource,
     picking_results: &ViewportPickingResultsResource,

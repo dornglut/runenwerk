@@ -47,7 +47,6 @@ use shortcuts::{
     dispatch_global_shortcuts, dispatch_viewport_shortcuts, handle_viewport_tool_radial_shortcut,
     sync_active_editor_shortcut_bindings,
 };
-use viewport_pointer::presentation_bounds;
 #[cfg(test)]
 use viewport_pointer::{
     active_camera_viewport_binding, viewport_capture_active_for_surface, viewport_pointer_route,
@@ -233,6 +232,13 @@ fn primary_window_is_focused(
     windows
         .record(primary_window_id)
         .is_some_and(|record| record.focused)
+}
+
+fn presentation_bounds(presentation: &PrimaryPresentationMetricsResource) -> UiRect {
+    let size_px = presentation.size_px();
+    let width = size_px.0 as f32;
+    let height = size_px.1 as f32;
+    UiRect::new(0.0, 0.0, width, height)
 }
 
 fn set_primary_cursor_intent(
