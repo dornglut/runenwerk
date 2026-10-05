@@ -52,7 +52,8 @@ pub(crate) use viewport_pointer::{
 use shortcuts::{dispatch_active_editor_shortcuts, viewport_binding_for_focus};
 #[cfg(test)]
 use viewport_pointer::{
-    active_camera_viewport_binding, viewport_capture_active_for_surface, viewport_pointer_route,
+    active_camera_viewport_binding, presentation_bounds, viewport_capture_active_for_surface,
+    viewport_pointer_route,
 };
 
 #[allow(clippy::too_many_arguments)]
