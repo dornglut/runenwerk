@@ -4,7 +4,7 @@ use super::{
 };
 
 use crate::plugins::render::RenderFrameProducerId;
-use crate::plugins::render::backend::RenderSurfaceId;
+use crate::plugins::render::host::RenderSurfaceId;
 use ui_hosts::HostKind;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

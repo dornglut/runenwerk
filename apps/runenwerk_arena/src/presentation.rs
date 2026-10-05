@@ -1,11 +1,11 @@
 use anyhow::{Context, Result, bail};
 use engine::plugins::WorldRuntimeSet;
-use engine::plugins::render::backend::RenderSurfaceId;
 use engine::plugins::render::frame::{
     PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
     PreparedRenderProductSelectionResource, RenderDeterministicFrameContribution,
     RenderDeterministicFrameContributionResource,
 };
+use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::runtime::{
     RenderDynamicTextureTargetRequestRegistryResource, RenderRuntimeSet,
 };

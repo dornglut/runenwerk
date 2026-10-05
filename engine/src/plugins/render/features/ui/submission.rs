@@ -1,5 +1,5 @@
 use crate::plugins::render::api::ids::RenderFrameProducerId;
-use crate::plugins::render::backend::RenderSurfaceId;
+use crate::plugins::render::host::RenderSurfaceId;
 use std::collections::BTreeMap;
 use ui_render_data::UiFrame;
 

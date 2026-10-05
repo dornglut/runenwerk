@@ -485,7 +485,6 @@ impl Renderer {
                             {
                                 return Ok(false);
                             }
-                            ensure_compiled_pass_is_supported(pass)?;
                             Ok(true)
                         },
                     )?;

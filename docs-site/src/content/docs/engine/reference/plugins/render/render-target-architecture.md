@@ -33,7 +33,7 @@ Render stays:
    - graph compile: validation/order/inspectability.
    - execution compile: explicit pass execution metadata.
 4. Execute layer:
-   - renderer consumes prepared packet + compiled execution plans and owns backend/runtime artifacts.
+   - renderer consumes prepared packet + compiled execution plans and owns derived integration state over public RunenGPU contracts.
 5. Feature layer:
    - feature descriptors and prepared contributions integrate through typed contracts.
 
@@ -45,10 +45,14 @@ Render stays:
   - prepared frame and contribution payloads
   - compile metadata and inspection snapshots
   - cache stats metadata
-- renderer/backend side owns:
-  - all `wgpu` runtime objects
-  - runtime flow resources and temporal/history allocations
-  - command encoding and submission
+- renderer side owns:
+  - derived pipeline/resource caches over opaque public RunenGPU handles
+  - runtime flow resource and temporal/history realization policy
+  - render-plan execution through public RunenGPU encoding/submission contracts
+- render host (`engine/src/plugins/render/host/`) owns:
+  - native-window correlation and render surface identity/registry/configuration
+  - attachment, resize, retirement, and acquisition mapping over public RunenGPU context/surface contracts
+- RunenGPU owns physical GPU resources, command encoding/submission, and surface execution.
 
 Uniform state projection is completed in `RenderPrepare` and carried through prepared flow inputs; active runtime submission does not expose a mutable frame-data registry.
 

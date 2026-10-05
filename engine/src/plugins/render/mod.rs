@@ -1,16 +1,15 @@
 pub mod adapters;
 pub mod api;
 mod app_ext;
-pub mod backend;
 pub mod composition;
 pub mod features;
 pub mod frame;
 mod gpu_context_policy;
 pub mod gpu_primitives;
 pub mod graph;
+pub mod host;
 pub mod inspect;
 pub mod material_compiler;
-pub(crate) mod native_host;
 pub mod params;
 pub mod pipelines;
 pub mod procedural;

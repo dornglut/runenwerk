@@ -1,8 +1,8 @@
-use crate::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedSurfaceFrameSubmission,
     PreparedUiFrameContribution, SurfaceFrameSubmissionRegistryResource,
 };
+use crate::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::runtime::{Res, ResMut};
 use rusttype::{Font, Scale, point};
 use std::collections::HashMap;

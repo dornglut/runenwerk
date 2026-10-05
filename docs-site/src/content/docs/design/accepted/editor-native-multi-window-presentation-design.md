@@ -247,7 +247,7 @@ engine/src/plugins/render/frame/packet.rs
 engine/src/plugins/render/frame/view.rs
 engine/src/plugins/render/runtime/frame_prepare.rs
 engine/src/plugins/render/runtime/frame_submit.rs
-engine/src/plugins/render/backend/surface.rs
+engine/src/plugins/render/host/surface.rs
 engine/src/plugins/render/renderer/mod.rs
 ```
 
@@ -432,7 +432,7 @@ Exit criteria:
 
 Change:
 
-- `engine/src/plugins/render/backend/surface.rs`
+- `engine/src/plugins/render/host/surface.rs`
 - `engine/src/plugins/render/frame/packet.rs`
 - `engine/src/plugins/render/runtime/frame_prepare.rs`
 - `engine/src/plugins/render/runtime/frame_submit.rs`

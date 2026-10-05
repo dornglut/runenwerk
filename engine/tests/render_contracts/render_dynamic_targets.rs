@@ -409,7 +409,7 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
 
     let fixed = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
         producer(91),
-        engine::plugins::render::backend::RenderSurfaceId::primary(),
+        engine::plugins::render::host::RenderSurfaceId::primary(),
         scene.id(),
         alias_key("scene_color"),
         (1280, 720),
@@ -487,7 +487,7 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
 
     let mut wrong_surface = frame.clone();
     wrong_surface.surface.render_surface_id =
-        engine::plugins::render::backend::RenderSurfaceId::try_from_raw(2)
+        engine::plugins::render::host::RenderSurfaceId::try_from_raw(2)
             .expect("test surface should be nonzero");
     assert!(matches!(
         engine::plugins::render::inspect::inspect_fixed_resolution_execution(
@@ -546,7 +546,7 @@ fn fixed_resolution_preflight_accepts_internal_scene_and_native_resolve() {
 
     let fallback = engine::plugins::render::RenderFixedResolutionExecutionRequest::new(
         producer(92),
-        engine::plugins::render::backend::RenderSurfaceId::primary(),
+        engine::plugins::render::host::RenderSurfaceId::primary(),
         scene.id(),
         alias_key("scene_color"),
         (1280, 800),
@@ -978,8 +978,8 @@ fn render_dynamic_targets_request_registry_snapshots_valid_requests_by_key() {
 #[test]
 fn render_dynamic_targets_request_registry_scopes_same_key_to_distinct_surfaces() {
     let mut registry = RenderDynamicTextureTargetRequestRegistryResource::default();
-    let primary = engine::plugins::render::backend::RenderSurfaceId::primary();
-    let secondary = engine::plugins::render::backend::RenderSurfaceId::try_from_raw(2)
+    let primary = engine::plugins::render::host::RenderSurfaceId::primary();
+    let secondary = engine::plugins::render::host::RenderSurfaceId::try_from_raw(2)
         .expect("test surface should be nonzero");
 
     registry

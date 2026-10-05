@@ -5,7 +5,7 @@ use super::{
 use crate::plugins::render::{
     RenderDynamicTextureTargetDescriptor, RenderDynamicTextureTargetKey,
     RenderDynamicTextureUploadDescriptor, RenderFlowId, RenderFrameProducerId,
-    RenderGpuResourceAdapterError, RenderPassId, RenderTargetAliasKey, backend::RenderSurfaceId,
+    RenderGpuResourceAdapterError, RenderPassId, RenderTargetAliasKey, host::RenderSurfaceId,
 };
 use crate::runtime::NativeWindowId;
 use product::RenderProductSelection;

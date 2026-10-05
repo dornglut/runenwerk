@@ -5,7 +5,7 @@ use editor_shell::{
     RegionCompassAccessibility, RegionCompassViewModel, projected_host_tab_stacks,
     tab_stack_container_widget_id,
 };
-use engine::plugins::render::backend::{
+use engine::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
 use engine::plugins::render::inspect::{

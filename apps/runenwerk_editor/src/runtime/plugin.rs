@@ -1,4 +1,4 @@
-use engine::plugins::render::backend::RenderSurfaceRegistryResource;
+use engine::plugins::render::host::RenderSurfaceRegistryResource;
 use engine::plugins::render::{
     PreparedRenderProductSelectionResource, RenderDynamicTextureTargetRequestRegistryResource,
     RenderDynamicTextureUploadRegistryResource, RenderGpuResidencyBudgetResource,
@@ -402,7 +402,7 @@ mod tests {
             surface_registry
                 .record(binding.render_surface_id)
                 .map(|record| record.lifecycle_state),
-            Some(engine::plugins::render::backend::RenderSurfaceLifecycleState::Requested)
+            Some(engine::plugins::render::host::RenderSurfaceLifecycleState::Requested)
         );
         assert_eq!(window_registry.pending_creation_requests().len(), 1);
     }

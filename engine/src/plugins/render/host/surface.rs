@@ -259,6 +259,14 @@ fn normalized_surface_extent(target_size_px: (u32, u32)) -> (u32, u32) {
     (target_size_px.0.max(1), target_size_px.1.max(1))
 }
 
+pub fn preferred_surface_format(caps: &GpuSurfaceCapabilities) -> Option<GpuTextureFormat> {
+    caps.formats()
+        .iter()
+        .copied()
+        .find(|format| format.is_srgb())
+        .or_else(|| caps.formats().first().copied())
+}
+
 pub fn build_surface_config(
     width: u32,
     height: u32,

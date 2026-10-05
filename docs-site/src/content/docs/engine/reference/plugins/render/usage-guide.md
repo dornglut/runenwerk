@@ -66,7 +66,7 @@ Feature modules should register feature-owned flow declarations and state resour
 
 `frame_render_prepare_system` publishes an owned `PreparedRenderFrame` into `PreparedRenderFrameResource`.
 
-`frame_render_submit_system` consumes the prepared frame and submits through renderer/backend runtime state. It does not perform live extraction of flow-declared ECS resources.
+`frame_render_submit_system` consumes the prepared frame and submits through renderer integration state and public RunenGPU execution contracts. It does not perform live extraction of flow-declared ECS resources.
 
 Feature fallback policy is resolved in prepare (`Ready | Stale | Disabled | Missing`) and submit/runtime executes the encoded policy without ECS back-fills.
 

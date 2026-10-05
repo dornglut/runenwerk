@@ -3,7 +3,7 @@ use ui_program::RouteId;
 use ui_surface::SurfaceInstanceId;
 
 use crate::plugins::render::RenderFrameProducerId;
-use crate::plugins::render::backend::RenderSurfaceId;
+use crate::plugins::render::host::RenderSurfaceId;
 
 use super::{
     UiActionDispatchFailureReason, UiRuntimeDiagnosticCode, UiRuntimeDirtyCause,

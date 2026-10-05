@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use engine::plugins::TimePlugin;
-use engine::plugins::render::backend::RenderSurfaceId;
+use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::{
     FeatureContributionStatus, PreparedUiFrameResource, RenderPlugin,
     SurfaceFrameSubmissionRegistryResource,

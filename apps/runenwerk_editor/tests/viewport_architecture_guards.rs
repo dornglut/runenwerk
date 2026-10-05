@@ -11,7 +11,7 @@ use editor_viewport::{
     ExpressionSourceRealityClass, ViewportId, ViewportPresentationState,
     ViewportSurfacePresentationSlot,
 };
-use engine::plugins::render::backend::RenderSurfaceId;
+use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::{
     EditorPickingHit, EditorPickingTarget, RenderFlowRegistryResource, RenderFrameProducerId,
     SurfaceFrameSubmissionRegistryResource,

@@ -1,4 +1,4 @@
-use crate::plugins::render::backend::{
+use crate::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
 use crate::plugins::render::inspect::RenderDebugTimingsState;
@@ -880,7 +880,7 @@ pub(crate) fn build_frame_feature_contributions(
 
 fn apply_surface_ui_contribution(
     world: &runen_ecs::World,
-    render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+    render_surface_id: crate::plugins::render::host::RenderSurfaceId,
     contributions: &mut PreparedFrameContributions,
 ) {
     let Ok(resource) = world.resource::<PreparedUiFrameResource>() else {
@@ -1223,7 +1223,7 @@ fn project_dispatch_for_pass(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::render::backend::RenderSurfaceId;
+    use crate::plugins::render::host::RenderSurfaceId;
 
     #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
     struct TestContributionResource {

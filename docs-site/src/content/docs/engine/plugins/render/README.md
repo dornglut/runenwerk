@@ -21,8 +21,8 @@ Render runtime orchestration for the engine runtime path.
 
 ## Subdomain Ownership
 
-- `backend/`
-  - Backend device/surface/format policy, pipeline cache, resource allocator, and compiled pass execution.
+- `host/`
+  - Native-window correlation, render surface identity/registry/configuration, and attached public RunenGPU context/surface integration. RunenGPU owns physical GPU execution.
 - `graph/`
   - Canonical flow graph, pass graph, resource graph, planning, and validation.
 - `frame/`
@@ -30,7 +30,7 @@ Render runtime orchestration for the engine runtime path.
 - `features/`
   - Render feature registry, dependency ordering, and contribution fallback policies.
 - `renderer/`
-  - Per-frame realization and execution (`extract`, `prepare`, `render_flow`, dynamic targets, and setup).
+  - Per-frame realization and execution through public RunenGPU contracts (`extract`, `prepare`, `render_flow`, dynamic targets, pipeline caches, and setup).
 - `readiness/`
   - Render-owned readiness state derived from successful render warm-frame evidence and timeout policy.
 - `shader/`

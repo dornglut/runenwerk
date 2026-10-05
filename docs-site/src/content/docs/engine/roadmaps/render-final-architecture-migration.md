@@ -58,7 +58,8 @@ Native OS multi-window and multi-swapchain presentation is specified separately 
    - execution compile produces explicit execution metadata for binding/access/target/dispatch/import semantics.
 4. Execute:
    - renderer consumes prepared frame + execution plan only.
-   - renderer owns all `wgpu` artifacts and runtime caches.
+   - renderer owns derived integration state and runtime caches over public RunenGPU contracts.
+   - RunenGPU owns physical GPU resources, encoding, and submission; `host/` owns native-window and render-surface integration.
 5. Features:
    - feature descriptors and fallback policy are explicit (`Ready | Stale | Disabled | Missing` + policy).
 
@@ -71,9 +72,14 @@ Native OS multi-window and multi-swapchain presentation is specified separately 
   - compile metadata and debug/inspection snapshots
   - cache stats metadata resources
 - Renderer owns:
-  - `wgpu` pipelines/layouts/modules/bind groups/samplers
-  - runtime flow resources and temporal/history allocations
-  - command encoding/submission
+  - derived pipeline/resource caches over opaque public RunenGPU handles
+  - runtime flow resource and temporal/history realization policy
+  - render-plan execution through public RunenGPU encoding/submission contracts
+- Render host owns:
+  - native-window correlation and render surface identity/registry/configuration
+  - attachment, resize, retirement, and acquisition mapping over public RunenGPU context/surface contracts
+- RunenGPU owns:
+  - physical GPU resources, command encoding/submission, and surface execution
 
 The compatibility frame-data registry has been retired. Uniform state projection is owned by `RenderPrepare` and frozen into prepared flow inputs before submit/execute.
 
@@ -134,11 +140,10 @@ The compatibility frame-data registry has been retired. Uniform state projection
 ### Phase 6: Cache convergence
 
 - Objective:
-  - keep real backend caches renderer-owned and consolidate ECS stats authority.
+  - keep derived integration caches renderer-owned and consolidate ECS stats authority.
 - Core files:
   - `engine/src/plugins/render/renderer/pipeline_cache.rs`
   - `engine/src/plugins/render/pipelines/cache.rs`
-  - `engine/src/plugins/render/backend/pipeline_cache.rs`
   - `engine/src/plugins/render/pipelines/flow_keys.rs`
 - Gate:
   - stable flow frames hit cache for pipeline artifacts; stats observable via ECS.

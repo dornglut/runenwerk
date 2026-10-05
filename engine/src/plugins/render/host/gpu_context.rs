@@ -14,18 +14,18 @@ use winit::window::Window;
 use super::RenderSurfaceId;
 
 #[derive(Debug)]
-struct WgpuSurfaceState {
+struct AttachedSurfaceState {
     surface: GpuSurfaceHandle,
     config: GpuSurfaceConfiguration,
 }
 
 #[derive(Debug)]
-pub struct WgpuCtx {
+pub struct RenderGpuContext {
     context: GpuContext,
-    surfaces: BTreeMap<RenderSurfaceId, WgpuSurfaceState>,
+    surfaces: BTreeMap<RenderSurfaceId, AttachedSurfaceState>,
 }
 
-/// Stable renderer-facing acquisition categories across the WGPU 30 surface-result cutover.
+/// Renderer-facing acquisition categories mapped from public RunenGPU surface outcomes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 pub enum RenderSurfaceAcquireError {
     #[error("render surface was lost")]
@@ -38,7 +38,7 @@ pub enum RenderSurfaceAcquireError {
     Validation,
 }
 
-impl WgpuCtx {
+impl RenderGpuContext {
     async fn new_async(window: Arc<Window>) -> Result<Self> {
         let mut requirements = GpuCapabilityProfile::DesktopPresentationBaseline.requirements();
         requirements.insert(GpuCapabilityRequirement::Preferred {
@@ -150,7 +150,7 @@ impl WgpuCtx {
             context,
             surfaces: BTreeMap::from([(
                 RenderSurfaceId::primary(),
-                WgpuSurfaceState {
+                AttachedSurfaceState {
                     surface,
                     config: surface_config,
                 },
@@ -175,7 +175,7 @@ impl WgpuCtx {
         let config = build_surface_config(target_size_px.0, target_size_px.1, format, &caps)?;
         let surface = self.context.configure_surface(surface, config.clone())?;
         self.surfaces
-            .insert(render_surface_id, WgpuSurfaceState { surface, config });
+            .insert(render_surface_id, AttachedSurfaceState { surface, config });
         Ok(())
     }
 

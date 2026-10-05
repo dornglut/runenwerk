@@ -7,8 +7,8 @@ use crate::plugins::inspect::{
     RenderTextureInspectorState, submit_render_frame_report_to_diagnostics,
 };
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
-use crate::plugins::render::backend::RenderSurfaceAcquireError;
-use crate::plugins::render::backend::{
+use crate::plugins::render::host::RenderSurfaceAcquireError;
+use crate::plugins::render::host::{
     RenderSurfaceDiagnostic, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
 use crate::plugins::render::runtime::{
@@ -65,7 +65,7 @@ mod contribution_deferral_tests {
         AdditionalSurfaceRenderOutcome, SubmittedFrameGpuObservations,
         apply_additional_surface_render_outcome, publish_submitted_frame_history,
     };
-    use crate::plugins::render::backend::RenderSurfaceId;
+    use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::render::inspect::{
         RenderComposedFrameGpuTimingEvidence, RenderFrameHistoryState, RenderFrameObservationKey,
         RenderFrameObservationPolicyResource, RenderGpuTimingCapability, RenderPassTimingEvidence,
@@ -1069,7 +1069,7 @@ fn defer_contributions_for_remaining_surfaces(
 fn defer_contributions_for_surface(
     deferred: &mut Vec<RenderDeterministicFrameContribution>,
     deterministic_contributions: &[RenderDeterministicFrameContribution],
-    render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+    render_surface_id: crate::plugins::render::host::RenderSurfaceId,
 ) {
     deferred.extend(
         crate::plugins::render::renderer::deterministic_contributions_for_surface(
@@ -1393,7 +1393,7 @@ fn validate_prepared_frame_gfx_attachment(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::plugins::render::backend::RenderSurfaceId;
+    use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::render::inspect::{RenderCaptureSelector, RenderPixelProbeRequest};
 
     #[test]

@@ -96,7 +96,7 @@ fn predecessor_gpu_authority_and_raw_renderer_values_are_absent() {
         );
     }
 
-    let host_adapter = read(&engine.join("src/plugins/render/backend/wgpu_ctx.rs"));
+    let host_adapter = read(&engine.join("src/plugins/render/host/gpu_context.rs"));
     assert!(host_adapter.contains("GpuContext"));
     assert!(!host_adapter.contains("wgpu::"));
 }

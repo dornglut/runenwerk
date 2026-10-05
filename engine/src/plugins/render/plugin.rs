@@ -1,4 +1,3 @@
-use super::backend::{BackendResourceAllocatorResource, RenderSurfaceRegistryResource};
 use super::composition::{
     RenderFlowRegistryResource, RenderFragmentRegistryResource, sync_render_flow_registry_system,
 };
@@ -22,6 +21,7 @@ use super::frame::{
     PreparedRenderProductSelectionResource, RenderDeterministicFrameContributionResource,
     RenderFeatureContributionCollectorRegistryResource,
 };
+use super::host::RenderSurfaceRegistryResource;
 use super::inspect::{
     RenderCapturedTextureState, RenderDebugConfigResource, RenderDebugControlResource,
     RenderDebugFrameReportState, RenderDebugGraphDumpState, RenderDebugOverlayState,
@@ -112,7 +112,6 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderDynamicTextureTargetRequestRegistryResource>();
         app.init_resource::<RenderDynamicTextureUploadRegistryResource>();
         app.init_resource::<PipelineCacheResource>();
-        app.init_resource::<BackendResourceAllocatorResource>();
         app.init_resource::<RenderSurfaceRegistryResource>();
         app.init_resource::<RenderDebugOverlayState>();
         app.init_resource::<RenderRuntimeResourceInspectorState>();

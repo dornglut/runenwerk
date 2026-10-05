@@ -1,6 +1,6 @@
 use editor_shell::viewport_embed_slot_for;
 use editor_viewport::{ViewportId, ViewportSurfacePresentationSlot};
-use engine::plugins::render::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
+use engine::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::{
     CompiledPassExecutionPlan, PreparedMaterialFeatureResource, PreparedRenderFrameRequestResource,
     RenderFlowRegistryResource, RenderFrameProducerId, SurfaceFrameSubmissionRegistryResource,

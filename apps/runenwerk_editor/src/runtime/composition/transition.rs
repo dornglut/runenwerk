@@ -8,7 +8,7 @@ use editor_shell::{
     evaluate_editor_docking_intent, plan_editor_docking_transaction,
     plan_editor_fresh_profile_target, plan_editor_target_close_transaction,
 };
-use engine::plugins::render::backend::RenderSurfaceRegistryResource;
+use engine::plugins::render::host::RenderSurfaceRegistryResource;
 use engine::runtime::{
     NativeWindowId, NativeWindowLifecycleState, ResMut, WindowStateRegistryResource,
 };
