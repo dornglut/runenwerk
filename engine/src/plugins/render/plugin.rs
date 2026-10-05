@@ -2,8 +2,8 @@ use super::composition::{
     RenderFlowRegistryResource, RenderFragmentRegistryResource, sync_render_flow_registry_system,
 };
 use super::features::{
-    EditorPickingResultResource, PreparedDeformationFeatureResource,
-    PreparedDetailFeatureResource, PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
+    EditorPickingResultResource, PreparedDeformationFeatureResource, PreparedDetailFeatureResource,
+    PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedParticleVfxFeatureResource, PreparedProceduralWorldFeatureResource,
     PreparedUiFrameResource, PreparedWindFieldFeatureResource, PreparedWorldFeatureResource,
     RenderFeatureRegistryResource, SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,

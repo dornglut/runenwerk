@@ -2,10 +2,10 @@ use super::contribution_registry::PreparedSceneRouteRegisteredPayload;
 use super::{PreparedFeatureContributionDiagnostic, PreparedRegisteredFeaturePayload};
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::{
-    DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID,
-    FeatureContributionStatus, FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID,
-    PROCEDURAL_WORLD_RENDER_FEATURE_ID, PreparedUiFrameContribution, SCENE_ROUTE_RENDER_FEATURE_ID,
-    UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
+    DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID, FeatureContributionStatus,
+    FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID, PROCEDURAL_WORLD_RENDER_FEATURE_ID,
+    PreparedUiFrameContribution, SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID,
+    WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
 };
 use runen_spatial::ChunkId;
 use std::collections::BTreeMap;

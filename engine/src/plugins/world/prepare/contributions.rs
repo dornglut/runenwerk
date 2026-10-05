@@ -1,20 +1,17 @@
-use super::super::adapters::resources::{
-    OperationLogResource, RegionInvalidationJournalResource,
-};
+use super::super::adapters::resources::{OperationLogResource, RegionInvalidationJournalResource};
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::plugin::WorldAuthorityState;
 use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedDetailFeatureResource,
-    PreparedProceduralWorldFeatureResource,
-    PreparedWindFieldFeatureResource, PreparedWorldFeatureResource,
-    world::runtime_cache::WorldRuntimeCacheResource,
+    PreparedProceduralWorldFeatureResource, PreparedWindFieldFeatureResource,
+    PreparedWorldFeatureResource, world::runtime_cache::WorldRuntimeCacheResource,
 };
 use crate::plugins::render::frame::{
     PreparedDetailCellContribution, PreparedDetailFeatureContribution,
-    PreparedProceduralWorldFeatureContribution,
-    PreparedWindFieldFeatureContribution, PreparedWorldChunkContribution,
-    PreparedWorldDrawBatchRef, PreparedWorldFeatureContribution, PreparedWorldResidencyIntent,
+    PreparedProceduralWorldFeatureContribution, PreparedWindFieldFeatureContribution,
+    PreparedWorldChunkContribution, PreparedWorldDrawBatchRef, PreparedWorldFeatureContribution,
+    PreparedWorldResidencyIntent,
 };
 use crate::plugins::render::inspect::{
     RenderDebugTimingsState, RenderRuntimeResourceInspectorState, WorldRuntimeInspectorSnapshot,
