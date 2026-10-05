@@ -61,7 +61,7 @@ Current implementation evidence includes:
 
 - `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::populate_viewport_render_state`;
 - `apps/runenwerk_editor/src/runtime/systems/frame_submit.rs::extract_viewport_scene_render_packet_with_material_slots`;
-- `apps/runenwerk_editor/src/runtime/resources.rs::EditorViewportSceneRenderPacket`;
+- `apps/runenwerk_editor/src/runtime/resources/viewport_packet.rs::EditorViewportSceneRenderPacket`;
 - `apps/runenwerk_editor/src/runtime/resources.rs::EditorViewportRenderState::compose_scene_product_uniform`;
 - `apps/runenwerk_editor/src/runtime/systems/picking.rs::pick_entity_hit` and viewport picking-context formation;
 - `apps/runenwerk_editor/src/runtime/viewport/render_jobs.rs::build_viewport_render_job`;

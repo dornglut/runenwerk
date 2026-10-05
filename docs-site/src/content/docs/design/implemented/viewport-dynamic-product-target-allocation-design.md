@@ -569,6 +569,6 @@ V5 ends with allocated, viewport-scoped targets and dynamic UI binding support. 
 - `apps/runenwerk_editor/src/runtime/viewport/producer_scene.rs` iterates `ViewportRenderJob` records.
 - scene color, picking ids, overlay, and later depth are rendered into the targets allocated by V5.
 - `assets/shaders/editor_viewport_scene_product.wgsl` becomes target-local and no longer receives multiple panel rectangles.
-- `apps/runenwerk_editor/src/runtime/resources.rs::EditorViewportSceneProductUniform` becomes a single-job uniform or equivalent per-job parameter block.
+- `apps/runenwerk_editor/src/runtime/resources/viewport_packet.rs::EditorViewportSceneProductUniform` becomes a single-job uniform or equivalent per-job parameter block.
 
 Under the active render product surface foundation bundle, V5 and V6 should land together as one user-visible cutover. If they land separately for reviewability, V5 must be internal infrastructure only and must not introduce a visible path that copies the old global scene product into dynamic targets.

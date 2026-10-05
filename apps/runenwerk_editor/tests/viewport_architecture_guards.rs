@@ -1056,6 +1056,7 @@ fn rb0_runtime_sources_do_not_build_render_flows_per_viewport() {
 fn rb7_viewport_scene_product_shader_has_no_multi_rect_containment() {
     let sources = read_workspace_sources(&[
         "apps/runenwerk_editor/src/runtime/resources.rs",
+        "apps/runenwerk_editor/src/runtime/resources/viewport_packet.rs",
         "assets/shaders/editor_viewport_scene_product.wgsl",
     ]);
     let forbidden_terms = [

@@ -453,7 +453,7 @@ Implementation targets:
 - `assets/shaders/editor_viewport_scene_product.wgsl`
   - remove `viewport_b`, `viewport_c`, `viewport_d`, and reserved multi-rectangle fields;
   - render using local target coordinates for the current job.
-- `apps/runenwerk_editor/src/runtime/resources.rs::EditorViewportSceneProductUniform`
+- `apps/runenwerk_editor/src/runtime/resources/viewport_packet.rs::EditorViewportSceneProductUniform`
   - replace multi-rect fields with one viewport-local target/camera/product uniform.
 
 Exit criteria:
