@@ -135,9 +135,9 @@ fn current_editor_formation_bypasses_workspace_state_predecessor() {
     assert!(!activation.contains("import_legacy_workspace"));
     assert!(!activation.contains("build_default_workspace_state_with_registry"));
 
-    let resources = include_str!("../src/runtime/resources.rs");
+    let host = include_str!("../src/runtime/resources/host.rs");
     let apply = source_between(
-        resources,
+        host,
         "fn apply_editor_definition_document_activation(",
         "fn apply_workbench_composition_package_activation(",
     );
