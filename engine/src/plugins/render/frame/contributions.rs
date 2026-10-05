@@ -1,3 +1,4 @@
+use super::contribution_registry::PreparedSceneRouteRegisteredPayload;
 use super::{PreparedFeatureContributionDiagnostic, PreparedRegisteredFeaturePayload};
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::{
@@ -242,18 +243,27 @@ impl PreparedFrameContributions {
 
     pub fn scene_route_labels(&self) -> Option<(&str, &str)> {
         let contribution = self.by_feature.get(&SCENE_ROUTE_RENDER_FEATURE_ID)?;
-        match contribution.payload {
-            PreparedFeaturePayload::SceneRoute(ref value)
-                if !matches!(
-                    contribution.status,
-                    FeatureContributionStatus::Disabled | FeatureContributionStatus::Missing
-                ) =>
-            {
-                Some((
-                    value.world_scene_label.as_str(),
-                    value.overlay_scene_label.as_str(),
-                ))
-            }
+        if matches!(
+            contribution.status,
+            FeatureContributionStatus::Disabled | FeatureContributionStatus::Missing
+        ) {
+            return None;
+        }
+
+        match &contribution.payload {
+            PreparedFeaturePayload::SceneRoute(value) => Some((
+                value.world_scene_label.as_str(),
+                value.overlay_scene_label.as_str(),
+            )),
+            PreparedFeaturePayload::Registered(payload) => payload
+                .downcast_ref::<PreparedSceneRouteRegisteredPayload>()
+                .map(|value| {
+                    let contribution = value.contribution();
+                    (
+                        contribution.world_scene_label.as_str(),
+                        contribution.overlay_scene_label.as_str(),
+                    )
+                }),
             _ => None,
         }
     }
