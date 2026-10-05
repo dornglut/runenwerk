@@ -109,15 +109,18 @@ This is not an RDG-first rewrite. Whole-frame render graph compilation is an
 execution-planning layer over existing prepared product contracts. It does not
 replace Product Jobs, Product Graph, `RenderFlow`, or prepared-frame ownership.
 
-## Backend Runtime Boundary
+## Execution and Host Boundary
 
-The backend runtime owns WGPU execution mechanics only:
+RunenGPU owns physical GPU resources, command encoding/submission, and surface
+execution. The renderer derives execution state through its public contracts:
 
-- allocation and reuse of backend textures, buffers, samplers, and bind groups;
-- command encoding and submission;
-- pipeline layouts, shader modules, pipeline caches, and bind group caches;
-- dynamic target realization, uploads, captures, timings, and presentation;
-- surface and swapchain recovery.
+- resource realization/reuse policy and caches over opaque RunenGPU handles;
+- compiled render-plan execution through public encoding/submission contracts;
+- dynamic targets, uploads, captures, and timings.
+
+The Runenwerk render host owns native-window correlation, render surface
+identity/registry/configuration, and attachment, resize, retirement, and
+acquisition mapping over public RunenGPU context/surface contracts.
 
 Backend handles must not cross into domain, app, UI, or product descriptions.
 Backend resource state must not become product identity, product lineage, or app

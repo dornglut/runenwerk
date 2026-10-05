@@ -166,7 +166,7 @@ Future PM-008 implementation may touch:
 
 ```text
 engine/src/plugins/render/inspect
-engine/src/plugins/render/backend
+engine/src/plugins/render/host
 engine/src/plugins/render/runtime
 engine/src/plugins/render/renderer
 engine/src/plugins/render/frame

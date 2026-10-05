@@ -1,5 +1,4 @@
 use crate::plugins::render::RenderFlowId;
-use crate::plugins::render::backend::WgpuCtx;
 use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, UiFontAtlasResource,
 };
@@ -8,6 +7,7 @@ use crate::plugins::render::graph::{
     CompiledRenderFlowPlan, RenderExecutionGraphPreparedReport,
     RenderPreparedFramePreflightCacheState,
 };
+use crate::plugins::render::host::RenderGpuContext;
 use crate::plugins::render::inspect::{
     PassTimingSample, RenderCaptureSelectorResult, RenderCapturedTexture,
     RenderComposedFrameGpuTimingEvidence, RenderDebugConfigResource, RenderDebugControlResource,
@@ -835,7 +835,7 @@ pub struct Renderer {
 
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct Gfx {
-    ctx: WgpuCtx,
+    ctx: RenderGpuContext,
     pub renderer: Renderer,
 }
 
@@ -849,7 +849,7 @@ pub struct GfxFrameTimings {
 
 impl Gfx {
     pub fn new(window: Arc<Window>) -> Result<Self> {
-        let ctx = WgpuCtx::new(window)?;
+        let ctx = RenderGpuContext::new(window)?;
         Ok(Self {
             ctx,
             renderer: Renderer::new(),
@@ -872,7 +872,7 @@ impl Gfx {
 
     pub fn attach_surface(
         &mut self,
-        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
         window: Arc<Window>,
         target_size_px: (u32, u32),
     ) -> Result<()> {
@@ -882,21 +882,21 @@ impl Gfx {
 
     pub fn detach_surface(
         &mut self,
-        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
     ) -> bool {
         self.ctx.detach_surface(render_surface_id)
     }
 
     pub fn has_surface(
         &self,
-        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
     ) -> bool {
         self.ctx.has_surface(render_surface_id)
     }
 
     pub fn surface_size(
         &self,
-        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
     ) -> Option<(u32, u32)> {
         self.ctx
             .surface_config(render_surface_id)
@@ -905,7 +905,7 @@ impl Gfx {
 
     pub fn resize(
         &mut self,
-        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
         width: u32,
         height: u32,
     ) -> bool {
@@ -1015,7 +1015,7 @@ impl Gfx {
 
 pub(crate) fn deterministic_contributions_for_surface(
     contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
-    surface: crate::plugins::render::backend::RenderSurfaceId,
+    surface: crate::plugins::render::host::RenderSurfaceId,
 ) -> Vec<crate::plugins::render::RenderDeterministicFrameContribution> {
     contributions
         .iter()
@@ -1029,7 +1029,7 @@ pub(crate) fn deterministic_contributions_for_surface(
 /// render on independent surfaces, and a surface without deterministic work remains unaffected by
 /// another surface's in-flight submission.
 pub(crate) fn validate_deterministic_surface_scope(
-    contributions: impl IntoIterator<Item = (u64, crate::plugins::render::backend::RenderSurfaceId)>,
+    contributions: impl IntoIterator<Item = (u64, crate::plugins::render::host::RenderSurfaceId)>,
 ) -> Result<()> {
     let mut surfaces_by_producer = BTreeMap::new();
     for (producer, surface) in contributions {
@@ -1100,7 +1100,7 @@ mod tests {
         Renderer, composed_frame_gpu_timing_capability, frame_gpu_timing_capability,
         should_defer_deterministic_surface, validate_deterministic_surface_scope,
     };
-    use crate::plugins::render::backend::RenderSurfaceId;
+    use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::render::inspect::{
         RenderComposedFrameGpuTimingEvidence, RenderGpuTimingCapability, RenderPassTimingEvidence,
     };

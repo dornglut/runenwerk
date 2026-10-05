@@ -1,4 +1,4 @@
-use engine::plugins::render::backend::{
+use engine::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
 use engine::plugins::render::inspect::inspect_prepared_render_frame;

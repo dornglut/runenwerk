@@ -207,7 +207,7 @@ pub fn submit_editor_frame_system(
     let primary_surface_id = primary_target_id
         .and_then(|target_id| shell_state.composition_target_binding(target_id))
         .map(|binding| binding.render_surface_id)
-        .unwrap_or_else(engine::plugins::render::backend::RenderSurfaceId::primary);
+        .unwrap_or_else(engine::plugins::render::host::RenderSurfaceId::primary);
     submissions.replace_for_surface(
         EDITOR_SHELL_UI_PRODUCER_ID,
         primary_surface_id,
@@ -827,7 +827,7 @@ mod tests {
             EditorFreshTargetRequest, WorkspaceProfileLayoutSource,
             plan_editor_fresh_profile_target,
         };
-        use engine::plugins::render::backend::RenderSurfaceId;
+        use engine::plugins::render::host::RenderSurfaceId;
         use engine::runtime::NativeWindowId;
         use ui_composition::{CompositionPolicies, TargetProfileId};
 

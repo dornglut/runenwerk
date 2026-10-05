@@ -96,8 +96,10 @@ Translation boundaries:
 - The render execution graph compiler translates those prepared render inputs
   and static flow descriptions into backend-neutral execution plans plus typed
   diagnostics.
-- The backend runtime translates compiled execution plans into WGPU allocation,
-  binding, command encoding, submission, timing, and presentation.
+- The renderer translates compiled execution plans into public RunenGPU
+  allocation, binding, encoding, submission, and timing contracts. RunenGPU owns
+  physical GPU execution; the Runenwerk render host owns native-window and
+  render-surface integration.
 
 Team Topologies ownership:
 

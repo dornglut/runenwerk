@@ -1,4 +1,4 @@
-use crate::plugins::render::backend::RenderSurfaceId;
+use crate::plugins::render::host::RenderSurfaceId;
 use crate::plugins::render::{
     RenderFrameProducerId, SurfaceFrameRoute, SurfaceFrameSubmission, SurfaceFrameSubmissionOrder,
     SurfaceFrameSubmissionRegistryResource,

@@ -6,7 +6,7 @@ use std::path::PathBuf;
 #[test]
 fn renderer_surface_host_routes_through_public_runengpu_without_a_raw_renderer_bridge() {
     let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let host = fs::read_to_string(manifest.join("src/plugins/render/backend/wgpu_ctx.rs"))
+    let host = fs::read_to_string(manifest.join("src/plugins/render/host/gpu_context.rs"))
         .expect("Runenwerk surface host adapter should remain readable");
     let execute =
         fs::read_to_string(manifest.join("src/plugins/render/renderer/render_flow/execute.rs"))

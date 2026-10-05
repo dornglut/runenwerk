@@ -1,4 +1,4 @@
-use engine::plugins::render::backend::RenderSurfaceId;
+use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::{
     FeatureContributionStatus, PreparedUiFrameResource, RenderFrameProducerId, RenderPlugin,
     SurfaceFrameRoute, SurfaceFrameSubmission, SurfaceFrameSubmissionOrder,

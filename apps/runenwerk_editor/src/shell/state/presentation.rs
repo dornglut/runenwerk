@@ -1,5 +1,5 @@
 use editor_shell::{EditorCompositionRuntime, EditorWindowId, EditorWindowRegistry};
-use engine::plugins::render::backend::RenderSurfaceId;
+use engine::plugins::render::host::RenderSurfaceId;
 use engine::runtime::NativeWindowId;
 use ui_composition::PresentationTargetId;
 

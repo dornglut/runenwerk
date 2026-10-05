@@ -1,6 +1,6 @@
 use crate::app::WindowedAppState;
 use crate::plugins::InputState;
-use crate::plugins::render::native_host as render_native_host;
+use crate::plugins::render::host::native as render_native_host;
 use crate::runtime::PrimaryPresentationMetricsResource;
 use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use crate::runtime::frame_pacing::{

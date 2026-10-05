@@ -175,7 +175,6 @@ Without it, the architecture still cannot fully support:
 
 - API
 - graph
-- backend
 - renderer
 - resource
 
@@ -183,9 +182,9 @@ Without it, the architecture still cannot fully support:
 
 - `engine/src/plugins/render/api/passes.rs`
 - `engine/src/plugins/render/graph/planning.rs`
-- `engine/src/plugins/render/backend/execution.rs`
-- `engine/src/plugins/render/backend/pipeline_cache.rs`
-- `engine/src/plugins/render/backend/resource_allocator.rs`
+- `engine/src/plugins/render/renderer/render_flow/execute.rs`
+- `engine/src/plugins/render/renderer/pipeline_cache.rs`
+- `engine/src/plugins/render/renderer/render_flow/runtime_resources/*`
 - `engine/src/plugins/render/renderer/graph_execution.rs`
 - `engine/src/plugins/render/resource/usages.rs`
 
@@ -210,7 +209,7 @@ It must include:
 - dependency metadata
 
 ### 3. Pipeline support
-Add builtin pipeline support for graphics passes through backend pipeline cache.
+Add builtin pipeline support for graphics passes through the renderer pipeline cache over public RunenGPU handles.
 
 ### 4. Buffer binding support
 Add support for:
@@ -266,14 +265,14 @@ This is needed for:
 
 - API
 - graph
-- backend
+- renderer
 - resource
 
 ## Target files
 
 - `engine/src/plugins/render/api/passes.rs`
 - `engine/src/plugins/render/graph/planning.rs`
-- `engine/src/plugins/render/backend/execution.rs`
+- `engine/src/plugins/render/renderer/render_flow/execute.rs`
 - `engine/src/plugins/render/resource/usages.rs`
 - `engine/src/plugins/render/resource/descriptors.rs`
 
@@ -311,7 +310,7 @@ A compositor or history example must use `copy_pass(...)`.
 
 ## Exit criteria
 
-A declarative `copy_pass(...)` executes through builtin backend execution.
+A declarative `copy_pass(...)` executes through renderer execution over public RunenGPU contracts.
 
 ---
 
@@ -336,15 +335,15 @@ This makes the frame model cleaner and is important for:
 
 - API
 - graph
-- backend
+- renderer
 - surface
 
 ## Target files
 
 - `engine/src/plugins/render/api/passes.rs`
 - `engine/src/plugins/render/graph/planning.rs`
-- `engine/src/plugins/render/backend/execution.rs`
-- `engine/src/plugins/render/backend/surface.rs`
+- `engine/src/plugins/render/renderer/render_flow/execute.rs`
+- `engine/src/plugins/render/host/surface.rs`
 
 ## Required implementation
 
@@ -402,7 +401,6 @@ This is required for:
 
 - API
 - resource
-- backend
 - renderer
 
 ## Target files
@@ -411,8 +409,8 @@ This is required for:
 - `engine/src/plugins/render/api/passes.rs`
 - `engine/src/plugins/render/resource/descriptors.rs`
 - `engine/src/plugins/render/resource/usages.rs`
-- `engine/src/plugins/render/backend/resource_allocator.rs`
-- `engine/src/plugins/render/backend/execution.rs`
+- `engine/src/plugins/render/renderer/render_flow/runtime_resources/*`
+- `engine/src/plugins/render/renderer/render_flow/execute.rs`
 
 ## Required implementation
 
@@ -619,7 +617,6 @@ Boids is the best realistic next proof because it uses:
 
 - example / feature proof
 - API
-- backend
 - renderer
 
 ## Target files
@@ -682,7 +679,6 @@ You explicitly want this engine to be strong for:
 
 - example or feature-owned render support
 - API
-- backend
 - renderer
 
 ## Target files
@@ -765,13 +761,13 @@ Needed for:
 
 - resource
 - graph
-- backend
+- renderer
 
 ## Target files
 
 - `engine/src/plugins/render/resource/lifetime.rs`
 - `engine/src/plugins/render/resource/transient.rs`
-- `engine/src/plugins/render/backend/resource_allocator.rs`
+- `engine/src/plugins/render/renderer/render_flow/runtime_resources/*`
 - `engine/src/plugins/render/graph/planning.rs`
 - `engine/src/plugins/render/resource/descriptors.rs`
 

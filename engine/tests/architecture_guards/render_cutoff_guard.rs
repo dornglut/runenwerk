@@ -40,11 +40,11 @@ fn source_guards_read_lf_and_crlf_equivalently() {
 }
 
 fn collect_source_files(root: &Path, files: &mut Vec<std::path::PathBuf>) {
-    let Ok(entries) = fs::read_dir(root) else {
-        return;
-    };
+    let entries = fs::read_dir(root)
+        .unwrap_or_else(|err| panic!("failed to enumerate {}: {err}", root.display()));
 
-    for entry in entries.flatten() {
+    for entry in entries {
+        let entry = entry.expect("source directory entry must be readable");
         let path = entry.path();
         if path.is_dir() {
             collect_source_files(&path, files);
@@ -52,6 +52,55 @@ fn collect_source_files(root: &Path, files: &mut Vec<std::path::PathBuf>) {
             files.push(path);
         }
     }
+}
+
+#[test]
+fn r2_render_host_retires_backend_namespace_and_residue() {
+    for retired_path in [
+        "src/plugins/render/backend",
+        "src/plugins/render/backend.rs",
+        "src/plugins/render/native_host.rs",
+    ] {
+        assert!(
+            !Path::new(retired_path).exists(),
+            "retired Render owner must remain deleted: {retired_path}"
+        );
+    }
+
+    let forbidden = [
+        "render::backend",
+        "render::native_host",
+        "WgpuCtx",
+        "WgpuSurfaceState",
+        "BackendResourceAllocatorResource",
+        "TextureResourceEntry",
+        "BufferResourceEntry",
+        "TransientResourceClaim",
+        "BackendPipelineCacheResource",
+        "BackendPipelineCacheStats",
+        "ensure_compiled_pass_is_supported",
+    ];
+    let mut files = Vec::new();
+    for root in ["src", "tests", "examples", "../apps"] {
+        collect_source_files(Path::new(root), &mut files);
+    }
+    files.sort();
+    let offenders = files
+        .into_iter()
+        .filter(|path| path != Path::new("tests/architecture_guards/render_cutoff_guard.rs"))
+        .flat_map(|path| {
+            let source = read(path.to_str().expect("source paths must be UTF-8"));
+            forbidden
+                .iter()
+                .filter(|term| source.contains(**term))
+                .map(|term| format!("{}: {term}", path.display()))
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        offenders.is_empty(),
+        "maintained consumers must use the Render host owner without compatibility residue: {offenders:?}"
+    );
 }
 
 fn strip_cfg_test_modules(source: &str) -> String {
@@ -433,7 +482,7 @@ fn g5c1_render_cutover_has_one_frame_graph_and_no_raw_executor_sidecar() {
     assert!(render_packet.contains("pending_operations).into_operations()"));
     assert!(render_packet.contains("validate_prepared_uploads("));
 
-    let backend = read("src/plugins/render/backend/wgpu_ctx.rs");
+    let host = read("src/plugins/render/host/gpu_context.rs");
     for raw_surface_authority in [
         "wgpu::Surface",
         "SurfaceTexture",
@@ -442,11 +491,11 @@ fn g5c1_render_cutover_has_one_frame_graph_and_no_raw_executor_sidecar() {
         "current_host_surface_bridge",
     ] {
         assert!(
-            !backend.contains(raw_surface_authority),
-            "renderer backend must not retain raw surface authority '{raw_surface_authority}'"
+            !host.contains(raw_surface_authority),
+            "render host must not retain raw surface authority '{raw_surface_authority}'"
         );
     }
-    assert!(backend.contains(".acquire_surface_image(surface)"));
+    assert!(host.contains(".acquire_surface_image(surface)"));
     let renderer = read("src/plugins/render/renderer/mod.rs");
     assert!(renderer.contains("self.ctx.acquire_surface_image(render_surface_id)?"));
     assert!(renderer.contains("let acquired_extent = acquired.texture().descriptor().extent()"));

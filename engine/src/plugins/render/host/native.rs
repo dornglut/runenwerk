@@ -1,6 +1,6 @@
-use super::backend::{RenderSurfaceId, RenderSurfaceRegistryResource};
-use super::render_integration_is_active;
-use super::renderer::Gfx;
+use super::super::render_integration_is_active;
+use super::super::renderer::Gfx;
+use super::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::runtime::NativeWindowId;
 use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
@@ -152,7 +152,7 @@ mod tests {
     use super::*;
     use crate::app::App;
     use crate::plugins::RenderPlugin;
-    use crate::plugins::render::backend::RenderSurfaceLifecycleState;
+    use crate::plugins::render::host::RenderSurfaceLifecycleState;
 
     fn secondary_window(raw: u64) -> NativeWindowId {
         NativeWindowId::try_from_raw(raw).expect("secondary native window id should be valid")

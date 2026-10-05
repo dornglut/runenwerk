@@ -2,7 +2,7 @@ use std::process::Command;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use engine::plugins::render::backend::{
+use engine::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
 use engine::plugins::render::{Gfx, RenderFlow};

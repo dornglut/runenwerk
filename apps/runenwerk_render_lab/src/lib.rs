@@ -6,11 +6,11 @@
 
 use anyhow::{Context, Result, bail};
 use engine::plugins::render::apply_runenwerk_gpu_context_policy;
-use engine::plugins::render::backend::RenderSurfaceId;
 use engine::plugins::render::frame::{
     PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
     RenderDeterministicFrameContribution, RenderDeterministicFrameContributionResource,
 };
+use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::runtime::RenderDynamicTextureTargetRequestRegistryResource;
 use engine::plugins::render::runtime::RenderRuntimeSet;
 use engine::plugins::render::{

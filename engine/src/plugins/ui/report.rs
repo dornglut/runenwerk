@@ -2,7 +2,7 @@ use super::UiRuntimeInstallState;
 use super::{UiHostMutationReceipt, UiRuntimeSourceProgramFacts, UiTypedActionId};
 
 use crate::plugins::render::RenderFrameProducerId;
-use crate::plugins::render::backend::RenderSurfaceId;
+use crate::plugins::render::host::RenderSurfaceId;
 use ui_evaluator::UiOutput;
 use ui_hosts::{DomainCommand, HostCommand, HostKind};
 use ui_program::RouteId;

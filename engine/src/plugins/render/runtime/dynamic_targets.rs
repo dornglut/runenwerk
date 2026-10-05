@@ -98,7 +98,7 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
     pub fn replace_surface_contribution(
         &mut self,
         producer_id: impl Into<RenderFrameProducerId>,
-        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
         descriptors: impl IntoIterator<Item = RenderDynamicTextureTargetDescriptor>,
     ) -> Result<(), RenderDynamicTextureTargetRequestRegistryError> {
         self.replace_scoped_contribution(
@@ -188,7 +188,7 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
 
     pub fn snapshot_for_surface(
         &self,
-        render_surface_id: crate::plugins::render::backend::RenderSurfaceId,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
     ) -> Vec<RenderDynamicTextureTargetDescriptor> {
         self.contributions
             .values()
