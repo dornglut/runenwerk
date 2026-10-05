@@ -59,7 +59,7 @@ After an Editor Design apply command succeeds:
    stores an applied snapshot.
 2. `apps/runenwerk_editor/src/shell/dispatch_shell_command.rs::dispatch_shell_command`
    queues the applied document for app-owned activation.
-3. `apps/runenwerk_editor/src/runtime/resources.rs::EditorHostResource::apply_pending_editor_definition_activations`
+3. `apps/runenwerk_editor/src/runtime/resources/host.rs::EditorHostResource::apply_pending_editor_definition_activations`
    drains the queue at the runtime host boundary.
 4. Theme documents form `ThemeTokens` and replace the live host theme through
    `EditorHostResource::apply_theme`.

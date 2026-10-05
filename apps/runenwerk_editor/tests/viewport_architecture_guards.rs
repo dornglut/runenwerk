@@ -1202,7 +1202,7 @@ fn self_authoring_live_activation_uses_domain_workspace_formation_and_versioned_
     let activation = read_workspace_source(
         "apps/runenwerk_editor/src/shell/applied_editor_definition/activation.rs",
     );
-    let resources = read_workspace_source("apps/runenwerk_editor/src/runtime/resources.rs");
+    let host = read_workspace_source("apps/runenwerk_editor/src/runtime/resources/host.rs");
     let shell_workspace =
         read_workspace_source("domain/editor/editor_shell/src/workspace/definition_form.rs");
     let shell_surface_contract =
@@ -1216,9 +1216,9 @@ fn self_authoring_live_activation_uses_domain_workspace_formation_and_versioned_
         "workspace layout definitions should produce a non-theme live activation contract",
     );
     assert!(
-        resources.contains("form_editor_profile_composition")
-            && resources.contains("install_composition_runtime")
-            && !resources.contains("form_workspace_state_from_definition"),
+        host.contains("form_editor_profile_composition")
+            && host.contains("install_composition_runtime")
+            && !host.contains("form_workspace_state_from_definition"),
         "app runtime should apply authored workspace layouts through composition-native editor_shell formation",
     );
     assert!(
@@ -1248,7 +1248,7 @@ fn self_authoring_live_activation_updates_definition_catalogs_not_ui_definition_
     );
     let facade =
         read_workspace_source("apps/runenwerk_editor/src/shell/applied_editor_definition.rs");
-    let resources = read_workspace_source("apps/runenwerk_editor/src/runtime/resources.rs");
+    let host = read_workspace_source("apps/runenwerk_editor/src/runtime/resources/host.rs");
     let shell_state = read_workspace_source("apps/runenwerk_editor/src/shell/state.rs");
     let frame_model = read_workspace_source("domain/editor/editor_shell/src/surface_provider.rs");
     let shell_composition =
@@ -1265,9 +1265,9 @@ fn self_authoring_live_activation_updates_definition_catalogs_not_ui_definition_
         "applied definitions should produce explicit catalog activation contracts",
     );
     assert!(
-        resources.contains("install_editor_bindings")
-            && resources.contains("install_panel_registry")
-            && resources.contains("install_tool_surface_registry"),
+        host.contains("install_editor_bindings")
+            && host.contains("install_panel_registry")
+            && host.contains("install_tool_surface_registry"),
         "runtime activation must install formed catalogs and block invalid registry replacement",
     );
     assert!(
