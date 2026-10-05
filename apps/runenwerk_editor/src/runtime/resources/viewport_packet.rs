@@ -332,4 +332,3 @@ fn prepared_model_mesh_source_identity(
     }
     Ok(prepared)
 }
-
