@@ -9,14 +9,35 @@ fn read(path: &str) -> String {
 fn render_submit_consumes_prepared_world_resources_only() {
     let prepare_source = read("src/plugins/render/runtime/frame_prepare.rs");
     let submit_source = read("src/plugins/render/runtime/frame_submit.rs");
+    let feature_source = read("src/plugins/render/features/mod.rs");
+    let contribution_source = read("src/plugins/render/frame/contributions.rs");
+    let world_prepare_source = read("src/plugins/world/prepare/contributions.rs");
+
+    assert!(
+        !Path::new("src/plugins/render/features/caves/mod.rs").exists(),
+        "retired Cave render scaffold must not return"
+    );
+    for retired in [
+        "CaveRenderVisibilityResource",
+        "PreparedCaveFeatureResource",
+        "PreparedCaveFeatureContribution",
+        "CAVE_INTERIOR_RENDER_FEATURE_ID",
+        "CAVE_INTERIOR_RENDER_FEATURE_LABEL",
+        "PreparedFeaturePayload::Caves",
+        "insert_caves",
+    ] {
+        assert!(
+            !feature_source.contains(retired)
+                && !contribution_source.contains(retired)
+                && !prepare_source.contains(retired)
+                && !world_prepare_source.contains(retired),
+            "retired Cave render projection must not return (found '{retired}')"
+        );
+    }
 
     assert!(
         prepare_source.contains("PreparedWorldFeatureResource"),
         "prepare path must ingest world prepared contributions"
-    );
-    assert!(
-        prepare_source.contains("PreparedCaveFeatureResource"),
-        "prepare path must ingest cave prepared contributions"
     );
     assert!(
         prepare_source.contains("PreparedDetailFeatureResource"),

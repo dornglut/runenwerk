@@ -777,19 +777,6 @@ pub(crate) fn build_frame_feature_contributions(
         }
     }
 
-    if contributions
-        .feature(&CAVE_INTERIOR_RENDER_FEATURE_ID)
-        .is_none()
-        && let Ok(resource) = world.resource::<PreparedCaveFeatureResource>()
-    {
-        let cave_policy = feature_policy(
-            world,
-            CAVE_INTERIOR_RENDER_FEATURE_ID,
-            resource.fallback_policy,
-        );
-        contributions.insert_caves(resource.payload.clone(), resource.status, cave_policy);
-    }
-
     if contributions.feature(&DETAIL_RENDER_FEATURE_ID).is_none()
         && let Ok(resource) = world.resource::<PreparedDetailFeatureResource>()
     {

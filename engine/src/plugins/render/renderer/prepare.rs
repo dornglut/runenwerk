@@ -1140,11 +1140,6 @@ fn hash_prepared_feature_contribution(
                 intent.hard_pin.hash(&mut hasher);
             }
         }
-        crate::plugins::render::PreparedFeaturePayload::Caves(value) => {
-            "caves".hash(&mut hasher);
-            value.visible_sector_ids.hash(&mut hasher);
-            value.scoped_light_volume_count.hash(&mut hasher);
-        }
         crate::plugins::render::PreparedFeaturePayload::Detail(value) => {
             "detail".hash(&mut hasher);
             value.cells.len().hash(&mut hasher);

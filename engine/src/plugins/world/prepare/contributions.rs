@@ -1,18 +1,18 @@
 use super::super::adapters::resources::{
-    CaveSectorResource, OperationLogResource, RegionInvalidationJournalResource,
+    OperationLogResource, RegionInvalidationJournalResource,
 };
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::plugin::WorldAuthorityState;
 use crate::plugins::render::features::{
-    FeatureContributionStatus, FeatureFallbackPolicy, PreparedCaveFeatureResource,
-    PreparedDetailFeatureResource, PreparedProceduralWorldFeatureResource,
+    FeatureContributionStatus, FeatureFallbackPolicy, PreparedDetailFeatureResource,
+    PreparedProceduralWorldFeatureResource,
     PreparedWindFieldFeatureResource, PreparedWorldFeatureResource,
     world::runtime_cache::WorldRuntimeCacheResource,
 };
 use crate::plugins::render::frame::{
-    PreparedCaveFeatureContribution, PreparedDetailCellContribution,
-    PreparedDetailFeatureContribution, PreparedProceduralWorldFeatureContribution,
+    PreparedDetailCellContribution, PreparedDetailFeatureContribution,
+    PreparedProceduralWorldFeatureContribution,
     PreparedWindFieldFeatureContribution, PreparedWorldChunkContribution,
     PreparedWorldDrawBatchRef, PreparedWorldFeatureContribution, PreparedWorldResidencyIntent,
 };
@@ -77,29 +77,6 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         world_feature.payload = PreparedWorldFeatureContribution {
             visible_chunks,
             residency_intents,
-        };
-    }
-
-    let (visible_sector_ids, scoped_light_volume_count) =
-        if let Ok(caves) = world.resource::<CaveSectorResource>() {
-            (
-                caves.visible_sectors.iter().map(|value| value.0).collect(),
-                caves.visible_sectors.len() as u32,
-            )
-        } else {
-            (Vec::new(), 0)
-        };
-
-    if let Ok(cave_feature) = world.resource_mut::<PreparedCaveFeatureResource>() {
-        cave_feature.status = if visible_sector_ids.is_empty() {
-            FeatureContributionStatus::Stale
-        } else {
-            FeatureContributionStatus::Ready
-        };
-        cave_feature.fallback_policy = FeatureFallbackPolicy::ReuseLastGood;
-        cave_feature.payload = PreparedCaveFeatureContribution {
-            visible_sector_ids,
-            scoped_light_volume_count,
         };
     }
 
