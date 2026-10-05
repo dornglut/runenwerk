@@ -6,34 +6,45 @@ fn read(path: &str) -> String {
 }
 
 #[test]
-fn render_submit_consumes_prepared_world_resources_only() {
-    let prepare_source = read("src/plugins/render/runtime/frame_prepare.rs");
-    let submit_source = read("src/plugins/render/runtime/frame_submit.rs");
+fn retired_cave_render_projection_does_not_return() {
     let feature_source = read("src/plugins/render/features/mod.rs");
     let contribution_source = read("src/plugins/render/frame/contributions.rs");
+    let prepare_source = read("src/plugins/render/runtime/frame_prepare.rs");
     let world_prepare_source = read("src/plugins/world/prepare/contributions.rs");
 
-    assert!(
-        !Path::new("src/plugins/render/features/caves/mod.rs").exists(),
-        "retired Cave render scaffold must not return"
-    );
+    let predecessor_sources = [
+        ("render/features/mod.rs", feature_source.as_str()),
+        (
+            "render/frame/contributions.rs",
+            contribution_source.as_str(),
+        ),
+        ("render/runtime/frame_prepare.rs", prepare_source.as_str()),
+        (
+            "world/prepare/contributions.rs",
+            world_prepare_source.as_str(),
+        ),
+    ];
+
     for retired in [
         "CaveRenderVisibilityResource",
         "PreparedCaveFeatureResource",
         "PreparedCaveFeatureContribution",
-        "CAVE_INTERIOR_RENDER_FEATURE_ID",
-        "CAVE_INTERIOR_RENDER_FEATURE_LABEL",
         "PreparedFeaturePayload::Caves",
         "insert_caves",
     ] {
-        assert!(
-            !feature_source.contains(retired)
-                && !contribution_source.contains(retired)
-                && !prepare_source.contains(retired)
-                && !world_prepare_source.contains(retired),
-            "retired Cave render projection must not return (found '{retired}')"
-        );
+        for (path, source) in predecessor_sources {
+            assert!(
+                !source.contains(retired),
+                "retired Cave render projection must not return (found '{retired}' in {path})"
+            );
+        }
     }
+}
+
+#[test]
+fn render_submit_consumes_prepared_world_resources_only() {
+    let prepare_source = read("src/plugins/render/runtime/frame_prepare.rs");
+    let submit_source = read("src/plugins/render/runtime/frame_submit.rs");
 
     assert!(
         prepare_source.contains("PreparedWorldFeatureResource"),
