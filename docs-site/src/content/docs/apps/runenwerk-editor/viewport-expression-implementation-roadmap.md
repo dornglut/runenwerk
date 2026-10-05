@@ -148,7 +148,7 @@ Final responsibilities:
 - target allocation status;
 - last rendered product revisions.
 
-The singleton `EditorViewportRenderState` in `apps/runenwerk_editor/src/runtime/resources.rs` should be decomposed. Shared defaults can remain as helper functions, but live viewport state must be keyed by `ViewportId`.
+`apps/runenwerk_editor/src/runtime/viewport/render_state.rs` owns both the viewport-local render payload and the `ViewportId`-keyed live registry. A default `EditorViewportRenderState` ECS resource remains registered only because the generic render-flow state projection contract requires it before invocation-local overrides are applied; editor systems do not use that default resource as live viewport authority.
 
 ### Viewport Render Jobs
 
@@ -343,9 +343,9 @@ Implementation targets:
   - continue adding projection, scale policy, source version, render throttling, and target status as product needs require.
 - `apps/runenwerk_editor/src/runtime/viewport/render_state.rs::ViewportRenderStateCommandQueueResource`
   - route per-viewport camera reset/set and debug state commands by `ViewportId`.
-- `apps/runenwerk_editor/src/runtime/resources.rs::EditorViewportRenderState`
-  - remove live singleton viewport fields after equivalent per-viewport fields exist;
-  - keep only shared default helpers if still useful.
+- `apps/runenwerk_editor/src/runtime/viewport/render_state.rs::EditorViewportRenderState`
+  - keep the render payload owned beside the `ViewportId`-keyed registry;
+  - retain only the default ECS registration required by generic render-flow preparation, with no normal editor `Res`/`ResMut` mutation path.
 - `apps/runenwerk_editor/src/runtime/systems/input_bridge.rs`
   - route camera controls through `ViewportId`.
 - `apps/runenwerk_editor/src/editor_features/viewport/`

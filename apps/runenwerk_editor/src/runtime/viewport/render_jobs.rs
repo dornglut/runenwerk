@@ -150,7 +150,7 @@ fn publish_viewport_render_frame_requests(
 fn build_viewport_render_job(
     flow_id: RenderFlowId,
     scene_uniform_id: GpuWorkResourceId,
-    viewport_render: &crate::runtime::resources::EditorViewportRenderState,
+    viewport_render: &crate::runtime::viewport::EditorViewportRenderState,
     viewport_id: ViewportId,
     bounds: UiRect,
     product_targets: &ViewportProductTargetRegistryResource,
@@ -240,7 +240,7 @@ fn editor_main_flow_ids(
 mod tests {
     use super::*;
     use crate::runtime::app::test_gpu_work_resource_id;
-    use crate::runtime::resources::EditorViewportRenderState;
+    use crate::runtime::viewport::EditorViewportRenderState;
     use crate::runtime::viewport::{
         ViewportProductRegistryResource, ViewportProductTargetRegistryResource,
         material_preview_descriptor,

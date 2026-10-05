@@ -10,10 +10,10 @@ use runen_gpu::GpuWorkResourceId;
 use runen_input::PhysicalKeyIdentity;
 
 use crate::runtime::plugin::{EditorAppPlugin, EditorNativeWindowIntegrationPlugin};
-use crate::runtime::resources::{EditorHostResource, EditorViewportRenderState};
+use crate::runtime::resources::EditorHostResource;
 use crate::runtime::ui_gallery::{UiGalleryNativeWindowIntegrationPlugin, UiGalleryPlugin};
 use crate::runtime::viewport::{
-    EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID,
+    EDITOR_MAIN_FLOW_ID, EDITOR_VIEWPORT_SCENE_PRODUCT_UNIFORM_ID, EditorViewportRenderState,
     VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW, VIEWPORT_TARGET_ALIAS_OVERLAY,
     VIEWPORT_TARGET_ALIAS_PICKING_IDS, VIEWPORT_TARGET_ALIAS_SCENE_COLOR,
 };

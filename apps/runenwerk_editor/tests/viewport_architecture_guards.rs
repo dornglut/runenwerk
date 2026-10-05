@@ -600,7 +600,7 @@ fn production_sources_do_not_implement_deferred_ui_execution_strategies() {
 
 #[test]
 fn production_input_bridge_routes_viewport_interaction_by_tool_surface_session() {
-    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+    let input_bridge = input_bridge_sources();
 
     for forbidden in [
         "viewport_interaction_state()",
@@ -641,7 +641,7 @@ fn production_input_bridge_routes_viewport_interaction_by_tool_surface_session()
 
 #[test]
 fn production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownership() {
-    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+    let input_bridge = input_bridge_sources();
 
     assert!(
         input_bridge.contains("pointer_event_consumed_by_ui(&outcome)"),
@@ -662,7 +662,8 @@ fn production_input_bridge_allows_viewport_scroll_only_after_ui_declines_ownersh
 fn viewport_status_arbitration_is_formed_before_scene_fallback() {
     let shell_builder =
         include_str!("../../../domain/editor/editor_shell/src/composition/build_editor_shell.rs");
-    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+    let input_bridge = input_bridge_sources();
+    let routing = include_str!("../src/runtime/viewport/routing.rs");
 
     assert!(
         shell_builder.contains("viewport_surface_interaction_model(frame_model)"),
@@ -676,7 +677,8 @@ fn viewport_status_arbitration_is_formed_before_scene_fallback() {
     );
     assert!(
         input_bridge.contains("viewport_scene_binding_for_widget")
-            && input_bridge.contains("binding.host_widget_id == widget_id"),
+            && routing.contains("pub(crate) fn viewport_scene_binding_for_widget")
+            && routing.contains("binding.host_widget_id == widget_id"),
         "viewport input fallback must still accept only the scene embed binding, not status/chrome widgets",
     );
 }
@@ -684,9 +686,11 @@ fn viewport_status_arbitration_is_formed_before_scene_fallback() {
 #[test]
 fn production_picking_routes_only_through_viewport_scene_region() {
     let picking = include_str!("../src/runtime/systems/picking.rs");
+    let routing = include_str!("../src/runtime/viewport/routing.rs");
 
     assert!(
-        picking.contains("viewport_scene_binding_for_widget"),
+        picking.contains("viewport_scene_binding_for_widget")
+            && routing.contains("pub(crate) fn viewport_scene_binding_for_widget"),
         "picking must distinguish viewport scene region widgets from provider chrome",
     );
     assert!(
@@ -698,7 +702,7 @@ fn production_picking_routes_only_through_viewport_scene_region() {
         "picking must not resolve arbitrary hovered viewport-surface widgets as scene input",
     );
     assert!(
-        picking.contains("last_projection_artifacts_for_target(target_id)")
+        routing.contains("last_projection_artifacts_for_target(target_id)")
             && !picking.contains("clear_all_hits("),
         "picking must use target-local shell artifacts and must never clear unrelated targets on a no-route result",
     );
@@ -706,19 +710,20 @@ fn production_picking_routes_only_through_viewport_scene_region() {
 
 #[test]
 fn viewport_scene_interaction_is_presentation_target_local() {
-    let resources = include_str!("../src/runtime/resources.rs");
-    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+    let input_state = include_str!("../src/runtime/resources/input.rs");
+    let input_bridge = input_bridge_sources();
+    let routing = include_str!("../src/runtime/viewport/routing.rs");
     let target_input = include_str!("../src/runtime/composition/input.rs");
 
     assert!(
-        resources.contains("interaction_by_target: BTreeMap<PresentationTargetId")
-            && resources.contains("EditorTargetViewportInteractionState"),
+        input_state.contains("interaction_by_target: BTreeMap<PresentationTargetId")
+            && input_state.contains("EditorTargetViewportInteractionState"),
         "direct viewport interaction state must be keyed by PresentationTargetId",
     );
     assert!(
         input_bridge.contains("dispatch_editor_viewport_input_for_target")
-            && input_bridge.contains("last_projection_artifacts_for_target(target_id)")
-            && input_bridge.contains("binding_containing_cursor_for_target(target_id"),
+            && routing.contains("last_projection_artifacts_for_target(target_id)")
+            && routing.contains("binding_containing_cursor_for_target(presentation_target_id"),
         "primary scene interaction must use the shared target-explicit viewport path",
     );
     assert!(
@@ -786,8 +791,9 @@ fn multi_window_viewport_projection_runs_after_all_target_frames_before_products
 
 #[test]
 fn cursor_fallbacks_are_presentation_target_scoped() {
-    let input = include_str!("../src/runtime/systems/input_bridge.rs");
+    let input = input_bridge_sources();
     let picking = include_str!("../src/runtime/systems/picking.rs");
+    let routing = include_str!("../src/runtime/viewport/routing.rs");
     let bindings = include_str!("../src/runtime/viewport/tool_surface_binding.rs");
 
     assert!(
@@ -795,7 +801,8 @@ fn cursor_fallbacks_are_presentation_target_scoped() {
         "runtime bindings must support target-local coordinate lookup",
     );
     assert!(
-        input.contains("binding_containing_cursor_for_target(primary_target_id")
+        input.contains("fallback_viewport_binding")
+            && routing.contains("binding_containing_cursor_for_target(presentation_target_id")
             && picking.contains("binding_containing_cursor_for_target("),
         "primary input and picking must not search secondary target-local rectangles by raw cursor coordinates",
     );
@@ -931,7 +938,7 @@ fn runtime_binding_resolution_rejects_structural_mismatch_even_when_viewport_mat
 #[test]
 fn runtime_systems_do_not_route_viewports_through_first_frame_fallback() {
     let frame_submit = include_str!("../src/runtime/systems/frame_submit.rs");
-    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+    let input_bridge = input_bridge_sources();
     let product_registry = include_str!("../src/runtime/viewport/product_registry.rs");
 
     assert!(
@@ -951,7 +958,7 @@ fn runtime_systems_do_not_route_viewports_through_first_frame_fallback() {
 #[test]
 fn runtime_systems_share_single_viewport_bootstrap_routing_seam() {
     let frame_submit = include_str!("../src/runtime/systems/frame_submit.rs");
-    let input_bridge = include_str!("../src/runtime/systems/input_bridge.rs");
+    let input_bridge = input_bridge_sources();
     let routing = include_str!("../src/runtime/viewport/routing.rs");
 
     assert!(
@@ -1053,9 +1060,38 @@ fn rb0_runtime_sources_do_not_build_render_flows_per_viewport() {
 }
 
 #[test]
+fn viewport_render_state_registry_is_the_only_live_editor_state_authority() {
+    let render_state =
+        read_workspace_source("apps/runenwerk_editor/src/runtime/viewport/render_state.rs");
+    let plugin = read_workspace_source("apps/runenwerk_editor/src/runtime/plugin.rs");
+    let app = read_workspace_source("apps/runenwerk_editor/src/runtime/app.rs");
+    let runtime_sources = read_workspace_source_tree("apps/runenwerk_editor/src/runtime");
+
+    assert!(
+        render_state.contains("pub struct ViewportRenderStateResource")
+            && render_state.contains("states_by_viewport: BTreeMap<ViewportId")
+            && render_state.contains("pub struct EditorViewportRenderState"),
+        "viewport render-state payload and live ViewportId-keyed registry must share one concrete owner",
+    );
+    assert!(
+        plugin.contains("init_resource::<EditorViewportRenderState>()")
+            && app.contains("with_state::<EditorViewportRenderState>()"),
+        "the default EditorViewportRenderState ECS resource remains required by generic render-flow preparation",
+    );
+    let offenders = forbidden_source_markers(
+        &runtime_sources,
+        &["Res<EditorViewportRenderState>", "ResMut<EditorViewportRenderState>"],
+    );
+    assert!(
+        offenders.is_empty(),
+        "normal editor systems must not treat the default render-flow state as live viewport authority: {offenders:?}",
+    );
+}
+
+#[test]
 fn rb7_viewport_scene_product_shader_has_no_multi_rect_containment() {
     let sources = read_workspace_sources(&[
-        "apps/runenwerk_editor/src/runtime/resources.rs",
+        "apps/runenwerk_editor/src/runtime/viewport/render_state.rs",
         "apps/runenwerk_editor/src/runtime/resources/viewport_packet.rs",
         "assets/shaders/editor_viewport_scene_product.wgsl",
     ]);
@@ -1376,7 +1412,7 @@ fn viewport_tool_authority_is_mounted_session_scoped() {
     let session_store = read_workspace_source("apps/runenwerk_editor/src/shell/surface_session.rs");
     let dispatcher = read_workspace_source("apps/runenwerk_editor/src/shell/dispatch/viewport.rs");
     let input_bridge =
-        read_workspace_source("apps/runenwerk_editor/src/runtime/systems/input_bridge.rs");
+        input_bridge_sources();
     let picking = read_workspace_source("apps/runenwerk_editor/src/runtime/systems/picking.rs");
     let catalog = read_workspace_source("apps/runenwerk_editor/src/shell/command_catalog/mod.rs");
     let shell_command =
@@ -1758,6 +1794,14 @@ fn viewport_slot_mapping_happens_at_integration_edge() {
         !presentation_resolver.contains("UiViewportSurfaceSlot::"),
         "presentation resolver must not define a second canonical semantic slot enum in runenwerk_editor",
     );
+}
+
+fn input_bridge_sources() -> String {
+    [
+        read_workspace_source("apps/runenwerk_editor/src/runtime/systems/input_bridge.rs"),
+        read_workspace_source_tree_contents("apps/runenwerk_editor/src/runtime/systems/input_bridge"),
+    ]
+    .join("\n")
 }
 
 fn workspace_root() -> std::path::PathBuf {

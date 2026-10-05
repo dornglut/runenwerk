@@ -8,15 +8,13 @@ use ui_math::{UiPoint, UiRect};
 
 use crate::editor_runtime::{EditorPrimitiveKind, RunenwerkEditorRuntime};
 #[cfg(test)]
-use crate::runtime::resources::editor_viewport_camera;
-use crate::runtime::resources::{
-    EditorHostResource, EditorViewportCamera, EditorViewportSceneRenderPacket,
-};
+use crate::runtime::viewport::editor_viewport_camera;
+use crate::runtime::resources::{EditorHostResource, EditorViewportSceneRenderPacket};
 #[cfg(test)]
 use crate::runtime::systems::{entity_primitive, extract_viewport_scene_render_packet};
 use crate::runtime::viewport::{
-    ToolSurfaceRuntimeBindingRegistryResource, ViewportPickingResultsResource,
-    ViewportRenderStateResource,
+    EditorViewportCamera, ToolSurfaceRuntimeBindingRegistryResource,
+    ViewportPickingResultsResource, ViewportRenderStateResource, viewport_scene_binding_for_widget,
 };
 use editor_shell::ViewportToolKind;
 
@@ -567,34 +565,6 @@ fn routed_viewport_binding_for_target(
     Some(binding)
 }
 
-fn viewport_scene_binding_for_widget(
-    shell_state: &crate::shell::RunenwerkEditorShellState,
-    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
-    target_id: ui_composition::PresentationTargetId,
-    widget_id: editor_shell::WidgetId,
-) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
-    let context = structural_context_for_widget(shell_state, target_id, widget_id)?;
-    let binding = tool_surface_bindings.resolve_structural_context(context)?;
-    (binding.presentation_target_id == target_id && binding.host_widget_id == widget_id)
-        .then_some(binding)
-}
-
-fn structural_context_for_widget(
-    shell_state: &crate::shell::RunenwerkEditorShellState,
-    target_id: ui_composition::PresentationTargetId,
-    widget_id: editor_shell::WidgetId,
-) -> Option<editor_shell::StructuralWidgetRoutingContext> {
-    shell_state
-        .last_projection_artifacts_for_target(target_id)
-        .or_else(|| {
-            (target_id == shell_state.primary_composition_target_id())
-                .then(|| shell_state.last_projection_artifacts())
-                .flatten()
-        })
-        .and_then(|artifacts| artifacts.widget_structural_context_by_id.get(&widget_id))
-        .copied()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -750,7 +720,7 @@ mod tests {
         let entity = entity_with_primitive_kind(&runtime, EditorPrimitiveKind::Box);
         let transform = entity_transform(&runtime, entity).expect("entity should have transform");
         let camera = editor_viewport_camera();
-        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let camera_fov_y = crate::runtime::viewport::editor_viewport_camera_fov_y_radians();
         let direction = (transform.translation.to_glam() - camera.position).normalize_or_zero();
         let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
 
@@ -783,7 +753,7 @@ mod tests {
             viewport_bounds.y + viewport_bounds.height * 0.5,
         );
         let camera = editor_viewport_camera();
-        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let camera_fov_y = crate::runtime::viewport::editor_viewport_camera_fov_y_radians();
         let ray = viewport_ray(cursor, viewport_bounds, camera, camera_fov_y)
             .expect("center of a valid viewport should produce a picking ray");
         let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
@@ -824,7 +794,7 @@ mod tests {
         let transform =
             entity_transform(&runtime, target_entity).expect("target entity should have transform");
         let camera = editor_viewport_camera();
-        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let camera_fov_y = crate::runtime::viewport::editor_viewport_camera_fov_y_radians();
         let direction = (transform.translation.to_glam() - camera.position).normalize_or_zero();
         let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
 
@@ -856,7 +826,7 @@ mod tests {
             "CPU picking must not independently scan runtime entities before a render-state packet exists"
         );
 
-        let mut render_state = crate::runtime::resources::EditorViewportRenderState::default();
+        let mut render_state = crate::runtime::viewport::EditorViewportRenderState::default();
         render_state.set_primitive(Vec3Value::new(2.0, 1.0, -3.0), EditorPrimitive::default());
         let expected_packet = render_state.scene_packet.clone();
         render_states.upsert_state(ViewportRenderStateEntry {
@@ -882,7 +852,7 @@ mod tests {
         remove_all_editor_primitives(&mut runtime);
 
         let camera = editor_viewport_camera();
-        let camera_fov_y = crate::runtime::resources::editor_viewport_camera_fov_y_radians();
+        let camera_fov_y = crate::runtime::viewport::editor_viewport_camera_fov_y_radians();
         let scene_packet = extract_viewport_scene_render_packet(&runtime, None);
         let hit = compose_picking_hit(
             &runtime,
@@ -917,7 +887,7 @@ mod tests {
             UiPoint::new(0.0, 0.0),
             UiRect::new(0.0, 0.0, 1280.0, 720.0),
             editor_viewport_camera(),
-            crate::runtime::resources::editor_viewport_camera_fov_y_radians(),
+            crate::runtime::viewport::editor_viewport_camera_fov_y_radians(),
             PickingRay {
                 origin: vec3(0.0, 2.0, 0.0),
                 direction: vec3(1.0, 0.0, 0.0),
@@ -942,7 +912,7 @@ mod tests {
             UiPoint::new(640.0, 360.0),
             UiRect::new(0.0, 0.0, 1280.0, 720.0),
             editor_viewport_camera(),
-            crate::runtime::resources::editor_viewport_camera_fov_y_radians(),
+            crate::runtime::viewport::editor_viewport_camera_fov_y_radians(),
             PickingRay {
                 origin: vec3(4.0, 4.0, 4.0),
                 direction: vec3(0.0, -1.0, 0.0),
