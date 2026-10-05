@@ -2,6 +2,7 @@
 //! Purpose: Shared viewport routing policy for structural bindings and bootstrap seams.
 
 use editor_viewport::{ArtifactObservationFrame, ViewportId};
+use ui_math::UiPoint;
 
 use crate::runtime::viewport::{
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
@@ -67,6 +68,52 @@ fn select_viewport_id_with_bootstrap_policy(
         return None;
     }
     bootstrap_single_viewport_id(observed_viewport_ids)
+}
+
+pub(crate) fn fallback_viewport_binding(
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    presentation_target_id: ui_composition::PresentationTargetId,
+    cursor: UiPoint,
+) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
+    tool_surface_bindings.binding_containing_cursor_for_target(presentation_target_id, cursor)
+}
+
+pub(crate) fn viewport_binding_by_id_for_target(
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    target_id: ui_composition::PresentationTargetId,
+    viewport_id: ViewportId,
+) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
+    tool_surface_bindings.bindings().find(|binding| {
+        binding.presentation_target_id == target_id && binding.viewport_id == viewport_id
+    })
+}
+
+pub(crate) fn viewport_scene_binding_for_widget(
+    shell_state: &RunenwerkEditorShellState,
+    tool_surface_bindings: &ToolSurfaceRuntimeBindingRegistryResource,
+    target_id: ui_composition::PresentationTargetId,
+    widget_id: editor_shell::WidgetId,
+) -> Option<crate::runtime::viewport::ToolSurfaceRuntimeBindingRecord> {
+    let context = structural_context_for_widget(shell_state, target_id, widget_id)?;
+    let binding = tool_surface_bindings.resolve_structural_context(context)?;
+    (binding.presentation_target_id == target_id && binding.host_widget_id == widget_id)
+        .then_some(binding)
+}
+
+pub(crate) fn structural_context_for_widget(
+    shell_state: &RunenwerkEditorShellState,
+    target_id: ui_composition::PresentationTargetId,
+    widget_id: editor_shell::WidgetId,
+) -> Option<editor_shell::StructuralWidgetRoutingContext> {
+    shell_state
+        .last_projection_artifacts_for_target(target_id)
+        .or_else(|| {
+            (target_id == shell_state.primary_composition_target_id())
+                .then(|| shell_state.last_projection_artifacts())
+                .flatten()
+        })
+        .and_then(|artifacts| artifacts.widget_structural_context_by_id.get(&widget_id))
+        .copied()
 }
 
 #[cfg(test)]

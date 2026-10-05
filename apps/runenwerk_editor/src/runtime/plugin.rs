@@ -23,8 +23,7 @@ use crate::runtime::procgen::{
     sync_procgen_viewport_overlay_system,
 };
 use crate::runtime::resources::{
-    EditorHostResource, EditorInputBridgeState, EditorViewportRenderState,
-    RuntimePreviewProcessResource,
+    EditorHostResource, EditorInputBridgeState, RuntimePreviewProcessResource,
 };
 use crate::runtime::systems::{
     bootstrap_editor_demo_system, dispatch_editor_input_system,
@@ -36,7 +35,7 @@ use crate::runtime::systems::{
     sync_editor_primary_viewport_projection_system, sync_viewport_instances_system,
 };
 use crate::runtime::viewport::{
-    MountedSurfaceRegistryResource, SurfaceDefinitionRegistryResource,
+    EditorViewportRenderState, MountedSurfaceRegistryResource, SurfaceDefinitionRegistryResource,
     ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
     ViewportInstanceRegistryResource, ViewportLayoutMapResource, ViewportPickingResultsResource,
     ViewportPresentationStateResource, ViewportProductRegistryResource,

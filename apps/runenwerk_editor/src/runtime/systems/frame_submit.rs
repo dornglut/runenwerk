@@ -16,15 +16,16 @@ use ui_render_data::{
 
 use crate::editor_runtime::EditorPrimitive;
 use crate::runtime::resources::{
-    EditorHostResource, EditorViewportDebugStage, EditorViewportModelMeshMaterialSelectionPacket,
-    EditorViewportPrimitiveInstance, EditorViewportRenderState, EditorViewportSceneRenderPacket,
-    effective_shell_scale, scaled_shell_theme,
+    EditorHostResource, EditorViewportModelMeshMaterialSelectionPacket,
+    EditorViewportPrimitiveInstance, EditorViewportSceneRenderPacket, effective_shell_scale,
+    scaled_shell_theme,
 };
 use crate::runtime::viewport::{
-    MountedSurfaceRegistryResource, ToolSurfaceRuntimeBindingRegistryResource,
-    ViewportArtifactObservationResource, ViewportInstanceRegistryResource, ViewportLayoutEntry,
-    ViewportLayoutMapResource, ViewportPickingResultsResource, ViewportRenderStateEntry,
-    ViewportRenderStateResource, resolve_structural_viewport_products,
+    EditorViewportDebugStage, EditorViewportRenderState, MountedSurfaceRegistryResource,
+    ToolSurfaceRuntimeBindingRegistryResource, ViewportArtifactObservationResource,
+    ViewportInstanceRegistryResource, ViewportLayoutEntry, ViewportLayoutMapResource,
+    ViewportPickingResultsResource, ViewportRenderStateEntry, ViewportRenderStateResource,
+    resolve_structural_viewport_products,
 };
 use crate::shell::RunenwerkEditorShellState;
 
