@@ -218,9 +218,7 @@ pub(super) struct PreparedSceneRouteRegisteredPayload {
 impl PreparedSceneRouteRegisteredPayload {
     fn new(contribution: PreparedSceneRouteContribution) -> Self {
         Self {
-            kind: RenderFeatureContributionPayloadKind::new(
-                SCENE_ROUTE_REGISTERED_PAYLOAD_KIND,
-            ),
+            kind: RenderFeatureContributionPayloadKind::new(SCENE_ROUTE_REGISTERED_PAYLOAD_KIND),
             contribution,
         }
     }
