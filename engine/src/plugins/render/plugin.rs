@@ -7,8 +7,9 @@ use super::features::{
     PreparedParticleVfxFeatureResource, PreparedProceduralWorldFeatureResource,
     PreparedUiFrameResource, PreparedWindFieldFeatureResource, PreparedWorldFeatureResource,
     RenderFeatureRegistryResource, SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
-    ViewportSurfaceBindingRegistryResource, prepare_ui_feature_resource_system,
-    register_particle_vfx_feature_collector, sync_render_feature_registry_system,
+    ViewportSurfaceBindingRegistryResource, caves::register_cave_feature_collector,
+    prepare_ui_feature_resource_system, register_particle_vfx_feature_collector,
+    sync_render_feature_registry_system,
     world::{
         PreparedWorldVisualFeatureResource, RenderSdfRaymarchAccelerationResource,
         RenderSdfResidencyBudgetResource, RenderSdfResidencyResource,
@@ -84,6 +85,12 @@ impl Plugin for RenderPlugin {
         app.init_resource::<PreparedDeformationFeatureResource>();
         app.init_resource::<PreparedWindFieldFeatureResource>();
         app.init_resource::<RenderFeatureContributionCollectorRegistryResource>();
+        register_cave_feature_collector(
+            app.world_mut()
+                .resource_mut::<RenderFeatureContributionCollectorRegistryResource>()
+                .expect("render feature contribution collector registry should initialize"),
+        )
+        .expect("Cave render feature collector should register");
         register_particle_vfx_feature_collector(
             app.world_mut()
                 .resource_mut::<RenderFeatureContributionCollectorRegistryResource>()
@@ -172,5 +179,22 @@ mod tests {
         app.add_plugin(RenderPlugin);
 
         assert!(render_integration_is_active(app.world()));
+    }
+
+    #[test]
+    fn render_plugin_registers_cave_feature_collector() {
+        let mut app = App::new();
+        app.add_plugin(RenderPlugin);
+
+        let registry = app
+            .world()
+            .resource::<RenderFeatureContributionCollectorRegistryResource>()
+            .expect("render feature collector registry should initialize");
+        assert!(registry.collectors().any(|collector| {
+            collector.descriptor.feature_id
+                == crate::plugins::render::features::CAVE_INTERIOR_RENDER_FEATURE_ID
+                && collector.descriptor.payload_kind.as_str()
+                    == crate::plugins::render::features::caves::CAVE_INTERIOR_PAYLOAD_KIND
+        }));
     }
 }
