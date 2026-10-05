@@ -49,9 +49,9 @@ use shortcuts::{
 };
 #[cfg(test)]
 use viewport_pointer::{
-    active_camera_viewport_binding, presentation_bounds, viewport_capture_active_for_surface,
-    viewport_pointer_route,
+    active_camera_viewport_binding, viewport_capture_active_for_surface, viewport_pointer_route,
 };
+use viewport_pointer::presentation_bounds;
 pub(crate) use viewport_pointer::{
     clear_editor_viewport_interaction_for_target, dispatch_editor_viewport_input_for_target,
 };
