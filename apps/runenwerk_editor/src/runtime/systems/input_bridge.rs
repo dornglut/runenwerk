@@ -28,7 +28,7 @@ use crate::runtime::viewport::{
     ViewportInstanceRegistryResource, ViewportPickingResultsResource,
     ViewportPresentationStateResource, ViewportRenderStateCommand,
     ViewportRenderStateCommandQueueResource, ViewportRenderStateResource,
-    fallback_viewport_binding, resolve_structural_viewport_products,
+    fallback_viewport_binding, resolve_structural_viewport_products, structural_context_for_widget,
     viewport_binding_by_id_for_target, viewport_scene_binding_for_widget,
 };
 use crate::runtime::{build_viewport_picking_product_frame, viewport_hit_from_picking_product};
