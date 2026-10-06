@@ -3,7 +3,6 @@ use crate::plugins::render::frame::*;
 use crate::runtime::ResMut;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-pub mod caves;
 pub mod detail;
 pub mod editor_picking;
 pub mod particle_vfx;
@@ -16,7 +15,6 @@ pub use ui::*;
 
 pub const SCENE_ROUTE_RENDER_FEATURE_LABEL: &str = "scene.route";
 pub const WORLD_DRAW_RENDER_FEATURE_LABEL: &str = "world.draw";
-pub const CAVE_INTERIOR_RENDER_FEATURE_LABEL: &str = "cave.interior";
 pub const PROCEDURAL_WORLD_RENDER_FEATURE_LABEL: &str = "procedural.world";
 pub const DETAIL_RENDER_FEATURE_LABEL: &str = "detail";
 pub const MATERIAL_RENDER_FEATURE_LABEL: &str = "material";
@@ -30,7 +28,6 @@ pub const SCENE_ROUTE_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(1);
 pub const EDITOR_PICKING_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(2);
 pub const UI_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(3);
 pub const WORLD_DRAW_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(4);
-pub const CAVE_INTERIOR_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(5);
 pub const PROCEDURAL_WORLD_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(6);
 pub const DETAIL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(7);
 pub const MATERIAL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(8);
@@ -94,23 +91,6 @@ impl Default for PreparedWorldFeatureResource {
             status: FeatureContributionStatus::Missing,
             fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
             payload: PreparedWorldFeatureContribution::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
-pub struct PreparedCaveFeatureResource {
-    pub status: FeatureContributionStatus,
-    pub fallback_policy: FeatureFallbackPolicy,
-    pub payload: PreparedCaveFeatureContribution,
-}
-
-impl Default for PreparedCaveFeatureResource {
-    fn default() -> Self {
-        Self {
-            status: FeatureContributionStatus::Missing,
-            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
-            payload: PreparedCaveFeatureContribution::default(),
         }
     }
 }
@@ -332,15 +312,6 @@ impl RenderFeatureRegistryResource {
         );
         self.upsert_descriptor(
             RenderFeatureDescriptor::new(
-                CAVE_INTERIOR_RENDER_FEATURE_ID,
-                CAVE_INTERIOR_RENDER_FEATURE_LABEL,
-            )
-            .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
-            .with_order_hint(12)
-            .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
-        );
-        self.upsert_descriptor(
-            RenderFeatureDescriptor::new(
                 PROCEDURAL_WORLD_RENDER_FEATURE_ID,
                 PROCEDURAL_WORLD_RENDER_FEATURE_LABEL,
             )
@@ -358,7 +329,6 @@ impl RenderFeatureRegistryResource {
             RenderFeatureDescriptor::new(MATERIAL_RENDER_FEATURE_ID, MATERIAL_RENDER_FEATURE_LABEL)
                 .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
                 .depends_on(DETAIL_RENDER_FEATURE_ID)
-                .depends_on(CAVE_INTERIOR_RENDER_FEATURE_ID)
                 .with_order_hint(20)
                 .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
@@ -518,7 +488,6 @@ mod tests {
                 "editor.picking".to_string(),
                 "ui".to_string(),
                 "world.draw".to_string(),
-                "cave.interior".to_string(),
                 "procedural.world".to_string(),
                 "detail".to_string(),
                 "material".to_string(),

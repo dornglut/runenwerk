@@ -2,10 +2,10 @@ use super::contribution_registry::PreparedSceneRouteRegisteredPayload;
 use super::{PreparedFeatureContributionDiagnostic, PreparedRegisteredFeaturePayload};
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::{
-    CAVE_INTERIOR_RENDER_FEATURE_ID, DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID,
-    FeatureContributionStatus, FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID,
-    PROCEDURAL_WORLD_RENDER_FEATURE_ID, PreparedUiFrameContribution, SCENE_ROUTE_RENDER_FEATURE_ID,
-    UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
+    DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID, FeatureContributionStatus,
+    FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID, PROCEDURAL_WORLD_RENDER_FEATURE_ID,
+    PreparedUiFrameContribution, SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID,
+    WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
 };
 use runen_spatial::ChunkId;
 use std::collections::BTreeMap;
@@ -109,22 +109,6 @@ impl PreparedFrameContributions {
                 status,
                 fallback_policy,
                 payload: PreparedFeaturePayload::World(payload),
-            },
-        );
-    }
-
-    pub fn insert_caves(
-        &mut self,
-        payload: PreparedCaveFeatureContribution,
-        status: FeatureContributionStatus,
-        fallback_policy: FeatureFallbackPolicy,
-    ) {
-        self.insert(
-            CAVE_INTERIOR_RENDER_FEATURE_ID,
-            PreparedFeatureContribution {
-                status,
-                fallback_policy,
-                payload: PreparedFeaturePayload::Caves(payload),
             },
         );
     }
@@ -323,7 +307,6 @@ pub enum PreparedFeaturePayload {
     SceneRoute(PreparedSceneRouteContribution),
     Draw(PreparedDrawFeatureContribution),
     World(PreparedWorldFeatureContribution),
-    Caves(PreparedCaveFeatureContribution),
     Detail(PreparedDetailFeatureContribution),
     ProceduralWorld(PreparedProceduralWorldFeatureContribution),
     WindFields(PreparedWindFieldFeatureContribution),
@@ -367,12 +350,6 @@ pub struct PreparedWorldResidencyIntent {
     pub chunk_id: ChunkId,
     pub priority: i32,
     pub hard_pin: bool,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct PreparedCaveFeatureContribution {
-    pub visible_sector_ids: Vec<u32>,
-    pub scoped_light_volume_count: u32,
 }
 
 #[derive(Debug, Clone, Default)]

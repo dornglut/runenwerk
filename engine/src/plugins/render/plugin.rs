@@ -2,8 +2,8 @@ use super::composition::{
     RenderFlowRegistryResource, RenderFragmentRegistryResource, sync_render_flow_registry_system,
 };
 use super::features::{
-    EditorPickingResultResource, PreparedCaveFeatureResource, PreparedDeformationFeatureResource,
-    PreparedDetailFeatureResource, PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
+    EditorPickingResultResource, PreparedDeformationFeatureResource, PreparedDetailFeatureResource,
+    PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedParticleVfxFeatureResource, PreparedProceduralWorldFeatureResource,
     PreparedUiFrameResource, PreparedWindFieldFeatureResource, PreparedWorldFeatureResource,
     RenderFeatureRegistryResource, SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
@@ -75,7 +75,6 @@ impl Plugin for RenderPlugin {
         app.init_resource::<EditorPickingResultResource>();
         app.init_resource::<PreparedDrawFeatureResource>();
         app.init_resource::<PreparedWorldFeatureResource>();
-        app.init_resource::<PreparedCaveFeatureResource>();
         app.init_resource::<PreparedDetailFeatureResource>();
         app.init_resource::<PreparedProceduralWorldFeatureResource>();
         app.init_resource::<PreparedMaterialFeatureResource>();
