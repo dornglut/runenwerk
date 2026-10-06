@@ -260,19 +260,10 @@ impl RenderFeatureContributionCollector {
     }
 }
 
-#[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
+#[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderFeatureContributionCollectorRegistryResource {
     collectors: BTreeMap<RenderFeatureContributionCollectorId, RenderFeatureContributionCollector>,
     diagnostics: Vec<PreparedFeatureContributionDiagnostic>,
-}
-
-impl Default for RenderFeatureContributionCollectorRegistryResource {
-    fn default() -> Self {
-        Self {
-            collectors: BTreeMap::new(),
-            diagnostics: Vec::new(),
-        }
-    }
 }
 
 impl RenderFeatureContributionCollectorRegistryResource {
