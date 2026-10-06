@@ -198,7 +198,6 @@ These are advanced runtime boundary types produced by `RenderPrepare` and consum
 - `PreparedFeatureGate`
 - `PreparedFeatureContributionDiagnostic`
 - `PreparedUiFeatureContribution`
-- `PreparedSceneRouteContribution`
 - `PreparedDrawFeatureContribution`
 - `PreparedDrawBatch`
 - `PreparedMaterialFeatureContribution`
@@ -272,7 +271,6 @@ Feature ordering and fallback policies are explicit and live in ECS metadata:
 
 Built-in feature IDs:
 
-- `SCENE_ROUTE_RENDER_FEATURE_ID`
 - `UI_RENDER_FEATURE_ID`
 - `WORLD_DRAW_RENDER_FEATURE_ID`
 - `MATERIAL_RENDER_FEATURE_ID`
@@ -286,7 +284,6 @@ Contribution collector contract:
 - collectors declare prepared resources before reading them.
 - registered payloads use typed payload kinds, validation, runtime signatures, and inspection hooks instead of feature-specific central enum variants.
 - the registered payload bridge coexists with current `PreparedFeaturePayload` variants during migration.
-- scene route contribution now flows through the collector registry as the low-risk compatibility migration path.
 - particle/VFX/trail/decal contributions use `PreparedParticleVfxFeatureResource`
   plus the registered `particle.vfx.prepared` payload kind. Product domains
   prepare batches, sorting/transparency intent, temporal input declarations,

@@ -16,14 +16,6 @@ use std::time::Instant;
 type ExtractedRenderStateMap<'a> = BTreeMap<TypeId, &'a dyn Any>;
 
 pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result<()> {
-    let scene_route = world
-        .resource::<SceneResource>()
-        .ok()
-        .and_then(|scene_resource| scene_resource.manager.as_ref())
-        .map(|manager| PreparedSceneRouteContribution {
-            world_scene_label: manager.world.active.label().to_string(),
-            overlay_scene_label: manager.active_overlay().label().to_string(),
-        });
     let primary_target_size = world
         .resource::<PrimaryPresentationMetricsResource>()
         .ok()
@@ -118,8 +110,7 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         }
     };
 
-    let contributions =
-        build_frame_feature_contributions(&world, scene_route.as_ref(), &execution_feature_ids);
+    let contributions = build_frame_feature_contributions(&world, &execution_feature_ids);
     let dynamic_texture_target_requests = world
         .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
         .ok()
@@ -738,12 +729,11 @@ pub(crate) fn clear_prepared_frame(world: &mut WorldMut) {
 
 pub(crate) fn build_frame_feature_contributions(
     world: &runen_ecs::World,
-    scene_route: Option<&PreparedSceneRouteContribution>,
     execution_feature_ids: &[RenderFeatureId],
 ) -> PreparedFrameContributions {
     let mut contributions = PreparedFrameContributions::default();
 
-    collect_registered_feature_contributions(world, scene_route, &mut contributions);
+    collect_registered_feature_contributions(world, &mut contributions);
 
     if contributions.feature(&UI_RENDER_FEATURE_ID).is_none()
         && let Ok(resource) = world.resource::<PreparedUiFrameResource>()
@@ -883,7 +873,6 @@ fn apply_surface_ui_contribution(
 
 fn collect_registered_feature_contributions(
     world: &runen_ecs::World,
-    scene_route: Option<&PreparedSceneRouteContribution>,
     contributions: &mut PreparedFrameContributions,
 ) {
     let collector_registry = world
@@ -937,8 +926,7 @@ fn collect_registered_feature_contributions(
 
         let fallback_policy =
             feature_policy(world, descriptor.feature_id, descriptor.fallback_policy);
-        let context =
-            RenderFeatureContributionContext::new(world, descriptor, fallback_policy, scene_route);
+        let context = RenderFeatureContributionContext::new(world, descriptor, fallback_policy);
         match (collector.collect)(&context) {
             Ok(contribution) => {
                 if let Err(diagnostic) = validate_collected_contribution(descriptor, &contribution)
@@ -1359,45 +1347,6 @@ mod tests {
     }
 
     #[test]
-    fn render_feature_contributions_default_scene_route_uses_registered_collector() {
-        let world = runen_ecs::World::default();
-
-        let scene_route = PreparedSceneRouteContribution {
-            world_scene_label: "world.scene".to_string(),
-            overlay_scene_label: "overlay.scene".to_string(),
-        };
-        let contributions = build_frame_feature_contributions(&world, Some(&scene_route), &[]);
-
-        assert_eq!(
-            contributions.scene_route_labels(),
-            Some(("world.scene", "overlay.scene"))
-        );
-        assert!(contributions.diagnostics().is_empty());
-    }
-
-    #[test]
-    fn render_feature_contributions_without_scene_route_use_empty_fallback() {
-        let world = runen_ecs::World::default();
-
-        let contributions = build_frame_feature_contributions(&world, None, &[]);
-        let scene_route = contributions
-            .feature(&SCENE_ROUTE_RENDER_FEATURE_ID)
-            .expect("scene route should remain represented when Scene is absent");
-
-        assert_eq!(scene_route.status, FeatureContributionStatus::Missing);
-        assert_eq!(
-            scene_route.fallback_policy,
-            FeatureFallbackPolicy::EmptyContribution
-        );
-        assert!(matches!(
-            &scene_route.payload,
-            PreparedFeaturePayload::Empty
-        ));
-        assert_eq!(contributions.scene_route_labels(), None);
-        assert!(contributions.diagnostics().is_empty());
-    }
-
-    #[test]
     fn render_feature_contributions_registered_payload_does_not_need_central_variant() {
         let mut world = world_with_test_feature();
         world.insert_resource(TestContributionResource {
@@ -1409,12 +1358,7 @@ mod tests {
             .expect("test collector should register");
         world.insert_resource(collector_registry);
 
-        let scene_route = PreparedSceneRouteContribution {
-            world_scene_label: "world.scene".to_string(),
-            overlay_scene_label: "overlay.scene".to_string(),
-        };
-        let contributions =
-            build_frame_feature_contributions(&world, Some(&scene_route), &[test_feature_id()]);
+        let contributions = build_frame_feature_contributions(&world, &[test_feature_id()]);
 
         let contribution = contributions
             .feature(&test_feature_id())
@@ -1441,12 +1385,7 @@ mod tests {
             .expect("test collector should register");
         world.insert_resource(collector_registry);
 
-        let scene_route = PreparedSceneRouteContribution {
-            world_scene_label: "world.scene".to_string(),
-            overlay_scene_label: "overlay.scene".to_string(),
-        };
-        let contributions =
-            build_frame_feature_contributions(&world, Some(&scene_route), &[test_feature_id()]);
+        let contributions = build_frame_feature_contributions(&world, &[test_feature_id()]);
 
         let contribution = contributions
             .feature(&test_feature_id())

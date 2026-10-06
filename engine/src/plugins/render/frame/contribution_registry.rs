@@ -1,12 +1,9 @@
 use crate::plugins::render::api::ids::RenderFeatureId;
-use crate::plugins::render::features::{
-    FeatureContributionStatus, FeatureFallbackPolicy, SCENE_ROUTE_RENDER_FEATURE_ID,
-};
+use crate::plugins::render::features::FeatureFallbackPolicy;
 use crate::plugins::render::{
     PreparedFeatureContribution, PreparedFeatureContributionDiagnostic, PreparedFeaturePayload,
-    PreparedSceneRouteContribution,
 };
-use std::any::{Any, TypeId, type_name};
+use std::any::{TypeId, type_name};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::hash::{Hash, Hasher};
@@ -121,22 +118,9 @@ pub trait PreparedRegisteredFeaturePayloadValue: fmt::Debug + Send + Sync {
     fn inspect(&self) -> PreparedRegisteredFeaturePayloadInspection;
 }
 
-trait ErasedPreparedRegisteredFeaturePayloadValue: PreparedRegisteredFeaturePayloadValue {
-    fn as_any(&self) -> &dyn Any;
-}
-
-impl<T> ErasedPreparedRegisteredFeaturePayloadValue for T
-where
-    T: PreparedRegisteredFeaturePayloadValue + 'static,
-{
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct PreparedRegisteredFeaturePayload {
-    value: std::sync::Arc<dyn ErasedPreparedRegisteredFeaturePayloadValue>,
+    value: std::sync::Arc<dyn PreparedRegisteredFeaturePayloadValue>,
 }
 
 impl PreparedRegisteredFeaturePayload {
@@ -156,10 +140,6 @@ impl PreparedRegisteredFeaturePayload {
 
     pub fn inspect(&self) -> PreparedRegisteredFeaturePayloadInspection {
         self.value.inspect()
-    }
-
-    pub(super) fn downcast_ref<T: Any>(&self) -> Option<&T> {
-        self.value.as_any().downcast_ref::<T>()
     }
 }
 
@@ -207,63 +187,10 @@ impl PreparedRegisteredFeaturePayloadValue for StaticRegisteredFeaturePayload {
     }
 }
 
-const SCENE_ROUTE_REGISTERED_PAYLOAD_KIND: &str = "scene.route";
-
-#[derive(Debug, Clone)]
-pub(super) struct PreparedSceneRouteRegisteredPayload {
-    kind: RenderFeatureContributionPayloadKind,
-    contribution: PreparedSceneRouteContribution,
-}
-
-impl PreparedSceneRouteRegisteredPayload {
-    fn new(contribution: PreparedSceneRouteContribution) -> Self {
-        Self {
-            kind: RenderFeatureContributionPayloadKind::new(SCENE_ROUTE_REGISTERED_PAYLOAD_KIND),
-            contribution,
-        }
-    }
-
-    pub(super) fn contribution(&self) -> &PreparedSceneRouteContribution {
-        &self.contribution
-    }
-}
-
-impl PreparedRegisteredFeaturePayloadValue for PreparedSceneRouteRegisteredPayload {
-    fn kind(&self) -> &RenderFeatureContributionPayloadKind {
-        &self.kind
-    }
-
-    fn runtime_signature(&self) -> u64 {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        self.kind.hash(&mut hasher);
-        self.contribution.world_scene_label.hash(&mut hasher);
-        self.contribution.overlay_scene_label.hash(&mut hasher);
-        hasher.finish()
-    }
-
-    fn inspect(&self) -> PreparedRegisteredFeaturePayloadInspection {
-        PreparedRegisteredFeaturePayloadInspection {
-            payload_kind: self.kind.to_string(),
-            summary: "scene route".to_string(),
-            fields: vec![
-                (
-                    "world_scene_label".to_string(),
-                    self.contribution.world_scene_label.clone(),
-                ),
-                (
-                    "overlay_scene_label".to_string(),
-                    self.contribution.overlay_scene_label.clone(),
-                ),
-            ],
-        }
-    }
-}
-
 pub struct RenderFeatureContributionContext<'a> {
     world: &'a runen_ecs::World,
     descriptor: &'a RenderFeatureContributionCollectorDescriptor,
     fallback_policy: FeatureFallbackPolicy,
-    scene_route: Option<&'a PreparedSceneRouteContribution>,
 }
 
 impl<'a> RenderFeatureContributionContext<'a> {
@@ -271,13 +198,11 @@ impl<'a> RenderFeatureContributionContext<'a> {
         world: &'a runen_ecs::World,
         descriptor: &'a RenderFeatureContributionCollectorDescriptor,
         fallback_policy: FeatureFallbackPolicy,
-        scene_route: Option<&'a PreparedSceneRouteContribution>,
     ) -> Self {
         Self {
             world,
             descriptor,
             fallback_policy,
-            scene_route,
         }
     }
 
@@ -287,10 +212,6 @@ impl<'a> RenderFeatureContributionContext<'a> {
 
     pub fn fallback_policy(&self) -> FeatureFallbackPolicy {
         self.fallback_policy
-    }
-
-    pub fn scene_route(&self) -> Option<&PreparedSceneRouteContribution> {
-        self.scene_route
     }
 
     pub fn resource<R: runen_ecs::Resource>(&self) -> Option<&R> {
@@ -339,23 +260,10 @@ impl RenderFeatureContributionCollector {
     }
 }
 
-#[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
+#[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderFeatureContributionCollectorRegistryResource {
     collectors: BTreeMap<RenderFeatureContributionCollectorId, RenderFeatureContributionCollector>,
     diagnostics: Vec<PreparedFeatureContributionDiagnostic>,
-}
-
-impl Default for RenderFeatureContributionCollectorRegistryResource {
-    fn default() -> Self {
-        let mut registry = Self {
-            collectors: BTreeMap::new(),
-            diagnostics: Vec::new(),
-        };
-        registry
-            .try_register_collector(scene_route_collector())
-            .expect("builtin scene route collector should register");
-        registry
-    }
 }
 
 impl RenderFeatureContributionCollectorRegistryResource {
@@ -466,116 +374,13 @@ pub fn validate_collected_contribution(
     Ok(())
 }
 
-fn scene_route_collector() -> RenderFeatureContributionCollector {
-    RenderFeatureContributionCollector::new(
-        RenderFeatureContributionCollectorDescriptor::new(
-            SCENE_ROUTE_RENDER_FEATURE_ID,
-            "scene.route.collector",
-            SCENE_ROUTE_REGISTERED_PAYLOAD_KIND,
-        )
-        .with_fallback_policy(FeatureFallbackPolicy::EmptyContribution),
-        collect_scene_route_contribution,
-    )
-}
-
-fn collect_scene_route_contribution(
-    context: &RenderFeatureContributionContext<'_>,
-) -> Result<PreparedFeatureContribution, PreparedFeatureContributionDiagnostic> {
-    let Some(scene_route) = context.scene_route().cloned() else {
-        return Ok(PreparedFeatureContribution {
-            status: FeatureContributionStatus::Missing,
-            fallback_policy: context.fallback_policy(),
-            payload: PreparedFeaturePayload::Empty,
-        });
-    };
-    Ok(PreparedFeatureContribution {
-        status: FeatureContributionStatus::Ready,
-        fallback_policy: context.fallback_policy(),
-        payload: PreparedFeaturePayload::Registered(PreparedRegisteredFeaturePayload::new(
-            PreparedSceneRouteRegisteredPayload::new(scene_route),
-        )),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::plugins::render::FeatureContributionStatus;
 
     fn test_feature_id(raw: u64) -> RenderFeatureId {
         RenderFeatureId::try_from_raw(raw).expect("test feature id should be non-zero")
-    }
-
-    #[test]
-    fn scene_route_collector_emits_typed_registered_payload() {
-        let world = runen_ecs::World::default();
-        let collector = scene_route_collector();
-        let scene_route = PreparedSceneRouteContribution {
-            world_scene_label: "world.scene".to_string(),
-            overlay_scene_label: "overlay.scene".to_string(),
-        };
-        let context = RenderFeatureContributionContext::new(
-            &world,
-            &collector.descriptor,
-            collector.descriptor.fallback_policy,
-            Some(&scene_route),
-        );
-
-        let contribution =
-            (collector.collect)(&context).expect("Scene route should collect through registry");
-
-        assert_eq!(contribution.status, FeatureContributionStatus::Ready);
-        assert_eq!(
-            contribution.fallback_policy,
-            FeatureFallbackPolicy::EmptyContribution
-        );
-        let PreparedFeaturePayload::Registered(payload) = &contribution.payload else {
-            panic!("Scene route should use the registered payload bridge");
-        };
-        assert_eq!(payload.kind().as_str(), SCENE_ROUTE_REGISTERED_PAYLOAD_KIND);
-        let typed = payload
-            .downcast_ref::<PreparedSceneRouteRegisteredPayload>()
-            .expect("Scene route registered payload should preserve typed access");
-        assert_eq!(typed.contribution().world_scene_label, "world.scene");
-        assert_eq!(typed.contribution().overlay_scene_label, "overlay.scene");
-
-        let inspection = payload.inspect();
-        assert_eq!(inspection.payload_kind, SCENE_ROUTE_REGISTERED_PAYLOAD_KIND);
-        assert_eq!(inspection.summary, "scene route");
-        assert_eq!(
-            inspection.fields,
-            vec![
-                ("world_scene_label".to_string(), "world.scene".to_string()),
-                (
-                    "overlay_scene_label".to_string(),
-                    "overlay.scene".to_string()
-                ),
-            ]
-        );
-    }
-
-    #[test]
-    fn scene_route_collector_maps_absence_to_missing_empty_contribution() {
-        let world = runen_ecs::World::default();
-        let collector = scene_route_collector();
-        let context = RenderFeatureContributionContext::new(
-            &world,
-            &collector.descriptor,
-            FeatureFallbackPolicy::EmptyContribution,
-            None,
-        );
-
-        let contribution =
-            (collector.collect)(&context).expect("absent Scene route should use empty fallback");
-
-        assert_eq!(contribution.status, FeatureContributionStatus::Missing);
-        assert_eq!(
-            contribution.fallback_policy,
-            FeatureFallbackPolicy::EmptyContribution
-        );
-        assert!(matches!(
-            contribution.payload,
-            PreparedFeaturePayload::Empty
-        ));
     }
 
     fn noop_collector(

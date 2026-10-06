@@ -300,7 +300,6 @@ fn inspect_feature_payload(
     match payload {
         PreparedFeaturePayload::Empty => ("empty".to_string(), None, Vec::new()),
         PreparedFeaturePayload::Ui(_) => ("ui".to_string(), None, Vec::new()),
-        PreparedFeaturePayload::SceneRoute(_) => ("scene_route".to_string(), None, Vec::new()),
         PreparedFeaturePayload::Draw(_) => ("draw".to_string(), None, Vec::new()),
         PreparedFeaturePayload::World(_) => ("world".to_string(), None, Vec::new()),
         PreparedFeaturePayload::Detail(_) => ("detail".to_string(), None, Vec::new()),

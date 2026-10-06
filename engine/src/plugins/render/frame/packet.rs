@@ -319,10 +319,6 @@ impl PreparedRenderFrame {
         self.contributions.ui()
     }
 
-    pub fn scene_route_labels(&self) -> Option<(&str, &str)> {
-        self.contributions.scene_route_labels()
-    }
-
     pub fn dynamic_target_history_signatures(
         &self,
     ) -> anyhow::Result<BTreeMap<RenderDynamicTextureTargetKey, String>> {

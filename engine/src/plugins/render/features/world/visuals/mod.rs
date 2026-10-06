@@ -433,12 +433,8 @@ mod tests {
             world.insert_resource(resource);
         }
         let collector = world_visual_feature_collector();
-        let context = RenderFeatureContributionContext::new(
-            &world,
-            &collector.descriptor,
-            fallback_policy,
-            None,
-        );
+        let context =
+            RenderFeatureContributionContext::new(&world, &collector.descriptor, fallback_policy);
         (collector.collect)(&context)
     }
 
