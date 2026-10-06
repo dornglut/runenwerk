@@ -5,8 +5,8 @@ use super::features::{
     EditorPickingResultResource, PreparedDeformationFeatureResource, PreparedDetailFeatureResource,
     PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedParticleVfxFeatureResource, PreparedUiFrameResource, PreparedWindFieldFeatureResource,
-    PreparedWorldFeatureResource,
-    RenderFeatureRegistryResource, SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
+    PreparedWorldFeatureResource, RenderFeatureRegistryResource,
+    SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
     ViewportSurfaceBindingRegistryResource, prepare_ui_feature_resource_system,
     register_particle_vfx_feature_collector, sync_render_feature_registry_system,
     world::{

@@ -10,8 +10,7 @@ use crate::plugins::render::features::{
 use crate::plugins::render::frame::{
     PreparedDetailCellContribution, PreparedDetailFeatureContribution,
     PreparedWindFieldFeatureContribution, PreparedWorldChunkContribution,
-    PreparedWorldDrawBatchRef, PreparedWorldFeatureContribution,
-    PreparedWorldResidencyIntent,
+    PreparedWorldDrawBatchRef, PreparedWorldFeatureContribution, PreparedWorldResidencyIntent,
 };
 use crate::plugins::render::inspect::{
     RenderDebugTimingsState, RenderRuntimeResourceInspectorState, WorldRuntimeInspectorSnapshot,
