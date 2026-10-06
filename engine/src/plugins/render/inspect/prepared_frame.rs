@@ -303,9 +303,6 @@ fn inspect_feature_payload(
         PreparedFeaturePayload::Draw(_) => ("draw".to_string(), None, Vec::new()),
         PreparedFeaturePayload::World(_) => ("world".to_string(), None, Vec::new()),
         PreparedFeaturePayload::Detail(_) => ("detail".to_string(), None, Vec::new()),
-        PreparedFeaturePayload::ProceduralWorld(_) => {
-            ("procedural_world".to_string(), None, Vec::new())
-        }
         PreparedFeaturePayload::WindFields(_) => ("wind_fields".to_string(), None, Vec::new()),
         PreparedFeaturePayload::Material(_) => ("material".to_string(), None, Vec::new()),
         PreparedFeaturePayload::Deformation(_) => ("deformation".to_string(), None, Vec::new()),

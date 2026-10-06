@@ -14,7 +14,6 @@ pub use particle_vfx::*;
 pub use ui::*;
 
 pub const WORLD_DRAW_RENDER_FEATURE_LABEL: &str = "world.draw";
-pub const PROCEDURAL_WORLD_RENDER_FEATURE_LABEL: &str = "procedural.world";
 pub const DETAIL_RENDER_FEATURE_LABEL: &str = "detail";
 pub const MATERIAL_RENDER_FEATURE_LABEL: &str = "material";
 pub const PARTICLE_VFX_RENDER_FEATURE_LABEL: &str = "particle.vfx";
@@ -26,7 +25,6 @@ pub const EDITOR_PICKING_RENDER_FEATURE_LABEL: &str = "editor.picking";
 pub const EDITOR_PICKING_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(2);
 pub const UI_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(3);
 pub const WORLD_DRAW_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(4);
-pub const PROCEDURAL_WORLD_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(6);
 pub const DETAIL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(7);
 pub const MATERIAL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(8);
 pub const DEFORMATION_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(9);
@@ -106,23 +104,6 @@ impl Default for PreparedDetailFeatureResource {
             status: FeatureContributionStatus::Missing,
             fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
             payload: PreparedDetailFeatureContribution::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
-pub struct PreparedProceduralWorldFeatureResource {
-    pub status: FeatureContributionStatus,
-    pub fallback_policy: FeatureFallbackPolicy,
-    pub payload: PreparedProceduralWorldFeatureContribution,
-}
-
-impl Default for PreparedProceduralWorldFeatureResource {
-    fn default() -> Self {
-        Self {
-            status: FeatureContributionStatus::Missing,
-            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
-            payload: PreparedProceduralWorldFeatureContribution::default(),
         }
     }
 }
@@ -299,15 +280,6 @@ impl RenderFeatureRegistryResource {
             .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
         self.upsert_descriptor(
-            RenderFeatureDescriptor::new(
-                PROCEDURAL_WORLD_RENDER_FEATURE_ID,
-                PROCEDURAL_WORLD_RENDER_FEATURE_LABEL,
-            )
-            .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
-            .with_order_hint(14)
-            .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
-        );
-        self.upsert_descriptor(
             RenderFeatureDescriptor::new(DETAIL_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_LABEL)
                 .depends_on(WORLD_DRAW_RENDER_FEATURE_ID)
                 .with_order_hint(16)
@@ -475,7 +447,6 @@ mod tests {
                 "editor.picking".to_string(),
                 "ui".to_string(),
                 "world.draw".to_string(),
-                "procedural.world".to_string(),
                 "detail".to_string(),
                 "material".to_string(),
                 "particle.vfx".to_string(),

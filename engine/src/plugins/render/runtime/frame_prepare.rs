@@ -775,23 +775,6 @@ pub(crate) fn build_frame_feature_contributions(
         contributions.insert_detail(resource.payload.clone(), resource.status, detail_policy);
     }
 
-    if contributions
-        .feature(&PROCEDURAL_WORLD_RENDER_FEATURE_ID)
-        .is_none()
-        && let Ok(resource) = world.resource::<PreparedProceduralWorldFeatureResource>()
-    {
-        let procedural_policy = feature_policy(
-            world,
-            PROCEDURAL_WORLD_RENDER_FEATURE_ID,
-            resource.fallback_policy,
-        );
-        contributions.insert_procedural_world(
-            resource.payload.clone(),
-            resource.status,
-            procedural_policy,
-        );
-    }
-
     if contributions.feature(&MATERIAL_RENDER_FEATURE_ID).is_none()
         && let Ok(resource) = world.resource::<PreparedMaterialFeatureResource>()
     {

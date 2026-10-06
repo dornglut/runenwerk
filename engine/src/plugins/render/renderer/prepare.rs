@@ -1144,14 +1144,6 @@ fn hash_prepared_feature_contribution(
                 cell.instance_count.hash(&mut hasher);
             }
         }
-        crate::plugins::render::PreparedFeaturePayload::ProceduralWorld(value) => {
-            "procedural_world".hash(&mut hasher);
-            value.overlays.len().hash(&mut hasher);
-            for overlay in &value.overlays {
-                overlay.overlay_id.hash(&mut hasher);
-                overlay.source_revision.hash(&mut hasher);
-            }
-        }
         crate::plugins::render::PreparedFeaturePayload::WindFields(value) => {
             "wind_fields".hash(&mut hasher);
             value.fields.len().hash(&mut hasher);
