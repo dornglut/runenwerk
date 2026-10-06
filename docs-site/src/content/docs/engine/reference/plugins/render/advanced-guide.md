@@ -81,7 +81,6 @@ Prepare/submit boundary types are public for inspection and integration:
 - `PreparedFeatureContribution`
 - `PreparedFeaturePayload`
 - `PreparedUiFeatureContribution`
-- `PreparedSceneRouteContribution`
 - `FeatureContributionStatus`
 - `FeatureFallbackPolicy`
 

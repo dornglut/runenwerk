@@ -1109,11 +1109,6 @@ fn hash_prepared_feature_contribution(
                 submission.primitive_count_hint().hash(&mut hasher);
             }
         }
-        crate::plugins::render::PreparedFeaturePayload::SceneRoute(value) => {
-            "scene_route".hash(&mut hasher);
-            value.world_scene_label.hash(&mut hasher);
-            value.overlay_scene_label.hash(&mut hasher);
-        }
         crate::plugins::render::PreparedFeaturePayload::Draw(value) => {
             "draw".hash(&mut hasher);
             value.batches.len().hash(&mut hasher);

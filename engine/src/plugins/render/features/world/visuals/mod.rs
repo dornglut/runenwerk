@@ -437,7 +437,6 @@ mod tests {
             &world,
             &collector.descriptor,
             fallback_policy,
-            None,
         );
         (collector.collect)(&context)
     }

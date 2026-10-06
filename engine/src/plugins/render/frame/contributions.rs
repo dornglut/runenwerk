@@ -1,11 +1,10 @@
-use super::contribution_registry::PreparedSceneRouteRegisteredPayload;
 use super::{PreparedFeatureContributionDiagnostic, PreparedRegisteredFeaturePayload};
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::{
     DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID, FeatureContributionStatus,
     FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID, PROCEDURAL_WORLD_RENDER_FEATURE_ID,
-    PreparedUiFrameContribution, SCENE_ROUTE_RENDER_FEATURE_ID, UI_RENDER_FEATURE_ID,
-    WIND_FIELDS_RENDER_FEATURE_ID, WORLD_DRAW_RENDER_FEATURE_ID,
+    PreparedUiFrameContribution, UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID,
+    WORLD_DRAW_RENDER_FEATURE_ID,
 };
 use runen_spatial::ChunkId;
 use std::collections::BTreeMap;
@@ -57,26 +56,6 @@ impl PreparedFrameContributions {
                 status,
                 fallback_policy,
                 payload: PreparedFeaturePayload::Ui(payload),
-            },
-        );
-    }
-
-    pub fn insert_scene_route(
-        &mut self,
-        world_scene_label: String,
-        overlay_scene_label: String,
-        status: FeatureContributionStatus,
-        fallback_policy: FeatureFallbackPolicy,
-    ) {
-        self.insert(
-            SCENE_ROUTE_RENDER_FEATURE_ID,
-            PreparedFeatureContribution {
-                status,
-                fallback_policy,
-                payload: PreparedFeaturePayload::SceneRoute(PreparedSceneRouteContribution {
-                    world_scene_label,
-                    overlay_scene_label,
-                }),
             },
         );
     }
@@ -225,33 +204,6 @@ impl PreparedFrameContributions {
         }
     }
 
-    pub fn scene_route_labels(&self) -> Option<(&str, &str)> {
-        let contribution = self.by_feature.get(&SCENE_ROUTE_RENDER_FEATURE_ID)?;
-        if matches!(
-            contribution.status,
-            FeatureContributionStatus::Disabled | FeatureContributionStatus::Missing
-        ) {
-            return None;
-        }
-
-        match &contribution.payload {
-            PreparedFeaturePayload::SceneRoute(value) => Some((
-                value.world_scene_label.as_str(),
-                value.overlay_scene_label.as_str(),
-            )),
-            PreparedFeaturePayload::Registered(payload) => payload
-                .downcast_ref::<PreparedSceneRouteRegisteredPayload>()
-                .map(|value| {
-                    let contribution = value.contribution();
-                    (
-                        contribution.world_scene_label.as_str(),
-                        contribution.overlay_scene_label.as_str(),
-                    )
-                }),
-            _ => None,
-        }
-    }
-
     pub fn feature_gate(&self, id: &RenderFeatureId) -> Option<PreparedFeatureGate> {
         let contribution = self.by_feature.get(id)?;
         Some(contribution.gate())
@@ -304,7 +256,6 @@ pub enum PreparedFeaturePayload {
     #[default]
     Empty,
     Ui(PreparedUiFrameContribution),
-    SceneRoute(PreparedSceneRouteContribution),
     Draw(PreparedDrawFeatureContribution),
     World(PreparedWorldFeatureContribution),
     Detail(PreparedDetailFeatureContribution),
@@ -313,12 +264,6 @@ pub enum PreparedFeaturePayload {
     Material(PreparedMaterialFeatureContribution),
     Deformation(PreparedDeformationFeatureContribution),
     Registered(PreparedRegisteredFeaturePayload),
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct PreparedSceneRouteContribution {
-    pub world_scene_label: String,
-    pub overlay_scene_label: String,
 }
 
 #[derive(Debug, Clone, Default)]

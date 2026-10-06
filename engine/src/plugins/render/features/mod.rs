@@ -13,7 +13,6 @@ pub use editor_picking::*;
 pub use particle_vfx::*;
 pub use ui::*;
 
-pub const SCENE_ROUTE_RENDER_FEATURE_LABEL: &str = "scene.route";
 pub const WORLD_DRAW_RENDER_FEATURE_LABEL: &str = "world.draw";
 pub const PROCEDURAL_WORLD_RENDER_FEATURE_LABEL: &str = "procedural.world";
 pub const DETAIL_RENDER_FEATURE_LABEL: &str = "detail";
@@ -24,7 +23,6 @@ pub const DEFORMATION_RENDER_FEATURE_LABEL: &str = "deformation";
 pub const WIND_FIELDS_RENDER_FEATURE_LABEL: &str = "wind.fields";
 pub const EDITOR_PICKING_RENDER_FEATURE_LABEL: &str = "editor.picking";
 
-pub const SCENE_ROUTE_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(1);
 pub const EDITOR_PICKING_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(2);
 pub const UI_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(3);
 pub const WORLD_DRAW_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(4);
@@ -285,18 +283,9 @@ impl RenderFeatureRegistryResource {
     pub fn register_builtin_descriptors(&mut self) {
         self.upsert_descriptor(
             RenderFeatureDescriptor::new(
-                SCENE_ROUTE_RENDER_FEATURE_ID,
-                SCENE_ROUTE_RENDER_FEATURE_LABEL,
-            )
-            .with_order_hint(-100)
-            .with_fallback_policy(FeatureFallbackPolicy::EmptyContribution),
-        );
-        self.upsert_descriptor(
-            RenderFeatureDescriptor::new(
                 EDITOR_PICKING_RENDER_FEATURE_ID,
                 EDITOR_PICKING_RENDER_FEATURE_LABEL,
             )
-            .depends_on(SCENE_ROUTE_RENDER_FEATURE_ID)
             .with_order_hint(-90)
             .with_fallback_policy(FeatureFallbackPolicy::ReuseLastGood),
         );
@@ -306,7 +295,6 @@ impl RenderFeatureRegistryResource {
                 WORLD_DRAW_RENDER_FEATURE_ID,
                 WORLD_DRAW_RENDER_FEATURE_LABEL,
             )
-            .depends_on(SCENE_ROUTE_RENDER_FEATURE_ID)
             .with_order_hint(10)
             .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
@@ -484,7 +472,6 @@ mod tests {
         assert_eq!(
             ordered,
             vec![
-                "scene.route".to_string(),
                 "editor.picking".to_string(),
                 "ui".to_string(),
                 "world.draw".to_string(),
