@@ -2,8 +2,8 @@ use super::{PreparedFeatureContributionDiagnostic, PreparedRegisteredFeaturePayl
 use crate::plugins::render::api::ids::RenderFeatureId;
 use crate::plugins::render::features::{
     DEFORMATION_RENDER_FEATURE_ID, DETAIL_RENDER_FEATURE_ID, FeatureContributionStatus,
-    FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID, PROCEDURAL_WORLD_RENDER_FEATURE_ID,
-    PreparedUiFrameContribution, UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID,
+    FeatureFallbackPolicy, MATERIAL_RENDER_FEATURE_ID, PreparedUiFrameContribution,
+    UI_RENDER_FEATURE_ID, WIND_FIELDS_RENDER_FEATURE_ID,
     WORLD_DRAW_RENDER_FEATURE_ID,
 };
 use runen_spatial::ChunkId;
@@ -104,22 +104,6 @@ impl PreparedFrameContributions {
                 status,
                 fallback_policy,
                 payload: PreparedFeaturePayload::Detail(payload),
-            },
-        );
-    }
-
-    pub fn insert_procedural_world(
-        &mut self,
-        payload: PreparedProceduralWorldFeatureContribution,
-        status: FeatureContributionStatus,
-        fallback_policy: FeatureFallbackPolicy,
-    ) {
-        self.insert(
-            PROCEDURAL_WORLD_RENDER_FEATURE_ID,
-            PreparedFeatureContribution {
-                status,
-                fallback_policy,
-                payload: PreparedFeaturePayload::ProceduralWorld(payload),
             },
         );
     }
@@ -259,7 +243,6 @@ pub enum PreparedFeaturePayload {
     Draw(PreparedDrawFeatureContribution),
     World(PreparedWorldFeatureContribution),
     Detail(PreparedDetailFeatureContribution),
-    ProceduralWorld(PreparedProceduralWorldFeatureContribution),
     WindFields(PreparedWindFieldFeatureContribution),
     Material(PreparedMaterialFeatureContribution),
     Deformation(PreparedDeformationFeatureContribution),
@@ -307,17 +290,6 @@ pub struct PreparedDetailCellContribution {
     pub cell_id: String,
     pub chunk_id: ChunkId,
     pub instance_count: u32,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct PreparedProceduralWorldFeatureContribution {
-    pub overlays: Vec<PreparedProceduralOverlayContribution>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct PreparedProceduralOverlayContribution {
-    pub overlay_id: String,
-    pub source_revision: u64,
 }
 
 #[derive(Debug, Clone, Default)]
