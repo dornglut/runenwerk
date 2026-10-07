@@ -76,8 +76,9 @@ pub struct RenderDeterministicFrameContribution {
 /// Frame-scoped semantic contributions keyed by their owning producer.
 ///
 /// Multiple surfaces/producers may be present in one frame. Each producer may publish one surface
-/// per frame because the deterministic lowerer gives each producer one reusable physical-resource
-/// namespace; repeated publication by the same producer replaces only that producer's contribution.
+/// per frame under Runenwerk's publication policy; repeated publication by the same producer
+/// replaces only that producer's contribution. Retained renderer continuity is separately mapped
+/// to independent RunenRender sessions, without projecting producer IDs into the framework.
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDeterministicFrameContributionResource {
     contributions: BTreeMap<RenderFrameProducerId, RenderDeterministicFrameContribution>,

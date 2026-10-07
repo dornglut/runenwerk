@@ -3,8 +3,8 @@ use super::resource_descriptors::{
 };
 use super::*;
 use runen_gpu::{
-    GpuBindingKey, GpuBindingLayoutRefinement, GpuBlendConstant, GpuBlendMode, GpuBufferRange,
-    GpuBufferUsage, GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuDrawIntent, GpuDrawRange,
+    GpuBindingKey, GpuBindingLayoutRefinement, GpuBlendConstant, GpuBufferRange, GpuBufferUsage,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuDrawIntent, GpuDrawRange,
     GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMemoryIntent,
     GpuMultisampleStateDescriptor, GpuPipelineConfiguration, GpuPrimitiveStateDescriptor,
     GpuProgramDescriptor, GpuProgramSourceKey, GpuProgramSourceProvenance,
@@ -72,7 +72,7 @@ impl Renderer {
             product_surface_pass: None,
             product_surface_pass_format: None,
             glyph_atlas_gpu: std::collections::BTreeMap::new(),
-            render_execution: Default::default(),
+            render_sessions: Default::default(),
             temporal_execution_evidence: std::collections::BTreeMap::new(),
             dynamic_texture_targets:
                 super::dynamic_targets::RendererDynamicTextureTargetCache::default(),
@@ -110,12 +110,21 @@ impl Renderer {
             .unwrap_or_default()
     }
 
+    pub(in crate::plugins::render) fn synchronize_retained_sessions(
+        &mut self,
+        targets: &crate::plugins::render::RenderDynamicTextureTargetRequestRegistryResource,
+        surfaces: &crate::plugins::render::host::RenderSurfaceRegistryResource,
+    ) {
+        self.render_sessions.synchronize(targets);
+        self.render_sessions.retire_unattached_surfaces(surfaces);
+    }
+
     pub(super) fn begin_frame_gpu_observation(&mut self, context: &GpuContext) -> Result<()> {
         // Gfx owns one nonblocking progress point for its context/device generation. Timing and
         // capture consume the resulting public lifecycle facts; neither feature creates a poll
         // loop or reaches into the backend.
         context.progress();
-        self.render_execution.retain_in_flight_submissions();
+        self.render_sessions.reconcile();
         let super::render_flow::RendererGpuObservationOutput {
             timing_evidence,
             composed_timing_evidence,
@@ -141,10 +150,9 @@ impl Renderer {
         &self,
         contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
     ) -> bool {
-        self.render_execution
-            .has_in_flight_scopes(contributions.iter().map(|contribution| {
-                runen_render::RenderExecutionScope::new(contribution.producer_id.raw())
-            }))
+        contributions
+            .iter()
+            .any(|contribution| self.render_sessions.is_in_flight(contribution))
     }
 
     pub(super) fn publish_progressed_gpu_observations(&mut self) {
@@ -837,8 +845,11 @@ fn ui_render_pipeline_descriptor(
         ui_pipeline_attributes(kind),
     )?;
     let vertex_input = GpuVertexInputStateDescriptor::new([vertex_layout])?;
-    let color_target =
-        GpuColorTargetStateDescriptor::new(format, GpuBlendMode::Alpha, GpuColorWriteMask::ALL)?;
+    let color_target = GpuColorTargetStateDescriptor::new(
+        format,
+        Some(super::resource_descriptors::alpha_blend_state()?),
+        GpuColorWriteMask::ALL,
+    )?;
     let state = GpuRenderPipelineStateDescriptor::new(
         vertex_input,
         Some(GpuFragmentOutputStateDescriptor::new([color_target])),

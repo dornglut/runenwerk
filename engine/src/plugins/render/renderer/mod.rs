@@ -811,7 +811,7 @@ pub struct Renderer {
     product_surface_pass: Option<ProductSurfacePass>,
     product_surface_pass_format: Option<GpuTextureFormat>,
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
-    render_execution: runen_render::RenderExecutionState,
+    render_sessions: retained_sessions::RetainedRenderSessions,
     temporal_execution_evidence: BTreeMap<u64, Vec<runen_render::RenderTemporalExecutionEvidence>>,
     dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
     flow_runtime_cache: BTreeMap<RenderFlowId, render_flow::FlowRuntimeResources>,
@@ -884,7 +884,13 @@ impl Gfx {
         &mut self,
         render_surface_id: crate::plugins::render::host::RenderSurfaceId,
     ) -> bool {
-        self.ctx.detach_surface(render_surface_id)
+        let detached = self.ctx.detach_surface(render_surface_id);
+        if detached {
+            self.renderer
+                .render_sessions
+                .retire_surface(render_surface_id);
+        }
+        detached
     }
 
     pub fn has_surface(
@@ -917,6 +923,7 @@ impl Gfx {
         &mut self,
         prepared_frame: &PreparedRenderFrame,
         deterministic_contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
+        target_requests: &crate::plugins::render::RenderDynamicTextureTargetRequestRegistryResource,
         shader_registry: &mut ShaderRegistryResource,
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
@@ -935,6 +942,7 @@ impl Gfx {
                 )
             },
         ))?;
+        self.renderer.render_sessions.synchronize(target_requests);
         let mut timings = GfxFrameTimings::default();
         self.renderer
             .begin_frame_gpu_observation(self.ctx.context())?;
@@ -977,6 +985,7 @@ impl Gfx {
             (acquired_extent.width(), acquired_extent.height()),
             prepared_frame,
             &surface_contributions,
+            target_requests,
             shader_registry,
             compiled_flows,
             ui_rect_shader,
@@ -1024,8 +1033,8 @@ pub(crate) fn deterministic_contributions_for_surface(
         .collect()
 }
 
-/// The deterministic cache is scoped by producer, so one producer may not publish mutable
-/// intermediate work for more than one surface in the same frame. Independent producers may still
+/// Product publication allows one deterministic contribution per producer per frame.
+/// A producer must therefore select one surface for that publication. Independent producers may still
 /// render on independent surfaces, and a surface without deterministic work remains unaffected by
 /// another surface's in-flight submission.
 pub(crate) fn validate_deterministic_surface_scope(
@@ -1090,6 +1099,7 @@ mod pipeline_cache;
 mod prepare;
 mod render_flow;
 mod resource_descriptors;
+mod retained_sessions;
 mod setup;
 
 use crate::plugins::RenderFeatureId;

@@ -4,6 +4,7 @@ use crate::plugins::render::{
 };
 use std::collections::BTreeMap;
 use std::fmt;
+use std::sync::{Arc, Weak};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderDynamicTextureTargetRequestDiagnostic {
@@ -56,10 +57,17 @@ impl From<RenderDynamicTextureTargetDescriptorError>
     }
 }
 
+#[derive(Debug, Clone)]
+struct RenderDynamicTextureTargetRegistration {
+    descriptor: RenderDynamicTextureTargetDescriptor,
+    // Staged replacements preserve this witness; target withdrawal or scope change renews it.
+    continuity: Arc<()>,
+}
+
 #[derive(Debug, Clone, Default)]
 struct RenderDynamicTextureTargetRequestContribution {
     scope: RenderFrameSurfaceScope,
-    descriptors: BTreeMap<RenderDynamicTextureTargetKey, RenderDynamicTextureTargetDescriptor>,
+    descriptors: BTreeMap<RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRegistration>,
 }
 
 #[derive(Debug, Default, Clone, runen_ecs::Component, runen_ecs::Resource)]
@@ -80,7 +88,13 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
     ) -> Option<BTreeMap<RenderDynamicTextureTargetKey, RenderDynamicTextureTargetDescriptor>> {
         self.contributions
             .remove(&producer_id.into())
-            .map(|contribution| contribution.descriptors)
+            .map(|contribution| {
+                contribution
+                    .descriptors
+                    .into_iter()
+                    .map(|(key, registration)| (key, registration.descriptor))
+                    .collect()
+            })
     }
 
     pub fn replace_contribution(
@@ -169,20 +183,59 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
                 }
             }
         }
+        let previous = self
+            .contributions
+            .get(&producer_id)
+            .filter(|previous| previous.scope == scope);
+        let registrations = descriptors_by_key
+            .into_iter()
+            .map(|(key, descriptor)| {
+                let continuity = previous
+                    .and_then(|previous| previous.descriptors.get(&key))
+                    .map(|registration| Arc::clone(&registration.continuity))
+                    .unwrap_or_default();
+                (
+                    key,
+                    RenderDynamicTextureTargetRegistration {
+                        descriptor,
+                        continuity,
+                    },
+                )
+            })
+            .collect();
         self.contributions.insert(
             producer_id,
             RenderDynamicTextureTargetRequestContribution {
                 scope,
-                descriptors: descriptors_by_key,
+                descriptors: registrations,
             },
         );
         Ok(())
     }
 
+    /// Exact product registration lifetime, independent of per-frame semantic publication.
+    pub(in crate::plugins::render) fn continuity_for_target(
+        &self,
+        producer_id: RenderFrameProducerId,
+        surface: crate::plugins::render::host::RenderSurfaceId,
+        target: &RenderDynamicTextureTargetKey,
+    ) -> Option<Weak<()>> {
+        self.contributions
+            .get(&producer_id)
+            .filter(|contribution| contribution.scope.applies_to(surface))
+            .and_then(|contribution| contribution.descriptors.get(target))
+            .map(|registration| Arc::downgrade(&registration.continuity))
+    }
+
     pub fn snapshot(&self) -> Vec<RenderDynamicTextureTargetDescriptor> {
         self.contributions
             .values()
-            .flat_map(|contribution| contribution.descriptors.values().cloned())
+            .flat_map(|contribution| {
+                contribution
+                    .descriptors
+                    .values()
+                    .map(|registration| registration.descriptor.clone())
+            })
             .collect()
     }
 
@@ -193,7 +246,12 @@ impl RenderDynamicTextureTargetRequestRegistryResource {
         self.contributions
             .values()
             .filter(|contribution| contribution.scope.applies_to(render_surface_id))
-            .flat_map(|contribution| contribution.descriptors.values().cloned())
+            .flat_map(|contribution| {
+                contribution
+                    .descriptors
+                    .values()
+                    .map(|registration| registration.descriptor.clone())
+            })
             .collect()
     }
 

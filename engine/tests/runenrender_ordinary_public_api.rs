@@ -29,10 +29,10 @@ use runen_render::surface_input::{
     RenderSurfaceSemanticInputRequirement,
 };
 use runen_render::{
-    AdmittedRender, PreparedRadianceOutput, PreparedRender, RenderAdmissionError,
-    RenderCapturedRadiance, RenderEvaluationSelection, RenderExecutionError,
-    RenderExecutionErrorKind, RenderExecutionScope, RenderExecutionState,
-    RenderRadianceCaptureError, RenderRadianceCaptureErrorKind, RenderRadianceCaptureRequest,
+    AdmittedRender, PreparedRadianceOutput, PreparedRender, PreparedRenderOccurrence,
+    RenderAdmissionError, RenderCapturedRadiance, RenderEvaluationSelection, RenderExecutionError,
+    RenderExecutionErrorKind, RenderExecutionSession, RenderRadianceCaptureError,
+    RenderRadianceCaptureErrorKind, RenderRadianceCaptureRequest,
     RenderRadianceCaptureRequestError, RenderRadianceCaptureRequestErrorKind,
     RenderResultFormationError, RenderResultFormationErrorKind, RenderResultSubmissionError,
     RenderResultSubmissionErrorKind, RenderTemporalExecutionEvidence,
@@ -87,13 +87,13 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     let _ = RenderRadianceCaptureRequestError::kind;
     let _ = RenderRadianceCaptureError::kind;
     let _ = RenderRadianceCaptureError::gpu_failure_kind;
-    let _ = RenderExecutionState::new;
-    let _ = RenderExecutionState::retain_in_flight_submissions;
-    let _ = RenderExecutionState::record_submission;
-    let _ = RenderExecutionState::prepare;
-
-    let scope = RenderExecutionScope::new(7);
-    assert_eq!(scope.raw(), 7);
+    let _ = RenderExecutionSession::new;
+    let _ = RenderExecutionSession::reconcile;
+    let _ = RenderExecutionSession::associate_submission;
+    let _ = RenderExecutionSession::prepare;
+    let _ = PreparedRenderOccurrence::work_set;
+    let _ = PreparedRenderOccurrence::radiance_output;
+    assert!(!RenderExecutionSession::new().is_in_flight());
     let selection = RenderEvaluationSelection::new(0, 64, 32).expect("non-zero extent");
     assert_eq!(selection.output_index(), 0);
     assert_eq!(selection.extent(), (64, 32));
@@ -255,39 +255,39 @@ fn ordinary_surface_executes_headless_through_public_runengpu_only() {
         RenderRepresentationAvailabilityState::Available,
     )];
 
-    let mut allocator = GpuWorkResourceIdAllocator::new();
-    let destination = allocator
-        .allocate_texture_handle(
-            GpuTextureDescriptor::ordinary_owned_2d(
-                "R8 ordinary public consumer output",
-                GpuResourceLifetime::Transient,
-                GpuReconstruction::SourceBacked,
-                1,
-                1,
-                GpuTextureFormat::R32Uint,
-                [GpuTextureUsage::CopyDestination],
-                GpuTextureInitialization::Uninitialized,
+    let admit_output = |label: &str| {
+        let destination = GpuWorkResourceIdAllocator::new()
+            .allocate_texture_handle(
+                GpuTextureDescriptor::ordinary_owned_2d(
+                    label,
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    1,
+                    1,
+                    GpuTextureFormat::R32Uint,
+                    [GpuTextureUsage::CopyDestination],
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .unwrap(),
             )
-            .expect("public output descriptor"),
+            .unwrap();
+        admit_render(
+            &scene.snapshot(),
+            &request,
+            &semantic_inputs,
+            &[],
+            &availability,
+            &[RenderOutputBinding::new(
+                0,
+                RenderOutputDestination::SampleLatticeTexture(destination),
+            )],
+            &context,
         )
-        .expect("public output handle");
-    let output_bindings = [RenderOutputBinding::new(
-        0,
-        RenderOutputDestination::SampleLatticeTexture(destination),
-    )];
-
-    let admitted = admit_render(
-        &scene.snapshot(),
-        &request,
-        &semantic_inputs,
-        &[],
-        &availability,
-        &output_bindings,
-        &context,
-    )
-    .expect("public ordinary admission");
-    let submitted =
-        pollster::block_on(submit_render(admitted, &context)).expect("public ordinary submission");
+        .expect("public ordinary admission")
+    };
+    let admitted = admit_output("R8 ordinary public consumer output");
+    let submitted = pollster::block_on(submit_render(admitted.clone(), &context))
+        .expect("public ordinary submission");
 
     let deadline = Instant::now() + Duration::from_secs(30);
     loop {
@@ -308,4 +308,112 @@ fn ordinary_surface_executes_headless_through_public_runengpu_only() {
 
     assert_eq!(submitted.admitted_plan().scene_revision(), scene.revision());
     assert_eq!(submitted.admitted_plan().outputs().len(), 1);
+
+    // The downstream Vulkan lane exercises the retained contract alongside the unchanged one-shot
+    // path. Independent sessions prepare concurrently and carry exact non-cloneable occurrences
+    // across caller-owned composition with unrelated public RunenGPU work.
+    let mut first_session = RenderExecutionSession::new();
+    let mut second_session = RenderExecutionSession::new();
+    let first = first_session
+        .prepare(admit_output("first retained output"), &context, None)
+        .unwrap();
+    let second = second_session
+        .prepare(admit_output("second retained output"), &context, None)
+        .unwrap();
+    let peer = prepare_render(admit_output("one-shot peer output"), &context).unwrap();
+    let composed = pollster::block_on(
+        context.submit_work(
+            "downstream composed retained occurrences and one-shot peer",
+            first
+                .work_set()
+                .fragments()
+                .iter()
+                .cloned()
+                .chain(second.work_set().fragments().iter().cloned())
+                .chain(peer.work_set().fragments().iter().cloned()),
+        ),
+    )
+    .unwrap();
+    for occurrence in [&first, &second] {
+        assert!(
+            occurrence
+                .work_set()
+                .fragments()
+                .iter()
+                .flat_map(|fragment| fragment.nodes())
+                .all(|node| composed.contains_work_node(node.id()))
+        );
+    }
+    first_session
+        .associate_submission(first, &composed)
+        .unwrap();
+    second_session
+        .associate_submission(second, &composed)
+        .unwrap();
+    wait_for_submission(&context, &composed);
+    first_session.reconcile();
+    second_session.reconcile();
+    assert!(!first_session.is_in_flight());
+    assert!(!second_session.is_in_flight());
+
+    let missing = first_session
+        .prepare(admit_output("first retained output"), &context, None)
+        .unwrap();
+    let included = second_session
+        .prepare(admit_output("second retained output"), &context, None)
+        .unwrap();
+    let only_second = pollster::block_on(context.submit_work(
+        "downstream submission missing the first occurrence",
+        included.work_set().fragments().iter().cloned(),
+    ))
+    .unwrap();
+    assert!(matches!(
+        first_session.associate_submission(missing, &only_second),
+        Err(runen_render::RenderExecutionSessionError::SubmissionMissingRendererWork)
+    ));
+    second_session
+        .associate_submission(included, &only_second)
+        .unwrap();
+    wait_for_submission(&context, &only_second);
+    first_session.reconcile();
+    second_session.reconcile();
+
+    let foreign = first_session
+        .prepare(admit_output("first retained output"), &context, None)
+        .unwrap();
+    let own = second_session
+        .prepare(admit_output("second ownership output"), &context, None)
+        .unwrap();
+    let both = pollster::block_on(
+        context.submit_work(
+            "downstream exact session ownership",
+            foreign
+                .work_set()
+                .fragments()
+                .iter()
+                .cloned()
+                .chain(own.work_set().fragments().iter().cloned()),
+        ),
+    )
+    .unwrap();
+    assert!(matches!(
+        second_session.associate_submission(foreign, &both),
+        Err(runen_render::RenderExecutionSessionError::OccurrenceNotCurrent)
+    ));
+    second_session.associate_submission(own, &both).unwrap();
+    wait_for_submission(&context, &both);
+    first_session.reconcile();
+    second_session.reconcile();
+}
+
+fn wait_for_submission(context: &GpuContext, submission: &GpuSubmission) {
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        context.progress();
+        match submission.status() {
+            GpuSubmissionStatus::Completed => return,
+            GpuSubmissionStatus::Accepted if Instant::now() < deadline => std::thread::yield_now(),
+            status => panic!("public composed submission did not complete: {status:?}"),
+        }
+    }
 }

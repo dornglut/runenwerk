@@ -5,10 +5,11 @@ use crate::plugins::render::{RenderDepthPolicy, RenderIndirectDrawArgsKind};
 use runen_gpu::{
     GpuAttachmentStore, GpuBlendConstant, GpuBufferHandle, GpuBufferRange, GpuBufferRegion,
     GpuColorAttachmentLoad, GpuColorClearValue, GpuComputeOperation, GpuDepthAttachmentLoad,
-    GpuDepthClearValue, GpuDepthStencilAccess, GpuDispatchIntent, GpuDispatchSize, GpuDrawIntent,
-    GpuDrawRange, GpuIndexBufferBinding, GpuIndexFormat, GpuQueryRange, GpuQueryResolveOperation,
-    GpuReadbackId, GpuReadbackOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment,
-    GpuRenderDraw, GpuRenderOperation, GpuScissorRect, GpuTextureViewHandle, GpuTimestampWrites,
+    GpuDepthAttachmentState, GpuDepthClearValue, GpuDepthStencilAccess, GpuDispatchIntent,
+    GpuDispatchSize, GpuDrawIntent, GpuDrawRange, GpuIndexBufferBinding, GpuIndexFormat,
+    GpuIndirectFirstInstanceMode, GpuQueryRange, GpuQueryResolveOperation, GpuReadbackId,
+    GpuReadbackOperation, GpuRenderColorAttachment, GpuRenderDepthStencilAttachment, GpuRenderDraw,
+    GpuRenderOperation, GpuScissorRect, GpuTextureViewHandle, GpuTimestampWrites,
     GpuUploadOperation, GpuVertexBufferBinding, GpuViewport, GpuWorkOperation, PreparedGpuData,
     TransferData,
 };
@@ -156,17 +157,20 @@ pub(super) fn project_render_operation(
         );
         Some(GpuRenderDepthStencilAttachment::new(
             depth_target.view.clone(),
-            if read_only {
-                GpuDepthStencilAccess::ReadOnly
-            } else {
-                GpuDepthStencilAccess::ReadWrite
-            },
-            if read_only {
-                GpuDepthAttachmentLoad::Load
-            } else {
-                GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(1.0)?)
-            },
-            GpuAttachmentStore::Store,
+            Some(GpuDepthAttachmentState::new(
+                if read_only {
+                    GpuDepthStencilAccess::ReadOnly
+                } else {
+                    GpuDepthStencilAccess::ReadWrite
+                },
+                if read_only {
+                    GpuDepthAttachmentLoad::Load
+                } else {
+                    GpuDepthAttachmentLoad::Clear(GpuDepthClearValue::new(1.0)?)
+                },
+                GpuAttachmentStore::Store,
+            )?),
+            None,
         )?)
     } else {
         None
@@ -285,6 +289,7 @@ fn project_render_draw(
                         buffer.handle,
                         GpuBufferRange::new(buffer.handle, byte_offset, size)?,
                         indexed,
+                        GpuIndirectFirstInstanceMode::ZeroOnly,
                     )?
                 }
             };

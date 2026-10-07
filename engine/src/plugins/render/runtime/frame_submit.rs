@@ -489,6 +489,20 @@ fn reconcile_frame_history_policy(world: &mut WorldMut) {
 
 pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<()> {
     reconcile_frame_history_policy(&mut world);
+    // Product withdrawal retires retained continuity even when no native frame is prepared.
+    if let Some(mut gfx) = world.remove_resource::<Gfx>() {
+        if let (Ok(targets), Ok(surfaces)) = (
+            world.resource::<RenderDynamicTextureTargetRequestRegistryResource>(),
+            world.resource::<RenderSurfaceRegistryResource>(),
+        ) {
+            gfx.renderer
+                .synchronize_retained_sessions(targets, surfaces);
+        } else {
+            gfx.renderer
+                .synchronize_retained_sessions(&Default::default(), &Default::default());
+        }
+        world.insert_resource(gfx);
+    }
 
     let _submit_span = tracing::info_span!("systems.frame_render_submit").entered();
     let readiness_ready_before = world.resource::<RenderReadinessState>()?.is_ready();
@@ -649,6 +663,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             gfx.render(
                 &prepared_frame,
                 &deterministic_contributions,
+                world.resource::<RenderDynamicTextureTargetRequestRegistryResource>()?,
                 &mut shader_registry,
                 compiled_flows,
                 ui_rect_shader,
@@ -670,7 +685,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 tracing::debug!(
                     frame = prepared_frame.context.frame_index,
                     surface = render_surface_id.raw(),
-                    "deterministic surface submission deferred while its producer-scoped intermediates are in flight"
+                    "deterministic surface submission deferred while a retained renderer session is in flight"
                 );
                 Ok(())
             }
@@ -1202,25 +1217,29 @@ fn render_additional_surfaces(
             .copied()
             .unwrap_or_default()
             .retains_frame(prepared_frame.context.frame_index);
-        let render_result = gfx.render(
-            prepared_frame,
-            deterministic_contributions,
-            shader_registry,
-            flow_registry.compiled_flows(),
-            ui_rect_shader,
-            ui_font_atlas,
-            &prepared_frame.viewport_surface_bindings,
-            preflight_config,
-            debug_control,
-            debug_config,
-            composed_gpu_timing_requested,
-        );
+        let render_result = (|| -> anyhow::Result<_> {
+            let targets = world.resource::<RenderDynamicTextureTargetRequestRegistryResource>()?;
+            gfx.render(
+                prepared_frame,
+                deterministic_contributions,
+                targets,
+                shader_registry,
+                flow_registry.compiled_flows(),
+                ui_rect_shader,
+                ui_font_atlas,
+                &prepared_frame.viewport_surface_bindings,
+                preflight_config,
+                debug_control,
+                debug_config,
+                composed_gpu_timing_requested,
+            )
+        })();
         let outcome = match render_result {
             Ok(timings) if !timings.submitted => {
                 tracing::debug!(
                     frame = prepared_frame.context.frame_index,
                     surface = render_surface_id.raw(),
-                    "surface submission deferred while its producer-scoped deterministic intermediates are in flight"
+                    "surface submission deferred while a retained renderer session is in flight"
                 );
                 AdditionalSurfaceRenderOutcome::Deferred
             }

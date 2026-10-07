@@ -2,8 +2,8 @@ use crate::runtime::NativeWindowId;
 use anyhow::{Result, anyhow};
 use id_macros::id;
 use runen_gpu::{
-    GpuSurfaceCapabilities, GpuSurfaceConfiguration, GpuSurfacePresentMode, GpuTextureFormat,
-    GpuTextureUsage,
+    GpuSurfaceCapabilities, GpuSurfaceColorSpace, GpuSurfaceConfiguration, GpuSurfacePresentMode,
+    GpuTextureFormat, GpuTextureUsage,
 };
 use std::collections::BTreeMap;
 
@@ -260,11 +260,17 @@ fn normalized_surface_extent(target_size_px: (u32, u32)) -> (u32, u32) {
 }
 
 pub fn preferred_surface_format(caps: &GpuSurfaceCapabilities) -> Option<GpuTextureFormat> {
-    caps.formats()
+    let mut formats = caps
+        .format_capabilities()
         .iter()
-        .copied()
-        .find(|format| format.is_srgb())
-        .or_else(|| caps.formats().first().copied())
+        .filter(|entry| entry.supports_color_space(GpuSurfaceColorSpace::Srgb))
+        .map(|entry| entry.format());
+    let first = formats.next()?;
+    if first.is_srgb() {
+        Some(first)
+    } else {
+        Some(formats.find(|format| format.is_srgb()).unwrap_or(first))
+    }
 }
 
 pub fn build_surface_config(
@@ -299,6 +305,7 @@ pub fn build_surface_config(
         width.max(1),
         height.max(1),
         format,
+        GpuSurfaceColorSpace::Srgb,
         usages,
         GpuSurfacePresentMode::Fifo,
         alpha_mode,

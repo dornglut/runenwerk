@@ -38,103 +38,112 @@ pub enum RenderSurfaceAcquireError {
     Validation,
 }
 
+fn renderer_context_descriptor() -> Result<GpuContextDescriptor> {
+    let mut requirements = GpuCapabilityProfile::DesktopPresentationBaseline.requirements();
+    requirements.insert(GpuCapabilityRequirement::Preferred {
+        feature: GpuCapabilityFeature::TimestampQuery,
+        fallback: GpuPreferredFallback::DisableInstrumentation,
+    })?;
+    for feature in [
+        GpuCapabilityFeature::Compute,
+        GpuCapabilityFeature::IndirectExecution,
+        GpuCapabilityFeature::StorageTexture,
+        GpuCapabilityFeature::DepthAttachment,
+    ] {
+        requirements.insert(GpuCapabilityRequirement::Required(feature))?;
+    }
+    let mut descriptor = GpuContextDescriptor::new(requirements)
+        .with_label("Runenwerk renderer")
+        .with_provenance("Runenwerk renderer surface execution")
+        .with_power_preference(GpuPowerPreference::HighPerformance);
+    for (format, roles) in [
+        (
+            GpuTextureFormat::R8Unorm,
+            &[
+                GpuFormatRole::Sampled,
+                GpuFormatRole::Filterable,
+                GpuFormatRole::CopyDestination,
+            ][..],
+        ),
+        (
+            GpuTextureFormat::Rgba8Unorm,
+            &[
+                GpuFormatRole::Sampled,
+                GpuFormatRole::Filterable,
+                GpuFormatRole::StorageWrite,
+                GpuFormatRole::ColorAttachment,
+                GpuFormatRole::Blendable,
+                GpuFormatRole::CopySource,
+                GpuFormatRole::CopyDestination,
+            ][..],
+        ),
+        (
+            GpuTextureFormat::Rgba8UnormSrgb,
+            &[
+                GpuFormatRole::Sampled,
+                GpuFormatRole::Filterable,
+                GpuFormatRole::ColorAttachment,
+                GpuFormatRole::Blendable,
+                GpuFormatRole::CopySource,
+                GpuFormatRole::CopyDestination,
+            ][..],
+        ),
+        (
+            GpuTextureFormat::Bgra8Unorm,
+            &[
+                GpuFormatRole::Sampled,
+                GpuFormatRole::Filterable,
+                GpuFormatRole::ColorAttachment,
+                GpuFormatRole::Blendable,
+                GpuFormatRole::CopySource,
+                GpuFormatRole::CopyDestination,
+            ][..],
+        ),
+        (
+            GpuTextureFormat::Bgra8UnormSrgb,
+            &[
+                GpuFormatRole::Sampled,
+                GpuFormatRole::Filterable,
+                GpuFormatRole::ColorAttachment,
+                GpuFormatRole::Blendable,
+                GpuFormatRole::CopySource,
+                GpuFormatRole::CopyDestination,
+            ][..],
+        ),
+        (
+            GpuTextureFormat::R32Uint,
+            &[
+                GpuFormatRole::Sampled,
+                GpuFormatRole::StorageWrite,
+                GpuFormatRole::ColorAttachment,
+                GpuFormatRole::CopySource,
+                GpuFormatRole::CopyDestination,
+            ][..],
+        ),
+        (
+            GpuTextureFormat::R32Float,
+            &[GpuFormatRole::Sampled, GpuFormatRole::CopyDestination][..],
+        ),
+        (
+            GpuTextureFormat::Depth32Float,
+            &[
+                GpuFormatRole::Sampled,
+                GpuFormatRole::DepthStencil,
+                GpuFormatRole::CopySource,
+                GpuFormatRole::CopyDestination,
+            ][..],
+        ),
+    ] {
+        for &role in roles {
+            descriptor = descriptor.require_format_role(format, role);
+        }
+    }
+    Ok(descriptor)
+}
+
 impl RenderGpuContext {
     async fn new_async(window: Arc<Window>) -> Result<Self> {
-        let mut requirements = GpuCapabilityProfile::DesktopPresentationBaseline.requirements();
-        requirements.insert(GpuCapabilityRequirement::Preferred {
-            feature: GpuCapabilityFeature::TimestampQuery,
-            fallback: GpuPreferredFallback::DisableInstrumentation,
-        })?;
-        for feature in [
-            GpuCapabilityFeature::Compute,
-            GpuCapabilityFeature::IndirectExecution,
-            GpuCapabilityFeature::StorageTexture,
-            GpuCapabilityFeature::DepthAttachment,
-        ] {
-            requirements.insert(GpuCapabilityRequirement::Required(feature))?;
-        }
-        let mut descriptor = GpuContextDescriptor::new(requirements)
-            .with_label("Runenwerk renderer")
-            .with_provenance("Runenwerk renderer surface execution")
-            .with_power_preference(GpuPowerPreference::HighPerformance);
-        for (format, roles) in [
-            (
-                GpuTextureFormat::R8Unorm,
-                &[
-                    GpuFormatRole::Sampled,
-                    GpuFormatRole::Filterable,
-                    GpuFormatRole::CopyDestination,
-                ][..],
-            ),
-            (
-                GpuTextureFormat::Rgba8Unorm,
-                &[
-                    GpuFormatRole::Sampled,
-                    GpuFormatRole::Filterable,
-                    GpuFormatRole::StorageWrite,
-                    GpuFormatRole::ColorAttachment,
-                    GpuFormatRole::CopySource,
-                    GpuFormatRole::CopyDestination,
-                ][..],
-            ),
-            (
-                GpuTextureFormat::Rgba8UnormSrgb,
-                &[
-                    GpuFormatRole::Sampled,
-                    GpuFormatRole::Filterable,
-                    GpuFormatRole::ColorAttachment,
-                    GpuFormatRole::CopySource,
-                    GpuFormatRole::CopyDestination,
-                ][..],
-            ),
-            (
-                GpuTextureFormat::Bgra8Unorm,
-                &[
-                    GpuFormatRole::Sampled,
-                    GpuFormatRole::Filterable,
-                    GpuFormatRole::ColorAttachment,
-                    GpuFormatRole::CopySource,
-                    GpuFormatRole::CopyDestination,
-                ][..],
-            ),
-            (
-                GpuTextureFormat::Bgra8UnormSrgb,
-                &[
-                    GpuFormatRole::Sampled,
-                    GpuFormatRole::Filterable,
-                    GpuFormatRole::ColorAttachment,
-                    GpuFormatRole::CopySource,
-                    GpuFormatRole::CopyDestination,
-                ][..],
-            ),
-            (
-                GpuTextureFormat::R32Uint,
-                &[
-                    GpuFormatRole::Sampled,
-                    GpuFormatRole::StorageWrite,
-                    GpuFormatRole::ColorAttachment,
-                    GpuFormatRole::CopySource,
-                    GpuFormatRole::CopyDestination,
-                ][..],
-            ),
-            (
-                GpuTextureFormat::R32Float,
-                &[GpuFormatRole::Sampled, GpuFormatRole::CopyDestination][..],
-            ),
-            (
-                GpuTextureFormat::Depth32Float,
-                &[
-                    GpuFormatRole::Sampled,
-                    GpuFormatRole::DepthStencil,
-                    GpuFormatRole::CopySource,
-                    GpuFormatRole::CopyDestination,
-                ][..],
-            ),
-        ] {
-            for &role in roles {
-                descriptor = descriptor.require_format_role(format, role);
-            }
-        }
+        let descriptor = renderer_context_descriptor()?;
         let descriptor = apply_runenwerk_gpu_context_policy(descriptor);
         let (context, surface) =
             GpuContext::request_for_surface(descriptor, Arc::clone(&window)).await?;
@@ -211,6 +220,7 @@ impl RenderGpuContext {
             width.max(1),
             height.max(1),
             state.config.format(),
+            state.config.color_space(),
             state.config.usages().iter().copied(),
             state.config.present_mode(),
             state.config.alpha_mode(),
@@ -264,5 +274,44 @@ impl RenderGpuContext {
 
     pub(crate) fn context(&self) -> &GpuContext {
         &self.context
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn alpha_blended_target_formats_are_explicitly_admitted() {
+        let descriptor = renderer_context_descriptor().expect("valid renderer requirements");
+        for format in [
+            GpuTextureFormat::Rgba8Unorm,
+            GpuTextureFormat::Rgba8UnormSrgb,
+            GpuTextureFormat::Bgra8Unorm,
+            GpuTextureFormat::Bgra8UnormSrgb,
+        ] {
+            for role in [GpuFormatRole::ColorAttachment, GpuFormatRole::Blendable] {
+                assert!(
+                    descriptor
+                        .semantically_eq(&descriptor.clone().require_format_role(format, role)),
+                    "renderer must already require {format:?}::{role:?}"
+                );
+            }
+        }
+        for format in [
+            GpuTextureFormat::R8Unorm,
+            GpuTextureFormat::R32Uint,
+            GpuTextureFormat::R32Float,
+            GpuTextureFormat::Depth32Float,
+        ] {
+            assert!(
+                !descriptor.semantically_eq(
+                    &descriptor
+                        .clone()
+                        .require_format_role(format, GpuFormatRole::Blendable)
+                ),
+                "renderer must not demand unused blending for {format:?}"
+            );
+        }
     }
 }

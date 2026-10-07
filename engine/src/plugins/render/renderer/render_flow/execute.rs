@@ -1,4 +1,5 @@
 use super::super::dynamic_targets::RendererPreparedDynamicTextureUploadBatch;
+use super::super::retained_sessions::PreparedRetainedOccurrence;
 use super::*;
 use super::{
     canonical_work::{
@@ -34,6 +35,13 @@ struct RendererRealizationBatch<'a> {
     invocations: Vec<RealizedFlowInvocation<'a>>,
     final_captures: Vec<PreparedCaptureReadback>,
     maximum_occurrence: u64,
+}
+
+/// Exact retained occurrences and their public composition projection cross submission together.
+struct PreparedDeterministicCompositions {
+    fragments: Vec<GpuWorkFragment>,
+    imports: Vec<GpuWorkImport>,
+    occurrences: Vec<PreparedRetainedOccurrence>,
 }
 
 struct RealizedFlowInvocation<'a> {
@@ -74,6 +82,7 @@ impl Renderer {
         acquired_surface_extent: (u32, u32),
         prepared_frame: &PreparedRenderFrame,
         deterministic_contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
+        target_requests: &crate::plugins::render::RenderDynamicTextureTargetRequestRegistryResource,
         packet: RendererPreparedPacket,
         compiled_flows: &[CompiledRenderFlowPlan],
         shader_registry: &ShaderRegistryResource,
@@ -162,10 +171,11 @@ impl Renderer {
         }
         nodes.append(&mut frame.nodes);
 
-        let (producer_fragments, radiance_imports) = self.prepare_deterministic_compositions(
+        let deterministic = self.prepare_deterministic_compositions(
             context,
             prepared_frame,
             deterministic_contributions,
+            target_requests,
         )?;
 
         let mut terminal_controls =
@@ -248,8 +258,8 @@ impl Renderer {
                 prepared_frame.surface.render_surface_id.raw()
             ))?,
             nodes,
-            &producer_fragments,
-            &radiance_imports,
+            &deterministic.fragments,
+            &deterministic.imports,
             composed_gpu_timing
                 .as_ref()
                 .map(PreparedComposedGpuTiming::bracket),
@@ -262,12 +272,9 @@ impl Renderer {
                 rejection.reason().detail()
             )
         })?;
-        for contribution in deterministic_contributions {
-            let producer_scope =
-                runen_render::RenderExecutionScope::new(contribution.producer_id.raw());
-            self.render_execution
-                .record_submission(producer_scope, &submission);
-        }
+        let association_result = self
+            .render_sessions
+            .associate_composed_submission(deterministic.occurrences, &submission);
         // Once G5 accepts the submission, retain every renderer-observed readback before any
         // fallible product evidence work. An accepted lifecycle handle must never be dropped merely
         // because later provenance publication fails for this frame.
@@ -319,6 +326,10 @@ impl Renderer {
         self.pending_gpu_observation_output
             .capture_results
             .extend(capture_results);
+
+        // Association failure cannot discard accepted timing/capture lifecycle handles. The
+        // affected continuity is quarantined by the session owner and this frame fails closed.
+        association_result?;
 
         let accepted_upload_report = self
             .dynamic_texture_targets
@@ -769,12 +780,14 @@ impl Renderer {
         context: &GpuContext,
         prepared_frame: &PreparedRenderFrame,
         contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
-    ) -> Result<(Vec<GpuWorkFragment>, Vec<GpuWorkImport>)> {
+        target_requests: &crate::plugins::render::RenderDynamicTextureTargetRequestRegistryResource,
+    ) -> Result<PreparedDeterministicCompositions> {
         const TEMPORAL_EVIDENCE_FRAME_CAPACITY: usize = 32;
         self.temporal_execution_evidence
             .remove(&prepared_frame.context.frame_index);
         let mut fragments = Vec::new();
         let mut imports = Vec::new();
+        let mut retained_occurrences = Vec::new();
         for contribution in contributions.iter().filter(|contribution| {
             contribution.render_surface_id == prepared_frame.surface.render_surface_id
         }) {
@@ -804,13 +817,15 @@ impl Renderer {
                 )
                 .expect("frame finite evaluation extent is already non-zero")
             });
-            let producer_scope =
-                runen_render::RenderExecutionScope::new(contribution.producer_id.raw());
-            let prepared = self
-                .render_execution
-                .prepare(admitted, context, producer_scope, finite_evaluation)
-                .map_err(|error| anyhow::anyhow!("render preparation failed: {error}"))?;
+            let prepared = self.render_sessions.prepare(
+                contribution,
+                target_requests,
+                admitted,
+                context,
+                finite_evaluation,
+            )?;
             let output = prepared
+                .occurrence()
                 .radiance_output(contribution.output_index)
                 .ok_or_else(|| {
                     anyhow::anyhow!(
@@ -824,7 +839,7 @@ impl Renderer {
                     .or_default()
                     .push(evidence.clone());
             }
-            fragments.extend(prepared.work_set().fragments().iter().cloned());
+            fragments.extend(prepared.occurrence().work_set().fragments().iter().cloned());
             imports.push(output.import(GpuResourceProvenance::new(
                 GpuResourceLabel::new(format!(
                     "render.frame.radiance.composition.{}",
@@ -833,6 +848,7 @@ impl Renderer {
                 None,
                 None,
             )));
+            retained_occurrences.push(prepared);
         }
         while self.temporal_execution_evidence.len() > TEMPORAL_EVIDENCE_FRAME_CAPACITY {
             let Some(oldest) = self.temporal_execution_evidence.keys().next().copied() else {
@@ -840,7 +856,11 @@ impl Renderer {
             };
             self.temporal_execution_evidence.remove(&oldest);
         }
-        Ok((fragments, imports))
+        Ok(PreparedDeterministicCompositions {
+            fragments,
+            imports,
+            occurrences: retained_occurrences,
+        })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -852,6 +872,7 @@ impl Renderer {
         acquired_surface_extent: (u32, u32),
         prepared_frame: &PreparedRenderFrame,
         deterministic_contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
+        target_requests: &crate::plugins::render::RenderDynamicTextureTargetRequestRegistryResource,
         shader_registry: &mut ShaderRegistryResource,
         compiled_flows: &[CompiledRenderFlowPlan],
         ui_rect_shader: Option<ShaderHandle>,
@@ -880,6 +901,7 @@ impl Renderer {
             acquired_surface_extent,
             prepared_frame,
             deterministic_contributions,
+            target_requests,
             packet,
             compiled_flows,
             shader_registry,
