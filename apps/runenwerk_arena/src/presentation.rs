@@ -478,6 +478,11 @@ fn build_arena_frame_publication(
         [radius, radius, radius],
     )
     .context("player sphere bounds must be valid renderer coverage")?;
+    let arena_state = object_state(RenderAffineTransform3::identity(), arena_coverage.clone());
+    let player_state = object_state(
+        translation(presentation.position_scene_meters)?,
+        translated_coverage(&player_coverage, presentation.position_scene_meters)?,
+    );
 
     let arena_field_evidence = RenderFieldDistanceProtocolEvidence::new(
         RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
@@ -512,10 +517,7 @@ fn build_arena_frame_publication(
 
     let mut scene_update = RenderSceneUpdate::new();
     scene_update
-        .replace_state(
-            scene.arena_object_id,
-            object_state(RenderAffineTransform3::identity(), arena_coverage.clone()),
-        )
+        .replace_state(scene.arena_object_id, arena_state)
         .replace_participation(
             scene.arena_object_id,
             RenderObjectParticipation::new(
@@ -526,13 +528,7 @@ fn build_arena_frame_publication(
                 None,
             )?,
         )
-        .replace_state(
-            scene.player_object_id,
-            object_state(
-                translation(presentation.position_scene_meters)?,
-                translated_coverage(&player_coverage, presentation.position_scene_meters)?,
-            ),
-        )
+        .replace_state(scene.player_object_id, player_state)
         .replace_participation(
             scene.player_object_id,
             RenderObjectParticipation::new(
