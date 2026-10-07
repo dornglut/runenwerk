@@ -479,24 +479,6 @@ fn build_arena_frame_publication(
     )
     .context("player sphere bounds must be valid renderer coverage")?;
 
-    let mut state_update = RenderSceneUpdate::new();
-    state_update
-        .replace_state(
-            scene.arena_object_id,
-            object_state(RenderAffineTransform3::identity(), arena_coverage.clone()),
-        )
-        .replace_state(
-            scene.player_object_id,
-            object_state(
-                translation(presentation.position_scene_meters)?,
-                translated_coverage(&player_coverage, presentation.position_scene_meters)?,
-            ),
-        );
-    scene
-        .store
-        .commit(state_update)
-        .context("commit arena presentation spatial state")?;
-
     let arena_field_evidence = RenderFieldDistanceProtocolEvidence::new(
         RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
         RenderFieldDistanceGuarantee::conservative(
@@ -528,8 +510,12 @@ fn build_arena_frame_publication(
         None,
     )?;
 
-    let mut participation_update = RenderSceneUpdate::new();
-    participation_update
+    let mut scene_update = RenderSceneUpdate::new();
+    scene_update
+        .replace_state(
+            scene.arena_object_id,
+            object_state(RenderAffineTransform3::identity(), arena_coverage.clone()),
+        )
         .replace_participation(
             scene.arena_object_id,
             RenderObjectParticipation::new(
@@ -539,6 +525,13 @@ fn build_arena_frame_publication(
                 )?)),
                 None,
             )?,
+        )
+        .replace_state(
+            scene.player_object_id,
+            object_state(
+                translation(presentation.position_scene_meters)?,
+                translated_coverage(&player_coverage, presentation.position_scene_meters)?,
+            ),
         )
         .replace_participation(
             scene.player_object_id,
@@ -564,8 +557,8 @@ fn build_arena_frame_publication(
         );
     scene
         .store
-        .commit(participation_update)
-        .context("commit arena presentation representations and light")?;
+        .commit(scene_update)
+        .context("commit one atomic arena presentation scene transaction")?;
 
     let shutter = RenderTimeInterval::instant(RenderTimePoint::from_seconds(
         presentation.presentation_time_seconds,
@@ -1156,6 +1149,7 @@ mod tests {
             scene.player_representation_id(),
             scene.light_object_id(),
         );
+        let retained_before_publication = scene.snapshot();
         let prepared = prepared_field();
         let movement = ArenaMovementConfig::default();
         let snapshot = ArenaPresentationSnapshot {
@@ -1182,6 +1176,32 @@ mod tests {
             )
             .expect("arena frame publication");
 
+        assert_ne!(
+            publication.contribution.scene.revision(),
+            retained_before_publication.revision(),
+            "one logical arena publication must advance the renderer scene"
+        );
+        assert!(
+            retained_before_publication
+                .object_participation(ids.0)
+                .is_none(),
+            "retained pre-publication arena snapshot must keep its old participation"
+        );
+        assert!(
+            retained_before_publication
+                .object_participation(ids.2)
+                .is_none(),
+            "retained pre-publication player snapshot must keep its old participation"
+        );
+        assert_eq!(
+            retained_before_publication
+                .object_state(ids.2)
+                .expect("retained player state")
+                .spatial()
+                .local_to_scene(),
+            &RenderAffineTransform3::identity(),
+            "retained pre-publication player state must remain unchanged"
+        );
         assert_eq!(publication.invocation.view_id, "main");
         assert_eq!(publication.contribution.semantic_inputs.len(), 1);
         assert_eq!(publication.contribution.field_semantic_inputs.len(), 1);
@@ -1418,6 +1438,29 @@ mod tests {
             translation(next_snapshot.position_scene_meters)
                 .expect("next player translation")
                 .row_major_3x4()
+        );
+        assert_eq!(
+            publication
+                .contribution
+                .scene
+                .object_state(ids.2)
+                .expect("retained first player state")
+                .spatial()
+                .local_to_scene()
+                .row_major_3x4(),
+            translation(snapshot.position_scene_meters)
+                .expect("first player translation")
+                .row_major_3x4(),
+            "second publication must not mutate the first published scene snapshot"
+        );
+        assert!(
+            publication
+                .contribution
+                .scene
+                .object_participation(ids.0)
+                .and_then(|object| object.representation(ids.1))
+                .is_some(),
+            "first published arena participation must remain retained"
         );
     }
 
