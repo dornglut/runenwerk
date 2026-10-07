@@ -1146,6 +1146,24 @@ mod tests {
             scene.light_object_id(),
         );
         let retained_before_publication = scene.snapshot();
+
+        // RenderSceneRevision intentionally exposes no numeric increment API downstream. Advance an
+        // independently bootstrapped control scene by exactly one known non-noop commit so revision
+        // equality proves one Arena publication performs exactly one scene commit.
+        let mut one_commit_control = ArenaPresentationSceneResource::new();
+        let mut control_update = RenderSceneUpdate::new();
+        control_update.replace_state(
+            one_commit_control.player_object_id,
+            object_state(
+                translation([1.0, 0.0, 0.0]).expect("control translation"),
+                RenderSpatialCoverage::unbounded(),
+            ),
+        );
+        one_commit_control
+            .store
+            .commit(control_update)
+            .expect("control scene must advance exactly once");
+
         let prepared = prepared_field();
         let movement = ArenaMovementConfig::default();
         let snapshot = ArenaPresentationSnapshot {
@@ -1172,6 +1190,11 @@ mod tests {
             )
             .expect("arena frame publication");
 
+        assert_eq!(
+            publication.contribution.scene.revision(),
+            one_commit_control.snapshot().revision(),
+            "one logical arena publication must advance the renderer scene by exactly one revision"
+        );
         assert_ne!(
             publication.contribution.scene.revision(),
             retained_before_publication.revision(),
@@ -1380,6 +1403,19 @@ mod tests {
             source_tick: SimulationTick(5),
             presentation_time_seconds: 0.066,
         };
+        let mut next_control_update = RenderSceneUpdate::new();
+        next_control_update.replace_state(
+            one_commit_control.player_object_id,
+            object_state(
+                translation([2.0, 0.0, 0.0]).expect("next control translation"),
+                RenderSpatialCoverage::unbounded(),
+            ),
+        );
+        one_commit_control
+            .store
+            .commit(next_control_update)
+            .expect("control scene must advance exactly once again");
+
         let next_publication =
             build_arena_frame_publication(
                 &mut scene,
@@ -1395,6 +1431,11 @@ mod tests {
                 flow_id,
             )
             .expect("next arena frame publication");
+        assert_eq!(
+            next_publication.contribution.scene.revision(),
+            one_commit_control.snapshot().revision(),
+            "each repeated Arena publication must advance exactly one scene revision"
+        );
         assert_eq!(
             (
                 scene.arena_object_id(),
