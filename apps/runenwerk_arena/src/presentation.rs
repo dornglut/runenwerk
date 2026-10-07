@@ -1195,7 +1195,7 @@ mod tests {
                 .expect("retained player state")
                 .spatial()
                 .local_to_scene(),
-            &RenderAffineTransform3::identity(),
+            RenderAffineTransform3::identity(),
             "retained pre-publication player state must remain unchanged"
         );
         assert_eq!(publication.invocation.view_id, "main");
