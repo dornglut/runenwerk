@@ -211,6 +211,7 @@ impl RenderGpuContext {
             width.max(1),
             height.max(1),
             state.config.format(),
+            state.config.color_space(),
             state.config.usages().iter().copied(),
             state.config.present_mode(),
             state.config.alpha_mode(),

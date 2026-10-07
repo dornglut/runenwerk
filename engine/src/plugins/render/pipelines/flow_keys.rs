@@ -135,14 +135,14 @@ impl From<RenderPassKind> for FlowPassKind {
 mod tests {
     use super::*;
     use runen_gpu::{
-        GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuBlendMode,
-        GpuCapabilityRequirements, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-        GpuEntryPointName, GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor,
-        GpuPipelineConfiguration, GpuPrimitiveStateDescriptor, GpuProgramSourceIdentity,
-        GpuProgramSourceKey, GpuProgramSourceOwnerId, GpuProgramSourceProvenance,
-        GpuProgramSourceRegistry, GpuProgramSourceRevision, GpuRenderEntryPoints,
-        GpuSpecializationDeclaration, GpuSpecializationEntry, GpuSpecializationKey,
-        GpuSpecializationSchema, GpuSpecializationValue, GpuTextureFormat, GpuVertexAttribute,
+        GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuCapabilityRequirements,
+        GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuEntryPointName,
+        GpuFragmentOutputStateDescriptor, GpuMultisampleStateDescriptor, GpuPipelineConfiguration,
+        GpuPrimitiveStateDescriptor, GpuProgramSourceIdentity, GpuProgramSourceKey,
+        GpuProgramSourceOwnerId, GpuProgramSourceProvenance, GpuProgramSourceRegistry,
+        GpuProgramSourceRevision, GpuRenderEntryPoints, GpuSpecializationDeclaration,
+        GpuSpecializationEntry, GpuSpecializationKey, GpuSpecializationSchema,
+        GpuSpecializationValue, GpuTextureFormat, GpuVertexAttribute,
         GpuVertexBufferLayoutDescriptor, GpuVertexFormat, GpuVertexInputStateDescriptor,
         GpuVertexStepMode,
     };
@@ -260,7 +260,7 @@ fn fs_main() -> @location(0) vec4f {
     ) -> GpuRenderPipelineStateDescriptor {
         let color_target = GpuColorTargetStateDescriptor::new(
             GpuTextureFormat::Rgba8Unorm,
-            GpuBlendMode::Alpha,
+            None,
             GpuColorWriteMask::ALL,
         )
         .unwrap();

@@ -7,12 +7,13 @@ use crate::plugins::render::{
 };
 use runen_gpu::{
     GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement,
-    GpuBlendMode as GpuPipelineBlendMode, GpuColorTargetStateDescriptor, GpuColorWriteMask,
-    GpuCompareFunction, GpuComputePipelineDescriptor, GpuCullMode as GpuPipelineCullMode,
-    GpuDepthStencilStateDescriptor, GpuEntryPointName, GpuFragmentOutputStateDescriptor,
-    GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor, GpuPipelineConfiguration,
-    GpuPrimitiveStateDescriptor, GpuPrimitiveTopology as GpuPipelinePrimitiveTopology,
-    GpuProgramDescriptor, GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRenderEntryPoints,
+    GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
+    GpuComputePipelineDescriptor, GpuCullMode as GpuPipelineCullMode, GpuDepthBiasState,
+    GpuDepthClipMode, GpuDepthStateDescriptor, GpuDepthStencilStateDescriptor, GpuEntryPointName,
+    GpuFragmentOutputStateDescriptor, GpuFrontFace, GpuIndexFormat, GpuMultisampleStateDescriptor,
+    GpuPipelineConfiguration, GpuPrimitiveStateDescriptor,
+    GpuPrimitiveTopology as GpuPipelinePrimitiveTopology, GpuProgramDescriptor,
+    GpuRealizedPipelineLayout, GpuRealizedProgram, GpuRenderEntryPoints,
     GpuRenderPipelineDescriptor, GpuRenderPipelineStateDescriptor, GpuRuntimeBindingResource,
     GpuRuntimeBindingSet, GpuRuntimeBindingValue, GpuRuntimeBufferBinding,
     GpuRuntimeTextureViewBinding, GpuSamplerClass, GpuSamplerHandle, GpuSpecializationValueSet,
@@ -621,9 +622,9 @@ fn gpu_fragment_output_state(
             let blend = if format == GpuTextureFormat::R32Uint
                 || matches!(blend_mode, RenderBlendMode::Replace)
             {
-                GpuPipelineBlendMode::Replace
+                None
             } else {
-                GpuPipelineBlendMode::Alpha
+                Some(super::super::resource_descriptors::alpha_blend_state()?)
             };
             Ok(GpuColorTargetStateDescriptor::new(
                 format,
@@ -654,6 +655,7 @@ fn gpu_primitive_state(state: RenderRasterState) -> Result<GpuPrimitiveStateDesc
         strip_index_format,
         GpuFrontFace::CounterClockwise,
         cull_mode,
+        GpuDepthClipMode::Clip,
     )?)
 }
 
@@ -669,8 +671,12 @@ fn gpu_depth_stencil_state(
     }
     Ok(Some(GpuDepthStencilStateDescriptor::new(
         format,
-        !matches!(policy, RenderDepthPolicy::ReadOnly),
-        GpuCompareFunction::LessEqual,
+        Some(GpuDepthStateDescriptor::new(
+            !matches!(policy, RenderDepthPolicy::ReadOnly),
+            GpuCompareFunction::LessEqual,
+        )),
+        None,
+        GpuDepthBiasState::default(),
     )?))
 }
 

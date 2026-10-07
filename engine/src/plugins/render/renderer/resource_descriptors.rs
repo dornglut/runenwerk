@@ -1,8 +1,9 @@
 use anyhow::Result;
 use runen_gpu::{
-    GpuAddressMode, GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages,
-    GpuFilterMode, GpuMemoryIntent, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
-    GpuResourceLifetime, GpuResourceProvenance, GpuSamplerDescriptor, GpuTextureAspect,
+    GpuAddressMode, GpuBlendComponent, GpuBlendFactor, GpuBlendOperation, GpuBlendState,
+    GpuBufferDescriptor, GpuBufferInitialization, GpuBufferUsage, GpuBufferUsages, GpuFilterMode,
+    GpuMemoryIntent, GpuReconstruction, GpuResourceCommon, GpuResourceLabel, GpuResourceLifetime,
+    GpuResourceProvenance, GpuSamplerDescriptor, GpuSamplerFilterState, GpuTextureAspect,
     GpuTextureDescriptor, GpuTextureDimension, GpuTextureExtent, GpuTextureFormat,
     GpuTextureHandle, GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage,
     GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewDimension,
@@ -157,13 +158,32 @@ fn linear_sampler_descriptor_with_address_mode(
         address_mode,
         address_mode,
         address_mode,
-        GpuFilterMode::Linear,
-        GpuFilterMode::Linear,
-        GpuFilterMode::Nearest,
+        GpuSamplerFilterState::new(
+            GpuFilterMode::Linear,
+            GpuFilterMode::Linear,
+            GpuFilterMode::Nearest,
+            1,
+        )?,
         0.0,
         32.0,
         None,
     )?)
+}
+
+/// Existing Runenwerk straight-alpha composition, expressed in the accepted GPU contract.
+pub(in crate::plugins::render) fn alpha_blend_state() -> Result<GpuBlendState> {
+    Ok(GpuBlendState::new(
+        GpuBlendComponent::new(
+            GpuBlendFactor::SrcAlpha,
+            GpuBlendFactor::OneMinusSrcAlpha,
+            GpuBlendOperation::Add,
+        )?,
+        GpuBlendComponent::new(
+            GpuBlendFactor::One,
+            GpuBlendFactor::OneMinusSrcAlpha,
+            GpuBlendOperation::Add,
+        )?,
+    ))
 }
 
 #[cfg(test)]

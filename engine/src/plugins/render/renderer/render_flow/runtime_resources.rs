@@ -211,9 +211,10 @@ mod tests {
         GpuAddressMode, GpuBufferUsage, GpuFilterMode, GpuMemoryIntent, GpuQueryKind,
         GpuQuerySetDescriptor, GpuReconstruction, GpuResourceCommon, GpuResourceDescriptor,
         GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuSamplerDescriptor,
-        GpuTextureAspect, GpuTextureDescriptor, GpuTextureExtent, GpuTextureFormat,
-        GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage, GpuTextureUsages,
-        GpuTextureViewDescriptor, GpuTextureViewDimension, GpuWorkResourceIdAllocator,
+        GpuSamplerFilterState, GpuTextureAspect, GpuTextureDescriptor, GpuTextureExtent,
+        GpuTextureFormat, GpuTextureInitialization, GpuTextureSubresourceRange, GpuTextureUsage,
+        GpuTextureUsages, GpuTextureViewDescriptor, GpuTextureViewDimension,
+        GpuWorkResourceIdAllocator,
     };
 
     struct RuntimeTestUniform(u32);
@@ -574,9 +575,13 @@ mod tests {
                         GpuAddressMode::ClampToEdge,
                         GpuAddressMode::ClampToEdge,
                         GpuAddressMode::ClampToEdge,
-                        GpuFilterMode::Nearest,
-                        GpuFilterMode::Nearest,
-                        GpuFilterMode::Nearest,
+                        GpuSamplerFilterState::new(
+                            GpuFilterMode::Nearest,
+                            GpuFilterMode::Nearest,
+                            GpuFilterMode::Nearest,
+                            1,
+                        )
+                        .unwrap(),
                         0.0,
                         1.0,
                         None,
