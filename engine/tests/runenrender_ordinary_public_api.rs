@@ -200,16 +200,16 @@ fn ordinary_surface_executes_headless_through_public_runengpu_only() {
     let surface = RenderSurfaceProtocolEvidence::exact(RENDER_SURFACE_QUERY_PROTOCOL_REVISION)
         .expect("surface protocol")
         .with_semantic_input_requirement(RenderSurfaceSemanticInputRequirement::current());
-    let representation = RenderRepresentationRecord::new(
+    let representation = RenderRepresentationRecord::builder(
         representation_id,
         RenderSpatialCoverage::unbounded(),
         RenderTemporalSupport::unbounded(),
-        RenderRefinementEvidence::none(),
-        Some(surface),
-        None,
     )
+    .surface_query(Some(surface))
+    .refinement(RenderRefinementEvidence::none())
+    .build()
     .expect("public surface representation");
-    let participation = RenderObjectParticipation::new(vec![representation], None, None)
+    let participation = RenderObjectParticipation::from_representations(vec![representation])
         .expect("public object participation");
     let mut attach = RenderSceneUpdate::new();
     attach.replace_participation(object_id, participation);

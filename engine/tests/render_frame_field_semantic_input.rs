@@ -91,19 +91,19 @@ fn deterministic_frame_contribution_carries_surface_and_field_inputs_into_ordina
     )
     .expect("field protocol")
     .with_semantic_input_requirement(RenderFieldSemanticInputRequirement::current());
-    let field_record = RenderRepresentationRecord::new(
+    let field_record = RenderRepresentationRecord::builder(
         field_representation,
         RenderSpatialCoverage::axis_aligned_bounds([-1.0; 3], [1.0; 3]).expect("field coverage"),
         RenderTemporalSupport::unbounded(),
-        RenderRefinementEvidence::none(),
-        None,
-        Some(field_protocol),
     )
+    .field_distance(Some(field_protocol))
+    .refinement(RenderRefinementEvidence::none())
+    .build()
     .expect("field representation");
     let mut attach_field = RenderSceneUpdate::new();
     attach_field.replace_participation(
         field_object,
-        RenderObjectParticipation::new(vec![field_record], None, None)
+        RenderObjectParticipation::from_representations(vec![field_record])
             .expect("field participation"),
     );
     scene
@@ -121,19 +121,19 @@ fn deterministic_frame_contribution_carries_surface_and_field_inputs_into_ordina
         RenderSurfaceProtocolEvidence::exact(RENDER_SURFACE_QUERY_PROTOCOL_REVISION)
             .expect("surface protocol")
             .with_semantic_input_requirement(RenderSurfaceSemanticInputRequirement::current());
-    let surface_record = RenderRepresentationRecord::new(
+    let surface_record = RenderRepresentationRecord::builder(
         surface_representation,
         RenderSpatialCoverage::unbounded(),
         RenderTemporalSupport::unbounded(),
-        RenderRefinementEvidence::none(),
-        Some(surface_protocol),
-        None,
     )
+    .surface_query(Some(surface_protocol))
+    .refinement(RenderRefinementEvidence::none())
+    .build()
     .expect("surface representation");
     let mut attach_surface = RenderSceneUpdate::new();
     attach_surface.replace_participation(
         surface_object,
-        RenderObjectParticipation::new(vec![surface_record], None, None)
+        RenderObjectParticipation::from_representations(vec![surface_record])
             .expect("surface participation"),
     );
     scene

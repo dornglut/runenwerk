@@ -491,14 +491,14 @@ fn build_arena_frame_publication(
         )?,
     )?
     .with_semantic_input_requirement(RenderFieldSemanticInputRequirement::current());
-    let arena_representation = RenderRepresentationRecord::new(
+    let arena_representation = RenderRepresentationRecord::builder(
         scene.arena_representation_id,
         arena_coverage,
         RenderTemporalSupport::unbounded(),
-        RenderRefinementEvidence::none(),
-        None,
-        Some(arena_field_evidence),
-    )?;
+    )
+    .field_distance(Some(arena_field_evidence))
+    .refinement(RenderRefinementEvidence::none())
+    .build()?;
 
     let player_surface_evidence =
         RenderSurfaceProtocolEvidence::exact(RENDER_SURFACE_QUERY_PROTOCOL_REVISION)?
@@ -506,50 +506,42 @@ fn build_arena_frame_publication(
                 RENDER_ORIENTED_SURFACE_QUERY_PROTOCOL_REVISION,
             )?)
             .with_semantic_input_requirement(RenderSurfaceSemanticInputRequirement::current());
-    let player_representation = RenderRepresentationRecord::new(
+    let player_representation = RenderRepresentationRecord::builder(
         scene.player_representation_id,
         player_coverage,
         RenderTemporalSupport::unbounded(),
-        RenderRefinementEvidence::none(),
-        Some(player_surface_evidence),
-        None,
-    )?;
+    )
+    .surface_query(Some(player_surface_evidence))
+    .refinement(RenderRefinementEvidence::none())
+    .build()?;
 
     let mut scene_update = RenderSceneUpdate::new();
     scene_update
         .replace_state(scene.arena_object_id, arena_state)
         .replace_participation(
             scene.arena_object_id,
-            RenderObjectParticipation::new(
-                vec![arena_representation],
-                Some(RenderMaterialAssignment::new(RenderDiffuseMaterial::new(
-                    ARENA_REFLECTANCE,
-                )?)),
-                None,
-            )?,
+            RenderObjectParticipation::from_representations(vec![arena_representation])?
+                .with_material_assignment(Some(RenderMaterialAssignment::new(
+                    RenderDiffuseMaterial::new(ARENA_REFLECTANCE)?,
+                ))),
         )
         .replace_state(scene.player_object_id, player_state)
         .replace_participation(
             scene.player_object_id,
-            RenderObjectParticipation::new(
-                vec![player_representation],
-                Some(RenderMaterialAssignment::new(RenderDiffuseMaterial::new(
-                    PLAYER_REFLECTANCE,
-                )?)),
-                None,
-            )?,
+            RenderObjectParticipation::from_representations(vec![player_representation])?
+                .with_material_assignment(Some(RenderMaterialAssignment::new(
+                    RenderDiffuseMaterial::new(PLAYER_REFLECTANCE)?,
+                ))),
         )
         .replace_participation(
             scene.light_object_id,
-            RenderObjectParticipation::new(
-                Vec::new(),
-                None,
-                Some(RenderDirectionalEmitter::new(
+            RenderObjectParticipation::from_representations(Vec::new())?.with_emitter(Some(
+                RenderDirectionalEmitter::new(
                     LIGHT_DIRECTION_TO_SOURCE,
                     ARENA_WAVELENGTH_METERS,
                     LIGHT_SPECTRAL_IRRADIANCE_W_M3,
-                )?),
-            )?,
+                )?,
+            )),
         );
     scene
         .store

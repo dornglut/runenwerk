@@ -3150,7 +3150,7 @@ dependencies = [
 [[package]]
 name = "runen-render"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-render?rev=8a0606367d2556216f5737308cabc8e66337905b#8a0606367d2556216f5737308cabc8e66337905b"
+source = "git+https://github.com/dornglut/runen-render?rev=cf623a53d5d3748797bb17e0c2bf56ad8b4aec39#cf623a53d5d3748797bb17e0c2bf56ad8b4aec39"
 dependencies = [
  "bymsdfgen-core",
  "runen-gpu",
