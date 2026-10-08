@@ -63,7 +63,8 @@ fn render_timing_logging_enabled() -> bool {
 mod contribution_deferral_tests {
     use super::{
         AdditionalSurfaceRenderOutcome, SubmittedFrameGpuObservations,
-        apply_additional_surface_render_outcome, publish_submitted_frame_history,
+        apply_additional_surface_render_outcome, defer_contributions_for_surface,
+        publish_submitted_frame_history,
     };
     use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::render::inspect::{
@@ -78,8 +79,8 @@ mod contribution_deferral_tests {
     use crate::runtime::NativeWindowId;
     use runen_render::request::{
         RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderProbeObservation,
-        RenderRadiometricRepresentation, RenderRequest, RenderRequestedOutput,
-        RenderResultTopology, RenderSamplingSupport, RenderSemanticTolerance,
+        RenderRadiometricRepresentation, RenderRequestBuilder, RenderResultTopology,
+        RenderSamplingSupport, RenderSemanticTolerance,
     };
     use runen_render::scene::RenderSceneStore;
     use runen_render::space_time::{RenderAffineTransform3, RenderTimeInterval, RenderTimePoint};
@@ -112,21 +113,22 @@ mod contribution_deferral_tests {
             RenderSemanticTolerance::absolute(1.0e-4).expect("test tolerance should be valid"),
         )
         .expect("test output should be valid");
+        let mut builder = RenderRequestBuilder::new(shutter);
+        let observation_handle = builder.add_observation(observation);
+        let output = builder
+            .add_output(&observation_handle, output)
+            .expect("output belongs to the request");
+        let request = builder.finish().expect("test request should be valid");
         RenderDeterministicFrameContribution {
             producer_id: RenderFrameProducerId::try_from_raw(producer)
                 .expect("test producer id should be nonzero"),
             render_surface_id: surface,
             scene: RenderSceneStore::new().snapshot(),
-            request: RenderRequest::new(
-                shutter,
-                vec![observation],
-                vec![RenderRequestedOutput::new(0, output)],
-            )
-            .expect("test request should be valid"),
+            request,
             semantic_inputs: Vec::new(),
             field_semantic_inputs: Vec::new(),
             availability: Vec::new(),
-            output_index: 0,
+            output,
             target_key: RenderDynamicTextureTargetKey::new("test", "radiance"),
             finite_evaluation_extent: None,
         }
@@ -158,6 +160,24 @@ mod contribution_deferral_tests {
                 registry_revision: 11,
             },
         }
+    }
+
+    #[test]
+    fn deferring_a_semantic_contribution_retains_exact_output_lineage() {
+        let source = contribution(3, RenderSurfaceId::primary());
+        let foreign = contribution(3, RenderSurfaceId::primary());
+        assert_eq!(source.request, foreign.request);
+        assert_ne!(source.output, foreign.output);
+        let mut deferred = Vec::new();
+        defer_contributions_for_surface(
+            &mut deferred,
+            std::slice::from_ref(&source),
+            source.render_surface_id,
+        );
+        assert_eq!(deferred.len(), 1);
+        assert_eq!(deferred[0].request, source.request);
+        assert_eq!(deferred[0].output, source.output);
+        assert!(!deferred[0].request.contains_output(&foreign.output));
     }
 
     #[test]
@@ -278,6 +298,10 @@ mod contribution_deferral_tests {
             AdditionalSurfaceRenderOutcome::Fatal(anyhow::anyhow!("surface B failed")),
         )
         .expect_err("fatal surface should return a retryable deferred set");
+        for (retained, source) in failure.deferred.iter().zip(&contributions[1..]) {
+            assert_eq!(retained.output, source.output);
+            assert!(retained.request.contains_output(&source.output));
+        }
         assert_eq!(
             failure
                 .deferred
@@ -349,6 +373,12 @@ mod contribution_deferral_tests {
             AdditionalSurfaceRenderOutcome::Submitted,
         )
         .expect("a later independent surface should still submit");
+        assert_eq!(deferred[0].output, contributions[1].output);
+        assert!(
+            deferred[0]
+                .request
+                .contains_output(&contributions[1].output)
+        );
 
         assert_eq!(
             deferred
@@ -996,7 +1026,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                         }
                     }
                 } else {
-                    Err(anyhow!("render backend execution failed: {err:#}"))
+                    Err(err.context("render backend execution failed"))
                 }
             }
         };
@@ -1274,10 +1304,10 @@ fn render_additional_surfaces(
                         }
                     }
                 } else {
-                    AdditionalSurfaceRenderOutcome::Fatal(anyhow!(
-                        "render backend execution failed for surface {}: {err:#}",
+                    AdditionalSurfaceRenderOutcome::Fatal(err.context(format!(
+                        "render backend execution failed for surface {}",
                         render_surface_id.raw()
-                    ))
+                    )))
                 }
             }
         };

@@ -44,9 +44,9 @@ use runen_render::representation::{
     RenderRefinementEvidence, RenderRepresentationRecord, RenderSurfaceProtocolEvidence,
 };
 use runen_render::request::{
-    RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
-    RenderRadiometricRepresentation, RenderRequest, RenderRequestedOutput, RenderResultTopology,
-    RenderSamplingSupport, RenderSemanticTolerance,
+    RenderObservationSpec, RenderOutputHandle, RenderOutputSpec, RenderOutputValue,
+    RenderPerspectiveObservation, RenderRadiometricRepresentation, RenderRequest,
+    RenderRequestBuilder, RenderResultTopology, RenderSamplingSupport, RenderSemanticTolerance,
 };
 use runen_render::scene::{
     RenderObjectState, RenderSceneSnapshot, RenderSceneStore, RenderSceneUpdate,
@@ -61,7 +61,7 @@ use runen_render::surface_input::{
     RenderSurfaceSemanticInputGeneration, RenderSurfaceSemanticInputRequirement,
 };
 use runen_render::{
-    RenderCapturedRadiance, RenderResult, SubmittedRenderForResult, admit_render,
+    RenderCapturedRadiance, RenderInvocation, RenderResult, SubmittedRenderForResult, admit_render,
     submit_render_for_result,
 };
 use serde::Serialize;
@@ -200,6 +200,7 @@ struct OracleEvidence {
 struct FoundingFixture {
     scene: RenderSceneSnapshot,
     request: RenderRequest,
+    output: RenderOutputHandle,
     semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
     availability: Vec<RenderRepresentationAvailabilityFact>,
 }
@@ -231,26 +232,27 @@ pub fn run_founding_direct(output_root: impl AsRef<Path>) -> Result<ArtifactPath
     let context = request_context()?;
     let fixture = founding_fixture()?;
     let destination = output_destination()?;
-    let output_bindings = [RenderOutputBinding::new(
-        0,
-        RenderOutputDestination::SampleLatticeTexture(destination),
-    )];
-    let admitted = admit_render(
-        &fixture.scene,
-        &fixture.request,
-        &fixture.semantic_inputs,
-        &[],
-        &fixture.availability,
-        &output_bindings,
-        &context,
+    let output = fixture.output.clone();
+    let invocation = RenderInvocation::new(
+        fixture.scene.clone(),
+        fixture.request.clone(),
+        fixture.semantic_inputs.clone(),
+        Vec::new(),
+        fixture.availability.clone(),
+        vec![RenderOutputBinding::new(
+            output.clone(),
+            RenderOutputDestination::SampleLatticeTexture(destination),
+        )],
     )
-    .context("admit founding-direct through the ordinary maintained renderer")?;
+    .context("bind founding-direct request to physical output")?;
+    let admitted = admit_render(&invocation, &context)
+        .context("admit founding-direct through the ordinary maintained renderer")?;
     let mut submitted = pollster::block_on(submit_render_for_result(admitted, &context))
         .context("submit founding-direct through public RunenRender and RunenGPU")?;
     let result = form_result(&context, &mut submitted)?;
 
     let capture_request = submitted
-        .request_radiance_capture(0)
+        .request_radiance_capture(&output)
         .context("mint the formed-result founding-direct radiance capture request")?;
     let readback = GpuReadbackOperation::new(
         capture_request.source().clone(),
@@ -330,7 +332,7 @@ pub fn run_founding_direct(output_root: impl AsRef<Path>) -> Result<ArtifactPath
         render_result: RenderResultEvidence {
             scene_revision: format!("{:?}", result.scene_revision()),
             output_count: result.outputs().len(),
-            output_index: 0,
+            output_index: output.position(),
             output_topology: "128x128 row-major sample lattice",
             semantic_result_formed: true,
         },
@@ -551,14 +553,14 @@ fn founding_fixture_with_observation_extent_and_support(
         RenderResultTopology::sample_lattice_2d(width, height)?,
         RenderSemanticTolerance::absolute(ORACLE_TOLERANCE)?,
     )?;
-    let request = RenderRequest::new(
-        shutter,
-        vec![observation],
-        vec![RenderRequestedOutput::new(0, output)],
-    )?;
+    let mut request_builder = RenderRequestBuilder::new(shutter);
+    let observation_handle = request_builder.add_observation(observation);
+    let output = request_builder.add_output(&observation_handle, output)?;
+    let request = request_builder.finish()?;
     Ok(FoundingFixture {
         scene: store.snapshot(),
         request,
+        output,
         semantic_inputs: vec![
             RenderSurfaceSemanticInputBinding::new(
                 sphere_representation_id,

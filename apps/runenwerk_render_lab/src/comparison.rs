@@ -473,6 +473,7 @@ pub(super) fn build_render_lab_comparison_publication(
                 anyhow::anyhow!("comparison candidate evaluation extent must be non-zero")
             })?;
 
+    let output = fixture.output.clone();
     let contribution_a = RenderDeterministicFrameContribution {
         producer_id: producer_a,
         render_surface_id: RenderSurfaceId::primary(),
@@ -481,7 +482,7 @@ pub(super) fn build_render_lab_comparison_publication(
         semantic_inputs: fixture.semantic_inputs.clone(),
         field_semantic_inputs: Vec::new(),
         availability: fixture.availability.clone(),
-        output_index: 0,
+        output: output.clone(),
         target_key: raw_a_key.clone(),
         finite_evaluation_extent: Some(evaluation_a),
     };
@@ -493,7 +494,7 @@ pub(super) fn build_render_lab_comparison_publication(
         semantic_inputs: fixture.semantic_inputs,
         field_semantic_inputs: Vec::new(),
         availability: fixture.availability,
-        output_index: 0,
+        output,
         target_key: raw_b_key.clone(),
         finite_evaluation_extent: Some(evaluation_b),
     };
@@ -777,8 +778,8 @@ mod tests {
             publication.contribution_b.availability
         );
         assert_eq!(
-            publication.contribution_a.output_index,
-            publication.contribution_b.output_index
+            publication.contribution_a.output,
+            publication.contribution_b.output
         );
         assert_ne!(
             publication.contribution_a.producer_id,

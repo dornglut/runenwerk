@@ -794,24 +794,27 @@ impl Renderer {
             let target = self
                 .dynamic_texture_targets
                 .texture_handle(&contribution.target_key)?;
+            // The contribution owns renderer-semantic intent before its GPU target exists.
+            // Physical invocation is valid only after this product-owned late target resolution.
             let binding = runen_render::admission::RenderOutputBinding::new(
-                contribution.output_index,
+                contribution.output.clone(),
                 runen_render::admission::RenderOutputDestination::SampleLatticeTexture(target),
             );
-            let admitted = runen_render::admit_render(
-                &contribution.scene,
-                &contribution.request,
-                &contribution.semantic_inputs,
-                &contribution.field_semantic_inputs,
-                &contribution.availability,
-                std::slice::from_ref(&binding),
-                context,
+            let invocation = runen_render::RenderInvocation::new(
+                contribution.scene.clone(),
+                contribution.request.clone(),
+                contribution.semantic_inputs.clone(),
+                contribution.field_semantic_inputs.clone(),
+                contribution.availability.clone(),
+                vec![binding],
             )
-            .map_err(|error| anyhow::anyhow!("render admission failed: {error}"))?;
+            .map_err(|error| anyhow::Error::new(error).context("render invocation failed"))?;
+            let admitted = runen_render::admit_render(&invocation, context)
+                .map_err(|error| anyhow::Error::new(error).context("render admission failed"))?;
             let finite_evaluation = contribution.finite_evaluation_extent.map(|extent| {
                 let (width, height) = extent.dimensions();
                 runen_render::RenderEvaluationSelection::new(
-                    contribution.output_index,
+                    contribution.output.clone(),
                     width,
                     height,
                 )
@@ -826,11 +829,11 @@ impl Renderer {
             )?;
             let output = prepared
                 .occurrence()
-                .radiance_output(contribution.output_index)
+                .radiance_output(&contribution.output)
                 .ok_or_else(|| {
                     anyhow::anyhow!(
                         "deterministic render did not produce radiance output {}",
-                        contribution.output_index
+                        contribution.output.position()
                     )
                 })?;
             if let Some(evidence) = output.temporal_execution_evidence() {
@@ -1494,6 +1497,177 @@ fn accepted_pass_provenance(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn late_physical_invocation_keeps_published_output_and_typed_foreign_handle_failure() {
+        use crate::plugins::render::{
+            RenderDeterministicFiniteEvaluationExtent, RenderDeterministicFrameContribution,
+            RenderDynamicTextureRetention, RenderDynamicTextureTargetDescriptor,
+            RenderDynamicTextureTargetKey, RenderDynamicTextureTargetRequestRegistryResource,
+            RenderFrameProducerId, RenderTextureSampleMode, RenderTextureTargetFormat,
+            RenderTextureTargetUsage, host::RenderSurfaceId,
+        };
+        use runen_render::request::*;
+        use runen_render::space_time::*;
+        let descriptor = runen_gpu::GpuContextDescriptor::new(
+            runen_gpu::GpuCapabilityProfile::ComputeBaseline.requirements(),
+        )
+        .require_format_role(
+            runen_gpu::GpuTextureFormat::R32Float,
+            runen_gpu::GpuFormatRole::CopyDestination,
+        );
+        let context = match pollster::block_on(GpuContext::request(descriptor)) {
+            Ok(context) => context,
+            Err(error)
+                if error.category()
+                    == runen_gpu::GpuContextRequestErrorCategory::NoAdapterAvailable =>
+            {
+                assert_ne!(
+                    std::env::var("RUNENRENDER_R8_REQUIRE_GPU").ok().as_deref(),
+                    Some("1")
+                );
+                return;
+            }
+            Err(error) => panic!("late physical binding context: {error}"),
+        };
+        let build_request = || {
+            let shutter = RenderTimeInterval::instant(RenderTimePoint::from_seconds(0.0).unwrap());
+            let mut builder = RenderRequestBuilder::new(shutter);
+            let observation = builder.add_observation(RenderObservationSpec::Perspective(
+                RenderPerspectiveObservation::new(
+                    RenderAffineTransform3::identity(),
+                    std::f64::consts::FRAC_PI_3,
+                    1.0,
+                    shutter,
+                    RenderSamplingSupport::perspective_lattice_cell(),
+                )
+                .unwrap(),
+            ));
+            let output = builder
+                .add_output(
+                    &observation,
+                    RenderOutputSpec::new(
+                        RenderOutputValue::Radiance {
+                            representation:
+                                RenderRadiometricRepresentation::spectral_at_wavelength_meters(
+                                    550e-9,
+                                )
+                                .unwrap(),
+                        },
+                        RenderResultTopology::sample_lattice_2d(2, 2).unwrap(),
+                        RenderSemanticTolerance::exact(),
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+            (builder.finish().unwrap(), output)
+        };
+        let (request, output) = build_request();
+        let (foreign_request, foreign) = build_request();
+        assert_eq!(request, foreign_request);
+        let producer = RenderFrameProducerId::try_from_raw(1230).unwrap();
+        let key = RenderDynamicTextureTargetKey::new("late-binding", "radiance");
+        let contribution = RenderDeterministicFrameContribution {
+            producer_id: producer,
+            render_surface_id: RenderSurfaceId::primary(),
+            scene: runen_render::scene::RenderSceneStore::new().snapshot(),
+            request,
+            semantic_inputs: Vec::new(),
+            field_semantic_inputs: Vec::new(),
+            availability: Vec::new(),
+            output: output.clone(),
+            target_key: key.clone(),
+            finite_evaluation_extent: RenderDeterministicFiniteEvaluationExtent::new(2, 2),
+        };
+        let frame = PreparedRenderFrame {
+            context: crate::plugins::render::PreparedFrameContext {
+                frame_index: 0,
+                flow_registry_revision: 0,
+                shader_registry_revision: 0,
+                prepare_epoch: 0,
+            },
+            surface: crate::plugins::render::PreparedSurfaceInfo::unbound_primary((2, 2)),
+            views: Vec::new(),
+            flows: BTreeMap::new(),
+            flow_invocations: Vec::new(),
+            dynamic_texture_targets: Vec::new(),
+            dynamic_texture_uploads: Vec::new(),
+            product_selections: Vec::new(),
+            viewport_surface_bindings: Default::default(),
+            contributions: Default::default(),
+            shader: Default::default(),
+        };
+        let target = RenderDynamicTextureTargetDescriptor::new(
+            key,
+            2,
+            2,
+            RenderTextureTargetFormat::R32Float,
+            RenderTextureTargetUsage {
+                color_attachment: false,
+                depth_attachment: false,
+                sampled: true,
+                storage: false,
+                copy_src: false,
+                copy_dst: true,
+            },
+            RenderTextureSampleMode::NonFilterableFloat,
+            RenderDynamicTextureRetention::RetainWhileRequested,
+        );
+        let mut targets = RenderDynamicTextureTargetRequestRegistryResource::default();
+        targets
+            .replace_surface_contribution(producer, RenderSurfaceId::primary(), [target.clone()])
+            .unwrap();
+        let mut renderer = Renderer::new();
+        assert!(
+            renderer
+                .prepare_deterministic_compositions(
+                    &context,
+                    &frame,
+                    std::slice::from_ref(&contribution),
+                    &targets,
+                )
+                .is_err(),
+            "published semantic work cannot prepare before physical target realization"
+        );
+        renderer
+            .dynamic_texture_targets
+            .realize_for_frame(&context, &[target], &BTreeMap::new())
+            .unwrap();
+        let mut invalid = contribution.clone();
+        invalid.output = foreign.clone();
+        let error = match renderer.prepare_deterministic_compositions(
+            &context,
+            &frame,
+            &[invalid],
+            &targets,
+        ) {
+            Err(error) => error,
+            Ok(_) => panic!("late binding must reject an equal-position foreign handle"),
+        };
+        assert!(
+            matches!(error.downcast_ref::<runen_render::RenderInvocationError>(),
+            Some(runen_render::RenderInvocationError::ForeignOutput { output }) if output == &foreign)
+        );
+        let prepared = renderer
+            .prepare_deterministic_compositions(
+                &context,
+                &frame,
+                std::slice::from_ref(&contribution),
+                &targets,
+            )
+            .unwrap();
+        assert_eq!(prepared.occurrences.len(), 1);
+        let occurrence = prepared.occurrences[0].occurrence();
+        assert_eq!(
+            occurrence.radiance_output(&output).unwrap().output(),
+            &output
+        );
+        assert!(occurrence.radiance_output(&foreign).is_none());
+        assert_eq!(
+            renderer.temporal_execution_evidence[&0][0].evaluation_extent,
+            (2, 2)
+        );
+    }
 
     #[test]
     fn presenting_frame_rejects_when_no_compiled_present_was_resolved() {
