@@ -488,25 +488,26 @@ fn founding_fixture_with_observation_extent_and_support(
             RENDER_ORIENTED_SURFACE_QUERY_PROTOCOL_REVISION,
         )?)
         .with_semantic_input_requirement(RenderSurfaceSemanticInputRequirement::current());
-    let field_backed_representation = RenderRepresentationRecord::new(
+    let field_backed_representation = RenderRepresentationRecord::builder(
         sphere_representation_id,
         RenderSpatialCoverage::unbounded(),
         RenderTemporalSupport::unbounded(),
-        RenderRefinementEvidence::none(),
-        Some(oriented),
-        Some(RenderFieldDistanceProtocolEvidence::new(
-            RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
-            RenderFieldDistanceGuarantee::exact(),
-        )?),
-    )?;
-    let plane_representation = RenderRepresentationRecord::new(
+    )
+    .surface_query(Some(oriented))
+    .field_distance(Some(RenderFieldDistanceProtocolEvidence::new(
+        RENDER_FIELD_DISTANCE_PROTOCOL_REVISION,
+        RenderFieldDistanceGuarantee::exact(),
+    )?))
+    .refinement(RenderRefinementEvidence::none())
+    .build()?;
+    let plane_representation = RenderRepresentationRecord::builder(
         plane_representation_id,
         RenderSpatialCoverage::unbounded(),
         RenderTemporalSupport::unbounded(),
-        RenderRefinementEvidence::none(),
-        Some(oriented),
-        None,
-    )?;
+    )
+    .surface_query(Some(oriented))
+    .refinement(RenderRefinementEvidence::none())
+    .build()?;
     let material = |reflectance| {
         RenderMaterialAssignment::new(
             RenderDiffuseMaterial::new(reflectance).expect("fixture material"),
@@ -516,23 +517,18 @@ fn founding_fixture_with_observation_extent_and_support(
     attach
         .replace_participation(
             sphere_id,
-            RenderObjectParticipation::new(
-                vec![field_backed_representation],
-                Some(material(SPHERE_REFLECTANCE)),
-                None,
-            )?,
+            RenderObjectParticipation::from_representations(vec![field_backed_representation])?
+                .with_material_assignment(Some(material(SPHERE_REFLECTANCE))),
         )
         .replace_participation(
             plane_id,
-            RenderObjectParticipation::new(
-                vec![plane_representation],
-                Some(material(PLANE_REFLECTANCE)),
-                Some(RenderDirectionalEmitter::new(
+            RenderObjectParticipation::from_representations(vec![plane_representation])?
+                .with_material_assignment(Some(material(PLANE_REFLECTANCE)))
+                .with_emitter(Some(RenderDirectionalEmitter::new(
                     LIGHT_DIRECTION,
                     WAVELENGTH_METERS,
                     LIGHT_IRRADIANCE,
-                )?),
-            )?,
+                )?)),
         );
     store
         .commit(attach)
