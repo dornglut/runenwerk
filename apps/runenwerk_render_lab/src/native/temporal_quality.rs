@@ -1447,6 +1447,7 @@ mod tests {
             720,
         )
         .expect("fixture");
+        let output = fixture.output.clone();
         let contribution = RenderDeterministicFrameContribution {
             producer_id,
             render_surface_id: RenderSurfaceId::primary(),
@@ -1455,7 +1456,7 @@ mod tests {
             semantic_inputs: fixture.semantic_inputs,
             field_semantic_inputs: Vec::new(),
             availability: fixture.availability,
-            output_index: 0,
+            output,
             target_key: radiance_key,
             finite_evaluation_extent: None,
         };

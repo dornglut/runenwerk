@@ -12,7 +12,7 @@ use product::RenderProductSelection;
 use runen_gpu::GpuWorkResourceId;
 use runen_render::admission::RenderRepresentationAvailabilityFact;
 use runen_render::field_input::RenderFieldSemanticInputBinding;
-use runen_render::request::RenderRequest;
+use runen_render::request::{RenderOutputHandle, RenderRequest};
 use runen_render::scene::RenderSceneSnapshot;
 use runen_render::surface_input::RenderSurfaceSemanticInputBinding;
 use std::collections::{BTreeMap, BTreeSet};
@@ -68,7 +68,7 @@ pub struct RenderDeterministicFrameContribution {
     pub semantic_inputs: Vec<RenderSurfaceSemanticInputBinding>,
     pub field_semantic_inputs: Vec<RenderFieldSemanticInputBinding>,
     pub availability: Vec<RenderRepresentationAvailabilityFact>,
-    pub output_index: usize,
+    pub output: RenderOutputHandle,
     pub target_key: RenderDynamicTextureTargetKey,
     pub finite_evaluation_extent: Option<RenderDeterministicFiniteEvaluationExtent>,
 }
@@ -109,7 +109,7 @@ mod deterministic_contribution_tests {
     use super::*;
     use runen_render::request::{
         RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderProbeObservation,
-        RenderRadiometricRepresentation, RenderRequestedOutput, RenderResultTopology,
+        RenderRadiometricRepresentation, RenderRequestBuilder, RenderResultTopology,
         RenderSamplingSupport, RenderSemanticTolerance,
     };
     use runen_render::scene::RenderSceneStore;
@@ -142,23 +142,45 @@ mod deterministic_contribution_tests {
             RenderSemanticTolerance::absolute(1.0e-4).expect("test tolerance should be valid"),
         )
         .expect("test output should be valid");
+        let mut builder = RenderRequestBuilder::new(shutter);
+        let observation_handle = builder.add_observation(observation);
+        let output = builder
+            .add_output(&observation_handle, output)
+            .expect("output belongs to the request");
+        let request = builder.finish().expect("test request should be valid");
         RenderDeterministicFrameContribution {
             producer_id,
             render_surface_id: RenderSurfaceId::primary(),
             scene: RenderSceneStore::new().snapshot(),
-            request: RenderRequest::new(
-                shutter,
-                vec![observation],
-                vec![RenderRequestedOutput::new(0, output)],
-            )
-            .expect("test request should be valid"),
+            request,
             semantic_inputs: Vec::new(),
             field_semantic_inputs: Vec::new(),
             availability: Vec::new(),
-            output_index: 0,
+            output,
             target_key: RenderDynamicTextureTargetKey::new("test", "radiance"),
             finite_evaluation_extent: None,
         }
+    }
+
+    #[test]
+    fn contribution_output_correlation_survives_cloning_and_rejects_equal_foreign_requests() {
+        let first = contribution(producer(1));
+        let same_lineage = first.clone();
+        let foreign = contribution(producer(1));
+        assert_eq!(first.request, foreign.request);
+        assert_eq!(first.output.position(), foreign.output.position());
+        assert_ne!(first.output, foreign.output);
+        assert_eq!(first.output, same_lineage.output);
+        assert!(first.request.contains_output(&same_lineage.output));
+        assert!(!first.request.contains_output(&foreign.output));
+        assert_eq!(
+            first.output.observation(),
+            first.request.observation_handle(0).unwrap()
+        );
+        assert_eq!(
+            first.output.observation(),
+            same_lineage.output.observation()
+        );
     }
 
     #[test]

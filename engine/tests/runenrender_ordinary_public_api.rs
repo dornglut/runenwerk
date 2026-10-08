@@ -14,9 +14,9 @@ use runen_render::representation::{
     RenderSurfaceProtocolEvidence,
 };
 use runen_render::request::{
-    RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
-    RenderRequest, RenderRequestedOutput, RenderResultTopology, RenderSamplingSupport,
-    RenderSemanticTolerance,
+    RenderObservationSpec, RenderOutputHandle, RenderOutputSpec, RenderOutputValue,
+    RenderPerspectiveObservation, RenderRequestBuilder, RenderResultTopology,
+    RenderSamplingSupport, RenderSemanticTolerance,
 };
 use runen_render::scene::{RenderObjectState, RenderSceneStore, RenderSceneUpdate};
 use runen_render::space_time::{
@@ -31,8 +31,8 @@ use runen_render::surface_input::{
 use runen_render::{
     AdmittedRender, PreparedRadianceOutput, PreparedRender, PreparedRenderOccurrence,
     RenderAdmissionError, RenderCapturedRadiance, RenderEvaluationSelection, RenderExecutionError,
-    RenderExecutionErrorKind, RenderExecutionSession, RenderRadianceCaptureError,
-    RenderRadianceCaptureErrorKind, RenderRadianceCaptureRequest,
+    RenderExecutionErrorKind, RenderExecutionSession, RenderInvocation, RenderInvocationError,
+    RenderRadianceCaptureError, RenderRadianceCaptureErrorKind, RenderRadianceCaptureRequest,
     RenderRadianceCaptureRequestError, RenderRadianceCaptureRequestErrorKind,
     RenderResultFormationError, RenderResultFormationErrorKind, RenderResultSubmissionError,
     RenderResultSubmissionErrorKind, RenderTemporalExecutionEvidence,
@@ -72,15 +72,15 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     let _ = RenderExecutionError::submission_error;
     let _ = RenderResultSubmissionError::kind;
     let _ = RenderResultSubmissionError::verification_eligibility_kind;
-    let _ = RenderResultSubmissionError::observation_index;
+    let _ = RenderResultSubmissionError::observation;
     let _ = RenderResultSubmissionError::object_id;
     let _ = RenderResultSubmissionError::readback_cardinality;
     let _ = RenderResultSubmissionError::output_correlation;
-    let _ = RenderResultSubmissionError::correlation_output_index;
+    let _ = RenderResultSubmissionError::correlation_output;
     let _ = RenderResultSubmissionError::correlation_channel;
     let _ = RenderResultFormationError::kind;
     let _ = RenderResultFormationError::verification_eligibility_kind;
-    let _ = RenderResultFormationError::output_index;
+    let _ = RenderResultFormationError::output;
     let _ = RenderResultFormationError::sample_index;
     let _ = RenderResultFormationError::channel;
     let _ = RenderResultFormationError::gpu_failure_kind;
@@ -94,9 +94,13 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     let _ = PreparedRenderOccurrence::work_set;
     let _ = PreparedRenderOccurrence::radiance_output;
     assert!(!RenderExecutionSession::new().is_in_flight());
-    let selection = RenderEvaluationSelection::new(0, 64, 32).expect("non-zero extent");
-    assert_eq!(selection.output_index(), 0);
-    assert_eq!(selection.extent(), (64, 32));
+    fn assert_evaluation_handle(output: RenderOutputHandle) {
+        let selection =
+            RenderEvaluationSelection::new(output.clone(), 64, 32).expect("non-zero extent");
+        assert_eq!(selection.output(), &output);
+        assert_eq!(selection.extent(), (64, 32));
+    }
+    let _ = assert_evaluation_handle;
 
     fn assert_temporal_evidence(evidence: &RenderTemporalExecutionEvidence) {
         let _ = (
@@ -126,7 +130,7 @@ fn ordinary_semantic_renderer_surface_is_public_to_downstream_consumers() {
     let _ = RenderVerificationEligibilityErrorKind::SamplingSupportUnsupported;
 
     fn assert_prepared_output_surface(output: &PreparedRadianceOutput<'_>) {
-        let _ = output.output_index();
+        let _ = output.output();
         let _ = output.resource();
         let _ = output.texture();
         let _ = output.export_relationship();
@@ -226,20 +230,32 @@ fn ordinary_surface_executes_headless_through_public_runengpu_only() {
         )
         .expect("public perspective observation"),
     );
-    let request = RenderRequest::new(
-        shutter,
-        vec![observation],
-        vec![RenderRequestedOutput::new(
-            0,
+    let mut builder = RenderRequestBuilder::new(shutter);
+    let observation = builder.add_observation(observation);
+    let output = builder
+        .add_output(
+            &observation,
             RenderOutputSpec::new(
                 RenderOutputValue::ObjectIdentity,
                 RenderResultTopology::sample_lattice_2d(1, 1).expect("1x1 public lattice"),
                 RenderSemanticTolerance::exact(),
             )
             .expect("public object-identity output"),
-        )],
-    )
-    .expect("public render request");
+        )
+        .expect("output belongs to this request");
+    let request = builder.finish().expect("public render request");
+    // Semantic equality is deliberately not correlation equality between independent requests.
+    let mut foreign_builder = RenderRequestBuilder::new(shutter);
+    let foreign_observation = foreign_builder.add_observation(request.observations()[0]);
+    let foreign_output = foreign_builder
+        .add_output(&foreign_observation, request.outputs()[0].spec())
+        .expect("foreign request output");
+    let foreign_request = foreign_builder.finish().expect("foreign request");
+    assert_eq!(request, foreign_request);
+    assert_eq!(output.position(), foreign_output.position());
+    assert_ne!(output, foreign_output);
+    assert!(!request.contains_output(&foreign_output));
+    assert_eq!(request.clone().output_handle(0), Some(output.clone()));
 
     let semantic_inputs = [RenderSurfaceSemanticInputBinding::new(
         representation_id,
@@ -271,19 +287,34 @@ fn ordinary_surface_executes_headless_through_public_runengpu_only() {
                 .unwrap(),
             )
             .unwrap();
-        admit_render(
-            &scene.snapshot(),
-            &request,
-            &semantic_inputs,
-            &[],
-            &availability,
-            &[RenderOutputBinding::new(
-                0,
-                RenderOutputDestination::SampleLatticeTexture(destination),
+        let destination = RenderOutputDestination::SampleLatticeTexture(destination);
+        let rejected = RenderInvocation::new(
+            scene.snapshot(),
+            request.clone(),
+            semantic_inputs.to_vec(),
+            Vec::new(),
+            availability.to_vec(),
+            vec![RenderOutputBinding::new(
+                foreign_output.clone(),
+                destination.clone(),
             )],
-            &context,
         )
-        .expect("public ordinary admission")
+        .expect_err("equal-position foreign output must not bind to this request");
+        assert!(matches!(
+            rejected,
+            RenderInvocationError::ForeignOutput { output: rejected_output }
+                if rejected_output == foreign_output
+        ));
+        let invocation = RenderInvocation::new(
+            scene.snapshot(),
+            request.clone(),
+            semantic_inputs.to_vec(),
+            Vec::new(),
+            availability.to_vec(),
+            vec![RenderOutputBinding::new(output.clone(), destination)],
+        )
+        .expect("valid request-owned public invocation");
+        admit_render(&invocation, &context).expect("public ordinary admission")
     };
     let admitted = admit_output("R8 ordinary public consumer output");
     let submitted = pollster::block_on(submit_render(admitted.clone(), &context))
@@ -308,6 +339,15 @@ fn ordinary_surface_executes_headless_through_public_runengpu_only() {
 
     assert_eq!(submitted.admitted_plan().scene_revision(), scene.revision());
     assert_eq!(submitted.admitted_plan().outputs().len(), 1);
+    assert!(submitted.object_identity_decoder(&output).is_ok());
+    let foreign_decoder = submitted
+        .object_identity_decoder(&foreign_output)
+        .expect_err("foreign output must not select an execution-local decoder");
+    assert_eq!(foreign_decoder.output(), &foreign_output);
+    assert_eq!(
+        foreign_decoder.kind(),
+        runen_render::RenderObjectIdentityDecoderErrorKind::OutputNotAdmitted
+    );
 
     // The downstream Vulkan lane exercises the retained contract alongside the unchanged one-shot
     // path. Independent sessions prepare concurrently and carry exact non-cloneable occurrences
@@ -416,4 +456,144 @@ fn wait_for_submission(context: &GpuContext, submission: &GpuSubmission) {
             status => panic!("public composed submission did not complete: {status:?}"),
         }
     }
+}
+
+#[test]
+fn request_owned_radiance_survives_retention_and_rejects_foreign_evaluation_lookup_and_capture() {
+    let descriptor =
+        GpuContextDescriptor::new(GpuCapabilityProfile::ComputeBaseline.requirements())
+            .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::CopyDestination)
+            .require_format_role(GpuTextureFormat::R32Float, GpuFormatRole::CopySource);
+    let context = match pollster::block_on(GpuContext::request(descriptor)) {
+        Ok(context) => context,
+        Err(error) if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable => {
+            assert_ne!(
+                std::env::var("RUNENRENDER_R8_REQUIRE_GPU").ok().as_deref(),
+                Some("1")
+            );
+            return;
+        }
+        Err(error) => panic!("public radiance context failed: {error}"),
+    };
+    let build_request = || {
+        let shutter = RenderTimeInterval::instant(RenderTimePoint::from_seconds(0.0).unwrap());
+        let mut builder = RenderRequestBuilder::new(shutter);
+        let observation = builder.add_observation(RenderObservationSpec::Perspective(
+            RenderPerspectiveObservation::new(
+                RenderAffineTransform3::identity(),
+                std::f64::consts::FRAC_PI_3,
+                1.0,
+                shutter,
+                RenderSamplingSupport::perspective_lattice_cell(),
+            )
+            .unwrap(),
+        ));
+        let output = builder.add_output(&observation, RenderOutputSpec::new(
+            RenderOutputValue::Radiance {
+                representation: runen_render::request::RenderRadiometricRepresentation::spectral_at_wavelength_meters(550e-9).unwrap(),
+            },
+            RenderResultTopology::sample_lattice_2d(2, 2).unwrap(),
+            RenderSemanticTolerance::exact(),
+        ).unwrap()).unwrap();
+        (builder.finish().unwrap(), output)
+    };
+    let (request, output) = build_request();
+    let (foreign_request, foreign) = build_request();
+    assert_eq!(request, foreign_request);
+    assert_eq!(output.position(), foreign.position());
+    assert_ne!(output, foreign);
+    let destination = GpuWorkResourceIdAllocator::new()
+        .allocate_texture_handle(
+            GpuTextureDescriptor::ordinary_owned_2d(
+                "public retained radiance",
+                GpuResourceLifetime::Retained,
+                GpuReconstruction::SourceBacked,
+                2,
+                2,
+                GpuTextureFormat::R32Float,
+                [
+                    GpuTextureUsage::CopyDestination,
+                    GpuTextureUsage::CopySource,
+                ],
+                GpuTextureInitialization::Uninitialized,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+    let invocation = RenderInvocation::new(
+        RenderSceneStore::new().snapshot(),
+        request.clone(),
+        Vec::new(),
+        Vec::new(),
+        Vec::new(),
+        vec![RenderOutputBinding::new(
+            output.clone(),
+            RenderOutputDestination::SampleLatticeTexture(destination),
+        )],
+    )
+    .unwrap();
+    let admitted = admit_render(&invocation, &context).unwrap();
+    let mut session = RenderExecutionSession::new();
+    let error = session
+        .prepare(
+            admitted.clone(),
+            &context,
+            RenderEvaluationSelection::new(foreign.clone(), 2, 2),
+        )
+        .expect_err("foreign finite evaluation must reject before creating an occurrence");
+    assert!(
+        matches!(error, runen_render::RenderExecutionSessionError::ForeignEvaluationOutput { output } if output == foreign)
+    );
+    assert!(!session.is_in_flight());
+    let one_shot = prepare_render(admitted.clone(), &context).unwrap();
+    assert_eq!(one_shot.radiance_output(&output).unwrap().output(), &output);
+    assert!(one_shot.radiance_output(&foreign).is_none());
+    let occurrence = session
+        .prepare(
+            admitted,
+            &context,
+            RenderEvaluationSelection::new(output.clone(), 2, 2),
+        )
+        .unwrap();
+    assert_eq!(
+        occurrence.radiance_output(&output).unwrap().output(),
+        &output
+    );
+    assert!(occurrence.radiance_output(&foreign).is_none());
+    let submission = pollster::block_on(context.submit_work(
+        "public request-owned retained radiance",
+        occurrence.work_set().fragments().iter().cloned(),
+    ))
+    .unwrap();
+    let associated = session
+        .associate_submission(occurrence, &submission)
+        .unwrap();
+    wait_for_submission(&context, &submission);
+    session.reconcile();
+    drop(session);
+    let rejected_capture = match associated.request_radiance_capture(&foreign) {
+        Err(error) => error,
+        Ok(_) => panic!("foreign output cannot capture this completed associated occurrence"),
+    };
+    assert_eq!(rejected_capture.output(), &foreign);
+    assert_eq!(
+        rejected_capture.kind(),
+        RenderRadianceCaptureRequestErrorKind::OutputNotAdmitted
+    );
+    let capture = associated.request_radiance_capture(&output).unwrap();
+    assert_eq!(capture.output(), &output);
+    let readback =
+        GpuReadbackOperation::new(capture.source().clone(), capture.readback_id()).unwrap();
+    let fragment = runen_gpu::GpuWorkFragment::build("public radiance readback", |work| {
+        work.operation("readback", readback)?;
+        Ok(())
+    })
+    .unwrap();
+    let readback_submission =
+        pollster::block_on(context.submit_work("public radiance readback", [fragment])).unwrap();
+    wait_for_submission(&context, &readback_submission);
+    let captured = associated
+        .capture_radiance(capture, &context, &readback_submission)
+        .unwrap();
+    assert_eq!(captured.samples(), &[0.0; 4]);
 }

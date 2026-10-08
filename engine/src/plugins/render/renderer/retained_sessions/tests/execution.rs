@@ -8,7 +8,7 @@ use runen_gpu::{
 use runen_render::admission::{RenderOutputBinding, RenderOutputDestination};
 use runen_render::request::{
     RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
-    RenderRadiometricRepresentation, RenderRequest, RenderRequestedOutput, RenderResultTopology,
+    RenderRadiometricRepresentation, RenderRequestBuilder, RenderResultTopology,
     RenderSamplingSupport, RenderSemanticTolerance,
 };
 use runen_render::scene::RenderSceneStore;
@@ -53,21 +53,22 @@ fn contribution(raw: u64) -> RenderDeterministicFrameContribution {
         RenderSemanticTolerance::exact(),
     )
     .unwrap();
+    let mut builder = RenderRequestBuilder::new(shutter);
+    let observation = builder.add_observation(RenderObservationSpec::Perspective(observation));
+    let output = builder
+        .add_output(&observation, output)
+        .expect("own output");
+    let request = builder.finish().expect("retained request");
     RenderDeterministicFrameContribution {
         producer_id: key.producer,
         render_surface_id: key.surface,
         target_key: key.target,
         scene: RenderSceneStore::new().snapshot(),
-        request: RenderRequest::new(
-            shutter,
-            vec![RenderObservationSpec::Perspective(observation)],
-            vec![RenderRequestedOutput::new(0, output)],
-        )
-        .unwrap(),
+        request,
         semantic_inputs: Vec::new(),
         field_semantic_inputs: Vec::new(),
         availability: Vec::new(),
-        output_index: 0,
+        output,
         finite_evaluation_extent: None,
     }
 }
@@ -91,19 +92,19 @@ fn admit(
             .unwrap(),
         )
         .unwrap();
-    runen_render::admit_render(
-        &contribution.scene,
-        &contribution.request,
-        &contribution.semantic_inputs,
-        &contribution.field_semantic_inputs,
-        &contribution.availability,
-        &[RenderOutputBinding::new(
-            0,
+    let invocation = runen_render::RenderInvocation::new(
+        contribution.scene.clone(),
+        contribution.request.clone(),
+        contribution.semantic_inputs.clone(),
+        contribution.field_semantic_inputs.clone(),
+        contribution.availability.clone(),
+        vec![RenderOutputBinding::new(
+            contribution.output.clone(),
             RenderOutputDestination::SampleLatticeTexture(target),
         )],
-        context,
     )
-    .unwrap()
+    .expect("retained request-owned invocation");
+    runen_render::admit_render(&invocation, context).unwrap()
 }
 
 fn prepare(
@@ -119,7 +120,7 @@ fn prepare(
             targets,
             admit(contribution, context),
             context,
-            RenderEvaluationSelection::new(0, 2, 2),
+            RenderEvaluationSelection::new(contribution.output.clone(), 2, 2),
         )
         .unwrap()
 }
@@ -129,7 +130,15 @@ fn evidence(
 ) -> runen_render::RenderTemporalExecutionEvidence {
     occurrence
         .occurrence()
-        .radiance_output(0)
+        .radiance_output(
+            &occurrence
+                .occurrence()
+                .admitted_plan()
+                .plan()
+                .request()
+                .output_handle(0)
+                .expect("retained requested output"),
+        )
         .unwrap()
         .temporal_execution_evidence()
         .unwrap()

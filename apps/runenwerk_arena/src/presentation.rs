@@ -46,7 +46,7 @@ use runen_render::representation::{
 };
 use runen_render::request::{
     RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
-    RenderRadiometricRepresentation, RenderRequest, RenderRequestedOutput, RenderResultTopology,
+    RenderRadiometricRepresentation, RenderRequestBuilder, RenderResultTopology,
     RenderSamplingSupport, RenderSemanticTolerance,
 };
 use runen_render::scene::{
@@ -575,11 +575,10 @@ fn build_arena_frame_publication(
         RenderResultTopology::sample_lattice_2d(extent.0, extent.1)?,
         RenderSemanticTolerance::absolute(ARENA_RADIANCE_TOLERANCE)?,
     )?;
-    let request = RenderRequest::new(
-        shutter,
-        vec![observation],
-        vec![RenderRequestedOutput::new(0, output)],
-    )?;
+    let mut request_builder = RenderRequestBuilder::new(shutter);
+    let observation = request_builder.add_observation(observation);
+    let output = request_builder.add_output(&observation, output)?;
+    let request = request_builder.finish()?;
 
     let surface_binding = RenderSurfaceSemanticInputBinding::new(
         scene.player_representation_id,
@@ -646,7 +645,7 @@ fn build_arena_frame_publication(
             semantic_inputs: vec![surface_binding],
             field_semantic_inputs: vec![field_binding],
             availability,
-            output_index: 0,
+            output,
             target_key,
             finite_evaluation_extent: None,
         },
@@ -1222,6 +1221,12 @@ mod tests {
             "retained pre-publication player state must remain unchanged"
         );
         assert_eq!(publication.invocation.view_id, "main");
+        assert!(
+            publication
+                .contribution
+                .request
+                .contains_output(&publication.contribution.output)
+        );
         assert_eq!(publication.contribution.semantic_inputs.len(), 1);
         assert_eq!(publication.contribution.field_semantic_inputs.len(), 1);
         assert_eq!(
@@ -1431,6 +1436,22 @@ mod tests {
                 flow_id,
             )
             .expect("next arena frame publication");
+        assert!(
+            next_publication
+                .contribution
+                .request
+                .contains_output(&next_publication.contribution.output)
+        );
+        assert_ne!(
+            publication.contribution.output,
+            next_publication.contribution.output
+        );
+        assert!(
+            !next_publication
+                .contribution
+                .request
+                .contains_output(&publication.contribution.output)
+        );
         assert_eq!(
             next_publication.contribution.scene.revision(),
             one_commit_control.snapshot().revision(),

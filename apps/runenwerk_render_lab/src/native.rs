@@ -883,6 +883,7 @@ fn build_render_lab_temporal_radiance_publication(
             evaluation_extent.1,
         )
         .ok_or_else(|| anyhow::anyhow!("temporal finite-evaluation extent must be non-zero"))?;
+    let output = fixture.output.clone();
     let contribution = RenderDeterministicFrameContribution {
         producer_id,
         render_surface_id: RenderSurfaceId::primary(),
@@ -891,7 +892,7 @@ fn build_render_lab_temporal_radiance_publication(
         semantic_inputs: fixture.semantic_inputs,
         field_semantic_inputs: Vec::new(),
         availability: fixture.availability,
-        output_index: 0,
+        output,
         target_key: target_key.clone(),
         finite_evaluation_extent: Some(finite_evaluation_extent),
     };
@@ -929,6 +930,7 @@ fn build_render_lab_radiance_publication(
         extent.0,
         extent.1,
     )?;
+    let output = fixture.output.clone();
     let contribution = RenderDeterministicFrameContribution {
         producer_id,
         render_surface_id: RenderSurfaceId::primary(),
@@ -937,7 +939,7 @@ fn build_render_lab_radiance_publication(
         semantic_inputs: fixture.semantic_inputs,
         field_semantic_inputs: Vec::new(),
         availability: fixture.availability,
-        output_index: 0,
+        output,
         target_key: target_key.clone(),
         finite_evaluation_extent: None,
     };
@@ -1753,6 +1755,7 @@ mod tests {
         let conflicting_invocation =
             PreparedFlowInvocationRequest::new(format!("{RL2_FLOW_ID}.main"), flow.id(), "main");
         let fixture = founding_fixture().expect("test fixture should build");
+        let old_output = fixture.output.clone();
         let old_contribution = RenderDeterministicFrameContribution {
             producer_id: rl2_producer,
             render_surface_id: RenderSurfaceId::primary(),
@@ -1761,13 +1764,14 @@ mod tests {
             semantic_inputs: fixture.semantic_inputs,
             field_semantic_inputs: Vec::new(),
             availability: fixture.availability,
-            output_index: 0,
+            output: old_output,
             target_key: old_key.clone(),
             finite_evaluation_extent: None,
         };
         let new_fixture =
             founding_fixture_with_observation_and_extent(RenderAffineTransform3::identity(), 8, 8)
                 .expect("new fixture should build");
+        let new_output = new_fixture.output.clone();
         let new_contribution = RenderDeterministicFrameContribution {
             producer_id: rl2_producer,
             render_surface_id: RenderSurfaceId::primary(),
@@ -1776,7 +1780,7 @@ mod tests {
             semantic_inputs: new_fixture.semantic_inputs,
             field_semantic_inputs: Vec::new(),
             availability: new_fixture.availability,
-            output_index: 0,
+            output: new_output,
             target_key: new_key,
             finite_evaluation_extent: None,
         };
@@ -1836,6 +1840,7 @@ mod tests {
             flow.id(),
             "main",
         );
+        let output = fixture.output.clone();
         let contribution = RenderDeterministicFrameContribution {
             producer_id,
             render_surface_id: RenderSurfaceId::try_from_raw(2).expect("secondary surface id"),
@@ -1844,7 +1849,7 @@ mod tests {
             semantic_inputs: fixture.semantic_inputs,
             field_semantic_inputs: Vec::new(),
             availability: fixture.availability,
-            output_index: 0,
+            output,
             target_key,
             finite_evaluation_extent: None,
         };

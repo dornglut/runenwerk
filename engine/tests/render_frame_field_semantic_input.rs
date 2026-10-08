@@ -12,7 +12,6 @@ use runen_render::admission::{
     RenderOutputBinding, RenderOutputDestination, RenderRepresentationAvailabilityFact,
     RenderRepresentationAvailabilityState,
 };
-use runen_render::admit_render;
 use runen_render::field_input::{
     RenderFieldSemanticInput, RenderFieldSemanticInputBinding, RenderFieldSemanticInputRequirement,
 };
@@ -24,8 +23,7 @@ use runen_render::representation::{
 };
 use runen_render::request::{
     RenderObservationSpec, RenderOutputSpec, RenderOutputValue, RenderPerspectiveObservation,
-    RenderRequest, RenderRequestedOutput, RenderResultTopology, RenderSamplingSupport,
-    RenderSemanticTolerance,
+    RenderRequestBuilder, RenderResultTopology, RenderSamplingSupport, RenderSemanticTolerance,
 };
 use runen_render::scene::{RenderObjectState, RenderSceneStore, RenderSceneUpdate};
 use runen_render::space_time::{
@@ -37,6 +35,7 @@ use runen_render::surface_input::{
     RenderSurfaceSemanticInput, RenderSurfaceSemanticInputBinding,
     RenderSurfaceSemanticInputRequirement,
 };
+use runen_render::{RenderInvocation, admit_render};
 
 fn object_state(z: f64) -> RenderObjectState {
     RenderObjectState::new(
@@ -153,20 +152,20 @@ fn deterministic_frame_contribution_carries_surface_and_field_inputs_into_ordina
         )
         .expect("test perspective"),
     );
-    let request = RenderRequest::new(
-        shutter,
-        vec![observation],
-        vec![RenderRequestedOutput::new(
-            0,
+    let mut builder = RenderRequestBuilder::new(shutter);
+    let observation = builder.add_observation(observation);
+    let output = builder
+        .add_output(
+            &observation,
             RenderOutputSpec::new(
                 RenderOutputValue::ObjectIdentity,
                 RenderResultTopology::sample_lattice_2d(1, 1).expect("1x1 lattice"),
                 RenderSemanticTolerance::exact(),
             )
             .expect("object identity output"),
-        )],
-    )
-    .expect("test request");
+        )
+        .expect("same request");
+    let request = builder.finish().expect("test request");
 
     let surface_binding = RenderSurfaceSemanticInputBinding::new(
         surface_representation,
@@ -202,7 +201,7 @@ fn deterministic_frame_contribution_carries_surface_and_field_inputs_into_ordina
         semantic_inputs: vec![surface_binding],
         field_semantic_inputs: vec![field_binding],
         availability,
-        output_index: 0,
+        output,
         target_key: RenderDynamicTextureTargetKey::new("gp1b4", "radiance"),
         finite_evaluation_extent: None,
     };
@@ -232,32 +231,26 @@ fn deterministic_frame_contribution_carries_surface_and_field_inputs_into_ordina
         )
         .expect("output handle");
     let output_binding = RenderOutputBinding::new(
-        0,
+        retained.output.clone(),
         RenderOutputDestination::SampleLatticeTexture(destination),
     );
+    let invoke = |field_inputs| {
+        RenderInvocation::new(
+            retained.scene.clone(),
+            retained.request.clone(),
+            retained.semantic_inputs.clone(),
+            field_inputs,
+            retained.availability.clone(),
+            vec![output_binding.clone()],
+        )
+        .expect("request-owned output binding")
+    };
 
     assert!(
-        admit_render(
-            &retained.scene,
-            &retained.request,
-            &retained.semantic_inputs,
-            &[],
-            &retained.availability,
-            std::slice::from_ref(&output_binding),
-            &context,
-        )
-        .is_err(),
+        admit_render(&invoke(Vec::new()), &context).is_err(),
         "field-backed representation must fail closed when its binding is absent"
     );
 
-    admit_render(
-        &retained.scene,
-        &retained.request,
-        &retained.semantic_inputs,
-        &retained.field_semantic_inputs,
-        &retained.availability,
-        std::slice::from_ref(&output_binding),
-        &context,
-    )
-    .expect("one contribution must carry surface and field inputs into ordinary admission");
+    admit_render(&invoke(retained.field_semantic_inputs.clone()), &context)
+        .expect("one contribution must carry surface and field inputs into ordinary admission");
 }
