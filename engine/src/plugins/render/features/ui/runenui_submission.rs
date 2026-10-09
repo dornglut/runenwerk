@@ -308,7 +308,7 @@ mod tests {
                     env!("CARGO_MANIFEST_DIR"),
                     "/../assets/fonts/JetBrainsMono-Regular.ttf"
                 ))
-                .to_vec()
+                .to_vec(),
             )
             .expect("bundled UI font must be valid");
         assert!(registered > 0);
@@ -416,7 +416,7 @@ mod tests {
         legacy.replace(SurfaceFrameSubmission::new(producer(2)));
         runenui.replace(
             RunenUiPaintSubmission::new(producer(2), publication_id(1), paint())
-                .with_render_surface(surface)
+                .with_render_surface(surface),
         );
         assert!(matches!(
             ordered_mixed_ui_submissions_for_surface(&legacy, &runenui, surface),

@@ -1,5 +1,5 @@
-use crate::plugins::render::RunenUiPublicationId;
 use super::*;
+use crate::plugins::render::RunenUiPublicationId;
 use runen_gpu::{
     GpuContext, GpuContextAffinity, GpuExecutionLifecycleState, GpuReadbackId, GpuReadbackStatus,
     GpuSubmission, GpuSubmissionFailure, GpuSubmissionStatus, GpuWorkNodeId,
@@ -139,7 +139,6 @@ impl CaptureObservation {
         }
     }
 }
-
 
 /// Exact one-shot renderer execution witness for an already-admitted source
 /// publication. The terminal Present node must be from the very same composed

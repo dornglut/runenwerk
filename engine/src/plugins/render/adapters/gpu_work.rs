@@ -263,7 +263,6 @@ struct PreparedRenderGpuWorkFrame {
     present_node: Option<GpuWorkNodeId>,
 }
 
-
 #[derive(Debug, Clone)]
 pub(crate) struct RenderGpuFrameTimingBracket {
     fragment: GpuWorkFragment,

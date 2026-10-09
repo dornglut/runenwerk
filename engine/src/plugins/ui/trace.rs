@@ -278,7 +278,6 @@ impl UiRuntimeTraceEvent {
     pub fn dirty_cause(&self) -> Option<UiRuntimeDirtyCause> {
         self.dirty_cause
     }
-
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, runen_ecs::Resource)]

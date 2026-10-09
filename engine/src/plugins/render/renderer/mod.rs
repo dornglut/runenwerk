@@ -14,8 +14,8 @@ use crate::plugins::render::inspect::{
     RenderGpuTimingCapability, RenderPassProvenanceRecord, RenderPassTimingEvidence,
     ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
 };
-use crate::plugins::render::{RenderFlowId, RenderFrameProducerId, RunenUiPublicationId};
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
+use crate::plugins::render::{RenderFlowId, RenderFrameProducerId, RunenUiPublicationId};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use runen_gpu::{

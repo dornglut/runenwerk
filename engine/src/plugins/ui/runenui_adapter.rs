@@ -1,11 +1,11 @@
-#[cfg(test)]
-use runenui_runtime::LogicalSize;
 use runenui_core::{
     Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, SemanticCommand,
     UiApp, View, button, column, text,
 };
 #[cfg(test)]
 use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment};
+#[cfg(test)]
+use runenui_runtime::LogicalSize;
 use runenui_runtime::{
     AppRuntime, HostRequestToken, PumpBudget, SurfaceBuildContext, SurfacePublication,
 };
