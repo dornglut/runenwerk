@@ -94,8 +94,8 @@ physics = { path = "domain/physics" }
 runen-net = { git = "https://github.com/dornglut/runen-net", rev = "e8dce38b2578eb3559356968beb2351cc03c6758" }
 runen-net-quic = { git = "https://github.com/dornglut/runen-net", rev = "e8dce38b2578eb3559356968beb2351cc03c6758" }
 runen-spatial = { git = "https://github.com/dornglut/runen-spatial", rev = "2bb6b2ed89894aefaa39bf0e39d296b703916821" }
-runen-gpu = { git = "https://github.com/dornglut/runen-gpu", rev = "7a833e750bc92b28f05b2c8507e326660f100a1e" }
-runen-render = { git = "https://github.com/dornglut/runen-render", rev = "cf623a53d5d3748797bb17e0c2bf56ad8b4aec39" }
+runen-gpu = { git = "https://github.com/dornglut/runen-gpu", rev = "b11c5c665ee4e9d13adc20cb6b0b03a8467800ea" }
+runen-render = { git = "https://github.com/dornglut/runen-render", rev = "08f85232d7c47e7cada3decb6e31cfa99c147bfa" }
 runen-input = { git = "https://github.com/dornglut/runen-input", rev = "2751e19fa42255b86e786e7cd837198c917b7b25" }
 runenui_core = { git = "https://github.com/dornglut/runen-ui", rev = "b386e9ade907f4e358ac6ca39b660c9e181b1460" }
 runenui_runtime = { git = "https://github.com/dornglut/runen-ui", rev = "b386e9ade907f4e358ac6ca39b660c9e181b1460" }

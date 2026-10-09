@@ -515,6 +515,7 @@ mod tests {
             prepared_material: None,
             prepared_material_gpu_resources: None,
             prepared_ui: UiPreparedDraws::default(),
+            runenui_2d: Vec::new(),
             ui_dynamic_bind_groups: UiDynamicBindGroups::default(),
             pending_operations: RendererPendingOperations::default(),
             viewport_surface_bindings: Default::default(),

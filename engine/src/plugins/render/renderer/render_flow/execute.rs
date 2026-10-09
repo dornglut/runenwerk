@@ -12,13 +12,14 @@ use super::{
     occurrences::expand_render_pass_occurrences_in_frame,
 };
 use crate::plugins::render::{
-    RenderGpuWorkOccurrenceId, RenderPassId, ResolvedRenderGpuWorkNode,
-    prepare_render_gpu_frame_work,
+    RenderGpuWorkOccurrenceId, RenderPassId, ResolvedRenderGpuWorkNode, RunenUiMixedWork,
+    prepare_render_gpu_frame_work, prepare_render_gpu_frame_work_with_mixed_ui,
 };
 use runen_gpu::{
-    GpuPresentOperation, GpuResourceLabel, GpuResourceProvenance, GpuTextureHandle,
+    GpuPresentOperation, GpuRenderDraw, GpuResourceLabel, GpuResourceProvenance, GpuTextureHandle,
     GpuTextureViewHandle, GpuWorkFragment, GpuWorkImport,
 };
+use runen_render::execution_2d::{Render2dPreparedContribution, Render2dTarget};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FeaturePassAction {
@@ -35,6 +36,10 @@ struct RendererRealizationBatch<'a> {
     invocations: Vec<RealizedFlowInvocation<'a>>,
     final_captures: Vec<PreparedCaptureReadback>,
     maximum_occurrence: u64,
+    /// Exact GPU target-admitted F2 preparations; never presentation evidence.
+    prepared_runenui: Vec<(RunenUiPublicationId, u32, Render2dPreparedContribution)>,
+    /// Source-ordered legacy GPU draws, before any mixed compositor flattening.
+    ordered_legacy_draws: Vec<(u32, GpuRenderDraw)>,
 }
 
 /// Exact retained occurrences and their public composition projection cross submission together.
@@ -42,6 +47,13 @@ struct PreparedDeterministicCompositions {
     fragments: Vec<GpuWorkFragment>,
     imports: Vec<GpuWorkImport>,
     occurrences: Vec<PreparedRetainedOccurrence>,
+}
+
+/// One bounded frame's flow realization before canonical GPU graph authoring.
+struct RealizedFrameInvocations<'a> {
+    invocations: Vec<RealizedFlowInvocation<'a>>,
+    maximum_occurrence: u64,
+    prepared_runenui: Vec<(RunenUiPublicationId, u32, Render2dPreparedContribution)>,
 }
 
 struct RealizedFlowInvocation<'a> {
@@ -250,20 +262,64 @@ impl Renderer {
 
         let encode_submit_start = Instant::now();
         let _span = tracing::info_span!("renderer.prepare_submit").entered();
-        let graph = prepare_render_gpu_frame_work(
-            context,
-            GpuResourceLabel::new(format!(
-                "render.frame.{}.surface.{}",
-                prepared_frame.context.frame_index,
-                prepared_frame.surface.render_surface_id.raw()
-            ))?,
-            nodes,
-            &deterministic.fragments,
-            &deterministic.imports,
-            composed_gpu_timing
-                .as_ref()
-                .map(PreparedComposedGpuTiming::bracket),
-        )?;
+        let graph_label = GpuResourceLabel::new(format!(
+            "render.frame.{}.surface.{}",
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw()
+        ))?;
+        let timing_bracket = composed_gpu_timing
+            .as_ref()
+            .map(PreparedComposedGpuTiming::bracket);
+        let (graph, runenui_witnesses) = if batch.prepared_runenui.is_empty() {
+            (
+                prepare_render_gpu_frame_work(
+                    context,
+                    graph_label,
+                    nodes,
+                    &deterministic.fragments,
+                    &deterministic.imports,
+                    timing_bracket,
+                )?,
+                Vec::new(),
+            )
+        } else {
+            let mut ui_occurrences = nodes
+                .iter()
+                .filter_map(ResolvedRenderGpuWorkNode::builtin_ui_occurrence);
+            let ui_occurrence = ui_occurrences.next().ok_or_else(|| {
+                anyhow::anyhow!("RunenUI paint has no admitted canonical UI occurrence")
+            })?;
+            if ui_occurrences.next().is_some() {
+                bail!("RunenUI paint targets more than one canonical UI occurrence");
+            }
+            let mixed = RunenUiMixedWork {
+                ui_occurrence,
+                legacy_draws: std::mem::take(&mut batch.ordered_legacy_draws),
+                contributions: std::mem::take(&mut batch.prepared_runenui),
+            };
+            let authored = prepare_render_gpu_frame_work_with_mixed_ui(
+                context,
+                graph_label,
+                nodes,
+                crate::plugins::render::RenderGpuExternalWork {
+                    producer_fragments: &deterministic.fragments,
+                    imports: &deterministic.imports,
+                },
+                timing_bracket,
+                mixed,
+                present_occurrence,
+            )?;
+            let witnesses = authored
+                .f2_tokens
+                .into_iter()
+                .map(|(publication_id, token)| RunenUiGpuPresentationWitness {
+                    publication_id,
+                    contribution: token,
+                    present_node: authored.present_node.clone(),
+                })
+                .collect::<Vec<_>>();
+            (authored.graph, witnesses)
+        };
         let prepared = pollster::block_on(context.prepare_submission(graph))?;
         let submission = context.submit_prepared(prepared).map_err(|rejection| {
             anyhow::anyhow!(
@@ -300,9 +356,12 @@ impl Renderer {
         let mut observation_output = self.gpu_observations.accept(
             context,
             submission,
-            timing_frames,
-            composed_gpu_timing.map(PreparedComposedGpuTiming::into_frame),
-            capture_readbacks,
+            super::observation::AcceptedFrameObservations {
+                timings: timing_frames,
+                composed_timing: composed_gpu_timing.map(PreparedComposedGpuTiming::into_frame),
+                captures: capture_readbacks,
+                runenui: runenui_witnesses,
+            },
             &mut batch.capture_runtime,
         );
         if let Some(evidence) = composed_terminal_evidence {
@@ -313,6 +372,9 @@ impl Renderer {
             composed_timing_evidence,
             captured_textures,
             capture_results,
+            runenui_accepted,
+            runenui_presented,
+            runenui_rejected,
         } = observation_output;
         self.pending_gpu_observation_output
             .timing_evidence
@@ -326,6 +388,15 @@ impl Renderer {
         self.pending_gpu_observation_output
             .capture_results
             .extend(capture_results);
+        self.pending_gpu_observation_output
+            .runenui_accepted
+            .extend(runenui_accepted);
+        self.pending_gpu_observation_output
+            .runenui_presented
+            .extend(runenui_presented);
+        self.pending_gpu_observation_output
+            .runenui_rejected
+            .extend(runenui_rejected);
 
         // Association failure cannot discard accepted timing/capture lifecycle handles. The
         // affected continuity is quarantined by the session owner and this frame fails closed.
@@ -435,19 +506,33 @@ impl Renderer {
             viewport,
             product_surface,
         };
-        let builtin_ui_draws = self.lower_ui_draws(
+        // Keep each draw's exact outer producer position until this point. The
+        // existing generic BuiltinUiComposite path remains unchanged for legacy
+        // frames; the F2 cutover will consume these stable boundaries to author
+        // interleaved GPU nodes rather than re-sorting an already flat list.
+        let ordered_legacy_draws = self.lower_ui_draws_with_submission_positions(
             &packet.prepared_ui,
             &packet.viewport_surface_bindings,
             &packet.ui_dynamic_bind_groups.viewport,
             &packet.ui_dynamic_bind_groups.product_surface,
             acquired_surface_extent,
         )?;
+        if ordered_legacy_draws
+            .windows(2)
+            .any(|pair| pair[0].0 > pair[1].0)
+        {
+            bail!("UI draw preparation lost its producer ordering before GPU work authoring");
+        }
+        let builtin_ui_draws = ordered_legacy_draws
+            .iter()
+            .map(|(_, draw)| draw.clone())
+            .collect::<Vec<_>>();
 
         let frame_index = prepared_frame.context.frame_index;
         let mut capture_runtime =
             FrameCaptureRuntime::new(frame_index, debug_control, &debug_config.capture_selectors);
         let mut flow_runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
-        let realization_result = (|| -> Result<(Vec<RealizedFlowInvocation<'a>>, u64)> {
+        let realization_result = (|| -> Result<RealizedFrameInvocations<'a>> {
             let active_flow_ids = compiled_flows
                 .iter()
                 .map(|flow| flow.flow_id)
@@ -504,6 +589,53 @@ impl Renderer {
                         invocation.invocation_id.0.clone(),
                         invocation_packet,
                         occurrences,
+                    ));
+                }
+            }
+
+            let admitted_ui_passes = scheduled_invocations
+                .iter()
+                .flat_map(|(_, _, _, occurrences)| occurrences.iter())
+                .filter(|occurrence| {
+                    matches!(
+                        occurrence.pass,
+                        CompiledPassExecutionPlan::BuiltinUiComposite(_)
+                    )
+                })
+                .count();
+            if !packet.runenui_2d.is_empty() && admitted_ui_passes != 1 {
+                bail!(
+                    "RunenUI F2 requires exactly one admitted UI composite pass per acquired surface (got {admitted_ui_passes})"
+                );
+            }
+            let mut prepared_runenui = Vec::new();
+            if admitted_ui_passes == 1 {
+                for publication in &packet.runenui_2d {
+                    let target = Render2dTarget::new(
+                        surface_view.clone(),
+                        publication.logical_extent.0,
+                        publication.logical_extent.1,
+                        publication.raster_scale,
+                    )?;
+                    let contribution = self
+                        .runenui_2d_executor
+                        .prepare(
+                            context,
+                            publication.semantic.composition(),
+                            publication.semantic.bindings(),
+                            &target,
+                        )
+                        .map_err(|error| {
+                            anyhow::anyhow!(
+                                "RunenUI producer {:?} F2 preparation rejected publication {}: {error}",
+                                publication.producer_id,
+                                publication.publication_id.raw()
+                            )
+                        })?;
+                    prepared_runenui.push((
+                        publication.publication_id,
+                        publication.compositor_position,
+                        contribution,
                     ));
                 }
             }
@@ -723,6 +855,7 @@ impl Renderer {
                                 passes: &canonical_projections,
                                 surface_color_view: Some(surface_view),
                                 builtin_ui_draws: Some(&builtin_ui_draws),
+                                runenui_paint_present: !invocation_packet.runenui_2d.is_empty(),
                                 timing: logical_timing_plan
                                     .as_ref()
                                     .and_then(LogicalGpuPassTimingPlan::timing),
@@ -750,10 +883,18 @@ impl Renderer {
                     scheduled_invocations.len()
                 );
             }
-            Ok((invocations, maximum_occurrence))
+            Ok(RealizedFrameInvocations {
+                invocations,
+                maximum_occurrence,
+                prepared_runenui,
+            })
         })();
         self.flow_runtime_cache = flow_runtime_cache;
-        let (invocations, maximum_occurrence) = realization_result?;
+        let RealizedFrameInvocations {
+            invocations,
+            maximum_occurrence,
+            prepared_runenui,
+        } = realization_result?;
         let mut final_captures = Vec::new();
         if capture_runtime.should_attempt_stage(CaptureStage::Final) {
             self.prepare_final_surface_capture(
@@ -772,6 +913,8 @@ impl Renderer {
             invocations,
             final_captures,
             maximum_occurrence,
+            prepared_runenui,
+            ordered_legacy_draws,
         })
     }
 

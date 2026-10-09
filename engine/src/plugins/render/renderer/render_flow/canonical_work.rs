@@ -47,6 +47,7 @@ pub(super) struct CanonicalInvocationProjection<'a, 'pass> {
     pub(super) passes: &'a [CanonicalPassProjection<'pass>],
     pub(super) surface_color_view: Option<&'a GpuTextureViewHandle>,
     pub(super) builtin_ui_draws: Option<&'a [GpuRenderDraw]>,
+    pub(super) runenui_paint_present: bool,
     pub(super) timing: Option<&'a LogicalGpuPassTiming>,
 }
 
@@ -148,6 +149,7 @@ pub(super) fn resolve_canonical_invocation(
         passes,
         surface_color_view,
         builtin_ui_draws,
+        runenui_paint_present,
         timing,
     } = projection;
 
@@ -256,6 +258,27 @@ pub(super) fn resolve_canonical_invocation(
                     return Ok(CanonicalInvocationResolution::PreG7Residual);
                 };
                 let timing = timestamp_projection(timing, projected.timestamp_indices)?;
+                if draws.is_empty() && timing.is_none() && runenui_paint_present {
+                    // The F2-only Counter does not need a fake GPU draw, but
+                    // the admitted UI pass still supplies its real semantic
+                    // insertion point and all before/after capture controls.
+                    nodes.push(ResolvedRenderGpuWorkNode::empty_builtin_ui_composite(
+                        projected.occurrence,
+                        occurrence_label(flow, "ui", projected.occurrence)?,
+                        pass_control,
+                    ));
+                    let Some(_) = append_capture_readbacks(
+                        flow,
+                        projected.after_captures,
+                        &[projected.occurrence],
+                        maximum_occurrence,
+                        &mut nodes,
+                    )?
+                    else {
+                        return Ok(CanonicalInvocationResolution::PreG7Residual);
+                    };
+                    continue;
+                }
                 if draws.is_empty() && timing.is_none() {
                     if !forward_no_work_occurrence(
                         flow,
@@ -319,13 +342,23 @@ pub(super) fn resolve_canonical_invocation(
         };
 
         let is_present_copy = matches!(projected.pass, CompiledPassExecutionPlan::Present(_));
-        nodes.push(ResolvedRenderGpuWorkNode::pass(
+        let node = ResolvedRenderGpuWorkNode::pass(
             projected.occurrence,
             occurrence_label(flow, "pass", projected.occurrence)?,
             operation,
             execution_preference(projected.pass),
             pass_control,
-        ));
+        );
+        nodes.push(
+            if matches!(
+                projected.pass,
+                CompiledPassExecutionPlan::BuiltinUiComposite(_)
+            ) {
+                node.with_builtin_ui_composite()
+            } else {
+                node
+            },
+        );
         let Some(after_capture_occurrences) = append_capture_readbacks(
             flow,
             projected.after_captures,

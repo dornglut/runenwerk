@@ -124,26 +124,23 @@ impl Renderer {
         let flattened_rect_instances = contribution
             .submissions
             .iter()
-            .enumerate()
-            .flat_map(|(submission_order, submission)| {
-                Self::extract_rect_instances(submission_order as u32, &submission.frame)
+            .flat_map(|submission| {
+                Self::extract_rect_instances(submission.submission_order, &submission.frame)
             })
             .collect::<Vec<_>>();
         let flattened_stroke_instances = contribution
             .submissions
             .iter()
-            .enumerate()
-            .flat_map(|(submission_order, submission)| {
-                Self::extract_stroke_instances(submission_order as u32, &submission.frame)
+            .flat_map(|submission| {
+                Self::extract_stroke_instances(submission.submission_order, &submission.frame)
             })
             .collect::<Vec<_>>();
         let flattened_glyph_instances = contribution
             .submissions
             .iter()
-            .enumerate()
-            .flat_map(|(submission_order, submission)| {
+            .flat_map(|submission| {
                 Self::extract_glyph_instances(
-                    submission_order as u32,
+                    submission.submission_order,
                     &submission.frame,
                     atlas_resource,
                 )
@@ -152,17 +149,21 @@ impl Renderer {
         let flattened_viewport_embed_instances = contribution
             .submissions
             .iter()
-            .enumerate()
-            .flat_map(|(submission_order, submission)| {
-                Self::extract_viewport_embed_instances(submission_order as u32, &submission.frame)
+            .flat_map(|submission| {
+                Self::extract_viewport_embed_instances(
+                    submission.submission_order,
+                    &submission.frame,
+                )
             })
             .collect::<Vec<_>>();
         let flattened_product_surface_instances = contribution
             .submissions
             .iter()
-            .enumerate()
-            .flat_map(|(submission_order, submission)| {
-                Self::extract_product_surface_instances(submission_order as u32, &submission.frame)
+            .flat_map(|submission| {
+                Self::extract_product_surface_instances(
+                    submission.submission_order,
+                    &submission.frame,
+                )
             })
             .collect::<Vec<_>>();
 
@@ -460,7 +461,6 @@ impl Renderer {
         let surface_height = surface_height_u32.max(1) as f32;
         let empty_ui = PreparedUiFrameContribution::default();
         let ui = prepared_frame.ui().unwrap_or(&empty_ui);
-
         let mut feature_gates = BTreeMap::<RenderFeatureId, FeatureExecutionGate>::new();
         let mut feature_runtime_signatures = BTreeMap::<RenderFeatureId, u64>::new();
 
@@ -482,6 +482,13 @@ impl Renderer {
             .get(&UI_RENDER_FEATURE_ID)
             .copied()
             .unwrap_or_default();
+        // A RunenUI paint payload never falls back to cached predecessor draws,
+        // even if feature admission or subsequent GPU presentation fails.
+        if !ui.runenui_submissions.is_empty()
+            && ui_gate.fallback_policy == FeatureFallbackPolicy::ReuseLastGood
+        {
+            anyhow::bail!("ReuseLastGood is forbidden for frames carrying RunenUI paint");
+        }
         let prepared_material = prepared_frame
             .contributions
             .feature(&MATERIAL_RENDER_FEATURE_ID)
@@ -526,6 +533,34 @@ impl Renderer {
             )?
         };
         let prepared_ui = self.resolve_ui_prepared_with_gate(prepared_ui_current, ui_gate);
+
+        // Validate the direct source-neutral paint before any renderer-side
+        // resource identity is committed. Failed scenes never reserve IDs.
+        // This does not claim execution, submission, or displayed-input truth.
+        let mut staged_resource_ids = self.runenui_2d_resource_ids.clone();
+        let mut runenui_2d = Vec::with_capacity(ui.runenui_submissions.len());
+        for submission in &ui.runenui_submissions {
+            let semantic = crate::plugins::render::features::project_runenui_paint_to_2d(
+                &submission.publication,
+                &mut staged_resource_ids,
+            )
+            .map_err(|error| {
+                anyhow::anyhow!(
+                    "RunenUI producer {:?} has unsupported published paint: {error}",
+                    submission.producer_id,
+                )
+            })?;
+            let logical = submission.publication.logical_size();
+            runenui_2d.push(PreparedRunenUi2dPublication {
+                producer_id: submission.producer_id,
+                publication_id: submission.publication_id,
+                compositor_position: submission.submission_order,
+                logical_extent: (f64::from(logical.width()), f64::from(logical.height())),
+                raster_scale: f64::from(submission.publication.raster_scale().get()),
+                semantic,
+            });
+        }
+        self.runenui_2d_resource_ids = staged_resource_ids;
         prepare_timings.prepare_ui_ms = prepare_ui_start.elapsed().as_secs_f32() * 1000.0;
         prepare_timings.prepare_mesh_ms = 0.0;
         prepare_timings.mesh_hot_path = MeshPrepareHotPath::default();
@@ -539,6 +574,7 @@ impl Renderer {
             prepared_material,
             prepared_material_gpu_resources,
             prepared_ui,
+            runenui_2d,
             ui_dynamic_bind_groups: UiDynamicBindGroups::default(),
             pending_operations,
             viewport_surface_bindings: viewport_surface_bindings.clone(),

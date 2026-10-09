@@ -21,4 +21,5 @@ pub(crate) use frame_submit::frame_render_submit_system;
 pub enum RenderRuntimeSet {
     GpuResidency,
     FramePrepare,
+    FrameSubmit,
 }

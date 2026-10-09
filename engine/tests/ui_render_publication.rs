@@ -1,305 +1,40 @@
+//! U5 typed-paint preparation and headless publication proof.
+//!
+//! Deliberately no renderer-presented receipt is forged by a prepared-frame test:
+//! only exact terminal RunenGPU and RunenRender evidence may promote displayed input.
+
 use std::collections::BTreeMap;
 
 use engine::plugins::TimePlugin;
-use engine::plugins::render::host::RenderSurfaceId;
+use engine::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::{
-    FeatureContributionStatus, PreparedUiFrameResource, RenderPlugin,
-    SurfaceFrameSubmissionRegistryResource,
+    FeatureContributionStatus, PreparedUiFrameResource, PreparedUiSubmissionKind,
+    RenderFrameProducerId, RenderPlugin, RunenUiPaintSubmissionRegistryResource, SurfaceFrameRoute,
+    SurfaceFrameSubmission, SurfaceFrameSubmissionOrder, SurfaceFrameSubmissionRegistryResource,
 };
 use engine::plugins::ui::{
-    IntoUi, UI_RUNTIME_FRAME_PRODUCER_ID, UiRuntimeDiagnosticCode, UiRuntimeDiagnosticsResource,
-    UiRuntimeEvaluationInput, UiRuntimeEvaluationResource, UiRuntimeFramePublicationFailureReason,
-    UiRuntimeFramePublicationResource, UiRuntimeFramePublicationStatus,
-    UiRuntimeFramePublicationTarget, UiRuntimeTraceEventKind, UiRuntimeTraceResource, UiScreen,
-    UiTypedScreenId, UiTypedSource, publish_latest_ui_runtime_frame,
+    AppUiExt, UiPlugin, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
+    UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding,
+    UiRuntimeSlotsResource, UiScreen, UiTypedActionDescriptor, UiTypedScreenId, UiTypedSource,
 };
 use engine::prelude::App;
-use ui_binding::HostDataSnapshot;
-use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistry, runenwerk_control_package};
+use engine::runtime::{NativeWindowId, WindowStateRegistryResource};
+
+use runenui_core::{FontFamilyName, GenericFontFamily, StyleEnvironment};
+use ui_controls::BUTTON_CONTROL_KIND_ID;
 use ui_definition::{
     AuthoredBindingRef, AuthoredControlAccessibilityDefinition, AuthoredControlKindId,
     AuthoredControlValue, AuthoredId, AuthoredRouteId, UiNodeDefinition, UiValueBinding,
 };
-use ui_evaluator::UiEvaluationContext;
-use ui_program::UiProgramSourceId;
-use ui_schema::UiSchemaValue;
+use ui_program::{RouteCapability, RouteId, RouteSchemaVersion, UiProgramSourceId};
+use ui_schema::UiSchemaRef;
 
-const COUNTER_TEXT_KEY: &str = "state.counter.output.selected";
+const CONTROLLED_FONT: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../assets/fonts/JetBrainsMono-Regular.ttf"
+));
 
-#[test]
-fn ui_render_publication_writes_surface_frame_submission_and_trace() {
-    let runtime = evaluated_counter_runtime("Clicked 2 / 5", 2);
-    let mut submissions = SurfaceFrameSubmissionRegistryResource::default();
-    let mut publications = UiRuntimeFramePublicationResource::default();
-    let mut trace = UiRuntimeTraceResource::default();
-    let mut diagnostics = UiRuntimeDiagnosticsResource::default();
-    let target = UiRuntimeFramePublicationTarget::default();
-    let expected_payload = runtime
-        .latest_report()
-        .expect("evaluation should produce report")
-        .frame_payload()
-        .clone();
-
-    let report = publish_latest_ui_runtime_frame(
-        &runtime,
-        &target,
-        &mut submissions,
-        &mut publications,
-        &mut trace,
-        &mut diagnostics,
-    );
-
-    assert!(report.is_published());
-    assert_eq!(report.status(), UiRuntimeFramePublicationStatus::Published);
-    assert_eq!(report.producer_id(), UI_RUNTIME_FRAME_PRODUCER_ID);
-    assert_eq!(report.render_surface_id(), RenderSurfaceId::primary());
-    assert_eq!(
-        report.frame_revision(),
-        Some(expected_payload.frame_revision())
-    );
-    assert_eq!(report.primitive_count(), expected_payload.primitive_count());
-    assert!(diagnostics.is_empty());
-    assert_eq!(publications.latest_report(), Some(&report));
-
-    let submission = submissions
-        .get_for_surface(&UI_RUNTIME_FRAME_PRODUCER_ID, RenderSurfaceId::primary())
-        .expect("UiPlugin publication should write a surface-scoped submission");
-    assert_eq!(submission.producer_id, UI_RUNTIME_FRAME_PRODUCER_ID);
-    assert_eq!(
-        submission.render_surface_id,
-        Some(RenderSurfaceId::primary())
-    );
-    assert_eq!(
-        submission.primitive_count_hint(),
-        expected_payload.primitive_count()
-    );
-
-    assert_frame_trace_contains(&trace, UiRuntimeTraceEventKind::UiFramePublished, &report);
-    assert_frame_trace_contains(&trace, UiRuntimeTraceEventKind::UiFramePresented, &report);
-
-    let output = runtime
-        .latest_report()
-        .expect("evaluation should produce report")
-        .output();
-    assert_eq!(
-        output.state_value(COUNTER_TEXT_KEY),
-        Some(&UiSchemaValue::string("Clicked 2 / 5"))
-    );
-}
-
-#[test]
-fn ui_render_publication_missing_evaluation_records_report_and_diagnostic() {
-    let previous_runtime = evaluated_counter_runtime("Clicked 1 / 5", 1);
-    let runtime = UiRuntimeEvaluationResource::default();
-    let target = UiRuntimeFramePublicationTarget::default();
-    let mut submissions = SurfaceFrameSubmissionRegistryResource::default();
-    let mut publications = UiRuntimeFramePublicationResource::default();
-    let mut trace = UiRuntimeTraceResource::default();
-    let mut diagnostics = UiRuntimeDiagnosticsResource::default();
-    let previous_report = publish_latest_ui_runtime_frame(
-        &previous_runtime,
-        &target,
-        &mut submissions,
-        &mut publications,
-        &mut trace,
-        &mut diagnostics,
-    );
-    assert!(previous_report.is_published());
-    assert!(
-        submissions
-            .get_for_surface(&UI_RUNTIME_FRAME_PRODUCER_ID, RenderSurfaceId::primary())
-            .is_some()
-    );
-
-    let report = publish_latest_ui_runtime_frame(
-        &runtime,
-        &target,
-        &mut submissions,
-        &mut publications,
-        &mut trace,
-        &mut diagnostics,
-    );
-
-    assert!(!report.is_published());
-    assert_eq!(
-        report.status(),
-        UiRuntimeFramePublicationStatus::MissingRuntimeEvaluation
-    );
-    assert!(submissions.is_empty());
-    assert!(
-        submissions
-            .get_for_surface(&UI_RUNTIME_FRAME_PRODUCER_ID, RenderSurfaceId::primary())
-            .is_none()
-    );
-    assert_eq!(publications.latest_report(), Some(&report));
-    assert_eq!(diagnostics.len(), 1);
-
-    let diagnostic = &diagnostics.entries()[0];
-    assert_eq!(
-        diagnostic.code,
-        UiRuntimeDiagnosticCode::FramePublicationRejected
-    );
-    let frame_publication = diagnostic
-        .frame_publication
-        .as_ref()
-        .expect("missing frame should record publication diagnostic facts");
-    assert_eq!(frame_publication.producer_id, UI_RUNTIME_FRAME_PRODUCER_ID);
-    assert_eq!(
-        frame_publication.render_surface_id,
-        RenderSurfaceId::primary()
-    );
-    assert_eq!(
-        frame_publication.failure_reason,
-        UiRuntimeFramePublicationFailureReason::MissingRuntimeEvaluation
-    );
-    assert_frame_trace_contains(&trace, UiRuntimeTraceEventKind::UiFramePublished, &report);
-}
-
-#[test]
-fn explicit_predecessor_renderer_fixture_can_feed_render_prepare() {
-    let runtime = evaluated_counter_runtime("Clicked 3 / 5", 3);
-    let mut submissions = SurfaceFrameSubmissionRegistryResource::default();
-    let mut publications = UiRuntimeFramePublicationResource::default();
-    let mut trace = UiRuntimeTraceResource::default();
-    let mut diagnostics = UiRuntimeDiagnosticsResource::default();
-    let target = UiRuntimeFramePublicationTarget::default();
-
-    let report = publish_latest_ui_runtime_frame(
-        &runtime,
-        &target,
-        &mut submissions,
-        &mut publications,
-        &mut trace,
-        &mut diagnostics,
-    );
-    assert!(report.is_published());
-
-    let mut app = App::headless();
-    app.add_plugin(TimePlugin);
-    app.add_plugin(RenderPlugin);
-    app.insert_resource(submissions);
-    let app = app
-        .run_for_frames(1)
-        .expect("explicit predecessor renderer fixture should reach render prepare");
-
-    let prepared = app
-        .world()
-        .resource::<PreparedUiFrameResource>()
-        .expect("RenderPlugin should prepare UI frame resource");
-    assert_eq!(
-        prepared.status_for_surface(RenderSurfaceId::primary()),
-        FeatureContributionStatus::Ready
-    );
-    let prepared_submission = prepared
-        .payload_for_surface(RenderSurfaceId::primary())
-        .submissions
-        .iter()
-        .find(|submission| submission.producer_id == UI_RUNTIME_FRAME_PRODUCER_ID)
-        .expect("explicit predecessor submission should remain isolated and consumable");
-    assert_eq!(
-        prepared_submission.primitive_count_hint(),
-        report.primitive_count()
-    );
-}
-
-#[test]
-fn ui_render_publication_can_feed_prepare_resource_directly() {
-    let runtime = evaluated_counter_runtime("Clicked 4 / 5", 4);
-    let mut submissions = SurfaceFrameSubmissionRegistryResource::default();
-    let mut publications = UiRuntimeFramePublicationResource::default();
-    let mut trace = UiRuntimeTraceResource::default();
-    let mut diagnostics = UiRuntimeDiagnosticsResource::default();
-    let target = UiRuntimeFramePublicationTarget::default();
-
-    let report = publish_latest_ui_runtime_frame(
-        &runtime,
-        &target,
-        &mut submissions,
-        &mut publications,
-        &mut trace,
-        &mut diagnostics,
-    );
-    assert!(report.is_published());
-
-    let mut app = App::headless();
-    app.add_plugin(TimePlugin);
-    app.add_plugin(RenderPlugin);
-    app.insert_resource(submissions);
-    let app = app
-        .run_for_frames(1)
-        .expect("direct prepared resource path should run");
-    let prepared = app
-        .world()
-        .resource::<PreparedUiFrameResource>()
-        .expect("prepared UI frame resource should exist");
-    let prepared_submission = prepared
-        .payload_for_surface(RenderSurfaceId::primary())
-        .submissions
-        .iter()
-        .find(|submission| submission.producer_id == UI_RUNTIME_FRAME_PRODUCER_ID)
-        .expect("prepare should consume UiPlugin surface-frame submission");
-    assert_eq!(
-        prepared_submission.primitive_count_hint(),
-        report.primitive_count()
-    );
-}
-
-fn evaluated_counter_runtime(text: &str, revision: u64) -> UiRuntimeEvaluationResource {
-    let input = counter_evaluation_input();
-    let mut runtime = UiRuntimeEvaluationResource::default();
-    let mut trace = UiRuntimeTraceResource::default();
-    let mut diagnostics = UiRuntimeDiagnosticsResource::default();
-
-    let report = runtime.evaluate(
-        &input,
-        None,
-        counter_context(text, revision),
-        &mut trace,
-        &mut diagnostics,
-    );
-    assert!(report.frame_payload().primitive_count() > 0);
-    assert!(diagnostics.is_empty(), "{:?}", diagnostics.entries());
-    runtime
-}
-
-fn counter_evaluation_input() -> UiRuntimeEvaluationInput {
-    let registry = ControlPackageRegistry::new()
-        .with_package(runenwerk_control_package())
-        .expect("runenwerk controls package should register");
-    let source = CounterScreen.into_ui_source();
-    let lowering = source.lower_with_registry_snapshot(&registry.snapshot());
-
-    assert!(lowering.passed(), "{:?}", lowering.formation().diagnostics);
-    UiRuntimeEvaluationInput::from_lowering_report(&lowering)
-}
-
-fn counter_context(text: &str, revision: u64) -> UiEvaluationContext {
-    UiEvaluationContext::default().with_host_data(HostDataSnapshot::new(
-        "counter.output.text",
-        UiSchemaValue::string(text),
-        revision,
-    ))
-}
-
-fn assert_frame_trace_contains(
-    trace: &UiRuntimeTraceResource,
-    kind: UiRuntimeTraceEventKind,
-    report: &engine::plugins::ui::UiRuntimeFramePublicationReport,
-) {
-    assert!(
-        trace.events().iter().any(|event| {
-            event.kind() == kind
-                && event.render_producer_id() == Some(report.producer_id())
-                && event.render_surface_id() == Some(report.render_surface_id())
-                && event.frame_revision() == report.frame_revision()
-                && event.frame_publication_status() == Some(report.status())
-        }),
-        "trace missing {kind:?} for report {report:?}: {:?}",
-        trace.events()
-    );
-}
-
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone, Copy)]
 struct CounterScreen;
 
 impl UiScreen for CounterScreen {
@@ -319,26 +54,31 @@ impl UiScreen for CounterScreen {
                         label: UiValueBinding::static_text("Counter"),
                         availability: None,
                     },
-                    counter_output_control(),
+                    counter_output(),
                 ],
             },
         )
+        .with_action_descriptor(UiTypedActionDescriptor::new(
+            engine::plugins::ui::UiTypedActionId::new("counter.increment.action"),
+            RouteId::new("counter.increment"),
+            RouteSchemaVersion::new(1),
+            UiSchemaRef::new("runenwerk.ui.controls.button.event", 1),
+            RouteCapability::new("counter.action.increment"),
+        ))
     }
 }
 
-fn counter_output_control() -> UiNodeDefinition {
+fn counter_output() -> UiNodeDefinition {
     let mut properties = BTreeMap::new();
     properties.insert(
         "label".to_owned(),
         AuthoredControlValue::String("Counter output".to_owned()),
     );
-
     let mut bindings = BTreeMap::new();
     bindings.insert(
         "selected".to_owned(),
-        AuthoredBindingRef::new("counter.output.text"),
+        AuthoredBindingRef::new("counter.output.selected"),
     );
-
     UiNodeDefinition::Control {
         id: AuthoredId::new("counter.output"),
         kind: AuthoredControlKindId::new(BUTTON_CONTROL_KIND_ID),
@@ -351,4 +91,144 @@ fn counter_output_control() -> UiNodeDefinition {
         }),
         children: Vec::new(),
     }
+}
+
+fn controlled_fonts() -> UiRuntimeFontConfiguration {
+    UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT.to_vec()]).with_generic_mapping(
+        GenericFontFamily::SansSerif,
+        vec![FontFamilyName::new("JetBrains Mono").expect("valid test font family")],
+    )
+}
+
+fn producer(id: u64) -> RenderFrameProducerId {
+    RenderFrameProducerId::try_from_raw(id).expect("valid producer")
+}
+
+#[test]
+fn mounted_counter_requires_no_native_or_renderer_resource() {
+    let mut app = App::headless();
+    app.add_plugin(UiPlugin);
+    let mount = app
+        .ui()
+        .mount_with_fonts(CounterScreen, &controlled_fonts());
+    let slot = mount.slot_id().expect("headless typed Counter must mount");
+    assert!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .expect("RunenUI slots resource")
+            .contains(slot)
+    );
+    assert!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .expect("presentation ledger installed")
+            .binding(slot)
+            .is_none()
+    );
+    assert!(
+        app.world()
+            .resource::<RenderSurfaceRegistryResource>()
+            .is_err()
+    );
+}
+
+#[test]
+fn attached_counter_prepares_runenui_paint_but_never_forges_presented_input() {
+    let mut app = App::headless();
+    app.add_plugin(TimePlugin);
+    app.add_plugin(UiPlugin);
+    app.add_plugin(RenderPlugin);
+    let slot = app
+        .ui()
+        .mount_with_fonts(CounterScreen, &controlled_fonts())
+        .slot_id()
+        .expect("controlled typed Counter must mount");
+    let surface = RenderSurfaceId::primary();
+    let mut windows = WindowStateRegistryResource::default();
+    let native = windows.register_primary_window("Counter", (320, 160), 1.0, true);
+    assert_eq!(native, NativeWindowId::primary());
+    app.insert_resource(windows);
+    app.world_mut()
+        .resource_mut::<RenderSurfaceRegistryResource>()
+        .expect("render surface registry installed")
+        .confirm_surface_attachment(surface, native, (320, 160))
+        .expect("attached source facts");
+
+    app.world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .expect("presentation associations installed")
+        .bind(
+            UiRuntimePresentationBinding::new(
+                slot,
+                producer(71),
+                surface,
+                StyleEnvironment::default(),
+            )
+            .with_route(SurfaceFrameRoute::Screen)
+            .with_order(SurfaceFrameSubmissionOrder::new(20, 0)),
+        )
+        .expect("one valid producer/surface binding");
+
+    // Neighboring legacy producers must retain their positions around RunenUI.
+    let registry = app
+        .world_mut()
+        .resource_mut::<SurfaceFrameSubmissionRegistryResource>()
+        .expect("legacy registry remains installed");
+    registry.replace(
+        SurfaceFrameSubmission::new(producer(70))
+            .with_order(SurfaceFrameSubmissionOrder::new(0, 0)),
+    );
+    registry.replace(
+        SurfaceFrameSubmission::new(producer(72))
+            .with_order(SurfaceFrameSubmissionOrder::new(40, 0)),
+    );
+
+    let app = app
+        .run_for_frames(1)
+        .expect("headless RenderPrepare must publish without a GPU");
+    let paint = app
+        .world()
+        .resource::<RunenUiPaintSubmissionRegistryResource>()
+        .expect("typed paint intake installed");
+    let published = paint.ordered_submissions_for_surface(surface);
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].producer_id, producer(71));
+    assert!(!published[0].publication.scene().is_empty());
+    let prepared = app
+        .world()
+        .resource::<PreparedUiFrameResource>()
+        .expect("UI feature prepared on the same surface");
+    assert_eq!(
+        prepared.status_for_surface(surface),
+        FeatureContributionStatus::Ready,
+    );
+    let ordered = prepared.payload_for_surface(surface);
+    assert_eq!(
+        ordered.ordered,
+        vec![
+            PreparedUiSubmissionKind::Legacy(0),
+            PreparedUiSubmissionKind::RunenUi(0),
+            PreparedUiSubmissionKind::Legacy(1),
+        ]
+    );
+    assert_eq!(ordered.submissions[0].submission_order, 0);
+    assert_eq!(ordered.runenui_submissions[0].submission_order, 1);
+    assert_eq!(ordered.submissions[1].submission_order, 2);
+    assert_eq!(ordered.submissions[0].producer_id, producer(70));
+    assert_eq!(ordered.submissions[1].producer_id, producer(72));
+    let ledger = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .expect("presentation ledger");
+    assert!(ledger.pending(slot).is_some());
+    assert!(
+        ledger
+            .displayed_for_mapping(
+                slot,
+                UiRuntimeNativeMapping::new(native, surface, (320, 160), 1.0)
+                    .expect("valid native mapping"),
+            )
+            .is_none(),
+        "RenderPrepare is not a terminal display receipt"
+    );
 }

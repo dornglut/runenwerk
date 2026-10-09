@@ -72,6 +72,8 @@ impl Renderer {
             product_surface_pass: None,
             product_surface_pass_format: None,
             glyph_atlas_gpu: std::collections::BTreeMap::new(),
+            runenui_2d_resource_ids: Default::default(),
+            runenui_2d_executor: runen_render::execution_2d::Render2dExecutor::new(),
             render_sessions: Default::default(),
             temporal_execution_evidence: std::collections::BTreeMap::new(),
             dynamic_texture_targets:
@@ -97,6 +99,9 @@ impl Renderer {
             gpu_observations: super::render_flow::RendererGpuObservationState::default(),
             pending_gpu_observation_output:
                 super::render_flow::RendererGpuObservationOutput::default(),
+            runenui_gpu_accepted: Vec::new(),
+            runenui_gpu_presented: Vec::new(),
+            runenui_gpu_rejected: Vec::new(),
         }
     }
 
@@ -130,6 +135,9 @@ impl Renderer {
             composed_timing_evidence,
             captured_textures,
             capture_results,
+            runenui_accepted,
+            runenui_presented,
+            runenui_rejected,
         } = self.gpu_observations.progress(context);
         self.pending_gpu_observation_output
             .timing_evidence
@@ -143,6 +151,15 @@ impl Renderer {
         self.pending_gpu_observation_output
             .capture_results
             .extend(capture_results);
+        self.pending_gpu_observation_output
+            .runenui_accepted
+            .extend(runenui_accepted);
+        self.pending_gpu_observation_output
+            .runenui_presented
+            .extend(runenui_presented);
+        self.pending_gpu_observation_output
+            .runenui_rejected
+            .extend(runenui_rejected);
         Ok(())
     }
 
@@ -173,6 +190,30 @@ impl Renderer {
         self.last_composed_gpu_timing_evidence = progressed.composed_timing_evidence;
         self.last_captured_textures = progressed.captured_textures;
         self.last_capture_selector_results = progressed.capture_results;
+        self.runenui_gpu_accepted
+            .append(&mut progressed.runenui_accepted);
+        self.runenui_gpu_presented
+            .append(&mut progressed.runenui_presented);
+        self.runenui_gpu_rejected
+            .append(&mut progressed.runenui_rejected);
+    }
+
+    /// Consumes only renderer-proven terminal presentation identities. Their
+    /// source publication content remains owned by the UiPlugin ledger.
+    pub(in crate::plugins::render) fn take_runenui_terminal_publications(
+        &mut self,
+    ) -> (
+        Vec<RunenUiPublicationId>,
+        Vec<RunenUiPublicationId>,
+        Vec<(RunenUiPublicationId, &'static str)>,
+    ) {
+        let mut accepted = std::mem::take(&mut self.runenui_gpu_accepted);
+        accepted.append(&mut self.pending_gpu_observation_output.runenui_accepted);
+        let mut presented = std::mem::take(&mut self.runenui_gpu_presented);
+        presented.append(&mut self.pending_gpu_observation_output.runenui_presented);
+        let mut rejected = std::mem::take(&mut self.runenui_gpu_rejected);
+        rejected.append(&mut self.pending_gpu_observation_output.runenui_rejected);
+        (accepted, presented, rejected)
     }
 
     pub(in crate::plugins::render) fn clear_published_gpu_observations(&mut self) {
@@ -598,14 +639,18 @@ impl Renderer {
     /// Lowers the current deletion-bound UI batches into execution-complete generic GPU draws.
     /// Screen-uniform and scissor preparation remain main-view-derived; only the explicit viewport
     /// comes from the exact acquired surface attachment extent.
-    pub(super) fn lower_ui_draws(
+    /// Preserves the producer's exact mixed-compositor position alongside each
+    /// successfully lowered legacy draw. The GPU work assembler can split
+    /// ordinary UiFrame segments around RunenRender's exact authored F2 nodes;
+    /// it must never infer the segments from a flattened draw vector.
+    pub(super) fn lower_ui_draws_with_submission_positions(
         &self,
         prepared: &UiPreparedDraws,
         viewport_surface_bindings: &ViewportSurfaceBindingRegistry,
         viewport_bind_groups: &UiViewportBindGroups,
         product_surface_bind_groups: &UiProductSurfaceBindGroups,
         acquired_surface_extent: (u32, u32),
-    ) -> Result<Vec<GpuRenderDraw>> {
+    ) -> Result<Vec<(u32, GpuRenderDraw)>> {
         let viewport = GpuViewport::new(
             0.0,
             0.0,
@@ -628,6 +673,7 @@ impl Renderer {
                             &batch.instance_buffer._handle,
                             batch.instance_count,
                             batch.scissor,
+                            batch.submission_order,
                         )
                     }),
                 UiPreparedDrawCommand::Stroke(index) => self
@@ -641,6 +687,7 @@ impl Renderer {
                             &batch.instance_buffer._handle,
                             batch.instance_count,
                             batch.scissor,
+                            batch.submission_order,
                         )
                     }),
                 UiPreparedDrawCommand::Glyph(index) => self
@@ -655,6 +702,7 @@ impl Renderer {
                                 &batch.instance_buffer._handle,
                                 batch.instance_count,
                                 batch.scissor,
+                                batch.submission_order,
                             )
                         })
                     }),
@@ -672,6 +720,7 @@ impl Renderer {
                             &batch.instance_buffer._handle,
                             batch.instance_count,
                             batch.scissor,
+                            batch.submission_order,
                         ))
                     }),
                 UiPreparedDrawCommand::ProductSurface(index) => self
@@ -686,34 +735,45 @@ impl Renderer {
                             &batch.instance_buffer._handle,
                             batch.instance_count,
                             batch.scissor,
+                            batch.submission_order,
                         ))
                     }),
             };
-            let Some((pipeline, bindings, instance_buffer, instance_count, scissor)) = projected
+            let Some((
+                pipeline,
+                bindings,
+                instance_buffer,
+                instance_count,
+                scissor,
+                submission_order,
+            )) = projected
             else {
                 continue;
             };
             if instance_count == 0 {
                 continue;
             }
-            draws.push(GpuRenderDraw::new(
-                pipeline.descriptor().clone(),
-                bindings,
-                [GpuVertexBufferBinding::new(
+            draws.push((
+                submission_order,
+                GpuRenderDraw::new(
+                    pipeline.descriptor().clone(),
+                    bindings,
+                    [GpuVertexBufferBinding::new(
+                        0,
+                        instance_buffer,
+                        GpuBufferRange::whole(instance_buffer)?,
+                    )?],
+                    None,
+                    GpuDrawIntent::direct(
+                        GpuDrawRange::new(0, 6)?,
+                        GpuDrawRange::new(0, instance_count)?,
+                    ),
+                    viewport,
+                    GpuScissorRect::new(scissor.0, scissor.1, scissor.2, scissor.3)?,
+                    GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0)?,
                     0,
-                    instance_buffer,
-                    GpuBufferRange::whole(instance_buffer)?,
-                )?],
-                None,
-                GpuDrawIntent::direct(
-                    GpuDrawRange::new(0, 6)?,
-                    GpuDrawRange::new(0, instance_count)?,
-                ),
-                viewport,
-                GpuScissorRect::new(scissor.0, scissor.1, scissor.2, scissor.3)?,
-                GpuBlendConstant::new(0.0, 0.0, 0.0, 0.0)?,
-                0,
-            )?);
+                )?,
+            ));
         }
         Ok(draws)
     }

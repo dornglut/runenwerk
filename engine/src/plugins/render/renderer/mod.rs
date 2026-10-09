@@ -1,6 +1,6 @@
-use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::features::{
-    FeatureContributionStatus, FeatureFallbackPolicy, UiFontAtlasResource,
+    FeatureContributionStatus, FeatureFallbackPolicy, RunenUi2dResourceIdentityMap,
+    RunenUi2dSemanticProjection, UiFontAtlasResource,
 };
 use crate::plugins::render::frame::PreparedRenderFrame;
 use crate::plugins::render::graph::{
@@ -15,6 +15,7 @@ use crate::plugins::render::inspect::{
     ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
 };
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
+use crate::plugins::render::{RenderFlowId, RenderFrameProducerId, RunenUiPublicationId};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
 use runen_gpu::{
@@ -780,6 +781,18 @@ pub(crate) struct PreparedMaterialGpuResources {
     _samplers: Vec<RendererSamplerResource>,
 }
 
+/// Already source-neutral F2 semantic facts for one exact UI publication.
+/// The RunenUI publication itself remains owned by Engine's UI integration.
+#[derive(Debug, Clone)]
+struct PreparedRunenUi2dPublication {
+    producer_id: RenderFrameProducerId,
+    publication_id: RunenUiPublicationId,
+    compositor_position: u32,
+    logical_extent: (f64, f64),
+    raster_scale: f64,
+    semantic: RunenUi2dSemanticProjection,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct RendererPreparedPacket {
     surface_format: GpuTextureFormat,
@@ -790,6 +803,9 @@ pub(crate) struct RendererPreparedPacket {
     prepared_material: Option<crate::plugins::render::PreparedMaterialFeatureContribution>,
     prepared_material_gpu_resources: Option<PreparedMaterialGpuResources>,
     prepared_ui: UiPreparedDraws,
+    /// RunenUI paint validated against the exact admitted semantic subset,
+    /// ready for RunenRender F2 preparation without introducing another UI IR.
+    runenui_2d: Vec<PreparedRunenUi2dPublication>,
     ui_dynamic_bind_groups: UiDynamicBindGroups,
     pending_operations: RendererPendingOperations,
     viewport_surface_bindings: ViewportSurfaceBindingRegistry,
@@ -811,6 +827,9 @@ pub struct Renderer {
     product_surface_pass: Option<ProductSurfacePass>,
     product_surface_pass_format: Option<GpuTextureFormat>,
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
+    /// Renderer lifetime owns monotonic semantic resource mapping, not RunenUI.
+    runenui_2d_resource_ids: RunenUi2dResourceIdentityMap,
+    runenui_2d_executor: runen_render::execution_2d::Render2dExecutor,
     render_sessions: retained_sessions::RetainedRenderSessions,
     temporal_execution_evidence: BTreeMap<u64, Vec<runen_render::RenderTemporalExecutionEvidence>>,
     dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
@@ -831,6 +850,11 @@ pub struct Renderer {
     last_captured_textures: Vec<RenderCapturedTexture>,
     gpu_observations: render_flow::RendererGpuObservationState,
     pending_gpu_observation_output: render_flow::RendererGpuObservationOutput,
+    /// Terminal GPU/Present observations retained until the Engine's UiPlugin
+    /// integration explicitly drains them. A failed render may not discard them.
+    runenui_gpu_accepted: Vec<RunenUiPublicationId>,
+    runenui_gpu_presented: Vec<RunenUiPublicationId>,
+    runenui_gpu_rejected: Vec<(RunenUiPublicationId, &'static str)>,
 }
 
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
@@ -868,6 +892,16 @@ impl Gfx {
         frame_index: u64,
     ) -> &[runen_render::RenderTemporalExecutionEvidence] {
         self.renderer.temporal_execution_evidence(frame_index)
+    }
+
+    pub(crate) fn take_runenui_terminal_publications(
+        &mut self,
+    ) -> (
+        Vec<RunenUiPublicationId>,
+        Vec<RunenUiPublicationId>,
+        Vec<(RunenUiPublicationId, &'static str)>,
+    ) {
+        self.renderer.take_runenui_terminal_publications()
     }
 
     pub fn attach_surface(
@@ -1103,6 +1137,41 @@ mod retained_sessions;
 mod setup;
 
 use crate::plugins::RenderFeatureId;
+
+// The retained RunenRender executor owns only CPU-side immutable semantic
+// observations and derived field data. Once prepare() returns, the owned F2
+// contribution holds its GPU work independently of the executor. RunenGPU owns
+// submitted resources and completion; its exact witnesses remain in gpu_observations.
+// Therefore rebuilding this CPU-side preparation cache does not require GPU
+// quiescence, which may never occur during continuous UI submission.
+impl Renderer {
+    pub(in crate::plugins::render) fn reclaim_obsolete_runenui_resources(
+        &mut self,
+        paints: &crate::plugins::render::RunenUiPaintSubmissionRegistryResource,
+    ) -> usize {
+        let mut live = std::collections::HashSet::new();
+        // Keep every active source publication across every surface scope;
+        // never retain just the currently rendered primary window.
+        for submission in paints.ordered_submissions() {
+            for item in submission.publication.scene().items() {
+                if let runenui_core::PaintPrimitive::ShapedTextRun(run) = item.primitive() {
+                    live.insert(run.resource_ref().clone());
+                }
+            }
+        }
+        let retired = self
+            .runenui_2d_resource_ids
+            .reclaim_obsolete_over_budget(&live);
+        if retired != 0 {
+            // A fresh immutable-observation generation is necessary: discard_cache()
+            // intentionally retains all observed values. Surviving semantic IDs
+            // map to their original resources; retired IDs are never reissued.
+            // Previously accepted GPU submissions do not borrow executor state.
+            self.runenui_2d_executor = runen_render::execution_2d::Render2dExecutor::new();
+        }
+        retired
+    }
+}
 
 #[cfg(test)]
 mod tests {

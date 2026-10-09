@@ -6,9 +6,10 @@ use super::features::{
     PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedParticleVfxFeatureResource, PreparedUiFrameResource, PreparedWindFieldFeatureResource,
     PreparedWorldFeatureResource, RenderFeatureRegistryResource,
-    SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
-    ViewportSurfaceBindingRegistryResource, prepare_ui_feature_resource_system,
-    register_particle_vfx_feature_collector, sync_render_feature_registry_system,
+    RunenUiPaintSubmissionRegistryResource, SurfaceFrameSubmissionRegistryResource,
+    UiFontAtlasResource, ViewportSurfaceBindingRegistryResource,
+    prepare_ui_feature_resource_system, register_particle_vfx_feature_collector,
+    sync_render_feature_registry_system,
     world::{
         PreparedWorldVisualFeatureResource, RenderSdfRaymarchAccelerationResource,
         RenderSdfResidencyBudgetResource, RenderSdfResidencyResource,
@@ -72,6 +73,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<ViewportSurfaceBindingRegistryResource>();
         app.init_resource::<UiFontAtlasResource>();
         app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
+        app.init_resource::<RunenUiPaintSubmissionRegistryResource>();
         app.init_resource::<EditorPickingResultResource>();
         app.init_resource::<PreparedDrawFeatureResource>();
         app.init_resource::<PreparedWorldFeatureResource>();
@@ -152,7 +154,12 @@ impl Plugin for RenderPlugin {
                 .on_invoker_thread()
                 .in_set(RenderRuntimeSet::FramePrepare),
         );
-        app.add_systems(RenderSubmit, frame_render_submit_system.on_invoker_thread());
+        app.add_systems(
+            RenderSubmit,
+            frame_render_submit_system
+                .on_invoker_thread()
+                .in_set(RenderRuntimeSet::FrameSubmit),
+        );
     }
 }
 

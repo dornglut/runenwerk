@@ -1,9 +1,11 @@
 use crate::app::App;
 use crate::plugin::Plugin;
+use crate::runtime::{RenderPrepare, RenderSubmit, SystemConfigExt, SystemMobilityExt};
 
 use super::{
-    UiPluginStateResource, UiRuntimeDiagnosticsResource, UiRuntimeReportResource,
-    UiRuntimeSlotsResource,
+    UiPluginStateResource, UiRuntimeDiagnosticsResource, UiRuntimePresentationAssociationsResource,
+    UiRuntimeReportResource, UiRuntimeSet, UiRuntimeSlotsResource,
+    apply_runenui_terminal_presentations_system, publish_runenui_bound_surfaces_system,
 };
 
 /// Installs the Engine-owned RunenUI integration resources.
@@ -15,6 +17,19 @@ impl Plugin for UiPlugin {
         app.init_resource::<UiRuntimeDiagnosticsResource>();
         app.init_resource::<UiRuntimeReportResource>();
         app.init_resource::<UiRuntimeSlotsResource>();
+        app.init_resource::<UiRuntimePresentationAssociationsResource>();
+        app.add_systems(
+            RenderPrepare,
+            publish_runenui_bound_surfaces_system
+                .on_invoker_thread()
+                .in_set(UiRuntimeSet::RenderPublication),
+        );
+        app.add_systems(
+            RenderSubmit,
+            apply_runenui_terminal_presentations_system
+                .on_invoker_thread()
+                .after_if_present(crate::plugins::render::runtime::RenderRuntimeSet::FrameSubmit),
+        );
 
         let diagnostic_count = app
             .world()
