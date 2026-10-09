@@ -1,5 +1,5 @@
-use std::process::Command;
 use std::collections::BTreeMap;
+use std::process::Command;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -14,6 +14,12 @@ use engine::plugins::ui::{
     UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
     UiScreen, UiTypedActionDescriptor, UiTypedScreenId, UiTypedSource,
 };
+use engine::plugins::{RenderPlugin, UiPlugin, default_plugins};
+use engine::prelude::{App, AppRenderExt, Res, Startup, Update};
+use engine::runtime::{
+    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, NativeWindowLifecycleState,
+    WindowStateRegistryResource,
+};
 use runenui_core::{FontFamilyName, GenericFontFamily, StyleEnvironment};
 use ui_controls::BUTTON_CONTROL_KIND_ID;
 use ui_definition::{
@@ -22,12 +28,6 @@ use ui_definition::{
 };
 use ui_program::{RouteCapability, RouteId, RouteSchemaVersion, UiProgramSourceId};
 use ui_schema::UiSchemaRef;
-use engine::plugins::{RenderPlugin, UiPlugin, default_plugins};
-use engine::prelude::{App, AppRenderExt, Res, Startup, Update};
-use engine::runtime::{
-    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, NativeWindowLifecycleState,
-    WindowStateRegistryResource,
-};
 use winit::window::Window;
 
 const NO_RENDER_ENV: &str = "RUNENWERK_NATIVE_NO_RENDER_SMOKE";
@@ -102,7 +102,6 @@ fn native_counter_fonts() -> UiRuntimeFontConfiguration {
         vec![FontFamilyName::new("JetBrains Mono").expect("controlled font family")],
     )
 }
-
 
 fn main() {
     match (
@@ -475,8 +474,7 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
             .bind(
                 UiRuntimePresentationBinding::new(
                     slot,
-                    RenderFrameProducerId::try_from_raw(71)
-                        .expect("test producer is nonzero"),
+                    RenderFrameProducerId::try_from_raw(71).expect("test producer is nonzero"),
                     RenderSurfaceId::primary(),
                     StyleEnvironment::default(),
                 )
