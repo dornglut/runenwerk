@@ -190,9 +190,12 @@ impl Renderer {
         self.last_composed_gpu_timing_evidence = progressed.composed_timing_evidence;
         self.last_captured_textures = progressed.captured_textures;
         self.last_capture_selector_results = progressed.capture_results;
-        self.runenui_gpu_accepted.append(&mut progressed.runenui_accepted);
-        self.runenui_gpu_presented.append(&mut progressed.runenui_presented);
-        self.runenui_gpu_rejected.append(&mut progressed.runenui_rejected);
+        self.runenui_gpu_accepted
+            .append(&mut progressed.runenui_accepted);
+        self.runenui_gpu_presented
+            .append(&mut progressed.runenui_presented);
+        self.runenui_gpu_rejected
+            .append(&mut progressed.runenui_rejected);
     }
 
     /// Consumes only renderer-proven terminal presentation identities. Their

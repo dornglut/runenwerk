@@ -1,10 +1,10 @@
+use crate::plugins::render::RunenUiPublicationId;
 use super::*;
 use runen_gpu::{
     GpuContext, GpuContextAffinity, GpuExecutionLifecycleState, GpuReadbackId, GpuReadbackStatus,
     GpuSubmission, GpuSubmissionFailure, GpuSubmissionStatus, GpuWorkNodeId,
 };
 use runen_render::execution_2d::Render2dContributionToken;
-use crate::plugins::render::RunenUiPublicationId;
 
 #[derive(Debug, Default)]
 pub(in crate::plugins::render::renderer) struct RendererGpuObservationOutput {
@@ -271,7 +271,9 @@ impl RendererGpuObservationState {
                 .composed_timing_evidence
                 .push(timing.pending_evidence());
         }
-        output.runenui_accepted.extend(runenui.iter().map(|witness| witness.publication_id));
+        output
+            .runenui_accepted
+            .extend(runenui.iter().map(|witness| witness.publication_id));
         self.accepted.push(AcceptedRendererObservation {
             submission,
             timings: accepted_timings,
@@ -377,7 +379,10 @@ impl RendererGpuObservationState {
                     GpuSubmissionStatus::Accepted => {}
                     GpuSubmissionStatus::Completed => {
                         for witness in std::mem::take(&mut accepted.runenui) {
-                            if !accepted.submission.contains_work_node(&witness.present_node) {
+                            if !accepted
+                                .submission
+                                .contains_work_node(&witness.present_node)
+                            {
                                 output.runenui_rejected.push((
                                     witness.publication_id,
                                     "same submitted GPU graph omitted terminal Present node",

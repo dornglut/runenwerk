@@ -1,6 +1,6 @@
 use crate::plugins::RenderFrameProducerId;
-use ui_render_data::UiFrame;
 use runenui_runtime::PaintPublication;
+use ui_render_data::UiFrame;
 
 use super::RunenUiPublicationId;
 
@@ -30,7 +30,9 @@ pub struct PreparedRunenUiPaintSubmission {
 
 impl PreparedUiFrameContribution {
     pub fn is_empty(&self) -> bool {
-        self.submissions.iter().all(PreparedSurfaceFrameSubmission::is_empty)
+        self.submissions
+            .iter()
+            .all(PreparedSurfaceFrameSubmission::is_empty)
             && self
                 .runenui_submissions
                 .iter()

@@ -4,8 +4,7 @@ use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
 
 use super::{
     UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeFontConfiguration,
-    UiRuntimeSlotMountFailure,
-    UiRuntimeSlotMountReport, UiRuntimeSlotsResource, UiScreen,
+    UiRuntimeSlotMountFailure, UiRuntimeSlotMountReport, UiRuntimeSlotsResource, UiScreen,
 };
 
 pub trait AppUiExt {

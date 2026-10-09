@@ -8,12 +8,12 @@
 use std::collections::HashMap;
 
 use runen_render::composition_2d::{
-    Render2dAffineTransform, Render2dColorRgba8, Render2dComposition,
-    Render2dCompositionError, Render2dEntry, Render2dFontBinding, Render2dGeometryError,
-    Render2dGlyph, Render2dItem, Render2dOpacity, Render2dPoint, Render2dPrimitive,
-    Render2dResourceBinding, Render2dResourceBindingError, Render2dResourceBindings,
-    Render2dResourceError, Render2dResourceId, Render2dResourceValue,
-    Render2dShapedTextPrimitive, Render2dShapedTextResource,
+    Render2dAffineTransform, Render2dColorRgba8, Render2dComposition, Render2dCompositionError,
+    Render2dEntry, Render2dFontBinding, Render2dGeometryError, Render2dGlyph, Render2dItem,
+    Render2dOpacity, Render2dPoint, Render2dPrimitive, Render2dResourceBinding,
+    Render2dResourceBindingError, Render2dResourceBindings, Render2dResourceError,
+    Render2dResourceId, Render2dResourceValue, Render2dShapedTextPrimitive,
+    Render2dShapedTextResource,
 };
 use runenui_core::{LogicalTransform, PaintPrimitive, ResourceRef, SceneLayer, SceneOpacity};
 use runenui_runtime::{PaintPublication, PaintSceneItem};
@@ -52,8 +52,8 @@ impl RunenUi2dResourceIdentityMap {
             .last_issued
             .checked_add(1)
             .ok_or(RunenUi2dProjectionError::ResourceIdsExhausted)?;
-        let id = Render2dResourceId::new(raw)
-            .ok_or(RunenUi2dProjectionError::ResourceIdsExhausted)?;
+        let id =
+            Render2dResourceId::new(raw).ok_or(RunenUi2dProjectionError::ResourceIdsExhausted)?;
         self.last_issued = raw;
         self.by_source.insert(source.clone(), id);
         Ok(id)
@@ -227,11 +227,8 @@ fn project_item(
                 )
             })
             .collect::<Result<Vec<_>, _>>()?;
-        let value = Render2dShapedTextResource::new(
-            binding,
-            f64::from(shaped.font_size()),
-            glyphs,
-        )?;
+        let value =
+            Render2dShapedTextResource::new(binding, f64::from(shaped.font_size()), glyphs)?;
         bindings.push(Render2dResourceBinding::new(
             next,
             Render2dResourceValue::ShapedText(value),
@@ -243,17 +240,10 @@ fn project_item(
     let origin = run.origin();
     let point = Render2dPoint::new(f64::from(origin.x()), f64::from(origin.y()))?;
     let color = run.foreground();
-    let rgba = Render2dColorRgba8::new(
-        color.red(),
-        color.green(),
-        color.blue(),
-        color.alpha(),
-    );
+    let rgba = Render2dColorRgba8::new(color.red(), color.green(), color.blue(), color.alpha());
 
     Ok(Render2dItem::new(
-        Render2dPrimitive::ShapedText(Render2dShapedTextPrimitive::new(
-            resource_id, point, rgba,
-        )),
+        Render2dPrimitive::ShapedText(Render2dShapedTextPrimitive::new(resource_id, point, rgba)),
         transform,
         Vec::new(),
         Render2dOpacity::OPAQUE,
@@ -283,15 +273,25 @@ mod tests {
         let mut ids = RunenUi2dResourceIdentityMap::default();
         let source_a = ResourceRef::new(ResourceKind::ShapedTextRun);
         let source_b = ResourceRef::new(ResourceKind::ShapedTextRun);
-        let first = ids.resolve_or_allocate(&source_a).expect("first resource id");
-        assert_eq!(first, ids.resolve_or_allocate(&source_a).expect("stable resource id"));
-        let second = ids.resolve_or_allocate(&source_b).expect("different resource id");
+        let first = ids
+            .resolve_or_allocate(&source_a)
+            .expect("first resource id");
+        assert_eq!(
+            first,
+            ids.resolve_or_allocate(&source_a)
+                .expect("stable resource id")
+        );
+        let second = ids
+            .resolve_or_allocate(&source_b)
+            .expect("different resource id");
         assert_ne!(first, second);
         assert_eq!(ids.retained_count(), 2);
         assert!(ids.retire(&source_a));
         assert_eq!(ids.retained_count(), 1);
         assert!(!ids.retire(&source_a));
-        let successor = ids.resolve_or_allocate(&source_a).expect("retired source renewed");
+        let successor = ids
+            .resolve_or_allocate(&source_a)
+            .expect("retired source renewed");
         assert_ne!(first, successor, "retired resource id must not be recycled");
         assert_ne!(second, successor, "resource identities must not alias");
     }

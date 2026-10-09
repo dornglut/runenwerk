@@ -1,4 +1,3 @@
-use crate::plugins::render::{RenderFlowId, RenderFrameProducerId, RunenUiPublicationId};
 use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, RunenUi2dResourceIdentityMap,
     RunenUi2dSemanticProjection, UiFontAtlasResource,
@@ -15,6 +14,7 @@ use crate::plugins::render::inspect::{
     RenderGpuTimingCapability, RenderPassProvenanceRecord, RenderPassTimingEvidence,
     ResolvedRenderCapturePlan, RuntimeResourceInspectionEntry,
 };
+use crate::plugins::render::{RenderFlowId, RenderFrameProducerId, RunenUiPublicationId};
 use crate::plugins::render::shader::{ShaderHandle, ShaderRegistryResource};
 use anyhow::Result;
 use bytemuck::{Pod, Zeroable};
@@ -903,8 +903,6 @@ impl Gfx {
     ) {
         self.renderer.take_runenui_terminal_publications()
     }
-
-
 
     pub fn attach_surface(
         &mut self,

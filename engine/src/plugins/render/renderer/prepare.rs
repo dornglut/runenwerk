@@ -150,14 +150,20 @@ impl Renderer {
             .submissions
             .iter()
             .flat_map(|submission| {
-                Self::extract_viewport_embed_instances(submission.submission_order, &submission.frame)
+                Self::extract_viewport_embed_instances(
+                    submission.submission_order,
+                    &submission.frame,
+                )
             })
             .collect::<Vec<_>>();
         let flattened_product_surface_instances = contribution
             .submissions
             .iter()
             .flat_map(|submission| {
-                Self::extract_product_surface_instances(submission.submission_order, &submission.frame)
+                Self::extract_product_surface_instances(
+                    submission.submission_order,
+                    &submission.frame,
+                )
             })
             .collect::<Vec<_>>();
 
@@ -549,7 +555,10 @@ impl Renderer {
                 producer_id: submission.producer_id,
                 publication_id: submission.publication_id,
                 compositor_position: submission.submission_order,
-                logical_extent: (f64::from(logical.width().get()), f64::from(logical.height().get())),
+                logical_extent: (
+                    f64::from(logical.width().get()),
+                    f64::from(logical.height().get()),
+                ),
                 raster_scale: f64::from(submission.publication.raster_scale().get()),
                 semantic,
             });

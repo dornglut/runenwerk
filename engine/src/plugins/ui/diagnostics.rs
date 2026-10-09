@@ -237,8 +237,6 @@ impl UiRuntimeDiagnostic {
             }),
         }
     }
-
-
 }
 
 /// Diagnostics collected by the UI runtime foundation.

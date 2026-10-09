@@ -325,17 +325,23 @@ pub(crate) fn prepare_submissions(
                     frame: submission.frame.clone(),
                     rect_shader_asset_id: submission.rect_shader_asset_id.clone(),
                 });
-                payload.ordered.push(PreparedUiSubmissionKind::Legacy(index));
+                payload
+                    .ordered
+                    .push(PreparedUiSubmissionKind::Legacy(index));
             }
             OrderedSurfaceUiSubmission::RunenUi(submission) => {
                 let index = payload.runenui_submissions.len();
-                payload.runenui_submissions.push(PreparedRunenUiPaintSubmission {
-                    producer_id: submission.producer_id,
-                    publication_id: submission.publication_id,
-                    submission_order: position,
-                    publication: submission.publication.clone(),
-                });
-                payload.ordered.push(PreparedUiSubmissionKind::RunenUi(index));
+                payload
+                    .runenui_submissions
+                    .push(PreparedRunenUiPaintSubmission {
+                        producer_id: submission.producer_id,
+                        publication_id: submission.publication_id,
+                        submission_order: position,
+                        publication: submission.publication.clone(),
+                    });
+                payload
+                    .ordered
+                    .push(PreparedUiSubmissionKind::RunenUi(index));
             }
         }
     }
@@ -376,8 +382,8 @@ mod tests {
     fn legacy_only_unscoped_fallback_keeps_secondary_surface_submissions() {
         let mut legacy = SurfaceFrameSubmissionRegistryResource::default();
         let secondary = RenderSurfaceId::try_from_raw(2).expect("test surface");
-        let producer = crate::plugins::render::RenderFrameProducerId::try_from_raw(91)
-            .expect("test producer");
+        let producer =
+            crate::plugins::render::RenderFrameProducerId::try_from_raw(91).expect("test producer");
         legacy.replace_for_surface(producer, secondary, |id| {
             crate::plugins::render::features::SurfaceFrameSubmission::new(id)
         });

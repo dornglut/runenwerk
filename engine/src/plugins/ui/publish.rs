@@ -7,16 +7,12 @@
 use anyhow::{Context, Result, anyhow};
 use runenui_runtime::{LogicalSize, RasterScale, SurfaceBuildContext};
 
+use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::plugins::render::{
     Gfx, RunenUiPaintSubmission, RunenUiPaintSubmissionRegistryResource,
     SurfaceFrameSubmissionRegistryResource,
 };
-use crate::plugins::render::host::{
-    RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
-};
-use crate::runtime::{
-    NativeWindowLifecycleState, WindowStateRegistryResource, WorldMut,
-};
+use crate::runtime::{NativeWindowLifecycleState, WindowStateRegistryResource, WorldMut};
 
 use super::{
     UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
@@ -39,8 +35,7 @@ pub fn apply_runenui_terminal_presentations_system(mut world: WorldMut) -> Resul
     if accepted.is_empty() && completed.is_empty() && rejected.is_empty() {
         return Ok(());
     }
-    let associations = world
-        .resource_mut::<UiRuntimePresentationAssociationsResource>()?;
+    let associations = world.resource_mut::<UiRuntimePresentationAssociationsResource>()?;
     for publication_id in accepted {
         // Input remains pending/in-flight; GPU submission acceptance alone is
         // never a displayed-input receipt.
@@ -75,7 +70,10 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
         Ok(associations) => associations.bindings().cloned().collect::<Vec<_>>(),
         Err(_) => return Ok(()),
     };
-    if world.resource::<RunenUiPaintSubmissionRegistryResource>().is_err() {
+    if world
+        .resource::<RunenUiPaintSubmissionRegistryResource>()
+        .is_err()
+    {
         // Headless U3 clients do not need any Render or native resource.
         // The association owner retains withdrawals until Render is available.
         return Ok(());
@@ -143,10 +141,12 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
             .resource::<SurfaceFrameSubmissionRegistryResource>()
             .ok()
             .is_some_and(|legacy| {
-                legacy.get_for_surface(&binding.producer_id, binding.render_surface_id).is_some()
-                    || legacy.get(&binding.producer_id).is_some_and(|submission| {
-                        submission.render_surface_id.is_none()
-                    })
+                legacy
+                    .get_for_surface(&binding.producer_id, binding.render_surface_id)
+                    .is_some()
+                    || legacy
+                        .get(&binding.producer_id)
+                        .is_some_and(|submission| submission.render_surface_id.is_none())
             });
         if collision {
             return Err(anyhow!(
@@ -195,7 +195,9 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
             Ok(id) => id,
             Err(error) => {
                 withdraw_paint_and_mapping(&mut world, &binding);
-                return Err(anyhow!("RunenUI publication lost its presentation binding: {error}"));
+                return Err(anyhow!(
+                    "RunenUI publication lost its presentation binding: {error}"
+                ));
             }
         };
 
@@ -325,7 +327,9 @@ mod exact_raster_extent_tests {
     #[test]
     fn native_fractional_dpi_preserves_exact_f2_target_pixels() {
         for raster in [1.0_f32, 1.25, 1.5, 1.75, 2.0, 2.25, 2.75, 3.0] {
-            for physical in [1_u32, 2, 3, 7, 21, 320, 321, 399, 640, 1279, 1280, 2049, 4096] {
+            for physical in [
+                1_u32, 2, 3, 7, 21, 320, 321, 399, 640, 1279, 1280, 2049, 4096,
+            ] {
                 let logical = exact_logical_axis_for_pixels(physical, raster)
                     .expect("ordinary native target axis must remain exactly representable");
                 assert_eq!(

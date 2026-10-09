@@ -273,7 +273,8 @@ pub(super) fn resolve_canonical_invocation(
                         &[projected.occurrence],
                         maximum_occurrence,
                         &mut nodes,
-                    )? else {
+                    )?
+                    else {
                         return Ok(CanonicalInvocationResolution::PreG7Residual);
                     };
                     continue;
@@ -348,11 +349,16 @@ pub(super) fn resolve_canonical_invocation(
             execution_preference(projected.pass),
             pass_control,
         );
-        nodes.push(if matches!(projected.pass, CompiledPassExecutionPlan::BuiltinUiComposite(_)) {
-            node.with_builtin_ui_composite()
-        } else {
-            node
-        });
+        nodes.push(
+            if matches!(
+                projected.pass,
+                CompiledPassExecutionPlan::BuiltinUiComposite(_)
+            ) {
+                node.with_builtin_ui_composite()
+            } else {
+                node
+            },
+        );
         let Some(after_capture_occurrences) = append_capture_readbacks(
             flow,
             projected.after_captures,

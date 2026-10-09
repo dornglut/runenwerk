@@ -5,20 +5,18 @@
 
 use std::collections::BTreeMap;
 
+use engine::plugins::TimePlugin;
 use engine::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::{
     FeatureContributionStatus, PreparedUiFrameResource, PreparedUiSubmissionKind,
-    RenderFrameProducerId, RenderPlugin, RunenUiPaintSubmissionRegistryResource,
-    SurfaceFrameRoute, SurfaceFrameSubmission, SurfaceFrameSubmissionOrder,
-    SurfaceFrameSubmissionRegistryResource,
+    RenderFrameProducerId, RenderPlugin, RunenUiPaintSubmissionRegistryResource, SurfaceFrameRoute,
+    SurfaceFrameSubmission, SurfaceFrameSubmissionOrder, SurfaceFrameSubmissionRegistryResource,
 };
 use engine::plugins::ui::{
     AppUiExt, UiPlugin, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
     UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding,
-    UiRuntimeSlotsResource, UiScreen, UiTypedActionDescriptor, UiTypedScreenId,
-    UiTypedSource,
+    UiRuntimeSlotsResource, UiScreen, UiTypedActionDescriptor, UiTypedScreenId, UiTypedSource,
 };
-use engine::plugins::TimePlugin;
 use engine::prelude::App;
 use engine::runtime::{NativeWindowId, WindowStateRegistryResource};
 
@@ -28,13 +26,13 @@ use ui_definition::{
     AuthoredBindingRef, AuthoredControlAccessibilityDefinition, AuthoredControlKindId,
     AuthoredControlValue, AuthoredId, AuthoredRouteId, UiNodeDefinition, UiValueBinding,
 };
-use ui_program::{
-    RouteCapability, RouteId, RouteSchemaVersion, UiProgramSourceId,
-};
+use ui_program::{RouteCapability, RouteId, RouteSchemaVersion, UiProgramSourceId};
 use ui_schema::UiSchemaRef;
 
-const CONTROLLED_FONT: &[u8] =
-    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/fonts/JetBrainsMono-Regular.ttf"));
+const CONTROLLED_FONT: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../assets/fonts/JetBrainsMono-Regular.ttf"
+));
 
 #[derive(Debug, Clone, Copy)]
 struct CounterScreen;
@@ -110,23 +108,28 @@ fn producer(id: u64) -> RenderFrameProducerId {
 fn mounted_counter_requires_no_native_or_renderer_resource() {
     let mut app = App::headless();
     app.add_plugin(UiPlugin);
-    let mount = app.ui().mount_with_fonts(CounterScreen, &controlled_fonts());
+    let mount = app
+        .ui()
+        .mount_with_fonts(CounterScreen, &controlled_fonts());
     let slot = mount.slot_id().expect("headless typed Counter must mount");
-    assert!(app
-        .world()
-        .resource::<UiRuntimeSlotsResource>()
-        .expect("RunenUI slots resource")
-        .contains(slot));
-    assert!(app
-        .world()
-        .resource::<UiRuntimePresentationAssociationsResource>()
-        .expect("presentation ledger installed")
-        .binding(slot)
-        .is_none());
-    assert!(app
-        .world()
-        .resource::<RenderSurfaceRegistryResource>()
-        .is_err());
+    assert!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .expect("RunenUI slots resource")
+            .contains(slot)
+    );
+    assert!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .expect("presentation ledger installed")
+            .binding(slot)
+            .is_none()
+    );
+    assert!(
+        app.world()
+            .resource::<RenderSurfaceRegistryResource>()
+            .is_err()
+    );
 }
 
 #[test]
@@ -218,11 +221,14 @@ fn attached_counter_prepares_runenui_paint_but_never_forges_presented_input() {
         .resource::<UiRuntimePresentationAssociationsResource>()
         .expect("presentation ledger");
     assert!(ledger.pending(slot).is_some());
-    assert!(ledger
-        .displayed_for_mapping(
-            slot,
-            UiRuntimeNativeMapping::new(native, surface, (320, 160), 1.0)
-                .expect("valid native mapping"),
-        )
-        .is_none(), "RenderPrepare is not a terminal display receipt");
+    assert!(
+        ledger
+            .displayed_for_mapping(
+                slot,
+                UiRuntimeNativeMapping::new(native, surface, (320, 160), 1.0)
+                    .expect("valid native mapping"),
+            )
+            .is_none(),
+        "RenderPrepare is not a terminal display receipt"
+    );
 }

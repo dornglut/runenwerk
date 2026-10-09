@@ -69,7 +69,9 @@ pub(super) use gpu_timing::{
     GpuComposedFrameTimingFrame, GpuPassTimestampIndices, GpuPassTimingFrame,
     PreparedComposedGpuTiming, prepare_composed_gpu_timing,
 };
-pub(super) use observation::{RendererGpuObservationOutput, RendererGpuObservationState, RunenUiGpuPresentationWitness};
+pub(super) use observation::{
+    RendererGpuObservationOutput, RendererGpuObservationState, RunenUiGpuPresentationWitness,
+};
 pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
 pub(crate) use program_sources::RendererProgramSourceAuthority;
 pub(super) use provenance::{

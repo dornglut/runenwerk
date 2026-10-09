@@ -9,10 +9,10 @@ use std::collections::BTreeMap;
 use runenui_core::{StyleEnvironment, SurfaceId, SurfaceInputContext};
 use runenui_runtime::{PaintRevision, SurfacePublication};
 
+use crate::plugins::render::host::RenderSurfaceId;
 use crate::plugins::render::{
     RenderFrameProducerId, RunenUiPublicationId, SurfaceFrameRoute, SurfaceFrameSubmissionOrder,
 };
-use crate::plugins::render::host::RenderSurfaceId;
 use crate::runtime::NativeWindowId;
 
 use super::UiRuntimeSlotId;
@@ -232,10 +232,12 @@ impl UiRuntimePresentationAssociationsResource {
         let slot = binding.slot_id;
         if self.bindings.get(&slot) != Some(&binding) {
             if let Some(previous) = self.bindings.get(&slot) {
-                self.withdrawn.push((previous.producer_id, previous.render_surface_id));
+                self.withdrawn
+                    .push((previous.producer_id, previous.render_surface_id));
             }
             self.pending.remove(&slot);
-            self.in_flight.retain(|_, pending| pending.binding.slot_id != slot);
+            self.in_flight
+                .retain(|_, pending| pending.binding.slot_id != slot);
             self.displayed.remove(&slot);
             self.current_mappings.remove(&slot);
             self.last_publication.remove(&slot);
@@ -246,10 +248,12 @@ impl UiRuntimePresentationAssociationsResource {
 
     pub fn unbind(&mut self, slot: UiRuntimeSlotId) {
         if let Some(previous) = self.bindings.remove(&slot) {
-            self.withdrawn.push((previous.producer_id, previous.render_surface_id));
+            self.withdrawn
+                .push((previous.producer_id, previous.render_surface_id));
         }
         self.pending.remove(&slot);
-        self.in_flight.retain(|_, pending| pending.binding.slot_id != slot);
+        self.in_flight
+            .retain(|_, pending| pending.binding.slot_id != slot);
         self.displayed.remove(&slot);
         self.current_mappings.remove(&slot);
         self.last_publication.remove(&slot);
@@ -274,11 +278,16 @@ impl UiRuntimePresentationAssociationsResource {
     /// input against the previous native transform, without inventing input facts.
     /// True when a new physical mapping invalidated the previous paint intake.
     /// The caller MUST retire that surface's renderer paint before publishing again.
-    pub fn update_mapping(&mut self, slot: UiRuntimeSlotId, mapping: UiRuntimeNativeMapping) -> bool {
+    pub fn update_mapping(
+        &mut self,
+        slot: UiRuntimeSlotId,
+        mapping: UiRuntimeNativeMapping,
+    ) -> bool {
         let changed = self.current_mappings.insert(slot, mapping) != Some(mapping);
         if changed {
             self.pending.remove(&slot);
-            self.in_flight.retain(|_, pending| pending.binding.slot_id != slot);
+            self.in_flight
+                .retain(|_, pending| pending.binding.slot_id != slot);
             self.last_publication.remove(&slot);
         }
         changed
@@ -286,7 +295,8 @@ impl UiRuntimePresentationAssociationsResource {
 
     /// Refuses old pending/display mappings as soon as the host surface detaches.
     pub fn invalidate_mapping(&mut self, slot: UiRuntimeSlotId) {
-        self.in_flight.retain(|_, pending| pending.binding.slot_id != slot);
+        self.in_flight
+            .retain(|_, pending| pending.binding.slot_id != slot);
         self.pending.remove(&slot);
         self.current_mappings.remove(&slot);
         self.last_publication.remove(&slot);
@@ -325,7 +335,9 @@ impl UiRuntimePresentationAssociationsResource {
             return Err(UiRuntimePresentationAssociationError::TargetChanged);
         }
         let slot = binding.slot_id;
-        let next = self.last_issued_publication_id.checked_add(1)
+        let next = self
+            .last_issued_publication_id
+            .checked_add(1)
             .and_then(RunenUiPublicationId::try_from_raw)
             .ok_or(UiRuntimePresentationAssociationError::PublicationIdentityExhausted)?;
         self.pending.insert(
@@ -411,9 +423,11 @@ impl UiRuntimePresentationAssociationsResource {
         };
         // A late receipt for an older accepted frame must not regress the
         // input surface after a newer frame already became displayed.
-        if self.displayed.get(&receipt.slot_id).is_some_and(|displayed|
-            displayed.publication_id >= receipt.publication_id
-        ) {
+        if self
+            .displayed
+            .get(&receipt.slot_id)
+            .is_some_and(|displayed| displayed.publication_id >= receipt.publication_id)
+        {
             self.in_flight.remove(&receipt.publication_id);
             return None;
         }
@@ -468,13 +482,17 @@ impl UiRuntimePresentationAssociationsResource {
         let Some(slot) = affected_slot else {
             return false;
         };
-        let later_is_live = self.pending.get(&slot).is_some_and(|pending|
-            pending.publication_id > publication_id
-        ) || self.in_flight.values().any(|pending|
-            pending.binding.slot_id == slot && pending.publication_id > publication_id
-        ) || self.displayed.get(&slot).is_some_and(|displayed|
-            displayed.publication_id > publication_id
-        );
+        let later_is_live = self
+            .pending
+            .get(&slot)
+            .is_some_and(|pending| pending.publication_id > publication_id)
+            || self.in_flight.values().any(|pending| {
+                pending.binding.slot_id == slot && pending.publication_id > publication_id
+            })
+            || self
+                .displayed
+                .get(&slot)
+                .is_some_and(|displayed| displayed.publication_id > publication_id);
         if !later_is_live {
             self.last_publication.remove(&slot);
         }
@@ -491,11 +509,10 @@ impl UiRuntimePresentationAssociationsResource {
         let displayed = self.displayed.get(&slot)?;
         (displayed.mapping == current
             && self.current_mappings.get(&slot) == Some(&current)
-            && self
-                .bindings
-                .get(&slot)
-                .is_some_and(|binding| binding.producer_id == displayed.producer_id
-                    && binding.render_surface_id == displayed.render_surface_id))
+            && self.bindings.get(&slot).is_some_and(|binding| {
+                binding.producer_id == displayed.producer_id
+                    && binding.render_surface_id == displayed.render_surface_id
+            }))
         .then_some(displayed)
     }
 }

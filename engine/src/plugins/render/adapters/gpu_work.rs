@@ -12,8 +12,8 @@
 //! occurrence identities plus only render-owned control/non-data requirements. RunenGPU continues
 //! to derive every resource dependency and hazard from the canonical operations.
 
-use runen_gpu::*;
 use crate::plugins::render::RunenUiPublicationId;
+use runen_gpu::*;
 use runen_render::execution_2d::{Render2dContributionToken, Render2dPreparedContribution};
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -117,7 +117,11 @@ impl ResolvedRenderGpuWorkNode {
     }
 
     pub(crate) const fn builtin_ui_occurrence(&self) -> Option<RenderGpuWorkOccurrenceId> {
-        if self.ui_composite { Some(self.occurrence) } else { None }
+        if self.ui_composite {
+            Some(self.occurrence)
+        } else {
+            None
+        }
     }
 
     pub(crate) fn pass(
@@ -315,13 +319,18 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
 ) -> Result<RunenUiMixedPreparedGraph, RenderGpuWorkAdapterError> {
     let nodes = nodes.into_iter().collect::<Vec<_>>();
     if mixed.legacy_draws.is_empty()
-        && mixed.contributions.iter().all(|(_, _, work)| !work.has_render_work())
+        && mixed
+            .contributions
+            .iter()
+            .all(|(_, _, work)| !work.has_render_work())
     {
         // F2 explicitly declares legitimate nonpainting content (for example
         // an outline-free space glyph). It emits no GPU node. Contract the
         // corresponding no-work UI occurrence through its existing render
         // predecessors, then prove the *same* frame's terminal Present.
-        let ui = nodes.iter().find(|node| node.occurrence == mixed.ui_occurrence)
+        let ui = nodes
+            .iter()
+            .find(|node| node.occurrence == mixed.ui_occurrence)
             .filter(|node| node.ui_composite)
             .ok_or(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
                 occurrence: mixed.ui_occurrence,
@@ -337,7 +346,9 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
                 for before in &node.control_order_after {
                     if *before == mixed.ui_occurrence {
                         for prior in &predecessor {
-                            if !expanded.contains(prior) { expanded.push(*prior); }
+                            if !expanded.contains(prior) {
+                                expanded.push(*prior);
+                            }
                         }
                     } else if !expanded.contains(before) {
                         expanded.push(*before);
@@ -347,7 +358,9 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
             }
             active.push(node);
         }
-        let ids = mixed.contributions.into_iter()
+        let ids = mixed
+            .contributions
+            .into_iter()
             .map(|(id, _, _)| (id, None))
             .collect();
         let prepared = prepare_resolved_render_gpu_work(
@@ -359,14 +372,17 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
             None,
             Some(present_occurrence),
             |label, fragments, graph_orders| {
-                context.prepare_work_graph_with_orders(label, fragments, graph_orders)
+                context
+                    .prepare_work_graph_with_orders(label, fragments, graph_orders)
                     .map_err(RenderGpuWorkAdapterError::from)
             },
         )?;
-        let present_node = prepared.present_node
-            .ok_or(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
-                occurrence: present_occurrence,
-            })?;
+        let present_node =
+            prepared
+                .present_node
+                .ok_or(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
+                    occurrence: present_occurrence,
+                })?;
         return Ok(RunenUiMixedPreparedGraph {
             graph: prepared.graph,
             f2_tokens: ids,
@@ -388,10 +404,12 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
                 .map_err(RenderGpuWorkAdapterError::from)
         },
     )?;
-    let present_node = prepared.present_node
-        .ok_or(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
-            occurrence: present_occurrence,
-        })?;
+    let present_node =
+        prepared
+            .present_node
+            .ok_or(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
+                occurrence: present_occurrence,
+            })?;
     Ok(RunenUiMixedPreparedGraph {
         graph: prepared.graph,
         f2_tokens: prepared.mixed_tokens,
@@ -423,7 +441,8 @@ pub(crate) fn prepare_render_gpu_frame_work(
                 .prepare_work_graph_with_orders(label, fragments, graph_orders)
                 .map_err(RenderGpuWorkAdapterError::from)
         },
-    ).map(|prepared| prepared.graph)
+    )
+    .map(|prepared| prepared.graph)
 }
 
 #[cfg(test)]
@@ -443,7 +462,8 @@ fn prepare_render_gpu_frame_work_for_test(
             GpuPreparedWorkGraph::prepare_with_orders(label, fragments, graph_orders)
                 .map_err(RenderGpuWorkAdapterError::from)
         },
-    ).map(|prepared| prepared.graph)
+    )
+    .map(|prepared| prepared.graph)
 }
 
 #[cfg(test)]
@@ -465,7 +485,8 @@ pub(crate) fn prepare_render_gpu_frame_work_with_composition_for_test(
             GpuPreparedWorkGraph::prepare_with_orders(label, fragments, graph_orders)
                 .map_err(RenderGpuWorkAdapterError::from)
         },
-    ).map(|prepared| prepared.graph)
+    )
+    .map(|prepared| prepared.graph)
 }
 
 #[cfg(test)]
@@ -488,7 +509,8 @@ fn prepare_render_gpu_frame_work_with_timing_for_test(
             GpuPreparedWorkGraph::prepare_with_orders(label, fragments, graph_orders)
                 .map_err(RenderGpuWorkAdapterError::from)
         },
-    ).map(|prepared| prepared.graph)
+    )
+    .map(|prepared| prepared.graph)
 }
 
 /// Prepares one bounded render work set from execution-complete logical GPU occurrences.
@@ -571,9 +593,13 @@ fn prepare_resolved_render_gpu_work(
             .iter()
             .map(|(before, after)| {
                 Ok(GpuGraphExplicitOrder::new(
-                    authored.occurrence_nodes.get(before)
+                    authored
+                        .occurrence_nodes
+                        .get(before)
                         .expect("normalized occurrence predecessor is present"),
-                    authored.occurrence_nodes.get(after)
+                    authored
+                        .occurrence_nodes
+                        .get(after)
                         .expect("normalized occurrence successor is present"),
                     "render-owned mixed UI control order",
                 )?)
@@ -630,9 +656,8 @@ fn prepare_resolved_render_gpu_work(
             return Ok(PreparedRenderGpuWorkFrame {
                 graph: provisional_graph,
                 mixed_tokens: Vec::new(),
-                present_node: present_occurrence.and_then(|id|
-                    provisional.occurrence_nodes.get(&id).cloned()
-                ),
+                present_node: present_occurrence
+                    .and_then(|id| provisional.occurrence_nodes.get(&id).cloned()),
             });
         };
         let timing_orders = compose_timing_graph_orders(
@@ -649,9 +674,8 @@ fn prepare_resolved_render_gpu_work(
         return Ok(PreparedRenderGpuWorkFrame {
             graph,
             mixed_tokens: Vec::new(),
-            present_node: present_occurrence.and_then(|id|
-                provisional.occurrence_nodes.get(&id).cloned()
-            ),
+            present_node: present_occurrence
+                .and_then(|id| provisional.occurrence_nodes.get(&id).cloned()),
         });
     }
 
@@ -664,8 +688,8 @@ fn prepare_resolved_render_gpu_work(
         &required_explicit_orders,
         imports,
     )?;
-    let present_node = present_occurrence
-        .and_then(|id| final_fragment.occurrence_nodes.get(&id).cloned());
+    let present_node =
+        present_occurrence.and_then(|id| final_fragment.occurrence_nodes.get(&id).cloned());
     let boundary_graph = prepare_graph(
         graph_label.clone(),
         compose_frame_fragments(producer_fragments, &final_fragment.fragment, timing_bracket),
@@ -707,13 +731,23 @@ fn mixed_ui_emissions(
     render: &GpuRenderOperation,
     mut mixed: RunenUiMixedWork,
 ) -> Result<Vec<MixedUiEmission>, RenderGpuWorkAdapterError> {
-    if !render.draws().iter().eq(mixed.legacy_draws.iter().map(|(_, draw)| draw)) {
+    if !render
+        .draws()
+        .iter()
+        .eq(mixed.legacy_draws.iter().map(|(_, draw)| draw))
+    {
         return Err(RenderGpuWorkAdapterError::InvalidMixedUi(
             "canonical legacy draw list must exactly match the submitted mixed producer order",
         ));
     }
-    if !mixed.legacy_draws.windows(2).all(|pair| pair[0].0 <= pair[1].0)
-        || !mixed.contributions.windows(2).all(|pair| pair[0].1 < pair[1].1)
+    if !mixed
+        .legacy_draws
+        .windows(2)
+        .all(|pair| pair[0].0 <= pair[1].0)
+        || !mixed
+            .contributions
+            .windows(2)
+            .all(|pair| pair[0].1 < pair[1].1)
     {
         return Err(RenderGpuWorkAdapterError::InvalidMixedUi(
             "mixed source compositor positions must be monotonic and unique for F2 producers",
@@ -735,7 +769,9 @@ fn mixed_ui_emissions(
     while legacy.peek().is_some() || f2.peek().is_some() {
         let next_legacy = legacy.peek().map(|(position, _)| *position);
         let next_f2 = f2.peek().map(|(_, position, _)| *position);
-        if next_legacy.is_some_and(|position| next_f2.is_none_or(|f2_position| position < f2_position)) {
+        if next_legacy
+            .is_some_and(|position| next_f2.is_none_or(|f2_position| position < f2_position))
+        {
             let position = next_legacy.expect("checked some");
             let mut draws = Vec::new();
             while legacy.peek().is_some_and(|(at, _)| *at == position) {
@@ -774,7 +810,9 @@ fn author_render_fragment_mixed(
     mixed: RunenUiMixedWork,
 ) -> Result<AuthoredRenderFragment, RenderGpuWorkAdapterError> {
     let ui_occurrence = mixed.ui_occurrence;
-    let ui_node = nodes.iter().find(|node| node.occurrence == ui_occurrence)
+    let ui_node = nodes
+        .iter()
+        .find(|node| node.occurrence == ui_occurrence)
         .ok_or(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
             occurrence: ui_occurrence,
         })?;
@@ -790,9 +828,11 @@ fn author_render_fragment_mixed(
             .into_iter()
             .map(|(id, _, contribution)| MixedUiEmission::RunenUi(id, contribution))
             .collect(),
-        _ => return Err(RenderGpuWorkAdapterError::InvalidMixedUi(
-            "builtin UI work is incompatible with its source producer scope",
-        )),
+        _ => {
+            return Err(RenderGpuWorkAdapterError::InvalidMixedUi(
+                "builtin UI work is incompatible with its source producer scope",
+            ));
+        }
     };
     let mut occurrence_nodes = BTreeMap::new();
     let mut mixed_tokens = Vec::new();
@@ -841,7 +881,9 @@ fn author_render_fragment_mixed(
                 } else {
                     let id = builder.add_node(
                         node.label.clone(),
-                        node.operation.clone().expect("legacy renderer node always has executable work"),
+                        node.operation
+                            .clone()
+                            .expect("legacy renderer node always has executable work"),
                         [],
                         GpuCapabilityRequirements::new(),
                         node.preference,
@@ -857,11 +899,20 @@ fn author_render_fragment_mixed(
     let index = ui_last_node_index.ok_or(RenderGpuWorkAdapterError::InvalidMixedUi(
         "an admitted mixed UI pass produced no executable GPU node",
     ))?;
-    let id = fragment.nodes().get(index)
-        .ok_or(RenderGpuWorkAdapterError::InvalidMixedUi("F2 authoring node count mismatch"))?
-        .id().clone();
+    let id = fragment
+        .nodes()
+        .get(index)
+        .ok_or(RenderGpuWorkAdapterError::InvalidMixedUi(
+            "F2 authoring node count mismatch",
+        ))?
+        .id()
+        .clone();
     occurrence_nodes.insert(ui_occurrence, id);
-    Ok(AuthoredRenderFragment { fragment, occurrence_nodes, mixed_tokens })
+    Ok(AuthoredRenderFragment {
+        fragment,
+        occurrence_nodes,
+        mixed_tokens,
+    })
 }
 
 fn compose_frame_fragments(
@@ -1071,7 +1122,9 @@ fn author_render_fragment(
             for node in nodes {
                 let node_id = builder.add_node(
                     node.label.clone(),
-                    node.operation.clone().expect("legacy renderer node always has executable work"),
+                    node.operation
+                        .clone()
+                        .expect("legacy renderer node always has executable work"),
                     [],
                     GpuCapabilityRequirements::new(),
                     node.preference,
@@ -1188,7 +1241,9 @@ fn collect_operation_resources(
 ) -> Result<BTreeMap<GpuWorkResourceId, GpuResourceRef>, RenderGpuWorkAdapterError> {
     let mut resources = BTreeMap::new();
     for node in nodes {
-        let Some(operation) = node.operation.as_ref() else { continue; };
+        let Some(operation) = node.operation.as_ref() else {
+            continue;
+        };
         for access in operation.derived_accesses()? {
             let resource = declared_resource_for_access(&access);
             let identity = resource.diagnostic_identity();

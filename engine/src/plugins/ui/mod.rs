@@ -36,9 +36,8 @@ pub use report::*;
 pub use resources::*;
 pub use runenui_adapter::{
     UiRuntimeFontConfiguration, UiRuntimeHostRequestDisposition, UiRuntimePendingEventRequest,
-    UiRuntimeSlotId,
-    UiRuntimeSlotMountFailure, UiRuntimeSlotMountReport, UiRuntimeSlotOperationFailure,
-    UiRuntimeSlotsResource,
+    UiRuntimeSlotId, UiRuntimeSlotMountFailure, UiRuntimeSlotMountReport,
+    UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
 };
 pub use schedule::*;
 pub use screen::*;

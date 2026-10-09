@@ -7,9 +7,9 @@ use super::features::{
     PreparedParticleVfxFeatureResource, PreparedUiFrameResource, PreparedWindFieldFeatureResource,
     PreparedWorldFeatureResource, RenderFeatureRegistryResource,
     RunenUiPaintSubmissionRegistryResource, SurfaceFrameSubmissionRegistryResource,
-    UiFontAtlasResource,
-    ViewportSurfaceBindingRegistryResource, prepare_ui_feature_resource_system,
-    register_particle_vfx_feature_collector, sync_render_feature_registry_system,
+    UiFontAtlasResource, ViewportSurfaceBindingRegistryResource,
+    prepare_ui_feature_resource_system, register_particle_vfx_feature_collector,
+    sync_render_feature_registry_system,
     world::{
         PreparedWorldVisualFeatureResource, RenderSdfRaymarchAccelerationResource,
         RenderSdfResidencyBudgetResource, RenderSdfResidencyResource,

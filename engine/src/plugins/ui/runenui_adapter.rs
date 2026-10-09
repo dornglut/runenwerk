@@ -1,3 +1,5 @@
+#[cfg(test)]
+use runenui_runtime::LogicalSize;
 use runenui_core::{
     Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, SemanticCommand,
     UiApp, View, button, column, text,
@@ -7,8 +9,6 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 use runenui_runtime::{
     AppRuntime, HostRequestToken, PumpBudget, SurfaceBuildContext, SurfacePublication,
 };
-#[cfg(test)]
-use runenui_runtime::LogicalSize;
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
 use ui_definition::{AuthoredControlValue, UiNodeDefinition, UiValue, UiValueBinding};
@@ -86,7 +86,9 @@ impl UiRuntimeSlotMountFailure {
             Self::ControlRegistry => "RunenUI slot mount could not form the control registry",
             Self::ProgramFormation => "RunenUI slot mount could not form a valid UiProgram",
             Self::UnsupportedProjection => "RunenUI slot mount rejected an unsupported projection",
-            Self::FontProvisioning => "RunenUI slot mount could not apply caller-provided font sources",
+            Self::FontProvisioning => {
+                "RunenUI slot mount could not apply caller-provided font sources"
+            }
         }
     }
 }
@@ -448,7 +450,9 @@ impl UiRuntimeSlotsResource {
             &slot.runtime.state().registry,
         )
         .map_err(|_| UiRuntimeSlotOperationFailure::UnsupportedProjection)?;
-        let next = slot.ingress_epoch.checked_add(1)
+        let next = slot
+            .ingress_epoch
+            .checked_add(1)
             .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
         slot.runtime
             .submit_action(RunenwerkProgramUiAction::ReplaceResolvedState(
@@ -470,7 +474,9 @@ impl UiRuntimeSlotsResource {
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
         let authored_id = ElementId::new(authored_id)
             .map_err(|_| UiRuntimeSlotOperationFailure::InvalidAuthoredId)?;
-        let next = slot.ingress_epoch.checked_add(1)
+        let next = slot
+            .ingress_epoch
+            .checked_add(1)
             .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
         slot.runtime
             .submit_automation_command(authored_id, SemanticCommand::Activate)
@@ -517,7 +523,9 @@ impl UiRuntimeSlotsResource {
             UiRuntimeHostRequestDisposition::Accepted => RunenwerkUiHostResponse::Accepted,
             UiRuntimeHostRequestDisposition::Rejected => RunenwerkUiHostResponse::Rejected,
         };
-        let next = slot.ingress_epoch.checked_add(1)
+        let next = slot
+            .ingress_epoch
+            .checked_add(1)
             .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
         slot.runtime
             .complete_host_request(&request.token, response)
@@ -1090,8 +1098,8 @@ mod tests {
 
     #[test]
     fn exact_renderer_receipt_promotes_only_matching_pending_runenui_input() {
-        use crate::plugins::render::{RenderFrameProducerId, SurfaceFrameSubmissionOrder};
         use crate::plugins::render::host::RenderSurfaceId;
+        use crate::plugins::render::{RenderFrameProducerId, SurfaceFrameSubmissionOrder};
         use crate::plugins::ui::presentation::{
             UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
             UiRuntimePresentationBinding, UiRuntimePresentedReceipt,
@@ -1112,15 +1120,12 @@ mod tests {
         let render_surface = RenderSurfaceId::primary();
         let producer = RenderFrameProducerId::try_from_raw(42).expect("valid producer");
         let style = StyleEnvironment::default();
-        let binding = UiRuntimePresentationBinding::new(slot, producer, render_surface, style.clone())
-            .with_order(SurfaceFrameSubmissionOrder::new(20, 0));
-        let mapping = UiRuntimeNativeMapping::new(
-            NativeWindowId::primary(),
-            render_surface,
-            (320, 160),
-            1.0,
-        )
-        .expect("positive native extent and scale");
+        let binding =
+            UiRuntimePresentationBinding::new(slot, producer, render_surface, style.clone())
+                .with_order(SurfaceFrameSubmissionOrder::new(20, 0));
+        let mapping =
+            UiRuntimeNativeMapping::new(NativeWindowId::primary(), render_surface, (320, 160), 1.0)
+                .expect("positive native extent and scale");
         let build = SurfaceBuildContext::tight(
             &style,
             LogicalSize::new(
@@ -1132,7 +1137,9 @@ mod tests {
             .publish_surface_for_slot(slot, &build)
             .expect("published source");
         let mut associations = UiRuntimePresentationAssociationsResource::default();
-        associations.bind(binding.clone()).expect("unique producer binding");
+        associations
+            .bind(binding.clone())
+            .expect("unique producer binding");
         assert!(associations.update_mapping(slot, mapping));
         assert!(!associations.update_mapping(slot, mapping));
         let publication_id = associations
@@ -1169,14 +1176,19 @@ mod tests {
             .promote(&receipt)
             .expect("first completed frame retains exact earlier input snapshot");
         assert_eq!(first_displayed.publication_id, publication_id);
-        assert_eq!(associations.pending(slot).map(|p| p.publication_id()), Some(second_id));
+        assert_eq!(
+            associations.pending(slot).map(|p| p.publication_id()),
+            Some(second_id)
+        );
         assert!(associations.associate_accepted_submission(second_id));
 
         let current = UiRuntimePresentedReceipt {
             publication_id: second_id,
             ..receipt
         };
-        let displayed = associations.promote(&current).expect("second exact GPU completion");
+        let displayed = associations
+            .promote(&current)
+            .expect("second exact GPU completion");
         assert_eq!(&displayed.input_context, first.input_context());
         assert_eq!(displayed.publication_id, second_id);
         assert!(associations.pending(slot).is_none());
@@ -1208,7 +1220,11 @@ mod tests {
             .promote_completed_publication(accepted_id)
             .expect("only the renderer-authorized terminal publication is promoted");
         assert_eq!(accepted.publication_id, accepted_id);
-        assert!(associations.promote_completed_publication(retry_id).is_none());
+        assert!(
+            associations
+                .promote_completed_publication(retry_id)
+                .is_none()
+        );
 
         // Native GPUs may complete accepted submissions out of source
         // publication order. Newest *successfully displayed* input wins,
@@ -1227,7 +1243,9 @@ mod tests {
             .expect("newer GPU frame is displayed first");
         assert_eq!(newer_displayed.publication_id, newer_id);
         assert!(
-            associations.promote_completed_publication(older_id).is_none(),
+            associations
+                .promote_completed_publication(older_id)
+                .is_none(),
             "older delayed completion cannot regress displayed input"
         );
         assert_eq!(associations.in_flight_count(), 0);
@@ -1239,11 +1257,15 @@ mod tests {
         );
         assert!(!associations.reject_terminal_publication(older_id));
 
-        let different_mapping = UiRuntimeNativeMapping::new(
-            NativeWindowId::primary(), render_surface, (640, 320), 2.0,
-        ).expect("valid resize mapping");
+        let different_mapping =
+            UiRuntimeNativeMapping::new(NativeWindowId::primary(), render_surface, (640, 320), 2.0)
+                .expect("valid resize mapping");
         assert!(associations.update_mapping(slot, different_mapping));
-        assert!(associations.displayed_for_mapping(slot, different_mapping).is_none());
+        assert!(
+            associations
+                .displayed_for_mapping(slot, different_mapping)
+                .is_none()
+        );
         assert!(associations.displayed_for_mapping(slot, mapping).is_none());
         associations.unbind(slot);
         assert!(associations.binding(slot).is_none());
@@ -1329,7 +1351,10 @@ mod tests {
         let (source, _, _, registry) = counter_projection_fixture();
         let invalid_fonts = UiRuntimeFontConfiguration::new(vec![vec![0, 1, 2, 3]]);
         let report = slots.mount_with_fonts(source, &registry, &invalid_fonts);
-        assert_eq!(report.failure(), Some(UiRuntimeSlotMountFailure::FontProvisioning));
+        assert_eq!(
+            report.failure(),
+            Some(UiRuntimeSlotMountFailure::FontProvisioning)
+        );
         assert!(slots.is_empty());
     }
 
@@ -1355,7 +1380,8 @@ mod tests {
             ),
         );
         assert!(
-            slots.has_pending_redraw(slot_id)
+            slots
+                .has_pending_redraw(slot_id)
                 .expect("mounted RunenUI slot has redraw authority"),
             "newly mounted RunenUI surface should request its first paint",
         );
@@ -1363,7 +1389,8 @@ mod tests {
             .publish_surface_for_slot(slot_id, &context)
             .expect("production slot font provisioning permits publication");
         assert!(
-            !slots.has_pending_redraw(slot_id)
+            !slots
+                .has_pending_redraw(slot_id)
                 .expect("redraw authority remains live after publication"),
             "successful RunenUI publication must acknowledge its dirty revision",
         );
@@ -1373,7 +1400,10 @@ mod tests {
             .iter()
             .filter_map(|item| item.primitive().as_shaped_text_run())
             .collect::<Vec<_>>();
-        assert!(!runs.is_empty(), "Counter publication must contain shaped text");
+        assert!(
+            !runs.is_empty(),
+            "Counter publication must contain shaped text"
+        );
         assert!(
             runs.iter()
                 .all(|run| paint.shaped_text_resource(run.resource_ref()).is_some())
@@ -1393,13 +1423,18 @@ mod tests {
         .expect("repeat publication must preserve semantic resource identities");
         assert_eq!(projected.composition(), repeated.composition());
         assert_eq!(projected.bindings(), repeated.bindings());
-        assert_eq!(projected.composition().root_entries().len(), paint.root_entries().len());
+        assert_eq!(
+            projected.composition().root_entries().len(),
+            paint.root_entries().len()
+        );
         for (source_entry, projected_entry) in paint
             .root_entries()
             .iter()
             .zip(projected.composition().root_entries())
         {
-            let index = source_entry.item_index().expect("Counter roots are direct items");
+            let index = source_entry
+                .item_index()
+                .expect("Counter roots are direct items");
             let source_item = &paint.items()[index];
             let source_run = source_item
                 .primitive()
@@ -1423,9 +1458,15 @@ mod tests {
             };
             assert_eq!(target.font().bytes(), source.font().bytes());
             assert_eq!(target.font().face_index(), source.font().face_index());
-            assert_eq!(target.font().normalized_coords(), source.font().normalized_coords());
+            assert_eq!(
+                target.font().normalized_coords(),
+                source.font().normalized_coords()
+            );
             assert_eq!(target.font().faux_bold(), source.font().faux_bold());
-            assert_eq!(target.font().faux_skew(), source.font().faux_skew().map(f64::from));
+            assert_eq!(
+                target.font().faux_skew(),
+                source.font().faux_skew().map(f64::from)
+            );
             assert_eq!(target.font_size(), f64::from(source.font_size()));
             assert_eq!(target.glyphs().len(), source.glyphs().len());
             for (actual, original) in target.glyphs().iter().zip(source.glyphs()) {

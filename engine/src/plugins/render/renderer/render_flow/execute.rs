@@ -12,9 +12,8 @@ use super::{
     occurrences::expand_render_pass_occurrences_in_frame,
 };
 use crate::plugins::render::{
-    RenderGpuWorkOccurrenceId, RenderPassId, ResolvedRenderGpuWorkNode,
-    RunenUiMixedWork, prepare_render_gpu_frame_work,
-    prepare_render_gpu_frame_work_with_mixed_ui,
+    RenderGpuWorkOccurrenceId, RenderPassId, ResolvedRenderGpuWorkNode, RunenUiMixedWork,
+    prepare_render_gpu_frame_work, prepare_render_gpu_frame_work_with_mixed_ui,
 };
 use runen_render::execution_2d::{Render2dPreparedContribution, Render2dTarget};
 use runen_gpu::{
@@ -261,7 +260,8 @@ impl Renderer {
             prepared_frame.context.frame_index,
             prepared_frame.surface.render_surface_id.raw()
         ))?;
-        let timing_bracket = composed_gpu_timing.as_ref()
+        let timing_bracket = composed_gpu_timing
+            .as_ref()
             .map(PreparedComposedGpuTiming::bracket);
         let (graph, runenui_witnesses) = if batch.prepared_runenui.is_empty() {
             (
@@ -276,12 +276,12 @@ impl Renderer {
                 Vec::new(),
             )
         } else {
-            let mut ui_occurrences = nodes.iter().filter_map(
-                ResolvedRenderGpuWorkNode::builtin_ui_occurrence
-            );
-            let ui_occurrence = ui_occurrences.next().ok_or_else(|| anyhow::anyhow!(
-                "RunenUI paint has no admitted canonical UI occurrence"
-            ))?;
+            let mut ui_occurrences = nodes
+                .iter()
+                .filter_map(ResolvedRenderGpuWorkNode::builtin_ui_occurrence);
+            let ui_occurrence = ui_occurrences.next().ok_or_else(|| {
+                anyhow::anyhow!("RunenUI paint has no admitted canonical UI occurrence")
+            })?;
             if ui_occurrences.next().is_some() {
                 bail!("RunenUI paint targets more than one canonical UI occurrence");
             }
@@ -300,13 +300,15 @@ impl Renderer {
                 mixed,
                 present_occurrence,
             )?;
-            let witnesses = authored.f2_tokens.into_iter().map(|(publication_id, token)| {
-                RunenUiGpuPresentationWitness {
+            let witnesses = authored
+                .f2_tokens
+                .into_iter()
+                .map(|(publication_id, token)| RunenUiGpuPresentationWitness {
                     publication_id,
                     contribution: token,
                     present_node: authored.present_node.clone(),
-                }
-            }).collect::<Vec<_>>();
+                })
+                .collect::<Vec<_>>();
             (authored.graph, witnesses)
         };
         let prepared = pollster::block_on(context.prepare_submission(graph))?;

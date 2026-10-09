@@ -88,10 +88,7 @@ impl RunenUiPaintSubmission {
 /// Separate immutable-paint intake; it does not supersede the legacy registry.
 #[derive(Clone, Debug, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RunenUiPaintSubmissionRegistryResource {
-    submissions: BTreeMap<
-        (RenderFrameProducerId, Option<RenderSurfaceId>),
-        RunenUiPaintSubmission,
-    >,
+    submissions: BTreeMap<(RenderFrameProducerId, Option<RenderSurfaceId>), RunenUiPaintSubmission>,
 }
 
 impl RunenUiPaintSubmissionRegistryResource {
@@ -109,7 +106,10 @@ impl RunenUiPaintSubmissionRegistryResource {
         self.submissions.clear();
     }
 
-    pub fn replace(&mut self, submission: RunenUiPaintSubmission) -> Option<RunenUiPaintSubmission> {
+    pub fn replace(
+        &mut self,
+        submission: RunenUiPaintSubmission,
+    ) -> Option<RunenUiPaintSubmission> {
         self.submissions.insert(
             (submission.producer_id, submission.render_surface_id),
             submission,
@@ -124,7 +124,8 @@ impl RunenUiPaintSubmissionRegistryResource {
         producer_id: &RenderFrameProducerId,
         render_surface_id: RenderSurfaceId,
     ) -> Option<&RunenUiPaintSubmission> {
-        self.submissions.get(&(*producer_id, Some(render_surface_id)))
+        self.submissions
+            .get(&(*producer_id, Some(render_surface_id)))
     }
 
     pub fn remove(
@@ -157,7 +158,11 @@ impl RunenUiPaintSubmissionRegistryResource {
         render_surface_id: RenderSurfaceId,
     ) -> Vec<&RunenUiPaintSubmission> {
         let mut by_producer = BTreeMap::<RenderFrameProducerId, &RunenUiPaintSubmission>::new();
-        for submission in self.submissions.values().filter(|s| s.render_surface_id.is_none()) {
+        for submission in self
+            .submissions
+            .values()
+            .filter(|s| s.render_surface_id.is_none())
+        {
             by_producer.insert(submission.producer_id, submission);
         }
         for submission in self
@@ -220,10 +225,10 @@ impl OrderedSurfaceUiSubmission<'_> {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum MixedSurfaceUiSubmissionError {
-    #[error("UI producer {producer_id:?} submitted both legacy and RunenUI paint to the same surface")]
-    CrossFamilyProducerCollision {
-        producer_id: RenderFrameProducerId,
-    },
+    #[error(
+        "UI producer {producer_id:?} submitted both legacy and RunenUI paint to the same surface"
+    )]
+    CrossFamilyProducerCollision { producer_id: RenderFrameProducerId },
 }
 
 /// Selects the surface overrides, rejects collisions, and sorts both paint
@@ -253,9 +258,11 @@ pub fn ordered_mixed_ui_submissions_for_surface<'a>(
             )
             .is_some()
         {
-            return Err(MixedSurfaceUiSubmissionError::CrossFamilyProducerCollision {
-                producer_id: submission.producer_id,
-            });
+            return Err(
+                MixedSurfaceUiSubmissionError::CrossFamilyProducerCollision {
+                    producer_id: submission.producer_id,
+                },
+            );
         }
     }
     let mut ordered = by_producer.into_values().collect::<Vec<_>>();
@@ -274,7 +281,9 @@ pub fn ordered_mixed_ui_submissions_for_surface<'a>(
 mod tests {
     use super::*;
 
-    use runenui_core::{FontFamilyName, GenericFontFamily, NoHostProtocol, StyleEnvironment, UiApp, View, text};
+    use runenui_core::{
+        FontFamilyName, GenericFontFamily, NoHostProtocol, StyleEnvironment, UiApp, View, text,
+    };
     use runenui_runtime::{AppRuntime, LogicalLength, LogicalSize, SurfaceBuildContext};
 
     struct SimplePaintApp;
@@ -295,14 +304,20 @@ mod tests {
         let mut runtime = AppRuntime::<SimplePaintApp>::mount(());
         let registered = runtime
             .register_text_font_bytes(
-                include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/fonts/JetBrainsMono-Regular.ttf")).to_vec()
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../assets/fonts/JetBrainsMono-Regular.ttf"
+                ))
+                .to_vec()
             )
             .expect("bundled UI font must be valid");
         assert!(registered > 0);
         let family = FontFamilyName::new("JetBrains Mono").expect("valid font family");
-        assert!(runtime
-            .set_text_generic_family_mapping(GenericFontFamily::SansSerif, &[family])
-            .expect("font mapping"));
+        assert!(
+            runtime
+                .set_text_generic_family_mapping(GenericFontFamily::SansSerif, &[family])
+                .expect("font mapping")
+        );
         let style = StyleEnvironment::default();
         runtime
             .publish_surface(&SurfaceBuildContext::tight(
@@ -342,7 +357,10 @@ mod tests {
         let result = ordered_mixed_ui_submissions_for_surface(&legacy, &runenui, surface)
             .expect("separate producers");
         assert_eq!(
-            result.iter().map(|value| value.producer_id()).collect::<Vec<_>>(),
+            result
+                .iter()
+                .map(|value| value.producer_id())
+                .collect::<Vec<_>>(),
             vec![producer(1), producer(2), producer(3)],
         );
         assert!(matches!(result[0], OrderedSurfaceUiSubmission::Legacy(_)));
@@ -350,7 +368,10 @@ mod tests {
         assert!(matches!(result[2], OrderedSurfaceUiSubmission::Legacy(_)));
         let (status, prepared) = super::super::resource::prepare_submissions(result)
             .expect("mixed UI preparation must preserve both payload families");
-        assert_eq!(status, crate::plugins::render::features::FeatureContributionStatus::Ready);
+        assert_eq!(
+            status,
+            crate::plugins::render::features::FeatureContributionStatus::Ready
+        );
         assert_eq!(prepared.submissions.len(), 2);
         assert_eq!(prepared.runenui_submissions.len(), 1);
         assert_eq!(
@@ -394,7 +415,8 @@ mod tests {
         let mut runenui = RunenUiPaintSubmissionRegistryResource::default();
         legacy.replace(SurfaceFrameSubmission::new(producer(2)));
         runenui.replace(
-            RunenUiPaintSubmission::new(producer(2), publication_id(1), paint()).with_render_surface(surface),
+            RunenUiPaintSubmission::new(producer(2), publication_id(1), paint())
+                .with_render_surface(surface)
         );
         assert!(matches!(
             ordered_mixed_ui_submissions_for_surface(&legacy, &runenui, surface),
