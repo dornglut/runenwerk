@@ -282,9 +282,10 @@ mod tests {
     use super::*;
 
     use runenui_core::{
-        FontFamilyName, GenericFontFamily, NoHostProtocol, StyleEnvironment, UiApp, View, text,
+        FontFamilyName, GenericFontFamily, LogicalLength, NoHostProtocol, StyleEnvironment, UiApp,
+        View, text,
     };
-    use runenui_runtime::{AppRuntime, LogicalLength, LogicalSize, SurfaceBuildContext};
+    use runenui_runtime::{AppRuntime, LogicalSize, SurfaceBuildContext};
 
     struct SimplePaintApp;
 

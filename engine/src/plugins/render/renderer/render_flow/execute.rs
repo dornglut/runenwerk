@@ -607,12 +607,21 @@ impl Renderer {
                         publication.logical_extent.1,
                         publication.raster_scale,
                     )?;
-                    let contribution = self.runenui_2d_executor.prepare(
-                        context,
-                        publication.semantic.composition(),
-                        publication.semantic.bindings(),
-                        &target,
-                    )?;
+                    let contribution = self
+                        .runenui_2d_executor
+                        .prepare(
+                            context,
+                            publication.semantic.composition(),
+                            publication.semantic.bindings(),
+                            &target,
+                        )
+                        .map_err(|error| {
+                            anyhow::anyhow!(
+                                "RunenUI producer {:?} F2 preparation rejected publication {}: {error}",
+                                publication.producer_id,
+                                publication.publication_id.raw()
+                            )
+                        })?;
                     prepared_runenui.push((
                         publication.publication_id,
                         publication.compositor_position,
