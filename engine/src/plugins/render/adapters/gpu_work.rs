@@ -2475,3 +2475,187 @@ mod tests {
         );
     }
 }
+
+
+#[cfg(test)]
+mod native_mixed_ui_tests {
+    use super::*;
+    use runen_render::composition_2d::{
+        Render2dAffineTransform, Render2dColorRgba8, Render2dComposition, Render2dEntry,
+        Render2dFontBinding, Render2dGlyph, Render2dItem, Render2dOpacity, Render2dPoint,
+        Render2dPrimitive, Render2dResourceBinding, Render2dResourceBindings,
+        Render2dResourceId, Render2dResourceValue, Render2dShapedTextPrimitive,
+        Render2dShapedTextResource,
+    };
+    use runen_render::execution_2d::{Render2dExecutor, Render2dTarget};
+    use std::time::{Duration, Instant};
+
+    /// Exercises the Engine-owned canonical fragment with a genuine pinned F2
+    /// contribution and RunenGPU submission. This uses an offscreen readback as
+    /// the terminal work witness, not a simulated native-window Present.
+    #[test]
+    fn source_only_f2_work_is_authored_once_and_proven_on_exact_gpu_submission() {
+        let descriptor =
+            GpuContextDescriptor::new(GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements())
+                .require_format_role(
+                    GpuTextureFormat::Rgba8UnormSrgb,
+                    GpuFormatRole::ColorAttachment,
+                )
+                .require_format_role(
+                    GpuTextureFormat::Rgba8UnormSrgb,
+                    GpuFormatRole::CopySource,
+                )
+                .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Sampled)
+                .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Filterable)
+                .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopyDestination)
+                .require_format_role(GpuTextureFormat::Rgba8UnormSrgb, GpuFormatRole::Blendable)
+                .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
+                .with_allowed_backends([GpuBackendFamily::Vulkan])
+                .with_label("Runenwerk U5 source-only mixed F2 proof");
+        let context = match pollster::block_on(GpuContext::request(descriptor)) {
+            Ok(context) => context,
+            Err(error)
+                if error.category() == GpuContextRequestErrorCategory::NoAdapterAvailable =>
+            {
+                assert_ne!(
+                    std::env::var("RUNEN_RENDER_REQUIRE_GPU").ok().as_deref(),
+                    Some("1"),
+                    "required Vulkan U5 execution adapter is missing"
+                );
+                return;
+            }
+            Err(error) => panic!("unexpected U5 Vulkan adapter failure: {error}"),
+        };
+        let mut resources = GpuResourceScope::new();
+        let texture = resources
+            .texture(
+                GpuTextureDescriptor::ordinary_owned_2d(
+                    "U5 F2 native proof target",
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    64,
+                    64,
+                    GpuTextureFormat::Rgba8UnormSrgb,
+                    [GpuTextureUsage::ColorAttachment, GpuTextureUsage::CopySource],
+                    GpuTextureInitialization::Zeroed,
+                )
+                .expect("target descriptor"),
+            )
+            .expect("target identity");
+        let view = resources
+            .texture_view(
+                GpuTextureViewDescriptor::ordinary_full_owned("U5 F2 view", &texture)
+                    .expect("target view descriptor"),
+            )
+            .expect("target view identity");
+        let target = Render2dTarget::new(view, 64.0, 64.0, 1.0)
+            .expect("exact source target and native raster scale");
+        let font = Render2dFontBinding::new(
+            include_bytes!(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../assets/fonts/JetBrainsMono-Regular.ttf"
+            ))
+            .to_vec(),
+            0,
+            Vec::new(),
+            false,
+            None,
+        )
+        .expect("controlled font binding");
+        let glyph = Render2dGlyph::new(1, 0.0, 0.0, 24.0)
+            .expect("controlled finite glyph");
+        let semantic_resource = Render2dShapedTextResource::new(font, 24.0, vec![glyph])
+            .expect("immutable shaped text");
+        let resource_id = Render2dResourceId::new(1).expect("nonzero semantic id");
+        let bindings = Render2dResourceBindings::new(vec![
+            Render2dResourceBinding::new(
+                resource_id,
+                Render2dResourceValue::ShapedText(semantic_resource),
+            ),
+        ])
+        .expect("one source-neutral binding");
+        let composition = Render2dComposition::new(vec![Render2dEntry::item(
+            Render2dItem::new(
+                Render2dPrimitive::ShapedText(Render2dShapedTextPrimitive::new(
+                    resource_id,
+                    Render2dPoint::new(8.0, 32.0).expect("glyph origin"),
+                    Render2dColorRgba8::WHITE,
+                )),
+                Render2dAffineTransform::IDENTITY,
+                Vec::new(),
+                Render2dOpacity::OPAQUE,
+            ),
+        )])
+        .expect("direct source-neutral composition");
+        let contribution = Render2dExecutor::new()
+            .prepare(&context, &composition, &bindings, &target)
+            .expect("F2 admits the real target and shaped glyph");
+        assert!(contribution.has_render_work());
+
+        let ui_occurrence = RenderGpuWorkOccurrenceId::new(1);
+        let tail_occurrence = RenderGpuWorkOccurrenceId::new(2);
+        let readback = GpuReadbackOperation::ordinary(
+            GpuTextureCopyRegion::whole_base_mip(&texture)
+                .expect("exact color readback")
+                .into(),
+        )
+        .expect("terminal offscreen observation");
+        let nodes = [
+            ResolvedRenderGpuWorkNode::empty_builtin_ui_composite(
+                ui_occurrence,
+                GpuResourceLabel::new("U5 admitted source-only UI").unwrap(),
+                [],
+            ),
+            ResolvedRenderGpuWorkNode::capture_readback(
+                tail_occurrence,
+                GpuResourceLabel::new("U5 terminal offscreen readback").unwrap(),
+                readback,
+                [ui_occurrence],
+            ),
+        ];
+        let publication_id =
+            RunenUiPublicationId::try_from_raw(1).expect("exact producer generation");
+        let authored = prepare_render_gpu_frame_work_with_mixed_ui(
+            &context,
+            GpuResourceLabel::new("one canonical Runenwerk U5 frame").unwrap(),
+            nodes,
+            &[],
+            &[],
+            None,
+            RunenUiMixedWork {
+                ui_occurrence,
+                legacy_draws: Vec::new(),
+                contributions: vec![(publication_id, 0, contribution)],
+            },
+            tail_occurrence,
+        )
+        .expect("RunenGPU admits F2 and readback in one canonical fragment");
+        let (observed_id, token) = authored
+            .f2_tokens
+            .into_iter()
+            .next()
+            .expect("one exact F2 publication");
+        assert_eq!(observed_id, publication_id);
+        let token = token.expect("painting F2 work has a single-use node token");
+
+        let prepared = pollster::block_on(context.prepare_submission(authored.graph))
+            .expect("RunenGPU accepts canonical mixed work graph");
+        let submission = context
+            .submit_prepared(prepared)
+            .expect("exact U5 graph submission");
+        assert!(submission.contains_work_node(&authored.present_node));
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while submission.status() == GpuSubmissionStatus::Accepted {
+            assert!(Instant::now() < deadline, "terminal Vulkan work did not complete");
+            context.progress();
+        }
+        assert_eq!(submission.status(), GpuSubmissionStatus::Completed);
+        assert_eq!(
+            token
+                .completed_by(&submission)
+                .expect("exact F2 node completed in original submission")
+                .submission_id(),
+            submission.id(),
+        );
+    }
+}
