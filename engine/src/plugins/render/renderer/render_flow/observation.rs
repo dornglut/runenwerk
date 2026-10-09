@@ -410,10 +410,13 @@ impl RendererGpuObservationState {
                                         "terminal submission lacks exact completed F2 work",
                                     )),
                                 },
-                                // RunenRender explicitly emits no node for genuinely
-                                // nonpainting shaped content. Terminal Present is the
-                                // sufficient visual-effect boundary in that case.
-                                None => output.runenui_presented.push(witness.publication_id),
+                                // No F2 node means there is no F2 completion evidence.
+                                // A successful Present of other work cannot promote the
+                                // publication's displayed-input authority.
+                                None => output.runenui_rejected.push((
+                                    witness.publication_id,
+                                    "nonpainting F2 contribution has no executed work token",
+                                )),
                             }
                         }
                     }
