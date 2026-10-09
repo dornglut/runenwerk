@@ -897,6 +897,7 @@ fn author_render_fragment_mixed(
     let mut mixed_tokens = Vec::new();
     let mut ui_first_node = None;
     let mut ui_last_node = None;
+    let mut invalid_f2_token = false;
     let fragment = GpuWorkFragment::build_with_provenance(
         graph_label.clone(),
         graph_provenance.clone(),
@@ -933,14 +934,16 @@ fn author_render_fragment_mixed(
                                     // An F2 emission may author several GPU nodes.
                                     // Never use one presumed node index as both
                                     // its execution-order frontiers.
-                                    let first = token.authored_nodes().first().ok_or(
-                                        RenderGpuWorkAdapterError::InvalidMixedUi(
-                                            "painting F2 token has no authored GPU node",
-                                        ),
-                                    )?;
-                                    let last = token.authored_nodes().last().expect("first exists");
-                                    ui_first_node.get_or_insert_with(|| first.clone());
-                                    ui_last_node = Some(last.clone());
+                                    if let Some(first) = token.authored_nodes().first() {
+                                        let last = token.authored_nodes().last().expect("first exists");
+                                        ui_first_node.get_or_insert_with(|| first.clone());
+                                        ui_last_node = Some(last.clone());
+                                    } else {
+                                        // The builder closure can only return G3 authoring
+                                        // errors; validate the F2-specific invariant after
+                                        // immutable fragment authoring instead.
+                                        invalid_f2_token = true;
+                                    }
                                 }
                                 mixed_tokens.push((id, token));
                             }
@@ -963,6 +966,11 @@ fn author_render_fragment_mixed(
             Ok(())
         },
     )?;
+    if invalid_f2_token {
+        return Err(RenderGpuWorkAdapterError::InvalidMixedUi(
+            "painting F2 token has no authored GPU node",
+        ));
+    }
     let last_node = ui_last_node.ok_or(RenderGpuWorkAdapterError::InvalidMixedUi(
         "an admitted mixed UI pass produced no executable GPU node",
     ))?;
