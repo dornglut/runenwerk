@@ -160,7 +160,6 @@ impl RendererGpuObservationState {
             .any(|accepted| !accepted.runenui.is_empty())
     }
 
-
     /// Retains the exact accepted submission for timing/capture obligations
     /// and the single-use RunenRender F2 presentation witnesses.
     pub fn accept(
