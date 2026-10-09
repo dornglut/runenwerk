@@ -170,7 +170,7 @@ impl RendererGpuObservationState {
 
     /// Retains the exact accepted submission for timing/capture obligations
     /// and the single-use RunenRender F2 presentation witnesses.
-    pub fn accept(
+    pub(super) fn accept(
         &mut self,
         context: &GpuContext,
         submission: GpuSubmission,
