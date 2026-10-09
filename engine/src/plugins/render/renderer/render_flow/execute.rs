@@ -597,7 +597,10 @@ impl Renderer {
                 .iter()
                 .flat_map(|(_, _, _, occurrences)| occurrences.iter())
                 .filter(|occurrence| {
-                    matches!(occurrence.pass, CompiledPassExecutionPlan::BuiltinUiComposite(_))
+                    matches!(
+                        occurrence.pass,
+                        CompiledPassExecutionPlan::BuiltinUiComposite(_)
+                    )
                 })
                 .count();
             if !packet.runenui_2d.is_empty() && admitted_ui_passes != 1 {
