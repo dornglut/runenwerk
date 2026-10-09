@@ -291,14 +291,14 @@ fn validate_commands(
             .iter(world)
             .find(|(player, _)| player.participant == participant)
             .ok_or(GameCommandError::MissingControlState(participant))?;
-        if let Some(last) = control.last_applied_tick {
-            if last.0 >= target_tick.0 {
-                return Err(GameCommandError::NonIncreasingTick {
-                    participant,
-                    last,
-                    attempted: target_tick,
-                });
-            }
+        if let Some(last) = control.last_applied_tick
+            && last.0 >= target_tick.0
+        {
+            return Err(GameCommandError::NonIncreasingTick {
+                participant,
+                last,
+                attempted: target_tick,
+            });
         }
 
         // Preserve P1's more-specific missing-physical-state error even in a

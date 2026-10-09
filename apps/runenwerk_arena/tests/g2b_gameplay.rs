@@ -1,5 +1,8 @@
+use engine::plugins::InputState;
 use engine::plugins::world::adapters::SdfChunkStoreResource;
 use engine::prelude::*;
+use winit::event::ElementState;
+use winit::keyboard::KeyCode;
 use runenwerk_arena::{
     ARENA_PLAYER_SPAWN, ArenaHazardConfig, ArenaPlayer, GameActionSnapshot, GameCommandError,
     GameInputAccumulator, LOCAL_PARTICIPANT_ID, LastLocalCommandBatch, MAX_ARENA_HEALTH,
@@ -586,4 +589,82 @@ fn ambiguous_player_identity_rejects_mutation_and_fails_closed_on_health_read() 
     assert_eq!(controls.len(), 2);
     assert!(controls.contains(&before.2));
     assert!(controls.contains(&PlayerControlState::default()));
+}
+
+#[derive(Debug, Copy, Clone, Default, Component, Resource)]
+struct RestartScriptFrame(u8);
+
+#[derive(Debug, Default, Component, Resource)]
+struct ObservedRestartCommands(Vec<(SimulationTick, bool)>);
+
+struct RestartInputFrameScript;
+
+impl Plugin for RestartInputFrameScript {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(FixedTimeConfig { step_seconds: 0.1 });
+        app.insert_resource(CatchupBudget {
+            max_steps_per_frame: 4,
+        });
+        app.init_resource::<RestartScriptFrame>();
+        app.init_resource::<ObservedRestartCommands>();
+        app.add_systems(
+            PreUpdate,
+            inject_restart_across_zero_tick_frame
+                .after(CoreSet::Time)
+                .before(CoreSet::Input),
+        );
+        app.add_systems(
+            FixedUpdate,
+            observe_formed_restart_commands.after(CoreSet::Simulation),
+        );
+    }
+}
+
+fn inject_restart_across_zero_tick_frame(
+    mut time: ResMut<Time>,
+    mut input: ResMut<InputState>,
+    mut frame: ResMut<RestartScriptFrame>,
+) {
+    if frame.0 == 0 {
+        time.delta_seconds = 0.0;
+        input.handle_keyboard_input(KeyCode::KeyR, ElementState::Pressed, None);
+    } else {
+        time.delta_seconds = 0.2;
+        input.handle_keyboard_input(KeyCode::KeyR, ElementState::Released, None);
+    }
+    frame.0 = frame.0.saturating_add(1);
+}
+
+fn observe_formed_restart_commands(
+    batch: Res<LastLocalCommandBatch>,
+    mut recorded: ResMut<ObservedRestartCommands>,
+) {
+    if let Some(ref batch) = batch.0 {
+        recorded.0.push((batch.tick, batch.commands[0].command.restart));
+    }
+}
+
+#[test]
+fn actual_restart_key_survives_zero_tick_frame_and_fires_once_during_two_tick_catchup() {
+    let mut app = build_headless_game_app();
+    app.add_plugin(RestartInputFrameScript);
+    let app = app
+        .run_for_frames(2)
+        .expect("scripted KeyR ingress and two headless fixed steps must execute");
+
+    let observed = app
+        .world()
+        .resource::<ObservedRestartCommands>()
+        .expect("game-owned tick batch observation should exist");
+    assert_eq!(
+        observed.0,
+        vec![(SimulationTick(1), true), (SimulationTick(2), false)]
+    );
+    assert_eq!(control(&app).applied_command_count, 2);
+    assert_eq!(vitals(&app), PlayerVitals::default());
+    assert!(!app
+        .world()
+        .resource::<GameInputAccumulator>()
+        .expect("game input accumulator should persist")
+        .latched_restart());
 }
