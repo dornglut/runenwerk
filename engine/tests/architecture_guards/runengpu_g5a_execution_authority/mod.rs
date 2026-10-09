@@ -107,7 +107,10 @@ fn canonical_timing_tail_owns_one_readback_identity_without_a_logical_staging_co
     assert!(canonical.contains("timing.readback_id(),"));
     assert!(execute.contains("timing.readback_id(),"));
     assert!(adapter.contains("pub(crate) fn timing_readback("));
-    assert!(adapter.contains("operation: GpuWorkOperation::Readback(operation)"));
+    assert!(
+        adapter.contains("operation: Some(GpuWorkOperation::Readback(operation))"),
+        "the canonical GPU adapter must retain a typed, execution-complete readback occurrence"
+    );
     assert!(!adapter.contains("TimingReadbackCopy"));
 }
 

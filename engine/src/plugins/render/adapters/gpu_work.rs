@@ -98,7 +98,7 @@ impl ResolvedRenderGpuWorkNode {
         self
     }
     /// A source-only F2 pass still participates in normal render controls even
-    /// when no legacy UiFrame draws and no timestamp operation exist.
+    /// when no pre-existing generic draws and no timestamp operation exist.
     pub(crate) fn empty_builtin_ui_composite(
         occurrence: RenderGpuWorkOccurrenceId,
         label: GpuResourceLabel,
