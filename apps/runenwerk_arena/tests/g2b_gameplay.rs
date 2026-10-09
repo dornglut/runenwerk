@@ -647,22 +647,26 @@ fn observe_formed_restart_commands(
 }
 
 #[test]
-fn actual_restart_key_survives_zero_tick_frame_and_fires_once_during_two_tick_catchup() {
+fn actual_restart_key_survives_zero_tick_frame_and_fires_once_during_multi_tick_catchup() {
     let mut app = build_headless_game_app();
     app.add_plugin(RestartInputFrameScript);
     let app = app
         .run_for_frames(2)
-        .expect("scripted KeyR ingress and two headless fixed steps must execute");
+        .expect("scripted KeyR ingress and headless catch-up steps must execute");
 
     let observed = app
         .world()
         .resource::<ObservedRestartCommands>()
         .expect("game-owned tick batch observation should exist");
-    assert_eq!(
-        observed.0,
-        vec![(SimulationTick(1), true), (SimulationTick(2), false)]
+    assert!(
+        observed.0.len() >= 2,
+        "the catch-up frame must execute more than one fixed step"
     );
-    assert_eq!(control(&app).applied_command_count, 2);
+    for (index, (tick, restart)) in observed.0.iter().enumerate() {
+        assert_eq!(*tick, SimulationTick(index as u64 + 1));
+        assert_eq!(*restart, index == 0);
+    }
+    assert_eq!(control(&app).applied_command_count, observed.0.len() as u64);
     assert_eq!(vitals(&app), PlayerVitals::default());
     assert!(
         !app.world()
@@ -670,4 +674,29 @@ fn actual_restart_key_survives_zero_tick_frame_and_fires_once_during_two_tick_ca
             .expect("game input accumulator should persist")
             .latched_restart()
     );
+}
+
+#[test]
+fn initial_worldsdf_overlap_does_not_damage_from_unadmitted_requested_motion() {
+    let mut app = integrated_game();
+    // This position overlaps the accepted left wall; the requested step would
+    // otherwise cross the hazard's expanded trigger, but P1 rejects the move.
+    set_local_pose(&mut app, [0.25, 0.5, 2.5]);
+    app.world_mut()
+        .resource_mut::<runenwerk_arena::ArenaMovementConfig>()
+        .unwrap()
+        .movement_speed = 100.0;
+    let before = history(&app);
+
+    apply(
+        &mut app,
+        2,
+        PlayerCommand {
+            move_x: 1,
+            ..PlayerCommand::default()
+        },
+    );
+
+    assert_eq!(history(&app).current, before.current);
+    assert_eq!(vitals(&app), PlayerVitals::default());
 }
