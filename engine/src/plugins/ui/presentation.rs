@@ -204,6 +204,10 @@ pub struct UiRuntimePresentationAssociationsResource {
     /// Retains complete source/input snapshots only for renderer-accepted GPU
     /// submissions. The GPU observation owner bounds the accepted population.
     in_flight: BTreeMap<RunenUiPublicationId, UiRuntimePendingPresentation>,
+    /// Number of accepted GPU attempts still capable of terminalizing this
+    /// exact immutable source generation. This is input-correlation accounting,
+    /// not a second GPU status/progress authority.
+    accepted_attempts: BTreeMap<RunenUiPublicationId, usize>,
     displayed: BTreeMap<UiRuntimeSlotId, UiRuntimeDisplayedPresentation>,
     current_mappings: BTreeMap<UiRuntimeSlotId, UiRuntimeNativeMapping>,
     last_publication: BTreeMap<UiRuntimeSlotId, (UiRuntimeNativeMapping, u64)>,
@@ -213,6 +217,16 @@ pub struct UiRuntimePresentationAssociationsResource {
 }
 
 impl UiRuntimePresentationAssociationsResource {
+    fn retire_in_flight_for_slot(&mut self, slot: UiRuntimeSlotId) {
+        self.in_flight.retain(|publication_id, pending| {
+            if pending.binding.slot_id != slot {
+                return true;
+            }
+            self.accepted_attempts.remove(publication_id);
+            false
+        });
+    }
+
     /// Rejects an ambiguous producer/surface ownership before any state mutation.
     ///
     /// # Errors
@@ -236,8 +250,7 @@ impl UiRuntimePresentationAssociationsResource {
                     .push((previous.producer_id, previous.render_surface_id));
             }
             self.pending.remove(&slot);
-            self.in_flight
-                .retain(|_, pending| pending.binding.slot_id != slot);
+            self.retire_in_flight_for_slot(slot);
             self.displayed.remove(&slot);
             self.current_mappings.remove(&slot);
             self.last_publication.remove(&slot);
@@ -252,8 +265,7 @@ impl UiRuntimePresentationAssociationsResource {
                 .push((previous.producer_id, previous.render_surface_id));
         }
         self.pending.remove(&slot);
-        self.in_flight
-            .retain(|_, pending| pending.binding.slot_id != slot);
+        self.retire_in_flight_for_slot(slot);
         self.displayed.remove(&slot);
         self.current_mappings.remove(&slot);
         self.last_publication.remove(&slot);
@@ -286,8 +298,7 @@ impl UiRuntimePresentationAssociationsResource {
         let changed = self.current_mappings.insert(slot, mapping) != Some(mapping);
         if changed {
             self.pending.remove(&slot);
-            self.in_flight
-                .retain(|_, pending| pending.binding.slot_id != slot);
+            self.retire_in_flight_for_slot(slot);
             self.last_publication.remove(&slot);
         }
         changed
@@ -295,8 +306,7 @@ impl UiRuntimePresentationAssociationsResource {
 
     /// Refuses old pending/display mappings as soon as the host surface detaches.
     pub fn invalidate_mapping(&mut self, slot: UiRuntimeSlotId) {
-        self.in_flight
-            .retain(|_, pending| pending.binding.slot_id != slot);
+        self.retire_in_flight_for_slot(slot);
         self.pending.remove(&slot);
         self.current_mappings.remove(&slot);
         self.last_publication.remove(&slot);
@@ -367,6 +377,19 @@ impl UiRuntimePresentationAssociationsResource {
         &mut self,
         publication_id: RunenUiPublicationId,
     ) -> bool {
+        if self.in_flight.contains_key(&publication_id) {
+            // An unchanged source publication can be drawn in several
+            // consecutive accepted GPU frames. One failed attempt must not
+            // retire a second already-admitted attempt still in flight.
+            let Some(count) = self.accepted_attempts.get_mut(&publication_id) else {
+                return false;
+            };
+            let Some(next) = count.checked_add(1) else {
+                return false;
+            };
+            *count = next;
+            return true;
+        }
         let Some(slot) = self.pending.iter().find_map(|(&slot, pending)| {
             (pending.publication_id == publication_id).then_some(slot)
         }) else {
@@ -381,6 +404,7 @@ impl UiRuntimePresentationAssociationsResource {
             return false;
         }
         self.in_flight.insert(publication_id, snapshot);
+        self.accepted_attempts.insert(publication_id, 1);
         true
     }
 
@@ -429,10 +453,12 @@ impl UiRuntimePresentationAssociationsResource {
             .is_some_and(|displayed| displayed.publication_id >= receipt.publication_id)
         {
             self.in_flight.remove(&receipt.publication_id);
+            self.accepted_attempts.remove(&receipt.publication_id);
             return None;
         }
         self.displayed.insert(receipt.slot_id, accepted);
         self.in_flight.remove(&receipt.publication_id);
+        self.accepted_attempts.remove(&receipt.publication_id);
         self.displayed.get(&receipt.slot_id)
     }
 
@@ -468,6 +494,13 @@ impl UiRuntimePresentationAssociationsResource {
         &mut self,
         publication_id: RunenUiPublicationId,
     ) -> bool {
+        if let Some(count) = self.accepted_attempts.get_mut(&publication_id) {
+            if *count > 1 {
+                *count -= 1;
+                return true;
+            }
+            self.accepted_attempts.remove(&publication_id);
+        }
         let affected_slot = if let Some(in_flight) = self.in_flight.remove(&publication_id) {
             Some(in_flight.binding.slot_id)
         } else {

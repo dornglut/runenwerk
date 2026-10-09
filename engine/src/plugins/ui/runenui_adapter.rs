@@ -1226,6 +1226,28 @@ mod tests {
                 .is_none()
         );
 
+        // Static UI paint may be submitted more than once before any GPU
+        // attempt completes. One rejected attempt must leave the identical
+        // source generation retained until another accepted attempt completes.
+        let repeated_id = associations
+            .stage(binding.clone(), mapping, 1, first.clone())
+            .expect("one unchanged source generation");
+        assert!(associations.associate_accepted_submission(repeated_id));
+        assert!(associations.associate_accepted_submission(repeated_id));
+        assert_eq!(associations.in_flight_count(), 1);
+        assert!(associations.reject_terminal_publication(repeated_id));
+        assert_eq!(
+            associations.in_flight_count(),
+            1,
+            "first failed GPU attempt cannot retire a second accepted attempt"
+        );
+        let recovered = associations
+            .promote_completed_publication(repeated_id)
+            .expect("second accepted attempt can still display the source generation");
+        assert_eq!(recovered.publication_id, repeated_id);
+        assert_eq!(associations.in_flight_count(), 0);
+        assert!(!associations.reject_terminal_publication(repeated_id));
+
         // Native GPUs may complete accepted submissions out of source
         // publication order. Newest *successfully displayed* input wins,
         // and a late older completion must not rewind its hit-test context.
