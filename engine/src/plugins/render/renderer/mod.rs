@@ -1159,7 +1159,9 @@ impl Renderer {
                 }
             }
         }
-        let retired = self.runenui_2d_resource_ids.reclaim_obsolete_over_budget(&live);
+        let retired = self
+            .runenui_2d_resource_ids
+            .reclaim_obsolete_over_budget(&live);
         if retired != 0 {
             // A fresh immutable-observation generation is necessary: discard_cache()
             // intentionally retains all observed values. Surviving semantic IDs

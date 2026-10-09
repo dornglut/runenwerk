@@ -301,7 +301,8 @@ mod tests {
         fn update(
             _: &mut Self::State,
             _: Self::Action,
-        ) -> impl IntoUpdateOutput<Self::Action, Self::HostProtocol> {}
+        ) -> impl IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+        }
     }
 
     fn paint() -> PaintPublication {

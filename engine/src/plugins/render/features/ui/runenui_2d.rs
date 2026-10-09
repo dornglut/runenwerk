@@ -60,7 +60,11 @@ impl RunenUi2dResourceIdentityMap {
         if self.retained_count() <= RECLAIM_WATERMARK {
             return 0;
         }
-        let stale = self.by_source.keys().filter(|source| !live.contains(*source)).count();
+        let stale = self
+            .by_source
+            .keys()
+            .filter(|source| !live.contains(*source))
+            .count();
         if stale < MINIMUM_STALE_TO_RECLAIM {
             return 0;
         }
@@ -343,7 +347,8 @@ mod tests {
                 "CPU source retention must be bounded independently of outstanding GPU submissions"
             );
             assert_eq!(
-                ids.resolve_or_allocate(&shared).expect("shared source survives"),
+                ids.resolve_or_allocate(&shared)
+                    .expect("shared source survives"),
                 shared_id
             );
         }
