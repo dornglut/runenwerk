@@ -5,7 +5,7 @@
 //! they never become RunenRender resource IDs. The complete SurfacePublication remains owned by
 //! the UI integration until exact displayed-input promotion.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use runen_render::composition_2d::{
     Render2dAffineTransform, Render2dColorRgba8, Render2dComposition, Render2dCompositionError,
@@ -39,6 +39,15 @@ impl RunenUi2dResourceIdentityMap {
     /// Renderer IDs are still never assigned to a different source reference.
     pub fn retire(&mut self, source: &ResourceRef) -> bool {
         self.by_source.remove(source).is_some()
+    }
+
+    /// Prunes only exact obsolete opaque source references. Monotonic F2
+    /// resource IDs are never reissued even after an idle-generation reset.
+    /// Callers MUST prove no old GPU F2 work can still use the retired ids.
+    pub fn retain_exact_live(&mut self, live: &HashSet<ResourceRef>) -> usize {
+        let before = self.by_source.len();
+        self.by_source.retain(|source, _| live.contains(source));
+        before - self.by_source.len()
     }
 
     fn resolve_or_allocate(
@@ -267,6 +276,30 @@ fn project_translation(
 mod tests {
     use super::*;
     use runenui_core::ResourceKind;
+
+    #[test]
+    fn idle_retirement_prunes_only_obsolete_exact_sources_without_recycling_ids() {
+        let mut map = RunenUi2dResourceIdentityMap::default();
+        let still_live = ResourceRef::new(ResourceKind::ShapedTextRun);
+        let expired = ResourceRef::new(ResourceKind::ShapedTextRun);
+        let live_id = map.resolve_or_allocate(&still_live).expect("live id");
+        let expired_id = map.resolve_or_allocate(&expired).expect("expired id");
+        let keep = HashSet::from([still_live.clone()]);
+        assert_eq!(map.retain_exact_live(&keep), 1);
+        assert_eq!(map.retained_count(), 1);
+        assert_eq!(
+            map.resolve_or_allocate(&still_live).expect("stable live id"),
+            live_id
+        );
+        assert_ne!(
+            map.resolve_or_allocate(&expired).expect("fresh renewed id"),
+            expired_id
+        );
+        assert_ne!(
+            map.resolve_or_allocate(&expired).expect("same renewed id"),
+            live_id
+        );
+    }
 
     #[test]
     fn resource_ids_are_stable_for_live_sources_and_never_recycled() {

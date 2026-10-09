@@ -151,6 +151,14 @@ pub(in crate::plugins::render::renderer) struct RunenUiGpuPresentationWitness {
 }
 
 impl RendererGpuObservationState {
+    /// True while terminal RunenRender F2 work may still reference resources
+    /// from an older immutable publication. Observation remains the sole
+    /// renderer-owned GPU execution lifecycle authority.
+    pub(crate) fn has_pending_runenui(&self) -> bool {
+        self.accepted.iter().any(|accepted| !accepted.runenui.is_empty())
+    }
+
+
     /// Retains the exact accepted submission for timing/capture obligations
     /// and the single-use RunenRender F2 presentation witnesses.
     pub fn accept(
