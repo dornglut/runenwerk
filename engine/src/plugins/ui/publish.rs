@@ -4,7 +4,7 @@
 //! host presentation maps are read only from the attached RenderSurface and its
 //! corresponding native window record, never from primary-window convenience facts.
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use runenui_runtime::{LogicalSize, RasterScale, SurfaceBuildContext};
 
 use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};

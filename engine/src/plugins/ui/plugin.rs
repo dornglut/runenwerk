@@ -20,13 +20,15 @@ impl Plugin for UiPlugin {
         app.init_resource::<UiRuntimePresentationAssociationsResource>();
         app.add_systems(
             RenderPrepare,
-            publish_runenui_bound_surfaces_system.in_set(UiRuntimeSet::RenderPublication),
+            publish_runenui_bound_surfaces_system
+                .on_invoker_thread()
+                .in_set(UiRuntimeSet::RenderPublication),
         );
         app.add_systems(
             RenderSubmit,
             apply_runenui_terminal_presentations_system
-                .after_if_present(crate::plugins::render::runtime::frame_render_submit_system)
-                .on_invoker_thread(),
+                .on_invoker_thread()
+                .after_if_present(crate::plugins::render::runtime::frame_render_submit_system),
         );
 
         let diagnostic_count = app

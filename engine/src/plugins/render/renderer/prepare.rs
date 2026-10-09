@@ -556,8 +556,8 @@ impl Renderer {
                 publication_id: submission.publication_id,
                 compositor_position: submission.submission_order,
                 logical_extent: (
-                    f64::from(logical.width().get()),
-                    f64::from(logical.height().get()),
+                    f64::from(logical.width()),
+                    f64::from(logical.height()),
                 ),
                 raster_scale: f64::from(submission.publication.raster_scale().get()),
                 semantic,
