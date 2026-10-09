@@ -288,7 +288,8 @@ mod tests {
         assert_eq!(map.retain_exact_live(&keep), 1);
         assert_eq!(map.retained_count(), 1);
         assert_eq!(
-            map.resolve_or_allocate(&still_live).expect("stable live id"),
+            map.resolve_or_allocate(&still_live)
+                .expect("stable live id"),
             live_id
         );
         assert_ne!(

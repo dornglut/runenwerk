@@ -155,7 +155,9 @@ impl RendererGpuObservationState {
     /// from an older immutable publication. Observation remains the sole
     /// renderer-owned GPU execution lifecycle authority.
     pub(crate) fn has_pending_runenui(&self) -> bool {
-        self.accepted.iter().any(|accepted| !accepted.runenui.is_empty())
+        self.accepted
+            .iter()
+            .any(|accepted| !accepted.runenui.is_empty())
     }
 
 
