@@ -303,6 +303,35 @@ mod tests {
     }
 
     #[test]
+    fn repeated_distinct_resource_generations_retire_without_recycling_semantic_ids() {
+        let mut ids = RunenUi2dResourceIdentityMap::default();
+        let mut issued = Vec::new();
+        for _generation in 0..64 {
+            let current = (0..24)
+                .map(|_| ResourceRef::new(ResourceKind::ShapedTextRun))
+                .collect::<HashSet<_>>();
+            for source in &current {
+                let id = ids.resolve_or_allocate(source).expect("monotonic resource id");
+                assert!(!issued.contains(&id), "retired resource ID must never reappear");
+                issued.push(id);
+                assert_eq!(
+                    ids.resolve_or_allocate(source).expect("same live resource"),
+                    id,
+                );
+            }
+            ids.retain_exact_live(&current);
+            assert_eq!(ids.retained_count(), 24, "only current source references survive");
+        }
+        assert_eq!(issued.len(), 64 * 24);
+        ids.retain_exact_live(&HashSet::new());
+        assert_eq!(ids.retained_count(), 0);
+        let new_id = ids
+            .resolve_or_allocate(&ResourceRef::new(ResourceKind::ShapedTextRun))
+            .expect("post-idle resource id");
+        assert!(!issued.contains(&new_id), "idle retirement cannot recycle IDs");
+    }
+
+    #[test]
     fn resource_ids_are_stable_for_live_sources_and_never_recycled() {
         let mut ids = RunenUi2dResourceIdentityMap::default();
         let source_a = ResourceRef::new(ResourceKind::ShapedTextRun);

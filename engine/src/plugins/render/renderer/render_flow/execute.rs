@@ -49,6 +49,13 @@ struct PreparedDeterministicCompositions {
     occurrences: Vec<PreparedRetainedOccurrence>,
 }
 
+/// One bounded frame's flow realization before canonical GPU graph authoring.
+struct RealizedFrameInvocations<'a> {
+    invocations: Vec<RealizedFlowInvocation<'a>>,
+    maximum_occurrence: u64,
+    prepared_runenui: Vec<(RunenUiPublicationId, u32, Render2dPreparedContribution)>,
+}
+
 struct RealizedFlowInvocation<'a> {
     flow: &'a CompiledRenderFlowPlan,
     invocation: &'a crate::plugins::render::PreparedFlowInvocation,
@@ -294,8 +301,10 @@ impl Renderer {
                 context,
                 graph_label,
                 nodes,
-                &deterministic.fragments,
-                &deterministic.imports,
+                crate::plugins::render::RenderGpuExternalWork {
+                    producer_fragments: &deterministic.fragments,
+                    imports: &deterministic.imports,
+                },
                 timing_bracket,
                 mixed,
                 present_occurrence,
@@ -347,10 +356,12 @@ impl Renderer {
         let mut observation_output = self.gpu_observations.accept(
             context,
             submission,
-            timing_frames,
-            composed_gpu_timing.map(PreparedComposedGpuTiming::into_frame),
-            capture_readbacks,
-            runenui_witnesses,
+            super::observation::AcceptedFrameObservations {
+                timings: timing_frames,
+                composed_timing: composed_gpu_timing.map(PreparedComposedGpuTiming::into_frame),
+                captures: capture_readbacks,
+                runenui: runenui_witnesses,
+            },
             &mut batch.capture_runtime,
         );
         if let Some(evidence) = composed_terminal_evidence {
@@ -521,11 +532,7 @@ impl Renderer {
         let mut capture_runtime =
             FrameCaptureRuntime::new(frame_index, debug_control, &debug_config.capture_selectors);
         let mut flow_runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
-        let realization_result = (|| -> Result<(
-            Vec<RealizedFlowInvocation<'a>>,
-            u64,
-            Vec<(RunenUiPublicationId, u32, Render2dPreparedContribution)>,
-        )> {
+        let realization_result = (|| -> Result<RealizedFrameInvocations<'a>> {
             let active_flow_ids = compiled_flows
                 .iter()
                 .map(|flow| flow.flow_id)
@@ -873,10 +880,18 @@ impl Renderer {
                     scheduled_invocations.len()
                 );
             }
-            Ok((invocations, maximum_occurrence, prepared_runenui))
+            Ok(RealizedFrameInvocations {
+                invocations,
+                maximum_occurrence,
+                prepared_runenui,
+            })
         })();
         self.flow_runtime_cache = flow_runtime_cache;
-        let (invocations, maximum_occurrence, prepared_runenui) = realization_result?;
+        let RealizedFrameInvocations {
+            invocations,
+            maximum_occurrence,
+            prepared_runenui,
+        } = realization_result?;
         let mut final_captures = Vec::new();
         if capture_runtime.should_attempt_stage(CaptureStage::Final) {
             self.prepare_final_surface_capture(

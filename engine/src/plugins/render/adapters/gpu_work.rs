@@ -304,6 +304,14 @@ impl RenderGpuFrameTimingBracket {
     }
 }
 
+/// Composable producer fragments and their imported resources share one
+/// external GPU-work boundary when the renderer prepares the canonical graph.
+#[derive(Clone, Copy)]
+pub(crate) struct RenderGpuExternalWork<'a> {
+    pub(crate) producer_fragments: &'a [GpuWorkFragment],
+    pub(crate) imports: &'a [GpuWorkImport],
+}
+
 /// Owns only the exact mixed UI node authoring seam in the existing canonical
 /// graph. The source-neutral F2 contribution is consumed once in the *final*
 /// fragment; provisional G3 hazard/control discovery never mints its token.
@@ -311,12 +319,15 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
     context: &GpuContext,
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
-    producer_fragments: &[GpuWorkFragment],
-    imports: &[GpuWorkImport],
+    external: RenderGpuExternalWork<'_>,
     timing_bracket: Option<&RenderGpuFrameTimingBracket>,
     mixed: RunenUiMixedWork,
     present_occurrence: RenderGpuWorkOccurrenceId,
 ) -> Result<RunenUiMixedPreparedGraph, RenderGpuWorkAdapterError> {
+    let RenderGpuExternalWork {
+        producer_fragments,
+        imports,
+    } = external;
     let nodes = nodes.into_iter().collect::<Vec<_>>();
     if mixed.legacy_draws.is_empty()
         && mixed
@@ -366,8 +377,10 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
         let prepared = prepare_resolved_render_gpu_work(
             graph_label,
             active,
-            producer_fragments,
-            imports,
+            RenderGpuExternalWork {
+                producer_fragments,
+                imports,
+            },
             timing_bracket,
             None,
             Some(present_occurrence),
@@ -393,8 +406,10 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
     let prepared = prepare_resolved_render_gpu_work(
         graph_label,
         nodes,
-        producer_fragments,
-        imports,
+        RenderGpuExternalWork {
+            producer_fragments,
+            imports,
+        },
         timing_bracket,
         Some(mixed),
         Some(present_occurrence),
@@ -431,8 +446,10 @@ pub(crate) fn prepare_render_gpu_frame_work(
     prepare_resolved_render_gpu_work(
         graph_label,
         nodes,
-        producer_fragments,
-        imports,
+        RenderGpuExternalWork {
+            producer_fragments,
+            imports,
+        },
         timing_bracket,
         None,
         None,
@@ -453,8 +470,10 @@ fn prepare_render_gpu_frame_work_for_test(
     prepare_resolved_render_gpu_work(
         graph_label,
         nodes,
-        &[],
-        &[],
+        RenderGpuExternalWork {
+            producer_fragments: &[],
+            imports: &[],
+        },
         None,
         None,
         None,
@@ -476,8 +495,10 @@ pub(crate) fn prepare_render_gpu_frame_work_with_composition_for_test(
     prepare_resolved_render_gpu_work(
         graph_label,
         nodes,
-        producer_fragments,
-        imports,
+        RenderGpuExternalWork {
+            producer_fragments,
+            imports,
+        },
         None,
         None,
         None,
@@ -500,8 +521,10 @@ fn prepare_render_gpu_frame_work_with_timing_for_test(
     prepare_resolved_render_gpu_work(
         graph_label,
         nodes,
-        producer_fragments,
-        imports,
+        RenderGpuExternalWork {
+            producer_fragments,
+            imports,
+        },
         Some(timing_bracket),
         None,
         None,
@@ -528,8 +551,7 @@ fn prepare_render_gpu_frame_work_with_timing_for_test(
 fn prepare_resolved_render_gpu_work(
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
-    producer_fragments: &[GpuWorkFragment],
-    imports: &[GpuWorkImport],
+    external: RenderGpuExternalWork<'_>,
     timing_bracket: Option<&RenderGpuFrameTimingBracket>,
     mut mixed: Option<RunenUiMixedWork>,
     present_occurrence: Option<RenderGpuWorkOccurrenceId>,
@@ -539,6 +561,10 @@ fn prepare_resolved_render_gpu_work(
         Vec<GpuGraphExplicitOrder>,
     ) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError>,
 ) -> Result<PreparedRenderGpuWorkFrame, RenderGpuWorkAdapterError> {
+    let RenderGpuExternalWork {
+        producer_fragments,
+        imports,
+    } = external;
     let nodes = nodes.into_iter().collect::<Vec<_>>();
     validate_occurrences(&nodes)?;
 
@@ -2613,8 +2639,10 @@ mod native_mixed_ui_tests {
             &context,
             GpuResourceLabel::new("one canonical Runenwerk U5 frame").unwrap(),
             nodes,
-            &[],
-            &[],
+            RenderGpuExternalWork {
+                producer_fragments: &[],
+                imports: &[],
+            },
             None,
             RunenUiMixedWork {
                 ui_occurrence,

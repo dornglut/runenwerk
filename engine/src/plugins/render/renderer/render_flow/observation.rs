@@ -150,6 +150,14 @@ pub(in crate::plugins::render::renderer) struct RunenUiGpuPresentationWitness {
     pub present_node: GpuWorkNodeId,
 }
 
+/// One submission owns timing, capture and F2 terminal observation obligations.
+pub(super) struct AcceptedFrameObservations {
+    pub(super) timings: Vec<GpuPassTimingFrame>,
+    pub(super) composed_timing: Option<GpuComposedFrameTimingFrame>,
+    pub(super) captures: Vec<PreparedCaptureReadback>,
+    pub(super) runenui: Vec<RunenUiGpuPresentationWitness>,
+}
+
 impl RendererGpuObservationState {
     /// True while terminal RunenRender F2 work may still reference resources
     /// from an older immutable publication. Observation remains the sole
@@ -166,18 +174,12 @@ impl RendererGpuObservationState {
         &mut self,
         context: &GpuContext,
         submission: GpuSubmission,
-        timings: Vec<GpuPassTimingFrame>,
-        composed_timing: Option<GpuComposedFrameTimingFrame>,
-        captures: Vec<PreparedCaptureReadback>,
-        runenui: Vec<RunenUiGpuPresentationWitness>,
+        frame: AcceptedFrameObservations,
         capture_runtime: &mut FrameCaptureRuntime,
     ) -> RendererGpuObservationOutput {
         self.accept_with_bound(
             submission,
-            timings,
-            composed_timing,
-            captures,
-            runenui,
+            frame,
             capture_runtime,
             context.execution_policy().max_in_flight_submissions().get(),
         )
@@ -186,13 +188,16 @@ impl RendererGpuObservationState {
     fn accept_with_bound(
         &mut self,
         submission: GpuSubmission,
-        timings: Vec<GpuPassTimingFrame>,
-        composed_timing: Option<GpuComposedFrameTimingFrame>,
-        captures: Vec<PreparedCaptureReadback>,
-        runenui: Vec<RunenUiGpuPresentationWitness>,
+        frame: AcceptedFrameObservations,
         capture_runtime: &mut FrameCaptureRuntime,
         bound: usize,
     ) -> RendererGpuObservationOutput {
+        let AcceptedFrameObservations {
+            timings,
+            composed_timing,
+            captures,
+            runenui,
+        } = frame;
         let mut output = RendererGpuObservationOutput::default();
         let mut accepted_timings = Vec::with_capacity(timings.len());
         for timing in timings {

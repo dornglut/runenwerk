@@ -408,11 +408,6 @@ impl UiRuntimePresentationAssociationsResource {
         true
     }
 
-    #[must_use]
-    pub(crate) fn in_flight_count(&self) -> usize {
-        self.in_flight.len()
-    }
-
     /// Promotes only an exact GPU-accepted immutable input snapshot after
     /// renderer-proven terminal completion and Present. A stale/cross-slot/
     /// cross-surface receipt never consumes the newer pending generation.
