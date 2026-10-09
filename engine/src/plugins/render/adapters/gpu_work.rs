@@ -935,7 +935,8 @@ fn author_render_fragment_mixed(
                                     // Never use one presumed node index as both
                                     // its execution-order frontiers.
                                     if let Some(first) = token.authored_nodes().first() {
-                                        let last = token.authored_nodes().last().expect("first exists");
+                                        let last =
+                                            token.authored_nodes().last().expect("first exists");
                                         ui_first_node.get_or_insert_with(|| first.clone());
                                         ui_last_node = Some(last.clone());
                                     } else {
