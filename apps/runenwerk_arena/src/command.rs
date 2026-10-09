@@ -96,10 +96,18 @@ impl fmt::Display for GameCommandError {
                 participant.0
             ),
             Self::MissingParticipant(participant) => {
-                write!(formatter, "participant {} is not present", participant.0)
+                write!(
+                    formatter,
+                    "participant {} is not present",
+                    participant.0
+                )
             }
             Self::DuplicateParticipant(participant) => {
-                write!(formatter, "participant {} has duplicate player identities", participant.0)
+                write!(
+                    formatter,
+                    "participant {} has duplicate player identities",
+                    participant.0
+                )
             }
             Self::DuplicateCommandParticipant(participant) => write!(
                 formatter,
@@ -107,16 +115,32 @@ impl fmt::Display for GameCommandError {
                 participant.0
             ),
             Self::MissingControlState(participant) => {
-                write!(formatter, "participant {} has no control state", participant.0)
+                write!(
+                    formatter,
+                    "participant {} has no control state",
+                    participant.0
+                )
             }
             Self::MissingPhysicalState(participant) => {
-                write!(formatter, "participant {} has no physical state", participant.0)
+                write!(
+                    formatter,
+                    "participant {} has no physical state",
+                    participant.0
+                )
             }
             Self::MissingVitals(participant) => {
-                write!(formatter, "participant {} has no health state", participant.0)
+                write!(
+                    formatter,
+                    "participant {} has no health state",
+                    participant.0
+                )
             }
             Self::InvalidVitals(participant) => {
-                write!(formatter, "participant {} has invalid health state", participant.0)
+                write!(
+                    formatter,
+                    "participant {} has invalid health state",
+                    participant.0
+                )
             }
             Self::HazardTickRegression(participant) => write!(
                 formatter,
@@ -256,7 +280,9 @@ fn validate_commands(
         }
 
         let query = world.query::<&ArenaPlayer>();
-        let mut matches = query.iter(world).filter(|player| player.participant == participant);
+        let mut matches = query
+            .iter(world)
+            .filter(|player| player.participant == participant);
         if matches.next().is_none() {
             return Err(GameCommandError::MissingParticipant(participant));
         }
@@ -307,7 +333,7 @@ fn evaluate_participant_update(
     }
     if next_vitals
         .last_hazard_hit_tick
-        .is_some_and(|last| last.0 > target_tick.0)
+        .is_some_and(|last| last.0 >= target_tick.0)
     {
         return Err(GameCommandError::HazardTickRegression(participant));
     }
@@ -375,8 +401,7 @@ fn hazard_segment_contacts(
 ) -> bool {
     let start: [f64; 3] = previous.map(f64::from);
     let delta: [f64; 3] = std::array::from_fn(|axis| f64::from(current[axis]) - start[axis]);
-    let offset: [f64; 3] =
-        std::array::from_fn(|axis| start[axis] - f64::from(hazard.center[axis]));
+    let offset: [f64; 3] = std::array::from_fn(|axis| start[axis] - f64::from(hazard.center[axis]));
     let sq_length = delta.iter().map(|value| value * value).sum::<f64>();
     let t = if sq_length > 0.0 {
         (-offset

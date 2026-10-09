@@ -46,7 +46,9 @@ fn vitals(app: &App) -> PlayerVitals {
 }
 
 fn set_local_pose(app: &mut App, position: [f32; 3]) {
-    let query = app.world().query::<(&ArenaPlayer, &mut PlayerPhysicalHistory)>();
+    let query = app
+        .world()
+        .query::<(&ArenaPlayer, &mut PlayerPhysicalHistory)>();
     let (_, state) = query
         .iter(app.world_mut())
         .find(|(player, _)| player.participant == LOCAL_PARTICIPANT_ID)
@@ -73,7 +75,13 @@ fn startup_initializes_single_gameplay_health_source_without_visual_or_net_runti
     assert_eq!(control(&app).last_applied_tick, Some(SimulationTick(1)));
     assert_eq!(app.registered_scene_count(), 0);
     assert!(app.world().resource::<NetworkInboundQueue>().is_err());
-    assert!(app.world().resource::<LastLocalCommandBatch>().unwrap().0.is_some());
+    assert!(
+        app.world()
+            .resource::<LastLocalCommandBatch>()
+            .unwrap()
+            .0
+            .is_some()
+    );
 }
 
 #[test]
@@ -155,7 +163,11 @@ fn defeat_stops_motion_interaction_effects_and_additional_hazard_damage() {
     assert_eq!(vitals(&app).last_hazard_hit_tick, Some(SimulationTick(62)));
     assert_eq!(history(&app).current, before.current);
     assert_eq!(history(&app).previous, before.current);
-    assert_eq!(control(&app).interact_request_count, 1, "request audit remains observable");
+    assert_eq!(
+        control(&app).interact_request_count,
+        1,
+        "request audit remains observable"
+    );
 }
 
 #[test]
@@ -175,7 +187,10 @@ fn restart_is_atomic_and_resets_full_physical_history_without_same_tick_damage()
         },
     );
     assert_eq!(vitals(&app), PlayerVitals::default());
-    assert_eq!(history(&app), PlayerPhysicalHistory::spawned(ARENA_PLAYER_SPAWN));
+    assert_eq!(
+        history(&app),
+        PlayerPhysicalHistory::spawned(ARENA_PLAYER_SPAWN)
+    );
     assert_eq!(control(&app).applied_command_count, commands_before + 1);
     apply(
         &mut app,
@@ -214,7 +229,8 @@ fn failed_spawn_readiness_preserves_all_gameplay_state_and_control_counters() {
         .unwrap()
         .chunks
         .clear();
-    let (before_health, before_motion, before_control) = (vitals(&app), history(&app), control(&app));
+    let (before_health, before_motion, before_control) =
+        (vitals(&app), history(&app), control(&app));
     let batch = command_batch(
         63,
         &[(
@@ -289,7 +305,10 @@ fn non_increasing_or_mismatched_tick_cannot_apply_damage_twice() {
 fn invalid_hazard_and_vitals_fail_before_any_mutation() {
     let mut app = integrated_game();
     let before = (vitals(&app), history(&app), control(&app));
-    app.world_mut().resource_mut::<ArenaHazardConfig>().unwrap().radius = f32::NAN;
+    app.world_mut()
+        .resource_mut::<ArenaHazardConfig>()
+        .unwrap()
+        .radius = f32::NAN;
     let batch = command_batch(2, &[(LOCAL_PARTICIPANT_ID, PlayerCommand::default())]);
     assert_eq!(
         apply_game_commands(app.world_mut(), batch.tick, &batch),
@@ -297,8 +316,7 @@ fn invalid_hazard_and_vitals_fail_before_any_mutation() {
     );
     assert_eq!((vitals(&app), history(&app), control(&app)), before);
 
-    *app.world_mut().resource_mut::<ArenaHazardConfig>().unwrap() =
-        ArenaHazardConfig::default();
+    *app.world_mut().resource_mut::<ArenaHazardConfig>().unwrap() = ArenaHazardConfig::default();
     let query = app.world().query::<(&ArenaPlayer, &mut PlayerVitals)>();
     let (_, vitals) = query
         .iter(app.world_mut())
@@ -363,14 +381,13 @@ fn restart_edge_is_retained_across_zero_ticks_then_consumed_only_once() {
 }
 
 #[test]
-fn replay_with_identical_world_and_commands_is_independent_of_filler_entity_order() {
+fn replay_remains_identical_across_entity_and_command_order() {
     #[derive(Debug, Copy, Clone, Component)]
     struct Filler;
 
     let mut first = integrated_game();
     let mut second = integrated_game();
     first.world_mut().spawn(Filler).unwrap();
-    second.world_mut().spawn(Filler).unwrap();
     let other = ParticipantId(17);
     for app in [&mut first, &mut second] {
         app.world_mut()
@@ -382,7 +399,8 @@ fn replay_with_identical_world_and_commands_is_independent_of_filler_entity_orde
             ))
             .unwrap();
     }
-    // Different command participant order must not affect state or replay output.
+    second.world_mut().spawn(Filler).unwrap();
+    // Different unrelated entity and command participant order cannot affect replay.
     for tick in 2..=42 {
         let inputs = [
             (
@@ -404,8 +422,12 @@ fn replay_with_identical_world_and_commands_is_independent_of_filler_entity_orde
     }
     for participant in [LOCAL_PARTICIPANT_ID, other] {
         assert_eq!(
-            player_state_for(first.world(), participant).unwrap().last_applied_tick,
-            player_state_for(second.world(), participant).unwrap().last_applied_tick
+            player_state_for(first.world(), participant)
+                .unwrap()
+                .last_applied_tick,
+            player_state_for(second.world(), participant)
+                .unwrap()
+                .last_applied_tick
         );
         assert_eq!(
             player_physical_history_for(first.world(), participant),
