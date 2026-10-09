@@ -700,3 +700,88 @@ fn initial_worldsdf_overlap_does_not_damage_from_unadmitted_requested_motion() {
     assert_eq!(history(&app).current, before.current);
     assert_eq!(vitals(&app), PlayerVitals::default());
 }
+
+#[test]
+fn admitted_high_speed_world_motion_crosses_hazard_even_when_both_poses_are_outside() {
+    let mut app = integrated_game();
+    set_local_pose(&mut app, [1.0, 1.0, 2.5]);
+    app.world_mut()
+        .resource_mut::<FixedTimeConfig>()
+        .unwrap()
+        .step_seconds = 0.1;
+    app.world_mut()
+        .resource_mut::<runenwerk_arena::ArenaMovementConfig>()
+        .unwrap()
+        .movement_speed = 22.5;
+
+    let start = history(&app).current.position;
+    apply(
+        &mut app,
+        2,
+        PlayerCommand {
+            move_x: 1,
+            ..PlayerCommand::default()
+        },
+    );
+    let end = history(&app).current.position;
+    let hazard = *app.world().resource::<ArenaHazardConfig>().unwrap();
+    let character_radius = app
+        .world()
+        .resource::<runenwerk_arena::ArenaMovementConfig>()
+        .unwrap()
+        .character
+        .radius;
+    let radius = f64::from(hazard.radius) + f64::from(character_radius);
+    for position in [start, end] {
+        let distance_squared = (0..3)
+            .map(|axis| {
+                let offset = f64::from(position[axis]) - f64::from(hazard.center[axis]);
+                offset * offset
+            })
+            .sum::<f64>();
+        assert!(
+            distance_squared > radius * radius,
+            "the admitted pass-through must not rely on endpoint contact: {position:?}"
+        );
+    }
+    assert!(end[0] > start[0], "physics must admit nonzero movement");
+    assert_eq!(vitals(&app).health, MAX_ARENA_HEALTH - 1);
+    assert_eq!(vitals(&app).last_hazard_hit_tick, Some(SimulationTick(2)));
+}
+
+#[test]
+fn only_the_participant_touching_the_maintained_hazard_takes_damage() {
+    let mut app = integrated_game();
+    let spectator = ParticipantId(17);
+    app.world_mut()
+        .spawn((
+            ArenaPlayer {
+                participant: spectator,
+            },
+            PlayerControlState::default(),
+            PlayerPhysicalHistory::spawned(ARENA_PLAYER_SPAWN),
+            PlayerVitals::default(),
+        ))
+        .unwrap();
+    set_local_pose(&mut app, [2.5, 1.0, 2.5]);
+
+    let batch = command_batch(
+        2,
+        &[
+            (LOCAL_PARTICIPANT_ID, PlayerCommand::default()),
+            (spectator, PlayerCommand::default()),
+        ],
+    );
+    apply_game_commands(app.world_mut(), batch.tick, &batch).unwrap();
+    assert_eq!(vitals(&app).health, MAX_ARENA_HEALTH - 1);
+    assert_eq!(
+        player_vitals_for(app.world(), spectator),
+        Some(PlayerVitals::default())
+    );
+    assert_eq!(
+        player_state_for(app.world(), spectator)
+            .unwrap()
+            .last_applied_tick,
+        Some(SimulationTick(2))
+    );
+}
