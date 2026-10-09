@@ -782,7 +782,7 @@ fn prepare_resolved_render_gpu_work(
 /// One checked operation inserted at the canonical UI pass position. The
 /// renderer owns the surrounding legacy span, not RunenRender's private draw.
 enum MixedUiEmission {
-    Legacy(GpuRenderOperation),
+    Legacy(Box<GpuRenderOperation>),
     RunenUi(RunenUiPublicationId, Render2dPreparedContribution),
 }
 
@@ -821,7 +821,7 @@ fn mixed_ui_emissions(
             render.depth_stencil_attachment().cloned(),
             [],
             Some(GpuTimestampWrites::new(ts.0.query_set(), Some(ts.1), None)?),
-        )?));
+        ).map(Box::new)?));
     }
     let mut legacy = mixed.legacy_draws.into_iter().peekable();
     let mut f2 = mixed.contributions.into_iter().peekable();
@@ -842,7 +842,7 @@ fn mixed_ui_emissions(
                 render.depth_stencil_attachment().cloned(),
                 draws,
                 None,
-            )?));
+            ).map(Box::new)?));
         } else {
             let (id, _position, contribution) = f2.next().expect("checked F2 ordinal");
             result.push(MixedUiEmission::RunenUi(id, contribution));
@@ -854,7 +854,7 @@ fn mixed_ui_emissions(
             render.depth_stencil_attachment().cloned(),
             [],
             Some(GpuTimestampWrites::new(ts.0.query_set(), None, Some(ts.1))?),
-        )?));
+        ).map(Box::new)?));
     }
     Ok(result)
 }
@@ -919,7 +919,7 @@ fn author_render_fragment_mixed(
                             MixedUiEmission::Legacy(render) => {
                                 let authored = builder.add_node(
                                     node.label.clone(),
-                                    GpuWorkOperation::Render(render),
+                                    GpuWorkOperation::Render(*render),
                                     [],
                                     GpuCapabilityRequirements::new(),
                                     GpuExecutionPreference::GraphicsRequired,
