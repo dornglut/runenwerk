@@ -1,8 +1,6 @@
 use engine::plugins::InputState;
 use engine::plugins::world::adapters::SdfChunkStoreResource;
 use engine::prelude::*;
-use winit::event::ElementState;
-use winit::keyboard::KeyCode;
 use runenwerk_arena::{
     ARENA_PLAYER_SPAWN, ArenaHazardConfig, ArenaPlayer, GameActionSnapshot, GameCommandError,
     GameInputAccumulator, LOCAL_PARTICIPANT_ID, LastLocalCommandBatch, MAX_ARENA_HEALTH,
@@ -10,6 +8,8 @@ use runenwerk_arena::{
     PlayerVitals, TickCommandBatch, apply_game_commands, build_headless_game_app,
     player_physical_history_for, player_state_for, player_vitals_for,
 };
+use winit::event::ElementState;
+use winit::keyboard::KeyCode;
 
 fn integrated_game() -> App {
     build_headless_game_app()
@@ -640,7 +640,9 @@ fn observe_formed_restart_commands(
     mut recorded: ResMut<ObservedRestartCommands>,
 ) {
     if let Some(ref batch) = batch.0 {
-        recorded.0.push((batch.tick, batch.commands[0].command.restart));
+        recorded
+            .0
+            .push((batch.tick, batch.commands[0].command.restart));
     }
 }
 
@@ -662,9 +664,10 @@ fn actual_restart_key_survives_zero_tick_frame_and_fires_once_during_two_tick_ca
     );
     assert_eq!(control(&app).applied_command_count, 2);
     assert_eq!(vitals(&app), PlayerVitals::default());
-    assert!(!app
-        .world()
-        .resource::<GameInputAccumulator>()
-        .expect("game input accumulator should persist")
-        .latched_restart());
+    assert!(
+        !app.world()
+            .resource::<GameInputAccumulator>()
+            .expect("game input accumulator should persist")
+            .latched_restart()
+    );
 }
