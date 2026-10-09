@@ -282,8 +282,8 @@ mod tests {
     use super::*;
 
     use runenui_core::{
-        FontFamilyName, GenericFontFamily, LogicalLength, NoHostProtocol, StyleEnvironment, UiApp,
-        View, text,
+        FontFamilyName, GenericFontFamily, IntoUpdateOutput, LogicalLength, NoHostProtocol,
+        StyleEnvironment, UiApp, View, text,
     };
     use runenui_runtime::{AppRuntime, LogicalSize, SurfaceBuildContext};
 
@@ -298,7 +298,12 @@ mod tests {
             text("Counter")
         }
 
-        fn update(_: &mut Self::State, _: Self::Action) {}
+        fn update(
+            _: &mut Self::State,
+            _: Self::Action,
+        ) -> impl IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            ()
+        }
     }
 
     fn paint() -> PaintPublication {
