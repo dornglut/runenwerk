@@ -154,7 +154,12 @@ impl Plugin for RenderPlugin {
                 .on_invoker_thread()
                 .in_set(RenderRuntimeSet::FramePrepare),
         );
-        app.add_systems(RenderSubmit, frame_render_submit_system.on_invoker_thread());
+        app.add_systems(
+            RenderSubmit,
+            frame_render_submit_system
+                .on_invoker_thread()
+                .in_set(RenderRuntimeSet::FrameSubmit),
+        );
     }
 }
 

@@ -28,7 +28,7 @@ impl Plugin for UiPlugin {
             RenderSubmit,
             apply_runenui_terminal_presentations_system
                 .on_invoker_thread()
-                .after_if_present(crate::plugins::render::runtime::frame_render_submit_system),
+                .after_if_present(crate::plugins::render::runtime::RenderRuntimeSet::FrameSubmit),
         );
 
         let diagnostic_count = app
