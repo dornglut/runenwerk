@@ -653,15 +653,15 @@ fn prepare_resolved_render_gpu_work(
             let from = prepared_id(before)?;
             let to = prepared_id(after)?;
             if !dependency_path_exists(&satisfied_edges, from, to) {
-                // RunenGPU deliberately rejects graph-scope explicit orders
-                // within one fragment. Adding them here is invalid, while a
-                // fragment-local explicit order cannot be retroactively added
-                // after F2's single-use node token was minted. Reject this
-                // unsupported non-data control edge rather than dropping it
-                // or corrupting exact painter/submission correlation.
-                return Err(RenderGpuWorkAdapterError::InvalidMixedUi(
-                    "mixed UI prerequisite lacks G3 typed GPU data causality",
-                ));
+                // G3 owns control ordering as well as typed hazards. F2 was
+                // authored exactly once into the immutable fragment, so add
+                // unsatisfied control edges at graph composition time using
+                // the accepted same-fragment G3 contract.
+                graph_orders.push(GpuGraphExplicitOrder::new(
+                    before,
+                    after,
+                    "render-owned mixed UI occurrence control order",
+                )?);
             }
         }
         if let Some(bracket) = timing_bracket {
@@ -895,9 +895,8 @@ fn author_render_fragment_mixed(
     };
     let mut occurrence_nodes = BTreeMap::new();
     let mut mixed_tokens = Vec::new();
-    let mut ui_first_node_index = None;
-    let mut ui_last_node_index = None;
-    let mut ordinal = 0_usize;
+    let mut ui_first_node = None;
+    let mut ui_last_node = None;
     let fragment = GpuWorkFragment::build_with_provenance(
         graph_label.clone(),
         graph_provenance.clone(),
@@ -917,7 +916,7 @@ fn author_render_fragment_mixed(
                     for emission in emissions.take().expect("exact one UI occurrence") {
                         match emission {
                             MixedUiEmission::Legacy(render) => {
-                                builder.add_node(
+                                let authored = builder.add_node(
                                     node.label.clone(),
                                     GpuWorkOperation::Render(render),
                                     [],
@@ -925,16 +924,23 @@ fn author_render_fragment_mixed(
                                     GpuExecutionPreference::GraphicsRequired,
                                     node.provenance.clone(),
                                 )?;
-                                ui_first_node_index.get_or_insert(ordinal);
-                                ui_last_node_index = Some(ordinal);
-                                ordinal += 1;
+                                ui_first_node.get_or_insert_with(|| authored.clone());
+                                ui_last_node = Some(authored);
                             }
                             MixedUiEmission::RunenUi(id, contribution) => {
                                 let token = contribution.append_to(builder)?;
-                                if token.is_some() {
-                                    ui_first_node_index.get_or_insert(ordinal);
-                                    ui_last_node_index = Some(ordinal);
-                                    ordinal += 1;
+                                if let Some(token) = token.as_ref() {
+                                    // An F2 emission may author several GPU nodes.
+                                    // Never use one presumed node index as both
+                                    // its execution-order frontiers.
+                                    let first = token.authored_nodes().first().ok_or(
+                                        RenderGpuWorkAdapterError::InvalidMixedUi(
+                                            "painting F2 token has no authored GPU node",
+                                        ),
+                                    )?;
+                                    let last = token.authored_nodes().last().expect("first exists");
+                                    ui_first_node.get_or_insert_with(|| first.clone());
+                                    ui_last_node = Some(last.clone());
                                 }
                                 mixed_tokens.push((id, token));
                             }
@@ -951,32 +957,19 @@ fn author_render_fragment_mixed(
                         node.preference,
                         node.provenance.clone(),
                     )?;
-                    ordinal += 1;
                     occurrence_nodes.insert(node.occurrence, id);
                 }
             }
             Ok(())
         },
     )?;
-    let index = ui_last_node_index.ok_or(RenderGpuWorkAdapterError::InvalidMixedUi(
+    let last_node = ui_last_node.ok_or(RenderGpuWorkAdapterError::InvalidMixedUi(
         "an admitted mixed UI pass produced no executable GPU node",
     ))?;
-    let id = fragment
-        .nodes()
-        .get(index)
-        .ok_or(RenderGpuWorkAdapterError::InvalidMixedUi(
-            "F2 authoring node count mismatch",
-        ))?
-        .id()
-        .clone();
-    occurrence_nodes.insert(ui_occurrence, id);
-    let first_node = ui_first_node_index
-        .and_then(|index| fragment.nodes().get(index))
-        .ok_or(RenderGpuWorkAdapterError::InvalidMixedUi(
-            "mixed UI first work node identity was lost",
-        ))?
-        .id()
-        .clone();
+    occurrence_nodes.insert(ui_occurrence, last_node);
+    let first_node = ui_first_node.ok_or(RenderGpuWorkAdapterError::InvalidMixedUi(
+        "mixed UI first work node identity was lost",
+    ))?;
     Ok(AuthoredRenderFragment {
         fragment,
         occurrence_nodes,
@@ -2506,19 +2499,20 @@ mod tests {
 mod native_mixed_ui_tests {
     use super::*;
     use runen_render::composition_2d::{
-        Render2dAffineTransform, Render2dColorRgba8, Render2dComposition, Render2dEntry,
-        Render2dFontBinding, Render2dGlyph, Render2dItem, Render2dOpacity, Render2dPoint,
-        Render2dPrimitive, Render2dResourceBinding, Render2dResourceBindings, Render2dResourceId,
-        Render2dResourceValue, Render2dShapedTextPrimitive, Render2dShapedTextResource,
+        Render2dAffineTransform, Render2dBrush, Render2dColorRgba8, Render2dComposition,
+        Render2dEntry, Render2dFontBinding, Render2dGlyph, Render2dItem, Render2dOpacity,
+        Render2dPoint, Render2dPrimitive, Render2dRect, Render2dResourceBinding,
+        Render2dResourceBindings, Render2dResourceId, Render2dResourceValue, Render2dShape,
+        Render2dShapedTextPrimitive, Render2dShapedTextResource,
     };
     use runen_render::execution_2d::{Render2dExecutor, Render2dTarget};
     use std::time::{Duration, Instant};
 
-    /// Exercises the Engine-owned canonical fragment with a genuine pinned F2
-    /// contribution and RunenGPU submission. This uses an offscreen readback as
-    /// the terminal work witness, not a simulated native-window Present.
+    /// A genuine multi-node vector/text/vector F2 contribution remains in one
+    /// canonical fragment, with independent control-only work before its first
+    /// node and after its last. Terminal readback is not a native Present.
     #[test]
-    fn source_only_f2_work_is_authored_once_and_proven_on_exact_gpu_submission() {
+    fn mixed_f2_nodes_obey_independent_control_frontiers_and_exact_completion() {
         let descriptor = GpuContextDescriptor::new(
             GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements(),
         )
@@ -2527,6 +2521,7 @@ mod native_mixed_ui_tests {
             GpuFormatRole::ColorAttachment,
         )
         .require_format_role(GpuTextureFormat::Rgba8UnormSrgb, GpuFormatRole::CopySource)
+        .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::ColorAttachment)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Sampled)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Filterable)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopyDestination)
@@ -2596,24 +2591,85 @@ mod native_mixed_ui_tests {
             Render2dResourceValue::ShapedText(semantic_resource),
         )])
         .expect("one source-neutral binding");
-        let composition = Render2dComposition::new(vec![Render2dEntry::item(Render2dItem::new(
-            Render2dPrimitive::ShapedText(Render2dShapedTextPrimitive::new(
-                resource_id,
-                Render2dPoint::new(8.0, 32.0).expect("glyph origin"),
-                Render2dColorRgba8::WHITE,
+        let vector = |x: f64| {
+            Render2dEntry::item(Render2dItem::new(
+                Render2dPrimitive::Fill {
+                    shape: Render2dShape::rect(
+                        Render2dRect::new(x, x, 8.0, 8.0).expect("finite rectangle"),
+                    ),
+                    brush: Render2dBrush::solid(Render2dColorRgba8::WHITE),
+                },
+                Render2dAffineTransform::IDENTITY,
+                Vec::new(),
+                Render2dOpacity::OPAQUE,
+            ))
+        };
+        let composition = Render2dComposition::new(vec![
+            vector(0.0),
+            Render2dEntry::item(Render2dItem::new(
+                Render2dPrimitive::ShapedText(Render2dShapedTextPrimitive::new(
+                    resource_id,
+                    Render2dPoint::new(8.0, 32.0).expect("glyph origin"),
+                    Render2dColorRgba8::WHITE,
+                )),
+                Render2dAffineTransform::IDENTITY,
+                Vec::new(),
+                Render2dOpacity::OPAQUE,
             )),
-            Render2dAffineTransform::IDENTITY,
-            Vec::new(),
-            Render2dOpacity::OPAQUE,
-        ))])
-        .expect("direct source-neutral composition");
+            vector(48.0),
+        ])
+        .expect("mixed F2 vector/text/vector composition");
         let contribution = Render2dExecutor::new()
             .prepare(&context, &composition, &bindings, &target)
             .expect("F2 admits the real target and shaped glyph");
         assert!(contribution.has_render_work());
 
-        let ui_occurrence = RenderGpuWorkOccurrenceId::new(1);
-        let tail_occurrence = RenderGpuWorkOccurrenceId::new(2);
+        let control_texture = resources
+            .texture(
+                GpuTextureDescriptor::ordinary_owned_2d(
+                    "U5 independent control surface",
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    64,
+                    64,
+                    GpuTextureFormat::Rgba8UnormSrgb,
+                    [GpuTextureUsage::ColorAttachment],
+                    GpuTextureInitialization::Zeroed,
+                )
+                .expect("independent GPU surface descriptor"),
+            )
+            .expect("independent control texture");
+        let control_view = resources
+            .texture_view(
+                GpuTextureViewDescriptor::ordinary_full_owned(
+                    "U5 independent control view",
+                    &control_texture,
+                )
+                .expect("independent GPU surface view descriptor"),
+            )
+            .expect("independent control view");
+        let control_clear = GpuWorkOperation::Render(
+            GpuRenderOperation::new(
+                [GpuRenderColorAttachment::new(
+                    control_view,
+                    GpuColorAttachmentLoad::Clear(
+                        GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0)
+                            .expect("finite clear"),
+                    ),
+                    GpuAttachmentStore::Store,
+                    None,
+                )
+                .expect("valid control attachment")],
+                None,
+                std::iter::empty::<GpuRenderDraw>(),
+                None,
+            )
+            .expect("valid independent control work"),
+        );
+        let before_occurrence = RenderGpuWorkOccurrenceId::new(1);
+        let ui_occurrence = RenderGpuWorkOccurrenceId::new(2);
+        let after_occurrence = RenderGpuWorkOccurrenceId::new(3);
+        let tail_occurrence = RenderGpuWorkOccurrenceId::new(4);
         let readback = GpuReadbackOperation::ordinary(
             GpuTextureCopyRegion::whole_base_mip(&texture)
                 .expect("exact color readback")
@@ -2621,16 +2677,30 @@ mod native_mixed_ui_tests {
         )
         .expect("terminal offscreen observation");
         let nodes = [
+            ResolvedRenderGpuWorkNode::pass(
+                before_occurrence,
+                GpuResourceLabel::new("U5 independent before").unwrap(),
+                control_clear.clone(),
+                GpuExecutionPreference::GraphicsRequired,
+                [],
+            ),
             ResolvedRenderGpuWorkNode::empty_builtin_ui_composite(
                 ui_occurrence,
-                GpuResourceLabel::new("U5 admitted source-only UI").unwrap(),
-                [],
+                GpuResourceLabel::new("U5 admitted mixed F2 UI").unwrap(),
+                [before_occurrence],
+            ),
+            ResolvedRenderGpuWorkNode::pass(
+                after_occurrence,
+                GpuResourceLabel::new("U5 independent after").unwrap(),
+                control_clear,
+                GpuExecutionPreference::GraphicsRequired,
+                [ui_occurrence],
             ),
             ResolvedRenderGpuWorkNode::capture_readback(
                 tail_occurrence,
                 GpuResourceLabel::new("U5 terminal offscreen readback").unwrap(),
                 readback,
-                [ui_occurrence],
+                [after_occurrence],
             ),
         ];
         let publication_id =
@@ -2659,6 +2729,45 @@ mod native_mixed_ui_tests {
             .expect("one exact F2 publication");
         assert_eq!(observed_id, publication_id);
         let token = token.expect("painting F2 work has a single-use node token");
+        assert!(
+            token.authored_nodes().len() >= 2,
+            "interleaved vector/text/vector must author multiple exact F2 nodes"
+        );
+        let graph = &authored.graph;
+        let position = |id: &GpuWorkNodeId| -> usize {
+            let prepared_id = graph
+                .nodes()
+                .iter()
+                .find(|candidate| candidate.node().id() == id)
+                .expect("authored node in final graph")
+                .id();
+            graph
+                .topological_order()
+                .iter()
+                .position(|candidate| *candidate == prepared_id)
+                .expect("node is topologically ordered")
+        };
+        let before = graph
+            .nodes()
+            .iter()
+            .find(|node| node.node().label().as_str() == "U5 independent before")
+            .expect("before work identity")
+            .node()
+            .id();
+        let after = graph
+            .nodes()
+            .iter()
+            .find(|node| node.node().label().as_str() == "U5 independent after")
+            .expect("after work identity")
+            .node()
+            .id();
+        for authored_node in token.authored_nodes() {
+            assert!(
+                position(before) < position(authored_node)
+                    && position(authored_node) < position(after),
+                "every F2 work node must execute between independent before/after controls"
+            );
+        }
 
         let prepared = pollster::block_on(context.prepare_submission(authored.graph))
             .expect("RunenGPU accepts canonical mixed work graph");
