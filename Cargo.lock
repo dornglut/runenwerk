@@ -3112,7 +3112,7 @@ dependencies = [
 [[package]]
 name = "runen-gpu"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-gpu?rev=7a833e750bc92b28f05b2c8507e326660f100a1e#7a833e750bc92b28f05b2c8507e326660f100a1e"
+source = "git+https://github.com/dornglut/runen-gpu?rev=b11c5c665ee4e9d13adc20cb6b0b03a8467800ea#b11c5c665ee4e9d13adc20cb6b0b03a8467800ea"
 dependencies = [
  "bytemuck",
  "naga",
@@ -3150,7 +3150,7 @@ dependencies = [
 [[package]]
 name = "runen-render"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-render?rev=cf623a53d5d3748797bb17e0c2bf56ad8b4aec39#cf623a53d5d3748797bb17e0c2bf56ad8b4aec39"
+source = "git+https://github.com/dornglut/runen-render?rev=08f85232d7c47e7cada3decb6e31cfa99c147bfa#08f85232d7c47e7cada3decb6e31cfa99c147bfa"
 dependencies = [
  "bymsdfgen-core",
  "runen-gpu",
