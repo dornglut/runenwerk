@@ -5,7 +5,7 @@ status: active
 owner: ui
 layer: architecture
 canonical: true
-last_reviewed: 2026-09-27
+last_reviewed: 2026-10-09
 publication: reference
 pagefind: false
 related_docs:
@@ -235,23 +235,49 @@ conformance suite.
 
 ## Consumer sequence
 
-Migration is deliberately sequenced by proof pressure:
+Migration is sequenced by **decision-complete consumer authority** and
+proof pressure, not by requiring an application category that lacks a current
+interactive UI consumer:
 
 1. **Headless authored/program proof** — prove one maintained Runenwerk source or
    UiProgram consumer through public RunenUI runtime/testing contracts. This
    establishes the projection boundary without Editor, Winit or renderer
    migration.
-2. **Engine/App mounted integration** — migrate one ordinary app-facing mounted
-   consumer so `engine::plugins::ui` becomes an adapter for that consumer.
-3. **Draw or another bounded non-Editor product** — prove a real interactive
-   product path and renderer/input integration without Editor breadth.
-4. **Editor shell/chrome and target-local UI** — migrate only after the adapter,
-   multi-target, text/editing, accessibility and interaction contracts are
-   already proven.
-5. Delete predecessor packages as their final maintained consumers disappear.
+2. **Engine/App mounted integration and publication** — migrate one ordinary
+   app-facing mounted consumer so `engine::plugins::ui` becomes an adapter for
+   that consumer; prove the bounded renderer, input/publication and Present
+   correlation before broadening the consumer surface.
+3. **Next maintained interactive product consumer** — qualify a real
+   product-owned interaction path beyond the controlled Engine Counter proof.
+   Prefer a bounded non-Editor application when such a consumer exists; do not
+   invent one merely to satisfy the sequence. If none exists, a **bounded Editor
+   consumer may be investigated** under a separately accepted decision. It may
+   be implemented only after its exact predecessor and retained owners,
+   interaction/focus/capture/keyboard/text boundary, native-target routing,
+   accessibility and renderer/presentation proof are established. A visually
+   distinct toolbar or popup is not automatically an independently mounted
+   consumer when the existing Editor shell shares one local runtime per target.
+4. **Editor expansion** — after a qualified first Editor consumer cut, extend
+   target-local shell/chrome and editing behavior only as the relevant
+   multi-target, text/IME, accessibility, interaction and cross-consumer
+   arbitration contracts become proven. Do not claim those capabilities are
+   already satisfied by the controlled Engine Counter proof.
+5. **Predecessor retirement** — delete local predecessor execution packages
+   when their final maintained consumers disappear, preserving each
+   same-consumer deletion obligation throughout the sequence.
 
-This order is not a release roadmap for RunenUI. Each source-bearing cut requires
-its own accepted Runenwerk issue and current-source recensus.
+A consumer may not have dual mounted, focus, capture, event-dispatch or layout
+authority during its cut. Scope, input precedence, render ordering, lifecycle
+retirement and proof must be stated for the **exact** consumer; an unqualified
+Editor toolbar-only change cannot be used to bypass these gates.
+
+This is a Runenwerk consumer-adoption order, not a release roadmap for RunenUI.
+Each source-bearing cut requires its own accepted Runenwerk issue and
+current-source recensus. See [U6 #1235](https://github.com/dornglut/runenwerk/issues/1235)
+for the non-Editor source census and
+[U7 #1236](https://github.com/dornglut/runenwerk/issues/1236)
+for the sequencing requalification; neither issue authorizes an Editor
+implementation cut by itself.
 
 ## First consumer cut
 
