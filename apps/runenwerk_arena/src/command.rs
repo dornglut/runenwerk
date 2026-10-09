@@ -96,11 +96,7 @@ impl fmt::Display for GameCommandError {
                 participant.0
             ),
             Self::MissingParticipant(participant) => {
-                write!(
-                    formatter,
-                    "participant {} is not present",
-                    participant.0
-                )
+                write!(formatter, "participant {} is not present", participant.0)
             }
             Self::DuplicateParticipant(participant) => {
                 write!(
