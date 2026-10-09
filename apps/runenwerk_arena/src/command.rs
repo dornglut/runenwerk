@@ -300,6 +300,23 @@ fn validate_commands(
                 });
             }
         }
+
+        // Preserve P1's more-specific missing-physical-state error even in a
+        // deliberately incomplete World without game level configuration.
+        let query = world.query::<(&ArenaPlayer, &PlayerPhysicalHistory)>();
+        if !query
+            .iter(world)
+            .any(|(player, _)| player.participant == participant)
+        {
+            return Err(GameCommandError::MissingPhysicalState(participant));
+        }
+        let query = world.query::<(&ArenaPlayer, &PlayerVitals)>();
+        if !query
+            .iter(world)
+            .any(|(player, _)| player.participant == participant)
+        {
+            return Err(GameCommandError::MissingVitals(participant));
+        }
     }
     Ok(())
 }

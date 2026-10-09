@@ -439,3 +439,149 @@ fn replay_remains_identical_across_entity_and_command_order() {
         );
     }
 }
+
+#[test]
+fn occupied_spawn_is_not_accepted_as_a_restart_destination() {
+    let mut app = integrated_game();
+    defeat_at_hazard(&mut app);
+    app.world_mut()
+        .resource_mut::<runenwerk_arena::ArenaMovementConfig>()
+        .unwrap()
+        .character
+        .radius = 1.0;
+    let before = (vitals(&app), history(&app), control(&app));
+    let batch = command_batch(
+        63,
+        &[(
+            LOCAL_PARTICIPANT_ID,
+            PlayerCommand {
+                restart: true,
+                ..PlayerCommand::default()
+            },
+        )],
+    );
+    assert_eq!(
+        apply_game_commands(app.world_mut(), batch.tick, &batch),
+        Err(GameCommandError::SpawnUnavailable(LOCAL_PARTICIPANT_ID))
+    );
+    assert_eq!((vitals(&app), history(&app), control(&app)), before);
+}
+
+#[test]
+fn bad_character_radius_and_future_damage_tick_are_fail_closed() {
+    let mut app = integrated_game();
+    let before = (vitals(&app), history(&app), control(&app));
+    let batch = command_batch(2, &[(LOCAL_PARTICIPANT_ID, PlayerCommand::default())]);
+    app.world_mut()
+        .resource_mut::<runenwerk_arena::ArenaMovementConfig>()
+        .unwrap()
+        .character
+        .radius = f32::NAN;
+    assert_eq!(
+        apply_game_commands(app.world_mut(), batch.tick, &batch),
+        Err(GameCommandError::InvalidCharacterRadius(LOCAL_PARTICIPANT_ID))
+    );
+    assert_eq!((vitals(&app), history(&app), control(&app)), before);
+
+    app.world_mut()
+        .resource_mut::<runenwerk_arena::ArenaMovementConfig>()
+        .unwrap()
+        .character
+        .radius = 0.25;
+    let world = app.world_mut();
+    let query = world.query::<(&ArenaPlayer, &mut PlayerVitals)>();
+    let (_, vitals) = query
+        .iter(world)
+        .find(|(player, _)| player.participant == LOCAL_PARTICIPANT_ID)
+        .unwrap();
+    vitals.health = 2;
+    vitals.last_hazard_hit_tick = Some(SimulationTick(2));
+    assert_eq!(
+        apply_game_commands(app.world_mut(), batch.tick, &batch),
+        Err(GameCommandError::HazardTickRegression(LOCAL_PARTICIPANT_ID))
+    );
+    assert_eq!(control(&app), before.2);
+    assert_eq!(history(&app), before.1);
+}
+
+#[test]
+fn later_invalid_restart_preserves_prior_participant_update_atomically() {
+    let mut app = integrated_game();
+    let other = ParticipantId(17);
+    app.world_mut()
+        .spawn((
+            ArenaPlayer { participant: other },
+            PlayerControlState::default(),
+            PlayerPhysicalHistory::spawned([2.5, 1.0, 2.5]),
+            PlayerVitals {
+                health: 0,
+                last_hazard_hit_tick: Some(SimulationTick(1)),
+            },
+        ))
+        .unwrap();
+    app.world_mut()
+        .resource_mut::<runenwerk_arena::ArenaMovementConfig>()
+        .unwrap()
+        .character
+        .radius = 1.0;
+    let before = (vitals(&app), history(&app), control(&app));
+    let batch = command_batch(
+        2,
+        &[
+            (
+                LOCAL_PARTICIPANT_ID,
+                PlayerCommand {
+                    move_x: 1,
+                    ..PlayerCommand::default()
+                },
+            ),
+            (
+                other,
+                PlayerCommand {
+                    restart: true,
+                    ..PlayerCommand::default()
+                },
+            ),
+        ],
+    );
+    assert_eq!(
+        apply_game_commands(app.world_mut(), batch.tick, &batch),
+        Err(GameCommandError::SpawnUnavailable(other))
+    );
+    assert_eq!((vitals(&app), history(&app), control(&app)), before);
+    assert_eq!(
+        player_state_for(app.world(), other),
+        Some(PlayerControlState::default())
+    );
+}
+
+#[test]
+fn ambiguous_player_identity_rejects_mutation_and_fails_closed_on_health_read() {
+    let mut app = integrated_game();
+    let before = (vitals(&app), history(&app), control(&app));
+    app.world_mut()
+        .spawn((
+            ArenaPlayer {
+                participant: LOCAL_PARTICIPANT_ID,
+            },
+            PlayerControlState::default(),
+            PlayerPhysicalHistory::spawned(ARENA_PLAYER_SPAWN),
+            PlayerVitals::default(),
+        ))
+        .unwrap();
+    assert_eq!(player_vitals_for(app.world(), LOCAL_PARTICIPANT_ID), None);
+    let batch = command_batch(2, &[(LOCAL_PARTICIPANT_ID, PlayerCommand::default())]);
+    assert_eq!(
+        apply_game_commands(app.world_mut(), batch.tick, &batch),
+        Err(GameCommandError::DuplicateParticipant(LOCAL_PARTICIPANT_ID))
+    );
+    let query = app.world().query::<(&ArenaPlayer, &PlayerControlState)>();
+    let controls: Vec<_> = query
+        .iter(app.world())
+        .filter(|(player, _)| player.participant == LOCAL_PARTICIPANT_ID)
+        .map(|(_, state)| *state)
+        .collect();
+    assert_eq!(controls.len(), 2);
+    assert!(controls.contains(&before.2));
+    assert!(controls.contains(&PlayerControlState::default()));
+}

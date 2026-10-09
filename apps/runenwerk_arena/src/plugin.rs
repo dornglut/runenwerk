@@ -99,6 +99,16 @@ pub fn player_vitals_for(
     world: &engine::prelude::World,
     participant: ParticipantId,
 ) -> Option<PlayerVitals> {
+    let identities = world.query::<&ArenaPlayer>();
+    let matching_identities = identities
+        .iter(world)
+        .filter(|player| player.participant == participant)
+        .take(2)
+        .count();
+    if matching_identities != 1 {
+        return None;
+    }
+
     let query = world.query::<(&ArenaPlayer, &PlayerVitals)>();
     query
         .iter(world)
