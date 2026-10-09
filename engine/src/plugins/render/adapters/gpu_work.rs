@@ -816,12 +816,15 @@ fn mixed_ui_emissions(
     let timestamps = render.timestamp_writes();
     // Timing spans the whole mixed UI pass, not only a legacy sibling.
     if let Some(ts) = timestamps.and_then(|t| t.beginning_of_pass().map(|start| (t, start))) {
-        result.push(MixedUiEmission::Legacy(GpuRenderOperation::new(
-            render.color_attachments().iter().cloned(),
-            render.depth_stencil_attachment().cloned(),
-            [],
-            Some(GpuTimestampWrites::new(ts.0.query_set(), Some(ts.1), None)?),
-        ).map(Box::new)?));
+        result.push(MixedUiEmission::Legacy(
+            GpuRenderOperation::new(
+                render.color_attachments().iter().cloned(),
+                render.depth_stencil_attachment().cloned(),
+                [],
+                Some(GpuTimestampWrites::new(ts.0.query_set(), Some(ts.1), None)?),
+            )
+            .map(Box::new)?,
+        ));
     }
     let mut legacy = mixed.legacy_draws.into_iter().peekable();
     let mut f2 = mixed.contributions.into_iter().peekable();
@@ -837,24 +840,30 @@ fn mixed_ui_emissions(
                 let (_, draw) = legacy.next().expect("checked legacy ordinal");
                 draws.push(draw);
             }
-            result.push(MixedUiEmission::Legacy(GpuRenderOperation::new(
-                render.color_attachments().iter().cloned(),
-                render.depth_stencil_attachment().cloned(),
-                draws,
-                None,
-            ).map(Box::new)?));
+            result.push(MixedUiEmission::Legacy(
+                GpuRenderOperation::new(
+                    render.color_attachments().iter().cloned(),
+                    render.depth_stencil_attachment().cloned(),
+                    draws,
+                    None,
+                )
+                .map(Box::new)?,
+            ));
         } else {
             let (id, _position, contribution) = f2.next().expect("checked F2 ordinal");
             result.push(MixedUiEmission::RunenUi(id, contribution));
         }
     }
     if let Some(ts) = timestamps.and_then(|t| t.end_of_pass().map(|end| (t, end))) {
-        result.push(MixedUiEmission::Legacy(GpuRenderOperation::new(
-            render.color_attachments().iter().cloned(),
-            render.depth_stencil_attachment().cloned(),
-            [],
-            Some(GpuTimestampWrites::new(ts.0.query_set(), None, Some(ts.1))?),
-        ).map(Box::new)?));
+        result.push(MixedUiEmission::Legacy(
+            GpuRenderOperation::new(
+                render.color_attachments().iter().cloned(),
+                render.depth_stencil_attachment().cloned(),
+                [],
+                Some(GpuTimestampWrites::new(ts.0.query_set(), None, Some(ts.1))?),
+            )
+            .map(Box::new)?,
+        ));
     }
     Ok(result)
 }
