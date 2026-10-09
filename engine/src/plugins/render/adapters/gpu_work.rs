@@ -2628,8 +2628,7 @@ mod native_mixed_ui_tests {
         } else {
             vec![shaped]
         };
-        let composition = Render2dComposition::new(entries)
-            .expect("source-neutral F2 composition");
+        let composition = Render2dComposition::new(entries).expect("source-neutral F2 composition");
         let contribution = Render2dExecutor::new()
             .prepare(&context, &composition, &bindings, &target)
             .expect("F2 admits the real target and shaped glyph");
@@ -2664,8 +2663,7 @@ mod native_mixed_ui_tests {
                 [GpuRenderColorAttachment::new(
                     control_view,
                     GpuColorAttachmentLoad::Clear(
-                        GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0)
-                            .expect("finite clear"),
+                        GpuColorClearValue::new(0.0, 0.0, 0.0, 1.0).expect("finite clear"),
                     ),
                     GpuAttachmentStore::Store,
                     None,
