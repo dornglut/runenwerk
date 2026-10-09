@@ -1,11 +1,27 @@
 use std::process::Command;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use engine::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
-use engine::plugins::render::{Gfx, RenderFlow};
+use engine::plugins::render::{
+    Gfx, RenderFlow, RenderFrameProducerId, SurfaceFrameSubmissionOrder,
+};
+use engine::plugins::ui::{
+    AppUiExt, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
+    UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
+    UiScreen, UiTypedActionDescriptor, UiTypedScreenId, UiTypedSource,
+};
+use runenui_core::{FontFamilyName, GenericFontFamily, StyleEnvironment};
+use ui_controls::BUTTON_CONTROL_KIND_ID;
+use ui_definition::{
+    AuthoredBindingRef, AuthoredControlAccessibilityDefinition, AuthoredControlKindId,
+    AuthoredControlValue, AuthoredId, AuthoredRouteId, UiNodeDefinition, UiValueBinding,
+};
+use ui_program::{RouteCapability, RouteId, RouteSchemaVersion, UiProgramSourceId};
+use ui_schema::UiSchemaRef;
 use engine::plugins::{RenderPlugin, UiPlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt, Res, Startup, Update};
 use engine::runtime::{
@@ -17,6 +33,76 @@ use winit::window::Window;
 const NO_RENDER_ENV: &str = "RUNENWERK_NATIVE_NO_RENDER_SMOKE";
 const RENDER_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_HOST_SMOKE";
 const RENDER_UI_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_UI_HOST_SMOKE";
+
+const COUNTER_FONT: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../assets/fonts/JetBrainsMono-Regular.ttf"
+));
+
+/// Same genuinely authored Counter root/control as the headless direct U5
+/// integration proof; native execution additionally requires terminal Present.
+#[derive(Debug, Clone, Copy)]
+struct NativeCounterScreen;
+
+impl UiScreen for NativeCounterScreen {
+    fn screen_id(&self) -> UiTypedScreenId {
+        UiTypedScreenId::new("counter.screen")
+    }
+
+    fn build_source(&self) -> UiTypedSource {
+        let mut properties = BTreeMap::new();
+        properties.insert(
+            "label".to_owned(),
+            AuthoredControlValue::String("Counter output".to_owned()),
+        );
+        let mut bindings = BTreeMap::new();
+        bindings.insert(
+            "selected".to_owned(),
+            AuthoredBindingRef::new("counter.output.selected"),
+        );
+        UiTypedSource::new(
+            self.screen_id(),
+            UiProgramSourceId::new("counter.screen.source"),
+            UiNodeDefinition::Column {
+                id: AuthoredId::new("counter.root"),
+                children: vec![
+                    UiNodeDefinition::Label {
+                        id: AuthoredId::new("counter.title"),
+                        label: UiValueBinding::static_text("Counter"),
+                        availability: None,
+                    },
+                    UiNodeDefinition::Control {
+                        id: AuthoredId::new("counter.output"),
+                        kind: AuthoredControlKindId::new(BUTTON_CONTROL_KIND_ID),
+                        properties,
+                        bindings,
+                        route: Some(AuthoredRouteId::new("counter.increment")),
+                        accessibility: Some(AuthoredControlAccessibilityDefinition {
+                            role: "button".to_owned(),
+                            label: Some("Counter output".to_owned()),
+                        }),
+                        children: Vec::new(),
+                    },
+                ],
+            },
+        )
+        .with_action_descriptor(UiTypedActionDescriptor::new(
+            engine::plugins::ui::UiTypedActionId::new("counter.increment.action"),
+            RouteId::new("counter.increment"),
+            RouteSchemaVersion::new(1),
+            UiSchemaRef::new("runenwerk.ui.controls.button.event", 1),
+            RouteCapability::new("counter.action.increment"),
+        ))
+    }
+}
+
+fn native_counter_fonts() -> UiRuntimeFontConfiguration {
+    UiRuntimeFontConfiguration::new(vec![COUNTER_FONT.to_vec()]).with_generic_mapping(
+        GenericFontFamily::SansSerif,
+        vec![FontFamilyName::new("JetBrains Mono").expect("controlled font family")],
+    )
+}
+
 
 fn main() {
     match (
@@ -155,6 +241,8 @@ struct NativeRenderHostSmokeHook {
     secondary_attached: Arc<AtomicBool>,
     secondary_requested: bool,
     frames_seen: usize,
+    counter_slot: Option<UiRuntimeSlotId>,
+    counter_displayed: Arc<AtomicBool>,
 }
 
 impl NativeWindowHook for NativeRenderHostSmokeHook {
@@ -200,6 +288,29 @@ impl NativeWindowHook for NativeRenderHostSmokeHook {
         }
         self.frame_seen.store(true, Ordering::SeqCst);
         self.frames_seen += 1;
+        if let Some(slot) = self.counter_slot {
+            let mapping = world
+                .resource::<WindowStateRegistryResource>()?
+                .record(NativeWindowId::primary())
+                .and_then(|native| {
+                    UiRuntimeNativeMapping::new(
+                        NativeWindowId::primary(),
+                        RenderSurfaceId::primary(),
+                        native.size_px,
+                        native.scale_factor,
+                    )
+                    .ok()
+                });
+            if mapping.is_some_and(|mapping| {
+                world
+                    .resource::<UiRuntimePresentationAssociationsResource>()
+                    .ok()
+                    .and_then(|associations| associations.displayed_for_mapping(slot, mapping))
+                    .is_some()
+            }) {
+                self.counter_displayed.store(true, Ordering::SeqCst);
+            }
+        }
         if world
             .resource::<engine::DebugMetricsState>()
             .ok()
@@ -210,7 +321,8 @@ impl NativeWindowHook for NativeRenderHostSmokeHook {
         }
 
         let should_close = self.frame_submitted.load(Ordering::SeqCst)
-            && self.secondary_attached.load(Ordering::SeqCst);
+            && self.secondary_attached.load(Ordering::SeqCst)
+            && (self.counter_slot.is_none() || self.counter_displayed.load(Ordering::SeqCst));
         let windows = world.resource_mut::<WindowStateRegistryResource>()?;
         if !self.secondary_requested {
             windows.request_window("Native selected-Render secondary", (640, 480));
@@ -219,7 +331,8 @@ impl NativeWindowHook for NativeRenderHostSmokeHook {
         let primary = windows
             .record_mut(NativeWindowId::primary())
             .ok_or_else(|| anyhow::anyhow!("selected-Render smoke primary window is missing"))?;
-        if should_close || self.frames_seen >= 16 {
+        let safety_frame_limit = if self.counter_slot.is_some() { 80 } else { 16 };
+        if should_close || self.frames_seen >= safety_frame_limit {
             primary.request_close();
         } else {
             primary.request_redraw();
@@ -343,6 +456,7 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
     let frame_submitted = Arc::new(AtomicBool::new(false));
     let primary_attached = Arc::new(AtomicBool::new(false));
     let secondary_attached = Arc::new(AtomicBool::new(false));
+    let counter_displayed = Arc::new(AtomicBool::new(false));
 
     let mut app = App::new();
     app.add_plugins(default_plugins());
@@ -350,13 +464,43 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
         app.add_plugin(UiPlugin);
     }
     app.add_plugin(RenderPlugin);
+    let counter_slot = if with_ui {
+        let slot = app
+            .ui()
+            .mount_with_fonts(NativeCounterScreen, &native_counter_fonts())
+            .slot_id()
+            .ok_or_else(|| anyhow::anyhow!("native U5 Counter failed to mount"))?;
+        app.world_mut()
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()?
+            .bind(
+                UiRuntimePresentationBinding::new(
+                    slot,
+                    RenderFrameProducerId::try_from_raw(71)
+                        .expect("test producer is nonzero"),
+                    RenderSurfaceId::primary(),
+                    StyleEnvironment::default(),
+                )
+                .with_order(SurfaceFrameSubmissionOrder::new(20, 0)),
+            )?;
+        Some(slot)
+    } else {
+        None
+    };
     let flow = RenderFlow::new("native.render.host.smoke")
         .with_surface_color()?
         .fullscreen_pass("native.render.host.smoke.clear")
         .main_surface_only()
         .clear_color([0.0, 0.0, 0.0, 1.0])
         .write_surface_color()?
-        .finish()
+        .finish();
+    let flow = if with_ui {
+        flow.builtin_ui_composite_pass("native.render.host.smoke.runenui")?
+            .main_surface_only()
+            .finish()
+    } else {
+        flow
+    };
+    let flow = flow
         .present_pass("native.render.host.smoke.present")?
         .main_surface_only()
         .surface_color()?
@@ -379,6 +523,8 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
             secondary_attached: Arc::clone(&secondary_attached),
             secondary_requested: false,
             frames_seen: 0,
+            counter_slot,
+            counter_displayed: Arc::clone(&counter_displayed),
         });
 
     anyhow::ensure!(
@@ -416,6 +562,12 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
         }
     );
 
+    if with_ui {
+        anyhow::ensure!(
+            counter_displayed.load(Ordering::SeqCst),
+            "native RunenUI Counter paint never completed F2 GPU work and terminal Present"
+        );
+    }
     println!(
         "native_render_host_smoke=pass ui_plugin={}",
         if with_ui { "selected" } else { "absent" }
