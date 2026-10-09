@@ -2512,7 +2512,16 @@ mod native_mixed_ui_tests {
     /// canonical fragment, with independent control-only work before its first
     /// node and after its last. Terminal readback is not a native Present.
     #[test]
+    fn source_only_f2_work_is_authored_once_and_proven_on_exact_gpu_submission() {
+        prove_f2_with_control_orders(false);
+    }
+
+    #[test]
     fn mixed_f2_nodes_obey_independent_control_frontiers_and_exact_completion() {
+        prove_f2_with_control_orders(true);
+    }
+
+    fn prove_f2_with_control_orders(mixed_vector_text: bool) {
         let descriptor = GpuContextDescriptor::new(
             GpuCapabilityProfile::OffscreenGraphicsBaseline.requirements(),
         )
@@ -2604,21 +2613,23 @@ mod native_mixed_ui_tests {
                 Render2dOpacity::OPAQUE,
             ))
         };
-        let composition = Render2dComposition::new(vec![
-            vector(0.0),
-            Render2dEntry::item(Render2dItem::new(
-                Render2dPrimitive::ShapedText(Render2dShapedTextPrimitive::new(
-                    resource_id,
-                    Render2dPoint::new(8.0, 32.0).expect("glyph origin"),
-                    Render2dColorRgba8::WHITE,
-                )),
-                Render2dAffineTransform::IDENTITY,
-                Vec::new(),
-                Render2dOpacity::OPAQUE,
+        let shaped = Render2dEntry::item(Render2dItem::new(
+            Render2dPrimitive::ShapedText(Render2dShapedTextPrimitive::new(
+                resource_id,
+                Render2dPoint::new(8.0, 32.0).expect("glyph origin"),
+                Render2dColorRgba8::WHITE,
             )),
-            vector(48.0),
-        ])
-        .expect("mixed F2 vector/text/vector composition");
+            Render2dAffineTransform::IDENTITY,
+            Vec::new(),
+            Render2dOpacity::OPAQUE,
+        ));
+        let entries = if mixed_vector_text {
+            vec![vector(0.0), shaped, vector(48.0)]
+        } else {
+            vec![shaped]
+        };
+        let composition = Render2dComposition::new(entries)
+            .expect("source-neutral F2 composition");
         let contribution = Render2dExecutor::new()
             .prepare(&context, &composition, &bindings, &target)
             .expect("F2 admits the real target and shaped glyph");
@@ -2730,8 +2741,8 @@ mod native_mixed_ui_tests {
         assert_eq!(observed_id, publication_id);
         let token = token.expect("painting F2 work has a single-use node token");
         assert!(
-            token.authored_nodes().len() >= 2,
-            "interleaved vector/text/vector must author multiple exact F2 nodes"
+            token.authored_nodes().len() >= if mixed_vector_text { 2 } else { 1 },
+            "every executable F2 node must retain its exact authored work identity"
         );
         let graph = &authored.graph;
         let position = |id: &GpuWorkNodeId| -> usize {
