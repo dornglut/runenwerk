@@ -611,12 +611,11 @@ fn prepare_resolved_render_gpu_work(
             };
         let mut graph_orders = Vec::new();
         for &(before_occurrence, after_occurrence) in &desired_control_orders {
-            let before = authored
-                .occurrence_nodes
-                .get(&before_occurrence)
-                .ok_or(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
+            let before = authored.occurrence_nodes.get(&before_occurrence).ok_or(
+                RenderGpuWorkAdapterError::MissingOrderedOccurrence {
                     occurrence: before_occurrence,
-                })?;
+                },
+            )?;
             let after = if after_occurrence == mixed_ui_occurrence {
                 authored.mixed_first_node.as_ref()
             } else {
