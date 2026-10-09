@@ -479,7 +479,9 @@ fn bad_character_radius_and_future_damage_tick_are_fail_closed() {
         .radius = f32::NAN;
     assert_eq!(
         apply_game_commands(app.world_mut(), batch.tick, &batch),
-        Err(GameCommandError::InvalidCharacterRadius(LOCAL_PARTICIPANT_ID))
+        Err(GameCommandError::InvalidCharacterRadius(
+            LOCAL_PARTICIPANT_ID
+        ))
     );
     assert_eq!((vitals(&app), history(&app), control(&app)), before);
 

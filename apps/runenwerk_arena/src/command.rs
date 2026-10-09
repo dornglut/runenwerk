@@ -140,7 +140,7 @@ impl fmt::Display for GameCommandError {
             }
             Self::HazardTickRegression(participant) => write!(
                 formatter,
-                "participant {} last hazard contact lies after the requested tick",
+                "participant {} last hazard contact is not before the requested tick",
                 participant.0
             ),
             Self::InvalidHazard => write!(formatter, "arena hazard policy is invalid"),
