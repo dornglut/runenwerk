@@ -1,8 +1,10 @@
 use super::*;
 use runen_gpu::{
     GpuContext, GpuContextAffinity, GpuExecutionLifecycleState, GpuReadbackId, GpuReadbackStatus,
-    GpuSubmission, GpuSubmissionFailure,
+    GpuSubmission, GpuSubmissionFailure, GpuSubmissionStatus, GpuWorkNodeId,
 };
+use runen_render::execution_2d::Render2dContributionToken;
+use crate::plugins::render::RunenUiPublicationId;
 
 #[derive(Debug, Default)]
 pub(in crate::plugins::render::renderer) struct RendererGpuObservationOutput {
@@ -10,6 +12,13 @@ pub(in crate::plugins::render::renderer) struct RendererGpuObservationOutput {
     pub composed_timing_evidence: Vec<RenderComposedFrameGpuTimingEvidence>,
     pub captured_textures: Vec<RenderCapturedTexture>,
     pub capture_results: Vec<RenderCaptureSelectorResult>,
+    /// Exact GPU/PRESENT-completed RunenUI publications. Prepared or merely
+    /// accepted submissions never appear in this list.
+    /// GPU has accepted this exact work, but it is not yet displayed.
+    pub runenui_accepted: Vec<RunenUiPublicationId>,
+    pub runenui_presented: Vec<RunenUiPublicationId>,
+    /// Terminal failures are diagnostic; they never grant displayed input.
+    pub runenui_rejected: Vec<(RunenUiPublicationId, &'static str)>,
 }
 
 #[derive(Debug, Default)]
@@ -23,6 +32,7 @@ struct AcceptedRendererObservation {
     timings: Vec<GpuPassTimingFrame>,
     composed_timing: Option<GpuComposedFrameTimingFrame>,
     captures: Vec<CaptureObservation>,
+    runenui: Vec<RunenUiGpuPresentationWitness>,
 }
 
 #[derive(Debug)]
@@ -130,7 +140,20 @@ impl CaptureObservation {
     }
 }
 
+
+/// Exact one-shot renderer execution witness for an already-admitted source
+/// publication. The terminal Present node must be from the very same composed
+/// RunenGPU graph as the F2 token. This cannot be minted by UiPlugin.
+#[derive(Debug)]
+pub(in crate::plugins::render::renderer) struct RunenUiGpuPresentationWitness {
+    pub publication_id: RunenUiPublicationId,
+    pub contribution: Option<Render2dContributionToken>,
+    pub present_node: GpuWorkNodeId,
+}
+
 impl RendererGpuObservationState {
+    /// Retains the exact accepted submission for timing/capture obligations
+    /// and the single-use RunenRender F2 presentation witnesses.
     pub fn accept(
         &mut self,
         context: &GpuContext,
@@ -138,6 +161,7 @@ impl RendererGpuObservationState {
         timings: Vec<GpuPassTimingFrame>,
         composed_timing: Option<GpuComposedFrameTimingFrame>,
         captures: Vec<PreparedCaptureReadback>,
+        runenui: Vec<RunenUiGpuPresentationWitness>,
         capture_runtime: &mut FrameCaptureRuntime,
     ) -> RendererGpuObservationOutput {
         self.accept_with_bound(
@@ -145,6 +169,7 @@ impl RendererGpuObservationState {
             timings,
             composed_timing,
             captures,
+            runenui,
             capture_runtime,
             context.execution_policy().max_in_flight_submissions().get(),
         )
@@ -156,6 +181,7 @@ impl RendererGpuObservationState {
         timings: Vec<GpuPassTimingFrame>,
         composed_timing: Option<GpuComposedFrameTimingFrame>,
         captures: Vec<PreparedCaptureReadback>,
+        runenui: Vec<RunenUiGpuPresentationWitness>,
         capture_runtime: &mut FrameCaptureRuntime,
         bound: usize,
     ) -> RendererGpuObservationOutput {
@@ -203,6 +229,7 @@ impl RendererGpuObservationState {
         if accepted_timings.is_empty()
             && accepted_composed_timing.is_none()
             && accepted_captures.is_empty()
+            && runenui.is_empty()
         {
             return output;
         }
@@ -227,6 +254,12 @@ impl RendererGpuObservationState {
                 capture_runtime.set_terminal(capture.selector_index, terminal.terminal.clone());
                 output.captured_textures.push(terminal);
             }
+            for witness in runenui {
+                output.runenui_rejected.push((
+                    witness.publication_id,
+                    "renderer GPU observation capacity exceeded",
+                ));
+            }
             return output;
         }
 
@@ -238,11 +271,13 @@ impl RendererGpuObservationState {
                 .composed_timing_evidence
                 .push(timing.pending_evidence());
         }
+        output.runenui_accepted.extend(runenui.iter().map(|witness| witness.publication_id));
         self.accepted.push(AcceptedRendererObservation {
             submission,
             timings: accepted_timings,
             composed_timing: accepted_composed_timing,
             captures: accepted_captures,
+            runenui,
         });
         output
     }
@@ -327,6 +362,54 @@ impl RendererGpuObservationState {
                 }
             }
 
+            // RunenRender's single-use token is kept with the exact accepted
+            // GpuSubmission until the entire graph reaches a terminal status.
+            // There is no second GPU progress tracker or early submission receipt.
+            if invalid_context.is_some() || lifecycle == GpuExecutionLifecycleState::Closed {
+                for witness in std::mem::take(&mut accepted.runenui) {
+                    output.runenui_rejected.push((
+                        witness.publication_id,
+                        "GPU context generation changed or closed",
+                    ));
+                }
+            } else {
+                match accepted.submission.status() {
+                    GpuSubmissionStatus::Accepted => {}
+                    GpuSubmissionStatus::Completed => {
+                        for witness in std::mem::take(&mut accepted.runenui) {
+                            if !accepted.submission.contains_work_node(&witness.present_node) {
+                                output.runenui_rejected.push((
+                                    witness.publication_id,
+                                    "same submitted GPU graph omitted terminal Present node",
+                                ));
+                                continue;
+                            }
+                            match witness.contribution {
+                                Some(token) => match token.completed_by(&accepted.submission) {
+                                    Ok(_) => output.runenui_presented.push(witness.publication_id),
+                                    Err(_) => output.runenui_rejected.push((
+                                        witness.publication_id,
+                                        "terminal submission lacks exact completed F2 work",
+                                    )),
+                                },
+                                // RunenRender explicitly emits no node for genuinely
+                                // nonpainting shaped content. Terminal Present is the
+                                // sufficient visual-effect boundary in that case.
+                                None => output.runenui_presented.push(witness.publication_id),
+                            }
+                        }
+                    }
+                    GpuSubmissionStatus::Failed(_) => {
+                        for witness in std::mem::take(&mut accepted.runenui) {
+                            output.runenui_rejected.push((
+                                witness.publication_id,
+                                "GPU submission failed before terminal Present",
+                            ));
+                        }
+                    }
+                }
+            }
+
             accepted.captures.retain(|capture| {
                 let status = accepted
                     .submission
@@ -359,6 +442,7 @@ impl RendererGpuObservationState {
             !accepted.timings.is_empty()
                 || accepted.composed_timing.is_some()
                 || !accepted.captures.is_empty()
+                || !accepted.runenui.is_empty()
         });
         output
     }

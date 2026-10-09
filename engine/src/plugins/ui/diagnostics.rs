@@ -3,8 +3,6 @@ use super::{
     UiTypedIdentityError,
 };
 
-use crate::plugins::render::RenderFrameProducerId;
-use crate::plugins::render::host::RenderSurfaceId;
 use ui_hosts::HostKind;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -23,7 +21,6 @@ pub enum UiRuntimeDiagnosticCode {
     TypedContractRejected,
     ActionDispatchRejected,
     RuntimeEvaluationRejected,
-    FramePublicationRejected,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,28 +101,6 @@ pub struct UiRuntimeEvaluationDiagnostic {
     pub failure_reason: UiRuntimeEvaluationFailureReason,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum UiRuntimeFramePublicationFailureReason {
-    MissingRuntimeEvaluation,
-}
-
-impl UiRuntimeFramePublicationFailureReason {
-    pub const fn message(self) -> &'static str {
-        match self {
-            Self::MissingRuntimeEvaluation => {
-                "UI runtime frame publication has no evaluated frame payload"
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct UiRuntimeFramePublicationDiagnostic {
-    pub producer_id: RenderFrameProducerId,
-    pub render_surface_id: RenderSurfaceId,
-    pub failure_reason: UiRuntimeFramePublicationFailureReason,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UiRuntimeDiagnostic {
     pub code: UiRuntimeDiagnosticCode,
@@ -136,7 +111,6 @@ pub struct UiRuntimeDiagnostic {
     pub typed_contract: Option<UiTypedContractDiagnostic>,
     pub action_dispatch: Option<UiActionDispatchDiagnostic>,
     pub runtime_evaluation: Option<UiRuntimeEvaluationDiagnostic>,
-    pub frame_publication: Option<UiRuntimeFramePublicationDiagnostic>,
 }
 
 impl UiRuntimeDiagnostic {
@@ -154,7 +128,6 @@ impl UiRuntimeDiagnostic {
             typed_contract: None,
             action_dispatch: None,
             runtime_evaluation: None,
-            frame_publication: None,
         }
     }
 
@@ -176,7 +149,6 @@ impl UiRuntimeDiagnostic {
             typed_contract: None,
             action_dispatch: None,
             runtime_evaluation: None,
-            frame_publication: None,
         }
     }
 
@@ -196,7 +168,6 @@ impl UiRuntimeDiagnostic {
             typed_contract: None,
             action_dispatch: None,
             runtime_evaluation: None,
-            frame_publication: None,
         }
     }
 
@@ -218,7 +189,6 @@ impl UiRuntimeDiagnostic {
             }),
             action_dispatch: None,
             runtime_evaluation: None,
-            frame_publication: None,
         }
     }
 
@@ -242,7 +212,6 @@ impl UiRuntimeDiagnostic {
                 failure_reason,
             }),
             runtime_evaluation: None,
-            frame_publication: None,
         }
     }
 
@@ -266,31 +235,10 @@ impl UiRuntimeDiagnostic {
                 program_id: program_id.into(),
                 failure_reason,
             }),
-            frame_publication: None,
         }
     }
 
-    pub fn frame_publication_rejected(
-        producer_id: RenderFrameProducerId,
-        render_surface_id: RenderSurfaceId,
-        failure_reason: UiRuntimeFramePublicationFailureReason,
-    ) -> Self {
-        Self {
-            code: UiRuntimeDiagnosticCode::FramePublicationRejected,
-            severity: UiRuntimeDiagnosticSeverity::Error,
-            message: failure_reason.message(),
-            mount: None,
-            runtime_slot_mount: None,
-            typed_contract: None,
-            action_dispatch: None,
-            runtime_evaluation: None,
-            frame_publication: Some(UiRuntimeFramePublicationDiagnostic {
-                producer_id,
-                render_surface_id,
-                failure_reason,
-            }),
-        }
-    }
+
 }
 
 /// Diagnostics collected by the UI runtime foundation.

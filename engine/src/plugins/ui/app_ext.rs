@@ -3,7 +3,8 @@ use crate::app::App;
 use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
 
 use super::{
-    UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeSlotMountFailure,
+    UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeFontConfiguration,
+    UiRuntimeSlotMountFailure,
     UiRuntimeSlotMountReport, UiRuntimeSlotsResource, UiScreen,
 };
 
@@ -40,9 +41,32 @@ impl UiAppMounting<'_> {
     {
         mount_typed_ui(self.app, screen)
     }
+
+    /// Mounts with explicit caller-provided font sources, without an Engine proof-font default.
+    pub fn mount_with_fonts<S>(
+        &mut self,
+        screen: S,
+        fonts: &UiRuntimeFontConfiguration,
+    ) -> UiRuntimeSlotMountReport
+    where
+        S: UiScreen,
+    {
+        mount_typed_ui_with_fonts(self.app, screen, Some(fonts))
+    }
 }
 
 fn mount_typed_ui<S>(app: &mut App, screen: S) -> UiRuntimeSlotMountReport
+where
+    S: UiScreen,
+{
+    mount_typed_ui_with_fonts(app, screen, None)
+}
+
+fn mount_typed_ui_with_fonts<S>(
+    app: &mut App,
+    screen: S,
+    fonts: Option<&UiRuntimeFontConfiguration>,
+) -> UiRuntimeSlotMountReport
 where
     S: UiScreen,
 {
@@ -70,7 +94,10 @@ where
             .world_mut()
             .resource_mut::<UiRuntimeSlotsResource>()
             .expect("UiRuntimeSlotsResource was initialized before typed UI mounting");
-        slots.mount(source, &snapshot)
+        match fonts {
+            Some(fonts) => slots.mount_with_fonts(source, &snapshot, fonts),
+            None => slots.mount(source, &snapshot),
+        }
     };
     record_slot_mount_diagnostic(app, &report);
     report

@@ -1,13 +1,14 @@
 use runenui_core::{
-    Effects, Element, ElementId, HostProtocol, SemanticCommand, UiApp, View, button, column, text,
+    Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, SemanticCommand,
+    UiApp, View, button, column, text,
 };
 #[cfg(test)]
-use runenui_core::{
-    FontFamilyName, GenericFontFamily, LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment,
+use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment};
+use runenui_runtime::{
+    AppRuntime, HostRequestToken, PumpBudget, SurfaceBuildContext, SurfacePublication,
 };
-use runenui_runtime::{AppRuntime, HostRequestToken, PumpBudget};
 #[cfg(test)]
-use runenui_runtime::{LogicalSize, SurfaceBuildContext};
+use runenui_runtime::LogicalSize;
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
 use ui_definition::{AuthoredControlValue, UiNodeDefinition, UiValue, UiValueBinding};
@@ -42,11 +43,41 @@ impl UiRuntimeSlotId {
     }
 }
 
+/// Explicit font inputs supplied by a host; no test font is a production default.
+#[derive(Clone, Debug, Default)]
+pub struct UiRuntimeFontConfiguration {
+    font_bytes: Vec<Vec<u8>>,
+    generic_mappings: Vec<(GenericFontFamily, Vec<FontFamilyName>)>,
+}
+
+impl UiRuntimeFontConfiguration {
+    /// Creates a font profile from host-owned immutable font-file data.
+    #[must_use]
+    pub fn new(font_bytes: Vec<Vec<u8>>) -> Self {
+        Self {
+            font_bytes,
+            generic_mappings: Vec::new(),
+        }
+    }
+
+    /// Adds an explicit generic family mapping resolved by RunenUI's font source.
+    #[must_use]
+    pub fn with_generic_mapping(
+        mut self,
+        generic: GenericFontFamily,
+        families: Vec<FontFamilyName>,
+    ) -> Self {
+        self.generic_mappings.push((generic, families));
+        self
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiRuntimeSlotMountFailure {
     ControlRegistry,
     ProgramFormation,
     UnsupportedProjection,
+    FontProvisioning,
 }
 
 impl UiRuntimeSlotMountFailure {
@@ -55,6 +86,7 @@ impl UiRuntimeSlotMountFailure {
             Self::ControlRegistry => "RunenUI slot mount could not form the control registry",
             Self::ProgramFormation => "RunenUI slot mount could not form a valid UiProgram",
             Self::UnsupportedProjection => "RunenUI slot mount rejected an unsupported projection",
+            Self::FontProvisioning => "RunenUI slot mount could not apply caller-provided font sources",
         }
     }
 }
@@ -68,6 +100,7 @@ pub enum UiRuntimeSlotOperationFailure {
     AutomationRejected,
     HostResponseRejected,
     RuntimeDidNotQuiesce,
+    PublicationRevisionExhausted,
     PublicationRejected,
     InvalidAuthoredId,
 }
@@ -254,6 +287,8 @@ struct UiRuntimeSlot {
     id: UiRuntimeSlotId,
     screen_id: UiTypedScreenId,
     runtime: AppRuntime<RunenwerkProgramUiApp>,
+    /// Host ingress generation only; RunenUI remains the paint/redraw authority.
+    ingress_epoch: u64,
 }
 
 #[derive(runen_ecs::Resource)]
@@ -277,6 +312,15 @@ impl UiRuntimeSlotsResource {
         source: UiTypedSource,
         registry: &ControlPackageRegistrySnapshot,
     ) -> UiRuntimeSlotMountReport {
+        self.mount_with_fonts(source, registry, &UiRuntimeFontConfiguration::default())
+    }
+
+    pub(crate) fn mount_with_fonts(
+        &mut self,
+        source: UiTypedSource,
+        registry: &ControlPackageRegistrySnapshot,
+        fonts: &UiRuntimeFontConfiguration,
+    ) -> UiRuntimeSlotMountReport {
         let screen_id = source.screen_id().clone();
         let lowering = source.lower_with_registry_snapshot(registry);
         if !lowering.passed() {
@@ -295,12 +339,16 @@ impl UiRuntimeSlotsResource {
             );
         }
 
-        let runtime = AppRuntime::<RunenwerkProgramUiApp>::mount(RunenwerkProgramUiState {
+        let mut runtime = AppRuntime::<RunenwerkProgramUiApp>::mount(RunenwerkProgramUiState {
             source,
             artifact,
             resolved_state,
             registry: registry.clone(),
         });
+        if let Err(failure) = provision_text_fonts(&mut runtime, fonts) {
+            let _ = runtime.shutdown();
+            return UiRuntimeSlotMountReport::rejected(screen_id, failure);
+        }
 
         let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
             return UiRuntimeSlotMountReport::rejected(
@@ -314,6 +362,7 @@ impl UiRuntimeSlotsResource {
             id: slot_id,
             screen_id: screen_id.clone(),
             runtime,
+            ingress_epoch: 1,
         });
         UiRuntimeSlotMountReport::accepted(screen_id, slot_id)
     }
@@ -325,6 +374,42 @@ impl UiRuntimeSlotsResource {
 
     pub fn slot_ids(&self) -> impl Iterator<Item = UiRuntimeSlotId> + '_ {
         self.slots.iter().map(|slot| slot.id)
+    }
+
+    /// Returns the Engine ingress generation that might require new RunenUI publication.
+    /// This does not mirror or replace RunenUI's own redraw revision.
+    #[must_use]
+    pub fn ingress_epoch(&self, slot_id: UiRuntimeSlotId) -> Option<u64> {
+        self.slot(slot_id).map(|slot| slot.ingress_epoch)
+    }
+
+    /// Checks RunenUI's own redraw authority; no Engine-owned dirty mirror is used.
+    ///
+    /// RunenUI's take_redraw_request returns a revision witness without consuming
+    /// the dirty revision. A successful publish_surface acknowledges that same
+    /// runtime-owned revision transactionally.
+    pub fn has_pending_redraw(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<bool, UiRuntimeSlotOperationFailure> {
+        let slot = self
+            .slot_mut(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        Ok(slot.runtime.take_redraw_request().is_some())
+    }
+
+    /// Publishes a slot's complete aligned paint, layout, semantics, and input snapshot.
+    /// RunenUI acknowledges its redraw request transactionally on successful publication.
+    pub fn publish_surface_for_slot(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        context: &SurfaceBuildContext<'_>,
+    ) -> Result<SurfacePublication, UiRuntimeSlotOperationFailure> {
+        self.slot_mut(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?
+            .runtime
+            .publish_surface(context)
+            .map_err(|_| UiRuntimeSlotOperationFailure::PublicationRejected)
     }
 
     #[must_use]
@@ -363,12 +448,15 @@ impl UiRuntimeSlotsResource {
             &slot.runtime.state().registry,
         )
         .map_err(|_| UiRuntimeSlotOperationFailure::UnsupportedProjection)?;
+        let next = slot.ingress_epoch.checked_add(1)
+            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
         slot.runtime
             .submit_action(RunenwerkProgramUiAction::ReplaceResolvedState(
                 resolved_state,
             ))
             .map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
         settle(&mut slot.runtime)?;
+        slot.ingress_epoch = next;
         Ok(())
     }
 
@@ -382,10 +470,13 @@ impl UiRuntimeSlotsResource {
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
         let authored_id = ElementId::new(authored_id)
             .map_err(|_| UiRuntimeSlotOperationFailure::InvalidAuthoredId)?;
+        let next = slot.ingress_epoch.checked_add(1)
+            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
         slot.runtime
             .submit_automation_command(authored_id, SemanticCommand::Activate)
             .map_err(|_| UiRuntimeSlotOperationFailure::AutomationRejected)?;
         settle(&mut slot.runtime)?;
+        slot.ingress_epoch = next;
         Ok(())
     }
 
@@ -426,10 +517,14 @@ impl UiRuntimeSlotsResource {
             UiRuntimeHostRequestDisposition::Accepted => RunenwerkUiHostResponse::Accepted,
             UiRuntimeHostRequestDisposition::Rejected => RunenwerkUiHostResponse::Rejected,
         };
+        let next = slot.ingress_epoch.checked_add(1)
+            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
         slot.runtime
             .complete_host_request(&request.token, response)
             .map_err(|_| UiRuntimeSlotOperationFailure::HostResponseRejected)?;
-        settle(&mut slot.runtime)
+        settle(&mut slot.runtime)?;
+        slot.ingress_epoch = next;
+        Ok(())
     }
 
     #[cfg(test)]
@@ -527,6 +622,31 @@ fn publication_facts_for_runtime(
         shaped_text_run_count,
         all_bounds_non_zero,
     })
+}
+
+/// Applies host-owned immutable font sources through RunenUI's text authority.
+/// The slot is not published if this provisioning transaction fails.
+fn provision_text_fonts(
+    runtime: &mut AppRuntime<RunenwerkProgramUiApp>,
+    configuration: &UiRuntimeFontConfiguration,
+) -> Result<(), UiRuntimeSlotMountFailure> {
+    for bytes in &configuration.font_bytes {
+        let registered = runtime
+            .register_text_font_bytes(bytes.clone())
+            .map_err(|_| UiRuntimeSlotMountFailure::FontProvisioning)?;
+        if registered == 0 {
+            return Err(UiRuntimeSlotMountFailure::FontProvisioning);
+        }
+    }
+    for (generic, families) in &configuration.generic_mappings {
+        let mapped = runtime
+            .set_text_generic_family_mapping(*generic, families)
+            .map_err(|_| UiRuntimeSlotMountFailure::FontProvisioning)?;
+        if !mapped {
+            return Err(UiRuntimeSlotMountFailure::FontProvisioning);
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -966,6 +1086,355 @@ mod tests {
             "controlled publication should contain shaped text"
         );
         assert!(facts.all_bounds_non_zero());
+    }
+
+    #[test]
+    fn exact_renderer_receipt_promotes_only_matching_pending_runenui_input() {
+        use crate::plugins::render::{RenderFrameProducerId, SurfaceFrameSubmissionOrder};
+        use crate::plugins::render::host::RenderSurfaceId;
+        use crate::plugins::ui::presentation::{
+            UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
+            UiRuntimePresentationBinding, UiRuntimePresentedReceipt,
+        };
+        use crate::runtime::NativeWindowId;
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let (source, _, _, registry) = counter_projection_fixture();
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").expect("valid test family")],
+            );
+        let slot = slots
+            .mount_with_fonts(source, &registry, &fonts)
+            .slot_id()
+            .expect("mounted Counter");
+        let render_surface = RenderSurfaceId::primary();
+        let producer = RenderFrameProducerId::try_from_raw(42).expect("valid producer");
+        let style = StyleEnvironment::default();
+        let binding = UiRuntimePresentationBinding::new(slot, producer, render_surface, style.clone())
+            .with_order(SurfaceFrameSubmissionOrder::new(20, 0));
+        let mapping = UiRuntimeNativeMapping::new(
+            NativeWindowId::primary(),
+            render_surface,
+            (320, 160),
+            1.0,
+        )
+        .expect("positive native extent and scale");
+        let build = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(
+                LogicalLength::from(RUNTIME_SURFACE_WIDTH),
+                LogicalLength::from(RUNTIME_SURFACE_HEIGHT),
+            ),
+        );
+        let first = slots
+            .publish_surface_for_slot(slot, &build)
+            .expect("published source");
+        let mut associations = UiRuntimePresentationAssociationsResource::default();
+        associations.bind(binding.clone()).expect("unique producer binding");
+        assert!(associations.update_mapping(slot, mapping));
+        assert!(!associations.update_mapping(slot, mapping));
+        let publication_id = associations
+            .stage(binding.clone(), mapping, 1, first.clone())
+            .expect("pending paint");
+
+        assert!(associations.associate_accepted_submission(publication_id));
+        assert_eq!(associations.in_flight_count(), 1);
+
+        let receipt = UiRuntimePresentedReceipt {
+            slot_id: slot,
+            producer_id: producer,
+            render_surface_id: render_surface,
+            surface_id: first.paint_publication().surface_id().clone(),
+            paint_revision: first.paint_publication().revision(),
+            publication_id,
+        };
+        let wrong_producer = UiRuntimePresentedReceipt {
+            producer_id: RenderFrameProducerId::try_from_raw(43).expect("valid producer"),
+            ..receipt.clone()
+        };
+        assert!(associations.promote(&wrong_producer).is_none());
+        assert_eq!(associations.in_flight_count(), 1);
+
+        // The old accepted frame must remain live while a newer equal-paint
+        // input generation is published, and only the actual completed frame
+        // can become displayed. Its earlier completion is not falsely stale.
+        let second_id = associations
+            .stage(binding.clone(), mapping, 1, first.clone())
+            .expect("new independent presentation of equal painted content");
+        assert_ne!(publication_id, second_id);
+        assert_eq!(associations.in_flight_count(), 1);
+        let first_displayed = associations
+            .promote(&receipt)
+            .expect("first completed frame retains exact earlier input snapshot");
+        assert_eq!(first_displayed.publication_id, publication_id);
+        assert_eq!(associations.pending(slot).map(|p| p.publication_id()), Some(second_id));
+        assert!(associations.associate_accepted_submission(second_id));
+
+        let current = UiRuntimePresentedReceipt {
+            publication_id: second_id,
+            ..receipt
+        };
+        let displayed = associations.promote(&current).expect("second exact GPU completion");
+        assert_eq!(&displayed.input_context, first.input_context());
+        assert_eq!(displayed.publication_id, second_id);
+        assert!(associations.pending(slot).is_none());
+        assert!(associations.displayed_for_mapping(slot, mapping).is_some());
+
+        let retry_id = associations
+            .stage(binding.clone(), mapping, 1, first.clone())
+            .expect("new pending GPU submission");
+        assert!(!associations.reject_terminal_publication(second_id));
+        assert!(associations.associate_accepted_submission(retry_id));
+        assert_eq!(associations.in_flight_count(), 1);
+        assert!(associations.reject_terminal_publication(retry_id));
+        assert_eq!(associations.in_flight_count(), 0);
+        assert!(associations.pending(slot).is_none());
+        assert!(
+            associations.needs_publication(slot, mapping, 1),
+            "failed submission must permit a fresh source publication",
+        );
+        assert!(
+            associations.displayed_for_mapping(slot, mapping).is_some(),
+            "failed new frame must not erase older displayed input",
+        );
+
+        let accepted_id = associations
+            .stage(binding.clone(), mapping, 1, first.clone())
+            .expect("retry source publication");
+        assert!(associations.associate_accepted_submission(accepted_id));
+        let accepted = associations
+            .promote_completed_publication(accepted_id)
+            .expect("only the renderer-authorized terminal publication is promoted");
+        assert_eq!(accepted.publication_id, accepted_id);
+        assert!(associations.promote_completed_publication(retry_id).is_none());
+
+        // Native GPUs may complete accepted submissions out of source
+        // publication order. Newest *successfully displayed* input wins,
+        // and a late older completion must not rewind its hit-test context.
+        let older_id = associations
+            .stage(binding.clone(), mapping, 2, first.clone())
+            .expect("older pending in-flight source");
+        assert!(associations.associate_accepted_submission(older_id));
+        let newer_id = associations
+            .stage(binding.clone(), mapping, 3, first.clone())
+            .expect("newer pending in-flight source");
+        assert!(associations.associate_accepted_submission(newer_id));
+        assert_eq!(associations.in_flight_count(), 2);
+        let newer_displayed = associations
+            .promote_completed_publication(newer_id)
+            .expect("newer GPU frame is displayed first");
+        assert_eq!(newer_displayed.publication_id, newer_id);
+        assert!(
+            associations.promote_completed_publication(older_id).is_none(),
+            "older delayed completion cannot regress displayed input"
+        );
+        assert_eq!(associations.in_flight_count(), 0);
+        assert_eq!(
+            associations
+                .displayed_for_mapping(slot, mapping)
+                .map(|displayed| displayed.publication_id),
+            Some(newer_id)
+        );
+        assert!(!associations.reject_terminal_publication(older_id));
+
+        let different_mapping = UiRuntimeNativeMapping::new(
+            NativeWindowId::primary(), render_surface, (640, 320), 2.0,
+        ).expect("valid resize mapping");
+        assert!(associations.update_mapping(slot, different_mapping));
+        assert!(associations.displayed_for_mapping(slot, different_mapping).is_none());
+        assert!(associations.displayed_for_mapping(slot, mapping).is_none());
+        associations.unbind(slot);
+        assert!(associations.binding(slot).is_none());
+    }
+
+    #[test]
+    fn host_presentation_mapping_rejects_invalid_scale_and_extent() {
+        use crate::plugins::render::host::RenderSurfaceId;
+        use crate::plugins::ui::{UiRuntimeMappingError, UiRuntimeNativeMapping};
+        use crate::runtime::NativeWindowId;
+
+        let window = NativeWindowId::primary();
+        let surface = RenderSurfaceId::primary();
+        assert_eq!(
+            UiRuntimeNativeMapping::new(window, surface, (0, 160), 1.0),
+            Err(UiRuntimeMappingError::EmptySurface),
+        );
+        for scale in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert_eq!(
+                UiRuntimeNativeMapping::new(window, surface, (320, 160), scale),
+                Err(UiRuntimeMappingError::InvalidScale),
+            );
+        }
+        let valid = UiRuntimeNativeMapping::new(window, surface, (320, 160), 1.5)
+            .expect("positive finite native raster scale");
+        assert_eq!(valid.native_window_id(), window);
+        assert_eq!(valid.render_surface_id(), surface);
+        assert_eq!(valid.target_size_px(), (320, 160));
+        assert_eq!(valid.native_scale_factor(), 1.5);
+    }
+
+    #[test]
+    fn unbind_and_rebind_retire_only_owned_paint_targets() {
+        use crate::plugins::render::RenderFrameProducerId;
+        use crate::plugins::render::host::RenderSurfaceId;
+        use crate::plugins::ui::{
+            UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding,
+        };
+
+        let first = UiRuntimeSlotId(17);
+        let second = UiRuntimeSlotId(18);
+        let producer_a = RenderFrameProducerId::try_from_raw(71).expect("valid producer");
+        let producer_b = RenderFrameProducerId::try_from_raw(72).expect("valid producer");
+        let surface = RenderSurfaceId::primary();
+        let mut associations = UiRuntimePresentationAssociationsResource::default();
+        let initial = UiRuntimePresentationBinding::new(
+            first,
+            producer_a,
+            surface,
+            StyleEnvironment::default(),
+        );
+        associations.bind(initial.clone()).expect("first binding");
+        assert!(associations.take_withdrawals().is_empty());
+
+        let collision = UiRuntimePresentationBinding::new(
+            second,
+            producer_a,
+            surface,
+            StyleEnvironment::default(),
+        );
+        assert!(associations.bind(collision).is_err());
+        assert!(associations.take_withdrawals().is_empty());
+
+        let replacement = UiRuntimePresentationBinding::new(
+            first,
+            producer_b,
+            surface,
+            StyleEnvironment::default(),
+        );
+        associations.bind(replacement).expect("replacement binding");
+        assert_eq!(associations.take_withdrawals(), vec![(producer_a, surface)]);
+        assert!(associations.take_withdrawals().is_empty());
+
+        associations.unbind(first);
+        assert_eq!(associations.take_withdrawals(), vec![(producer_b, surface)]);
+        associations.unbind(first);
+        assert!(associations.take_withdrawals().is_empty());
+    }
+
+    #[test]
+    fn invalid_caller_font_is_rejected_before_slot_mount() {
+        let mut slots = UiRuntimeSlotsResource::default();
+        let (source, _, _, registry) = counter_projection_fixture();
+        let invalid_fonts = UiRuntimeFontConfiguration::new(vec![vec![0, 1, 2, 3]]);
+        let report = slots.mount_with_fonts(source, &registry, &invalid_fonts);
+        assert_eq!(report.failure(), Some(UiRuntimeSlotMountFailure::FontProvisioning));
+        assert!(slots.is_empty());
+    }
+
+    #[test]
+    fn mounted_slot_publication_exposes_production_shaped_text_resource() {
+        let mut slots = UiRuntimeSlotsResource::default();
+        let (source, _, _, registry) = counter_projection_fixture();
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").expect("valid test font family")],
+            );
+        let slot_id = slots
+            .mount_with_fonts(source, &registry, &fonts)
+            .slot_id()
+            .expect("caller-provided test fonts allow the Counter slot to mount");
+        let environment = StyleEnvironment::default();
+        let context = SurfaceBuildContext::tight(
+            &environment,
+            LogicalSize::new(
+                LogicalLength::from(RUNTIME_SURFACE_WIDTH),
+                LogicalLength::from(RUNTIME_SURFACE_HEIGHT),
+            ),
+        );
+        assert!(
+            slots.has_pending_redraw(slot_id)
+                .expect("mounted RunenUI slot has redraw authority"),
+            "newly mounted RunenUI surface should request its first paint",
+        );
+        let publication = slots
+            .publish_surface_for_slot(slot_id, &context)
+            .expect("production slot font provisioning permits publication");
+        assert!(
+            !slots.has_pending_redraw(slot_id)
+                .expect("redraw authority remains live after publication"),
+            "successful RunenUI publication must acknowledge its dirty revision",
+        );
+        let paint = publication.paint_scene();
+        let runs = paint
+            .items()
+            .iter()
+            .filter_map(|item| item.primitive().as_shaped_text_run())
+            .collect::<Vec<_>>();
+        assert!(!runs.is_empty(), "Counter publication must contain shaped text");
+        assert!(
+            runs.iter()
+                .all(|run| paint.shaped_text_resource(run.resource_ref()).is_some())
+        );
+
+        let mut resource_ids =
+            crate::plugins::render::features::RunenUi2dResourceIdentityMap::default();
+        let projected = crate::plugins::render::features::project_runenui_paint_to_2d(
+            publication.paint_publication(),
+            &mut resource_ids,
+        )
+        .expect("Counter paint subset must be losslessly supported by RunenRender 2D");
+        let repeated = crate::plugins::render::features::project_runenui_paint_to_2d(
+            publication.paint_publication(),
+            &mut resource_ids,
+        )
+        .expect("repeat publication must preserve semantic resource identities");
+        assert_eq!(projected.composition(), repeated.composition());
+        assert_eq!(projected.bindings(), repeated.bindings());
+        assert_eq!(projected.composition().root_entries().len(), paint.root_entries().len());
+        for (source_entry, projected_entry) in paint
+            .root_entries()
+            .iter()
+            .zip(projected.composition().root_entries())
+        {
+            let index = source_entry.item_index().expect("Counter roots are direct items");
+            let source_item = &paint.items()[index];
+            let source_run = source_item
+                .primitive()
+                .as_shaped_text_run()
+                .expect("Counter paints only shaped runs");
+            let source = paint
+                .shaped_text_resource(source_run.resource_ref())
+                .expect("RunenUI retains shaped resource");
+            let runen_render::composition_2d::Render2dEntry::Item(item) = projected_entry else {
+                panic!("Counter must project to direct RunenRender items");
+            };
+            let runen_render::composition_2d::Render2dPrimitive::ShapedText(text) =
+                item.primitive()
+            else {
+                panic!("Counter must project to exact shaped text");
+            };
+            let Some(runen_render::composition_2d::Render2dResourceValue::ShapedText(target)) =
+                projected.bindings().get(text.resource_id())
+            else {
+                panic!("projected shaped text must have a binding");
+            };
+            assert_eq!(target.font().bytes(), source.font().bytes());
+            assert_eq!(target.font().face_index(), source.font().face_index());
+            assert_eq!(target.font().normalized_coords(), source.font().normalized_coords());
+            assert_eq!(target.font().faux_bold(), source.font().faux_bold());
+            assert_eq!(target.font().faux_skew(), source.font().faux_skew().map(f64::from));
+            assert_eq!(target.font_size(), f64::from(source.font_size()));
+            assert_eq!(target.glyphs().len(), source.glyphs().len());
+            for (actual, original) in target.glyphs().iter().zip(source.glyphs()) {
+                assert_eq!(actual.id(), original.id());
+                assert_eq!(actual.x(), f64::from(original.x()));
+                assert_eq!(actual.y(), f64::from(original.y()));
+                assert_eq!(actual.advance(), f64::from(original.advance()));
+            }
+        }
     }
 
     #[test]

@@ -1,6 +1,7 @@
-use crate::plugins::render::RenderFlowId;
+use crate::plugins::render::{RenderFlowId, RenderFrameProducerId, RunenUiPublicationId};
 use crate::plugins::render::features::{
-    FeatureContributionStatus, FeatureFallbackPolicy, UiFontAtlasResource,
+    FeatureContributionStatus, FeatureFallbackPolicy, RunenUi2dResourceIdentityMap,
+    RunenUi2dSemanticProjection, UiFontAtlasResource,
 };
 use crate::plugins::render::frame::PreparedRenderFrame;
 use crate::plugins::render::graph::{
@@ -780,6 +781,18 @@ pub(crate) struct PreparedMaterialGpuResources {
     _samplers: Vec<RendererSamplerResource>,
 }
 
+/// Already source-neutral F2 semantic facts for one exact UI publication.
+/// The RunenUI publication itself remains owned by Engine's UI integration.
+#[derive(Debug, Clone)]
+struct PreparedRunenUi2dPublication {
+    producer_id: RenderFrameProducerId,
+    publication_id: RunenUiPublicationId,
+    compositor_position: u32,
+    logical_extent: (f64, f64),
+    raster_scale: f64,
+    semantic: RunenUi2dSemanticProjection,
+}
+
 #[derive(Debug, Clone)]
 pub(crate) struct RendererPreparedPacket {
     surface_format: GpuTextureFormat,
@@ -790,6 +803,9 @@ pub(crate) struct RendererPreparedPacket {
     prepared_material: Option<crate::plugins::render::PreparedMaterialFeatureContribution>,
     prepared_material_gpu_resources: Option<PreparedMaterialGpuResources>,
     prepared_ui: UiPreparedDraws,
+    /// RunenUI paint validated against the exact admitted semantic subset,
+    /// ready for RunenRender F2 preparation without introducing another UI IR.
+    runenui_2d: Vec<PreparedRunenUi2dPublication>,
     ui_dynamic_bind_groups: UiDynamicBindGroups,
     pending_operations: RendererPendingOperations,
     viewport_surface_bindings: ViewportSurfaceBindingRegistry,
@@ -811,6 +827,9 @@ pub struct Renderer {
     product_surface_pass: Option<ProductSurfacePass>,
     product_surface_pass_format: Option<GpuTextureFormat>,
     glyph_atlas_gpu: BTreeMap<u64, UiGlyphAtlasGpu>,
+    /// Renderer lifetime owns monotonic semantic resource mapping, not RunenUI.
+    runenui_2d_resource_ids: RunenUi2dResourceIdentityMap,
+    runenui_2d_executor: runen_render::execution_2d::Render2dExecutor,
     render_sessions: retained_sessions::RetainedRenderSessions,
     temporal_execution_evidence: BTreeMap<u64, Vec<runen_render::RenderTemporalExecutionEvidence>>,
     dynamic_texture_targets: dynamic_targets::RendererDynamicTextureTargetCache,
@@ -831,6 +850,11 @@ pub struct Renderer {
     last_captured_textures: Vec<RenderCapturedTexture>,
     gpu_observations: render_flow::RendererGpuObservationState,
     pending_gpu_observation_output: render_flow::RendererGpuObservationOutput,
+    /// Terminal GPU/Present observations retained until the Engine's UiPlugin
+    /// integration explicitly drains them. A failed render may not discard them.
+    runenui_gpu_accepted: Vec<RunenUiPublicationId>,
+    runenui_gpu_presented: Vec<RunenUiPublicationId>,
+    runenui_gpu_rejected: Vec<(RunenUiPublicationId, &'static str)>,
 }
 
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
@@ -869,6 +893,18 @@ impl Gfx {
     ) -> &[runen_render::RenderTemporalExecutionEvidence] {
         self.renderer.temporal_execution_evidence(frame_index)
     }
+
+    pub(crate) fn take_runenui_terminal_publications(
+        &mut self,
+    ) -> (
+        Vec<RunenUiPublicationId>,
+        Vec<RunenUiPublicationId>,
+        Vec<(RunenUiPublicationId, &'static str)>,
+    ) {
+        self.renderer.take_runenui_terminal_publications()
+    }
+
+
 
     pub fn attach_surface(
         &mut self,

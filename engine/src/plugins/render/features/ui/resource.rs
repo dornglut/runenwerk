@@ -1,6 +1,8 @@
 use crate::plugins::render::features::{
-    FeatureContributionStatus, FeatureFallbackPolicy, PreparedSurfaceFrameSubmission,
-    PreparedUiFrameContribution, SurfaceFrameSubmissionRegistryResource,
+    FeatureContributionStatus, FeatureFallbackPolicy, OrderedSurfaceUiSubmission,
+    PreparedRunenUiPaintSubmission, PreparedSurfaceFrameSubmission, PreparedUiFrameContribution,
+    PreparedUiSubmissionKind, RunenUiPaintSubmissionRegistryResource,
+    SurfaceFrameSubmissionRegistryResource, ordered_mixed_ui_submissions_for_surface,
 };
 use crate::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::runtime::{Res, ResMut};
@@ -247,52 +249,97 @@ impl PreparedUiFrameResource {
     }
 }
 
+/// Prepares one ordered UI feature containing two source payload types.
+/// A producer collision rejects before any prepared resource is mutated.
+///
+/// # Errors
+///
+/// Rejects ambiguity between RunenUI and legacy frame producers or compositor
+/// position overflow; never emits a partially prepared mixed frame.
 pub fn prepare_ui_feature_resource_system(
     submissions: Res<SurfaceFrameSubmissionRegistryResource>,
+    runenui: Res<RunenUiPaintSubmissionRegistryResource>,
     surfaces: Res<RenderSurfaceRegistryResource>,
     mut prepared: ResMut<PreparedUiFrameResource>,
-) {
-    let ordered = submissions.ordered_submissions();
-    let (status, payload) = prepare_submissions(ordered);
+) -> anyhow::Result<()> {
+    // Preserve the accepted legacy-only default: the historical unscoped
+    // fallback contains every legacy submission, including secondary surfaces.
+    // A mixed frame uses exact primary selection rather than inventing an
+    // arbitrary global RunenUI/legacy presentation association.
+    let ordered = if runenui.is_empty() {
+        submissions
+            .ordered_submissions()
+            .into_iter()
+            .map(OrderedSurfaceUiSubmission::Legacy)
+            .collect()
+    } else {
+        ordered_mixed_ui_submissions_for_surface(
+            &submissions,
+            &runenui,
+            RenderSurfaceId::primary(),
+        )?
+    };
+    let (status, payload) = prepare_submissions(ordered)?;
+
+    let mut payload_by_surface = std::collections::BTreeMap::new();
+    let mut status_by_surface = std::collections::BTreeMap::new();
+    for surface in surfaces.records() {
+        let selected = ordered_mixed_ui_submissions_for_surface(
+            &submissions,
+            &runenui,
+            surface.render_surface_id,
+        )?;
+        let (status, payload) = prepare_submissions(selected)?;
+        payload_by_surface.insert(surface.render_surface_id, payload);
+        status_by_surface.insert(surface.render_surface_id, status);
+    }
+
     prepared.status = status;
     prepared.payload = payload;
-    prepared.payload_by_surface.clear();
-    prepared.status_by_surface.clear();
-    for surface in surfaces.records() {
-        let (status, payload) = prepare_submissions(
-            submissions.ordered_submissions_for_surface(surface.render_surface_id),
-        );
-        prepared
-            .payload_by_surface
-            .insert(surface.render_surface_id, payload);
-        prepared
-            .status_by_surface
-            .insert(surface.render_surface_id, status);
-    }
+    prepared.payload_by_surface = payload_by_surface;
+    prepared.status_by_surface = status_by_surface;
+    Ok(())
 }
 
-fn prepare_submissions(
-    submissions: Vec<&crate::plugins::render::features::SurfaceFrameSubmission>,
-) -> (FeatureContributionStatus, PreparedUiFrameContribution) {
+pub(crate) fn prepare_submissions(
+    submissions: Vec<OrderedSurfaceUiSubmission<'_>>,
+) -> anyhow::Result<(FeatureContributionStatus, PreparedUiFrameContribution)> {
     let status = if submissions.is_empty() {
         FeatureContributionStatus::Missing
     } else {
         FeatureContributionStatus::Ready
     };
-    let payload = PreparedUiFrameContribution {
-        submissions: submissions
-            .into_iter()
-            .map(|submission| PreparedSurfaceFrameSubmission {
-                producer_id: submission.producer_id,
-                route: submission.route.as_str().to_string(),
-                layer: submission.order.layer,
-                priority: submission.order.priority,
-                frame: submission.frame.clone(),
-                rect_shader_asset_id: submission.rect_shader_asset_id.clone(),
-            })
-            .collect(),
-    };
-    (status, payload)
+    let mut payload = PreparedUiFrameContribution::default();
+    for (position, submission) in submissions.into_iter().enumerate() {
+        let position = u32::try_from(position)
+            .map_err(|_| anyhow::anyhow!("mixed UI compositor position exceeds u32"))?;
+        match submission {
+            OrderedSurfaceUiSubmission::Legacy(submission) => {
+                let index = payload.submissions.len();
+                payload.submissions.push(PreparedSurfaceFrameSubmission {
+                    producer_id: submission.producer_id,
+                    submission_order: position,
+                    route: submission.route.as_str().to_string(),
+                    layer: submission.order.layer,
+                    priority: submission.order.priority,
+                    frame: submission.frame.clone(),
+                    rect_shader_asset_id: submission.rect_shader_asset_id.clone(),
+                });
+                payload.ordered.push(PreparedUiSubmissionKind::Legacy(index));
+            }
+            OrderedSurfaceUiSubmission::RunenUi(submission) => {
+                let index = payload.runenui_submissions.len();
+                payload.runenui_submissions.push(PreparedRunenUiPaintSubmission {
+                    producer_id: submission.producer_id,
+                    publication_id: submission.publication_id,
+                    submission_order: position,
+                    publication: submission.publication.clone(),
+                });
+                payload.ordered.push(PreparedUiSubmissionKind::RunenUi(index));
+            }
+        }
+    }
+    Ok((status, payload))
 }
 
 #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource, Default)]
@@ -323,6 +370,27 @@ mod tests {
             .glyphs
             .get(&ch)
             .unwrap_or_else(|| panic!("glyph metrics missing for '{ch}'"))
+    }
+
+    #[test]
+    fn legacy_only_unscoped_fallback_keeps_secondary_surface_submissions() {
+        let mut legacy = SurfaceFrameSubmissionRegistryResource::default();
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("test surface");
+        let producer = crate::plugins::render::RenderFrameProducerId::try_from_raw(91)
+            .expect("test producer");
+        legacy.replace_for_surface(producer, secondary, |id| {
+            crate::plugins::render::features::SurfaceFrameSubmission::new(id)
+        });
+        let selected = legacy
+            .ordered_submissions()
+            .into_iter()
+            .map(OrderedSurfaceUiSubmission::Legacy)
+            .collect::<Vec<_>>();
+        let (status, prepared) = prepare_submissions(selected).expect("legacy-only fallback");
+        assert_eq!(status, FeatureContributionStatus::Ready);
+        assert_eq!(prepared.submissions.len(), 1);
+        assert_eq!(prepared.submissions[0].producer_id, producer);
+        assert!(prepared.runenui_submissions.is_empty());
     }
 
     #[test]

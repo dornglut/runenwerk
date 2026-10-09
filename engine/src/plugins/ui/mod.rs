@@ -11,7 +11,8 @@ pub mod events;
 pub mod host;
 pub mod mount;
 pub mod plugin;
-pub mod render_publish;
+pub mod presentation;
+pub mod publish;
 #[cfg(test)]
 pub(crate) mod render_scene;
 pub mod report;
@@ -29,11 +30,13 @@ pub use events::*;
 pub use host::*;
 pub use mount::*;
 pub use plugin::UiPlugin;
-pub use render_publish::*;
+pub use presentation::*;
+pub use publish::*;
 pub use report::*;
 pub use resources::*;
 pub use runenui_adapter::{
-    UiRuntimeHostRequestDisposition, UiRuntimePendingEventRequest, UiRuntimeSlotId,
+    UiRuntimeFontConfiguration, UiRuntimeHostRequestDisposition, UiRuntimePendingEventRequest,
+    UiRuntimeSlotId,
     UiRuntimeSlotMountFailure, UiRuntimeSlotMountReport, UiRuntimeSlotOperationFailure,
     UiRuntimeSlotsResource,
 };
