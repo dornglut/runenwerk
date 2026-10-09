@@ -1081,11 +1081,11 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     if let Ok(paints) =
         world.resource::<crate::plugins::render::RunenUiPaintSubmissionRegistryResource>()
     {
-        let retired = gfx.renderer.reclaim_idle_runenui_resources(paints);
+        let retired = gfx.renderer.reclaim_obsolete_runenui_resources(paints);
         if retired > 0 {
             tracing::debug!(
                 retired,
-                "released obsolete RunenUI source refs and reset idle F2 realization generation"
+                "released obsolete RunenUI source refs and rotated F2 CPU preparation generation"
             );
         }
     }

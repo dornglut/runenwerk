@@ -20,9 +20,9 @@ use runenui_runtime::{PaintPublication, PaintSceneItem};
 
 /// Retained, monotonic mapping of opaque source resources into RunenRender identities.
 ///
-/// Hold this across frames for the same RunenRender realization lifetime. Retire stale
-/// source references after their pending contributions complete. Numeric renderer IDs
-/// are never recycled, including after source-resource retirement.
+/// This map survives F2 executor CPU-cache generations. It retains currently used
+/// source references and mints monotonically increasing semantic IDs; no ID is
+/// recycled, even while older GPU submissions remain in flight.
 #[derive(Clone, Debug, Default)]
 pub struct RunenUi2dResourceIdentityMap {
     last_issued: u64,
@@ -35,19 +35,36 @@ impl RunenUi2dResourceIdentityMap {
         self.by_source.len()
     }
 
-    /// Release a source reference after all pending rendering use has retired.
-    /// Renderer IDs are still never assigned to a different source reference.
+    /// Release an obsolete source reference; its semantic ID is permanently spent.
+    /// GPU work previously prepared from this source owns its work independently.
     pub fn retire(&mut self, source: &ResourceRef) -> bool {
         self.by_source.remove(source).is_some()
     }
 
-    /// Prunes only exact obsolete opaque source references. Monotonic F2
-    /// resource IDs are never reissued even after an idle-generation reset.
-    /// Callers MUST prove no old GPU F2 work can still use the retired ids.
+    /// Prunes obsolete opaque source references. Prepared F2 GPU operations own
+    /// their resource handles; no accepted submission depends on this CPU map.
+    /// Monotonic semantic IDs are never reissued across executor generations.
     pub fn retain_exact_live(&mut self, live: &HashSet<ResourceRef>) -> usize {
         let before = self.by_source.len();
         self.by_source.retain(|source, _| live.contains(source));
         before - self.by_source.len()
+    }
+
+    /// Bound retained source-reference history relative to all currently
+    /// published sources, even if GPU submissions never reach a globally idle
+    /// point. At most 256 obsolete references remain between reclamations;
+    /// keeping a minimum batch avoids resetting derived F2 fields every frame.
+    pub fn reclaim_obsolete_over_budget(&mut self, live: &HashSet<ResourceRef>) -> usize {
+        const RECLAIM_WATERMARK: usize = 256;
+        const MINIMUM_STALE_TO_RECLAIM: usize = 128;
+        if self.retained_count() <= RECLAIM_WATERMARK {
+            return 0;
+        }
+        let stale = self.by_source.keys().filter(|source| !live.contains(*source)).count();
+        if stale < MINIMUM_STALE_TO_RECLAIM {
+            return 0;
+        }
+        self.retain_exact_live(live)
     }
 
     fn resolve_or_allocate(
@@ -300,6 +317,36 @@ mod tests {
             map.resolve_or_allocate(&expired).expect("same renewed id"),
             live_id
         );
+    }
+
+    #[test]
+    fn continuous_resource_churn_reclaims_without_global_gpu_idle_and_never_reuses_ids() {
+        let mut ids = RunenUi2dResourceIdentityMap::default();
+        let shared = ResourceRef::new(ResourceKind::ShapedTextRun);
+        let shared_id = ids.resolve_or_allocate(&shared).expect("shared source id");
+        let mut greatest_id = shared_id.get();
+        for _generation in 0..512 {
+            // Two active surfaces can reference the same opaque immutable source.
+            let mut current = HashSet::from([shared.clone()]);
+            for index in 0..16 {
+                let source = ResourceRef::new(ResourceKind::ShapedTextRun);
+                let id = ids.resolve_or_allocate(&source).expect("monotonic id");
+                assert!(id.get() > greatest_id, "never recycle retired identities");
+                greatest_id = id.get();
+                if index < 2 {
+                    current.insert(source);
+                }
+            }
+            ids.reclaim_obsolete_over_budget(&current);
+            assert!(
+                ids.retained_count() <= current.len() + 256,
+                "CPU source retention must be bounded independently of outstanding GPU submissions"
+            );
+            assert_eq!(
+                ids.resolve_or_allocate(&shared).expect("shared source survives"),
+                shared_id
+            );
+        }
     }
 
     #[test]

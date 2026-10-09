@@ -1138,27 +1138,20 @@ mod setup;
 
 use crate::plugins::RenderFeatureId;
 
-// F2's accepted executor has only discard_cache(), which drops realized
-// fields but intentionally retains every observed immutable resource identity.
-// Keep that upstream contract unchanged: replace the executor only at an
-// observation-proven idle point, after no accepted F2 GPU work is outstanding.
-// No source or renderer ID is reused as a different immutable resource.
+// The retained RunenRender executor owns only CPU-side immutable semantic
+// observations and derived field data. Once prepare() returns, the owned F2
+// contribution holds its GPU work independently of the executor. RunenGPU owns
+// submitted resources and completion; its exact witnesses remain in gpu_observations.
+// Therefore rebuilding this CPU-side preparation cache does not require GPU
+// quiescence, which may never occur during continuous UI submission.
 impl Renderer {
-    pub(in crate::plugins::render) fn reclaim_idle_runenui_resources(
+    pub(in crate::plugins::render) fn reclaim_obsolete_runenui_resources(
         &mut self,
         paints: &crate::plugins::render::RunenUiPaintSubmissionRegistryResource,
     ) -> usize {
-        const RECLAIM_WATERMARK: usize = 256;
-        const MINIMUM_STALE_TO_RECLAIM: usize = 128;
-
-        let count = self.runenui_2d_resource_ids.retained_count();
-        if count <= RECLAIM_WATERMARK || self.gpu_observations.has_pending_runenui() {
-            return 0;
-        }
         let mut live = std::collections::HashSet::new();
-        // Enumerate all scoped source publications, not merely this frame's
-        // current RenderSurfaceId. A secondary window may retain the same F2
-        // resource while the primary surface is updating.
+        // Keep every active source publication across every surface scope;
+        // never retain just the currently rendered primary window.
         for submission in paints.ordered_submissions() {
             for item in submission.publication.scene().items() {
                 if let runenui_core::PaintPrimitive::ShapedTextRun(run) = item.primitive() {
@@ -1166,14 +1159,12 @@ impl Renderer {
                 }
             }
         }
-        if count.saturating_sub(live.len()) < MINIMUM_STALE_TO_RECLAIM {
-            return 0;
-        }
-        let retired = self.runenui_2d_resource_ids.retain_exact_live(&live);
-        if retired > 0 {
-            // RunenRender's observed binding state cannot selectively forget
-            // dead IDs, so a replacement is the only public, source-neutral
-            // idle-generation reset. The retained map preserves active IDs.
+        let retired = self.runenui_2d_resource_ids.reclaim_obsolete_over_budget(&live);
+        if retired != 0 {
+            // A fresh immutable-observation generation is necessary: discard_cache()
+            // intentionally retains all observed values. Surviving semantic IDs
+            // map to their original resources; retired IDs are never reissued.
+            // Previously accepted GPU submissions do not borrow executor state.
             self.runenui_2d_executor = runen_render::execution_2d::Render2dExecutor::new();
         }
         retired
