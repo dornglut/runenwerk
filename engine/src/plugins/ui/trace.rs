@@ -4,7 +4,7 @@ use ui_surface::SurfaceInstanceId;
 
 use super::{
     UiActionDispatchFailureReason, UiRuntimeDiagnosticCode, UiRuntimeDirtyCause,
-    UiTypedActionDescriptor, UiTypedActionId,
+    UiRuntimeSourceProgramFacts, UiTypedActionDescriptor, UiTypedActionId,
 };
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

@@ -487,7 +487,7 @@ impl Renderer {
         if !ui.runenui_submissions.is_empty()
             && ui_gate.fallback_policy == FeatureFallbackPolicy::ReuseLastGood
         {
-            bail!("ReuseLastGood is forbidden for frames carrying RunenUI paint");
+            anyhow::bail!("ReuseLastGood is forbidden for frames carrying RunenUI paint");
         }
         let prepared_material = prepared_frame
             .contributions
