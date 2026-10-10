@@ -310,9 +310,6 @@ These are **ownership boundaries and acceptance gates**, not a duplicate roadmap
 
 ## Review/acceptance questions still requiring independent resolution
 
-8. Is the L0 UI consumer's pinned public RunenUI/Engine/RunenRender/RunenInput path complete enough for actual native graph controls, focus, text, painting, surface lifetime and headless parity **without reintroducing predecessor UI or relying on deferred Editor U8**?
-9. What is the precise non-overlap and possible *later* interoperability between PCG Lab cave-generation/acceptance workflows and the still-unmerged Visual Lab #236 creative-study product?
-
 
 1. What **minimal spatial cave candidate** and world-admission adapter is compatible with A0's final accepted `domain/product`, WorldSDF, and query contracts, without assigning semantic authority to a derived mask?
 2. What exact **distance conservatism / sample error** must be preserved for both collision and the selected ray-based renderer for a noisy derived wall?
@@ -321,5 +318,7 @@ These are **ownership boundaries and acceptance gates**, not a duplicate roadmap
 5. What **bounded standalone App/UI/native window/field/rendering path** can present changing cave products without copying the Editor app/runtime or creating a new global input/render authority?
 6. What smallest representative **seed corpus, fail-closed budgets and user review** can reject the easy but poor designs before production scope is activated?
 7. Which **water rendering ownership** is appropriate only after initial cave geometry/material and actual rendered scene evidence exists?
+8. Is the L0 UI consumer's pinned public RunenUI/Engine/RunenRender/RunenInput path complete enough for actual native graph controls, focus, text, painting, surface lifetime and headless parity **without reintroducing predecessor UI or relying on deferred Editor U8**?
+9. What is the precise non-overlap and possible *later* interoperability between PCG Lab cave-generation/acceptance workflows and the still-unmerged Visual Lab #236 creative-study product?
 
 #1243 remains open until these architecture questions are reviewed, dispositions recorded in that issue, and the design is accepted through normal repository governance.
