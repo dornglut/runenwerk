@@ -24,6 +24,29 @@ pub struct PlayerControlState {
     pub interact_request_count: u64,
 }
 
+pub const MAX_ARENA_HEALTH: u8 = 3;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Component)]
+pub struct PlayerVitals {
+    pub health: u8,
+    pub last_hazard_hit_tick: Option<SimulationTick>,
+}
+
+impl Default for PlayerVitals {
+    fn default() -> Self {
+        Self {
+            health: MAX_ARENA_HEALTH,
+            last_hazard_hit_tick: None,
+        }
+    }
+}
+
+impl PlayerVitals {
+    pub fn is_defeated(self) -> bool {
+        self.health == 0
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Component)]
 pub struct PlayerPhysicalHistory {
     pub previous: CharacterPhysicalState,

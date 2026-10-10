@@ -5,9 +5,9 @@ use engine::plugins::world::adapters::{
 use engine::prelude::*;
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use runenwerk_arena::{
-    ArenaMovementConfig, ArenaPlayer, GameActionSnapshot, GameInputAccumulator,
+    ArenaHazardConfig, ArenaMovementConfig, ArenaPlayer, GameActionSnapshot, GameInputAccumulator,
     LOCAL_PARTICIPANT_ID, LastLocalCommandBatch, ParticipantCommand, ParticipantId, PlayerCommand,
-    PlayerControlState, PlayerPhysicalHistory, TickCommandBatch, apply_game_commands,
+    PlayerControlState, PlayerPhysicalHistory, PlayerVitals, TickCommandBatch, apply_game_commands,
     build_headless_game_app, player_state_for,
 };
 use winit::event::ElementState;
@@ -21,6 +21,7 @@ fn direct_test_world() -> World {
     let mut world = World::new();
     world.insert_resource(FixedTimeConfig { step_seconds: 0.1 });
     world.insert_resource(ArenaMovementConfig::default());
+    world.insert_resource(ArenaHazardConfig::default());
     world.insert_resource(CollisionQueryServiceResource::default());
 
     let partition =
@@ -57,6 +58,7 @@ fn spawn_test_player(world: &mut World, participant: ParticipantId) {
             ArenaPlayer { participant },
             PlayerControlState::default(),
             PlayerPhysicalHistory::spawned([0.25, 0.5, 0.25]),
+            PlayerVitals::default(),
         ))
         .unwrap();
 }
@@ -241,6 +243,7 @@ fn command_application_is_directly_callable_for_an_explicit_tick() {
                 move_y: 1,
                 jump: true,
                 interact: true,
+                restart: false,
             },
         }],
     };
@@ -278,6 +281,7 @@ fn identical_tick_command_sequences_produce_identical_game_state() {
                     move_y: 0,
                     jump: true,
                     interact: false,
+                    restart: false,
                 },
             }],
         },
@@ -290,6 +294,7 @@ fn identical_tick_command_sequences_produce_identical_game_state() {
                     move_y: -1,
                     jump: false,
                     interact: true,
+                    restart: false,
                 },
             }],
         },
@@ -327,6 +332,7 @@ fn participant_identity_does_not_depend_on_ecs_spawn_order() {
                 move_y: 1,
                 jump: false,
                 interact: true,
+                restart: false,
             },
         }],
     };
@@ -375,6 +381,7 @@ fn rejected_command_batch_does_not_partially_mutate_game_state() {
                     move_y: 0,
                     jump: true,
                     interact: false,
+                    restart: false,
                 },
             },
             ParticipantCommand {

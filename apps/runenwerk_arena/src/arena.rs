@@ -5,7 +5,7 @@ use engine::plugins::world::build::{
     enqueue_ratified_world_sdf_payload_package,
 };
 use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
-use engine::prelude::{App, Plugin, ResMut, Startup};
+use engine::prelude::{App, Plugin, ResMut, Resource, Startup};
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use world_sdf::{
     FieldProductConsumerClass, FieldProductDescriptor, FieldProductId, FieldProductKind,
@@ -21,6 +21,26 @@ pub const ARENA_PLAYER_SPAWN: [f32; 3] = [1.0, 0.5, 1.0];
 pub const ARENA_FIELD_PRODUCT_ID: FieldProductId = FieldProductId(1);
 pub const ARENA_METRIC_DISTANCE_UNITS_PER_METER: u32 = 1024;
 pub const ARENA_METRIC_MAX_ABSOLUTE_ERROR_UNITS: u32 = 444;
+
+/// Static level policy. The trigger does not alter WorldSDF collision truth.
+#[derive(Debug, Copy, Clone, PartialEq, Resource)]
+pub struct ArenaHazardConfig {
+    pub center: [f32; 3],
+    pub radius: f32,
+    pub damage: u8,
+    pub cooldown_ticks: u64,
+}
+
+impl Default for ArenaHazardConfig {
+    fn default() -> Self {
+        Self {
+            center: [2.5, 0.5, 2.5],
+            radius: 0.45,
+            damage: 1,
+            cooldown_ticks: 30,
+        }
+    }
+}
 
 const ARENA_PAGE_COORD: SdfPageCoord3 = SdfPageCoord3 { x: 0, y: 0, z: 0 };
 const ARENA_CELL_COUNT_PER_AXIS: u8 = 8;

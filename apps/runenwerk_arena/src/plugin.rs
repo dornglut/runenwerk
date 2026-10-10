@@ -5,15 +5,15 @@ use engine::prelude::{
 };
 use runen_input::PhysicalKeyIdentity;
 
-use crate::arena::ARENA_PLAYER_SPAWN;
+use crate::arena::{ARENA_PLAYER_SPAWN, ArenaHazardConfig};
 use crate::command::{TickCommandBatch, apply_game_commands};
 use crate::input::{
     ACTION_INTERACT, ACTION_JUMP, ACTION_MOVE_DOWN, ACTION_MOVE_LEFT, ACTION_MOVE_RIGHT,
-    ACTION_MOVE_UP, GameActionSnapshot, GameInputAccumulator,
+    ACTION_MOVE_UP, ACTION_RESTART, GameActionSnapshot, GameInputAccumulator,
 };
 use crate::player::{
     ArenaMovementConfig, ArenaPlayer, LOCAL_PARTICIPANT_ID, ParticipantId, PlayerControlState,
-    PlayerPhysicalHistory,
+    PlayerPhysicalHistory, PlayerVitals,
 };
 
 #[derive(
@@ -28,6 +28,7 @@ impl Plugin for ArenaGamePlugin {
         app.init_resource::<GameInputAccumulator>();
         app.init_resource::<LastLocalCommandBatch>();
         app.init_resource::<ArenaMovementConfig>();
+        app.init_resource::<ArenaHazardConfig>();
         app.add_input_bindings([
             (ACTION_MOVE_LEFT, PhysicalKeyIdentity::code("KeyA")),
             (ACTION_MOVE_RIGHT, PhysicalKeyIdentity::code("KeyD")),
@@ -35,6 +36,7 @@ impl Plugin for ArenaGamePlugin {
             (ACTION_MOVE_DOWN, PhysicalKeyIdentity::code("KeyS")),
             (ACTION_JUMP, PhysicalKeyIdentity::code("Space")),
             (ACTION_INTERACT, PhysicalKeyIdentity::code("KeyE")),
+            (ACTION_RESTART, PhysicalKeyIdentity::code("KeyR")),
         ]);
         app.add_systems(engine::prelude::Startup, spawn_local_player);
         app.add_systems(PreUpdate, collect_game_actions.after(CoreSet::Input));
@@ -55,6 +57,7 @@ fn spawn_local_player(mut commands: Commands) {
         },
         PlayerControlState::default(),
         PlayerPhysicalHistory::spawned(ARENA_PLAYER_SPAWN),
+        PlayerVitals::default(),
     ));
 }
 
@@ -90,6 +93,26 @@ pub fn player_state_for(
     query
         .iter(world)
         .find_map(|(player, state)| (player.participant == participant).then_some(*state))
+}
+
+pub fn player_vitals_for(
+    world: &engine::prelude::World,
+    participant: ParticipantId,
+) -> Option<PlayerVitals> {
+    let identities = world.query::<&ArenaPlayer>();
+    let matching_identities = identities
+        .iter(world)
+        .filter(|player| player.participant == participant)
+        .take(2)
+        .count();
+    if matching_identities != 1 {
+        return None;
+    }
+
+    let query = world.query::<(&ArenaPlayer, &PlayerVitals)>();
+    query
+        .iter(world)
+        .find_map(|(player, vitals)| (player.participant == participant).then_some(*vitals))
 }
 
 pub fn player_physical_history_for(

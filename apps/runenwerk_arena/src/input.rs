@@ -10,6 +10,7 @@ pub const ACTION_MOVE_UP: &str = "arena.move_up";
 pub const ACTION_MOVE_DOWN: &str = "arena.move_down";
 pub const ACTION_JUMP: &str = "arena.jump";
 pub const ACTION_INTERACT: &str = "arena.interact";
+pub const ACTION_RESTART: &str = "arena.restart";
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Eq)]
 pub struct GameActionSnapshot {
@@ -19,6 +20,7 @@ pub struct GameActionSnapshot {
     pub move_down: bool,
     pub jump_pressed: bool,
     pub interact_pressed: bool,
+    pub restart_pressed: bool,
 }
 
 impl GameActionSnapshot {
@@ -30,6 +32,7 @@ impl GameActionSnapshot {
             move_down: actions.action_down(ACTION_MOVE_DOWN),
             jump_pressed: actions.action_pressed(ACTION_JUMP),
             interact_pressed: actions.action_pressed(ACTION_INTERACT),
+            restart_pressed: actions.action_pressed(ACTION_RESTART),
         }
     }
 }
@@ -40,6 +43,7 @@ pub struct GameInputAccumulator {
     move_y: i8,
     jump_latched: bool,
     interact_latched: bool,
+    restart_latched: bool,
 }
 
 impl GameInputAccumulator {
@@ -48,6 +52,7 @@ impl GameInputAccumulator {
         self.move_y = i8::from(snapshot.move_up) - i8::from(snapshot.move_down);
         self.jump_latched |= snapshot.jump_pressed;
         self.interact_latched |= snapshot.interact_pressed;
+        self.restart_latched |= snapshot.restart_pressed;
     }
 
     pub fn form_command_batch(
@@ -60,6 +65,7 @@ impl GameInputAccumulator {
             move_y: self.move_y,
             jump: std::mem::take(&mut self.jump_latched),
             interact: std::mem::take(&mut self.interact_latched),
+            restart: std::mem::take(&mut self.restart_latched),
         };
         TickCommandBatch {
             tick,
@@ -76,5 +82,9 @@ impl GameInputAccumulator {
 
     pub const fn latched_interact(&self) -> bool {
         self.interact_latched
+    }
+
+    pub const fn latched_restart(&self) -> bool {
+        self.restart_latched
     }
 }
