@@ -1,0 +1,228 @@
+---
+title: Runenwerk PCG Lab Product Design
+description: Active product and boundary design for a generator-agnostic inspection workbench, initially qualifying deterministic cave topology, 2.5D field geometry, materials, and deferred water.
+status: active
+owner: workspace
+layer: product / domain / app-integration
+canonical: true
+last_reviewed: 2026-10-10
+publication: reference
+pagefind: false
+related_docs:
+  - ../../domain/procgen/README.md
+  - ../../domain/world-sdf/README.md
+  - ../../domain/material-graph/README.md
+  - ../../domain/texture/README.md
+  - ./editor-procedural-content-and-simulation-workflow-plan.md
+  - ./material-lab-and-material-preview-design.md
+  - ../accepted/sdf-first-field-world-platform-design.md
+  - ../implemented/field-visualizer-product-workflow-design.md
+---
+
+# Runenwerk PCG Lab Product Design
+
+## Status and decision authority
+
+**Active design, NOT accepted implementation authority.** [Runenwerk #1243](https://github.com/dornglut/runenwerk/issues/1243) owns this investigation, critical review, and eventual acceptance decision. Accepted implementation requires separately bounded owner issues; this document does not authorize Rust, renderer, Editor, water, or GameTrack work. In case of disagreement, accepted ADRs, framework owners, current behavior, and the owning issues take precedence.
+
+Evidence census at Runenwerk accepted main `9d890e59b23ac211f297ae75063eefb06a2617e4`; this SHA is provenance, not a pinned future implementation base. [World authority A0 PR #1132](https://github.com/dornglut/runenwerk/pull/1132) is unmerged at census and has independent accepted-doc ownership. [Material/Texture P3 #841](https://github.com/dornglut/runenwerk/issues/841) is investigation-only. [Game product GD0 #1242](https://github.com/dornglut/runenwerk/issues/1242) has not selected a complete game/camera/art contract. Do not elevate any of their candidates into accepted PCG Lab prerequisites without later verification.
+
+## Product promise
+
+PCG Lab is the **Runenwerk Editor-hosted visual workbench** where a designer can configure procedural content, generate bounded candidates, inspect intermediate meaning, compare and diagnose candidates, retain a reproducible recipe and, eventually, explicitly publish an accepted product. It is **not** a new generation engine, material/shader editor, simulator, renderer, world source authority, or universal graph type.
+
+The **first qualifying scenario** is an organic **top-down cave** with a flat gameplay plane, readable ground and wall regions, seeded topology, rules, geometric shape/noise, procedural field inspection, and surface material composition. Rich stone/dirt appearance, wetness, lighting, and eventually shallow transparent puddles with visual interaction ripples are **desired experience targets**, not accepted current renderer capabilities. The product/game design remains open under GD0; do not impose fixed objectives, combat archetypes, enemy sizes, camera pitch, extraction timings or art palette from this engineering example.
+
+Future world, planet, and universe generators are relevant volatility pressure, **not** permission to standardize their coordinate systems, field storage, dataflow algorithms, topology, quality metrics, or execution plans from the cave case.
+
+### Ordinary first user journey
+
+1. Open PCG Lab in the existing Editor shell; pick a *Cave* generator preset or reopen a versioned recipe. Author seed, bounded scope and intelligible topological/shape controls. A generator execution graph is an *advanced authoring facility*, not required knowledge for the first user.
+2. Generate a bounded **macro topology candidate**; inspect chambers, intended connections, graph hard-constraint failures, optional paths and diagnostic source identities. Replay exactly, compare seeds and explicitly distinguish an invalid candidate from a valid but lower-ranked one.
+3. Form a **2D spatial embodiment** of a selected valid topology. Inspect open/rock occupancy, derived signed wall-boundary distance, passage clearance and the correspondence between intended edges and actually traversable corridors after every geometry-changing transformation.
+4. Inspect the **formed cave scene** (not a static/mock texture): flat ground, walls, and separately identified ground/wall material products. Changing material noise does not change collision; changing shape noise produces a new candidate and reruns required spatial checks.
+5. Later: retain authored pins/overrides, save recipe/candidate selections, compare metrics, and explicitly admit/publish through existing product and world authority. A separate qualified water/runtime track may later show shallow puddles and local disturbances.
+
+The first usable result is **real topology and actual generated field geometry with truthful diagnostics**, not an elaborate node catalog or a text panel renamed PCG Lab.
+
+## Existing source-backed boundaries and false shortcuts
+
+| Existing owner/path | Proven capability/limit at census | PCG Lab consequence |
+| --- | --- | --- |
+| `domain/procgen/src/document.rs`, `ratification.rs`, `planning.rs` | Document graph, typed first-slice terrain/material nodes, seed/version/scope, reservations, issue codes, lowering and candidate lifecycle vocabulary. | Add cave-family semantics under its owner, not a second generator owned by an Editor provider. A procgen *execution graph* is not a generated cave *topology graph*. |
+| `domain/procgen/src/field_preview.rs` | Deterministic bounded **3D** height/noise scalar-distance and material-channel preview (initial 32³ policy). | Not proof of a `Field2D` source, 2D cave producer, playable cave, or valid cave geometry. |
+| `domain/world_sdf` | Current world SDF payloads, sampled metrics, collision queries and field-preview DTOs. | A cave-specific 2D candidate must have an explicit qualified adapter to accepted world/collision truth. Do not equate `world_sdf::caves` summaries with runnable caves. |
+| `domain/product` | Shared descriptor/job/query/publication/consumption vocabulary, not central product semantic authority. | Reuse common product contracts; preserve cave- and world-specific truth at their owners. A0 #1132 is separately reconciling accepted docs to current source. |
+| `domain/editor/editor_viewport/src/expression/product.rs` and Field Visualizer | `ScalarField2D`/`VectorField2D` are **derived viewport product kinds** with presentation controls. | Reuse product target and color-ramp presentation. These are not authoritative queryable source-field types. |
+| `apps/runenwerk_editor/src/shell/providers/procgen_*.rs` | Current graph/preview providers present text/diagnostics and do not map substantive cave actions. | Need real graph/field/scene viewport integration through Tool Suite stable keys, not a parallel host or legacy enum growth. |
+| `domain/material_graph`, `domain/texture`, Editor Material Lab | Material graph ratification, PBR/noise/field vocabulary, texture descriptors, source-backed formed products and renderer previews exist. | No duplicate Material Lab; a *real cave-field → material → cave pixels* integration is still an unproved consumer. #841 owns broader P3 gaps. |
+| `dornglut/runen-render` current maintained ray evaluator | Primary rays, sphere/plane and sampled-field intersections, direct spectral radiance and directional occlusion visibility exist. Separate `composition_2d` is a UI/image compositor. | Do not claim ready-made full RGB PBR, multi-bounce GI, refraction, water or normal-rich cave scene from “ray tracing.” Probe the exact selected Runenwerk render/material path and its accepted evidence before scene claims. |
+
+## Semantic model and one-way dataflow
+
+```text
+authored generator recipe / version / bounded scope / seed
+    -> domain/procgen ratification + deterministic formation
+    -> candidate macro topology (chambers, intended connections, rules evidence)
+    -> candidate spatial embedding (2D coordinates, area reservation)
+    -> bounded geometric formation (open/solid, contours, wall geometry)
+    -> independently evaluated final-geometry constraints
+    -> ratified cave spatial product + optional auxiliary field products
+         |                |                   |
+         v                v                   v
+   query/collision    Editor field view   material inputs
+         |                |                   |
+         +---------------> product-composed cave viewport <--- Material Lab products
+                                      |
+                         explicit owner-governed world publish
+```
+
+**Do not infer authority from the diagram**: topology candidates, sampled masks, editor graph canvas positions, color ramps, generated texture pixels, renderer caches and runtime water ripples are not equivalent representations of one owning truth. The precise world-admission boundary is a D0 gate, to be reconciled with A0 current accepted owner contracts.
+
+### Three graph notions
+
+1. **Generator graph**: existing authored port/dataflow structure via `ProcgenDocument.graph` with Procgen-owned meaning/ratification. Its result is not necessarily a graph.
+2. **Macro topology**: typed *generated content* with stable chamber/edge identities, optional semantic role labels, edge requirements and rule lineage. An edge is **intended** passage connectivity only.
+3. **Spatial connectivity**: adjacency and agent-clearance on formed final **geometry**, produced by independent field/collision query evidence. Graph validity is necessary but never sufficient to claim a playable route.
+
+The first cave does not require a universal shape grammar, mission-graph DSL, solver framework or graph-authoring GUI. Presets with bounded, explicit typed rules and a real generated macro graph inspection surface are a more reviewable first consumer.
+
+### Rules, constraints, and quality
+
+- **Constructive rules** propose bounded variations: backbone, optional chambers, branches, cycles, room roles, passage attachments.
+- **Hard constraints** reject candidates: required-graph reachability; legal node identities; bounds and spatial overlap; intended-edge realization; formed physical minimum clearance under a *declared agent footprint*; required destinations reachable; no unapproved additional shortcuts when those matter to the recipe.
+- **Soft objectives** rank only already valid candidates: branch depth, loops, chamber variation, navigable area, chokepoint distribution, route alternatives and morphology variety.
+- **Game-derived constraints** (spawn placement, extraction mechanics, enemy-specific widths, objective order) are **not** universal Procgen laws. Only accepted game-owner input can qualify them.
+
+A constraint is tagged with **the stage it observes** (topology, spatial placement, final geometry, or contextual game evidence), its source identity, exact candidate revision and affected spatial/graph subject. A violated hard condition cannot be disguised as a low score or silently relaxed. Bounded deterministic attempts/backtracking/repair are permitted only with declared search budgets, reproducible attempt counts, explicit infeasible/exhausted status and no unbounded reroll loop.
+
+Example counterexamples that MUST be demonstrated:
+- topology connects A–B but CA smoothing seals the only passage;
+- wall noise opens an unrequested shortcut despite satisfying the intended-edge graph;
+- the path looks open at pixel resolution but fails a declared actor-clearance query;
+- two constraints are contradictory, so no candidate can be accepted;
+- an out-of-order finished job overwrites the selected seed's newer preview;
+- prior accepted world or preview is corrupted by an invalid draft.
+
+## 2D fields and 2.5D cave geometry
+
+**Cave's first geometric workload is planar in gameplay, not flat in appearance.** Use one consistent **open/rock classification** on a world-mapped XZ region and a horizontal walkable plane. A signed wall-boundary field (if sufficiently guaranteed) can drive curvature, query clearance and 2.5D wall shape. Floor and wall shading are derived presentation of accepted formed geometry; they must not have independent incompatible collision geometry.
+
+For a horizontal flat floor at vertical coordinate `y0`, the analytic plane distance is `d_floor(x,y,z) = y - y0` under a stated sign/normal convention. **A floor plane by itself neither restricts traversability to the cave nor generates walls.** A 2D open/solid mask or bounded distance representation and an explicit wall/plane composition policy are required. Wall height, camera-obstruction policy, cap/ceiling semantics and whether a wall is an extruded 2D contour or a sampled 3D WorldSDF must be decided by evidence, not by the word "SDF".
+
+**Do not conflate the following meanings** even if all become sampled grids or Texture2D artifacts:
+
+| Candidate value | Meaning and consumer |
+| --- | --- |
+| Open/solid occupancy | Generated cave partition; eventual geometry/collision source policy |
+| Signed wall-boundary distance | Spatial query/clearance and possible ray-surface intersection, only with explicit sign, metric/error/conservatism |
+| Coarse geological scalar or masks | Material variation, regional wetness or placement; does not cause collision unless explicitly promoted by the owning geometric operation |
+| Normal/roughness/bump detail | Appearance; can be high-frequency independent of low-frequency collision shape |
+| Puddle region/depth hint | Placement/appearance input; not water simulation authority |
+| Texture2D or sampled atlas | A data/storage/render artifact carrying values and mapping metadata; not necessarily field truth |
+
+Continuous procedural functions, sampled fields and baked Texture2D products are **distinct evaluation/storage choices**. A signed field distorted with arbitrary fractal noise is generally **not automatically a metric signed distance field**. If a strict distance consumer needs a certified error or conservative stepping bound, the formation/adapter MUST prove it or reject the candidate. Noise changed in the material graph must not change cave collision. Noise used for contours MUST invalidate affected geometry/query acceptance.
+
+### Noise and geometry method comparison
+
+- **CA-first** can generate organic open/solid shapes simply but does not by itself guarantee required chamber roles, final connectivity, passage width or spatial layout.
+- **Topology-first with bounded spatial embedding and shape passes** makes graph requirements explicit and allows organic local irregularity; risk: mechanically obvious rounded rooms/corridors. Test silhouette variety and recognizable procedural artifacts.
+- **Hybrid** may use connected chambers/passages as hard spatial anchors and CA/domain-warp only within allowable envelopes. Compare against an unconstrained CA baseline on the same seed corpus.
+- **Visual detail** uses independent multi-scale noise, rock cracks, roughness and normal variation, with separate cost and material ownership. **CA smoothing is not actual geological erosion**, and live erosion/fluids are out of this slice.
+
+No specific noise implementation, CA rule, graph grammar or SDF storage layout is approved by this design. Compare deterministic candidates and accept only based on measured geometry validity, user-facing visual quality and workload behavior.
+
+## Material Lab, lighting and shallow water
+
+**Material Lab remains the only material authoring owner.** PCG Lab selects material product identities and exposes the sampled cave context needed by their declared semantic inputs (world position, geometry/normal/distance, independently versioned material masks, wetness). Material identities/scene assignments and texture products remain at existing owners. A cave material preview must use actual formed cave geometry, not substitute a sphere or synthetic field-material fixture; [#841](https://github.com/dornglut/runenwerk/issues/841) separately decides missing material/PBR/procedural-texture semantics.
+
+Appearance target for first finished cave scene: layered ground/wall rock/dirt materials, visible noise variation, wetness response, readable wall depth and shadows. These are **independent evidence gates**; don't assert that material output transport proves actual consuming shader pixels or that a ray-intersection shader automatically provides full material shading.
+
+**Shallow-water concept**: a region of walkable floor, bounded water surface depth and appearance inputs, with visible terrain *under* the water. At later runtime, player movement may emit disturbance events and create local ripple-like surface normals/displacement. Separate the owners:
+
+- Procgen: deterministic initial puddle extent and optional supporting spatial masks.
+- Material/Texture: water/wet-rock appearance inputs, if qualified by a specific material product.
+- Rendering: transparent/refraction/reflection/depth compositing, correct visibility of underlying terrain, shadow/lighting as implemented.
+- Game/Simulation: disturbance event and any actual water state, only if separately authorized. Visual-only ripples are non-colliding derived state.
+
+Do not implement or invent a generalized `domain/water` API under this design. Water/ripple is a separately accepted successor, not a prerequisite to topology/field viewing. Depth readability is a product target even if the eventual renderer selects a bounded alternative to physical refraction.
+
+## UI and failure behavior
+
+PCG Lab should use the existing Editor Tool Suite/workbench and viewport product architecture. **No second focus/input/window authority and no legacy central enum expansion merely to register new surfaces.** The initial useful workspace pairs:
+
+- macro topology view with node/edge selection, violation overlays, graph metrics and seed comparison;
+- field/geometry viewport selecting accepted or candidate products, occupancy/distance/clearance/connected regions and exact stage/source revisions;
+- compact recipe/rule inspector; clear hard failures vs soft scores; 2D scene preview when genuine renderer/material integration is available.
+
+Selecting a macro chamber or connection should correlate it to its placed/formed region. Display **unavailable** as unavailable: no placeholder pretending to be a real generated GPU scene. Separate generated candidate, selected preview, preserved last-good, accepted/baked and live-world revisions. Generation runs have request identity and terminal success/failure/cancel/stale states; a newer selection must not be replaced by late older completions. Cancellation and failure must leave prior accepted products intact. Comparisons should record source, generator version, scope, inputs and acceptance predicate rather than a screenshot and one anonymous quality score.
+
+## Decisions and deferred questions
+
+| Question | Current disposition and gate |
+| --- | --- |
+| Standalone PCG Lab app now? | **No**. Editor tool suite uses accepted host. Revisit with real integration/performance evidence. |
+| Universal `Field2D` authoritative Rust abstraction? | **No current mandate**. Establish the smallest typed cave fields with coordinate, unit, error, scope and consumer contracts; promote shared semantics only with multiple qualified consumers. |
+| Generator graph or macro graph first? | **Macro topology proof first** for the cave slice; generator graph editing may follow. Do not confuse the two. |
+| Specific CA vs graph grammar vs solver? | **Not selected**. Require bounded comparative fixtures; topology and geometry invariants independent of implementation. |
+| Runtime source is necessarily sampled 3D WorldSDF? | **Unresolved** until accepted field-to-world product and render/collision query adapter is demonstrated. No 2D texture as hidden authority. |
+| Full shaded scene from current raytracer? | **Unproved**: reconcile Material Lab's actual cave scene path and RunenRender's current spectral/direct evaluator; qualify real pixel evidence. |
+| Physical height variation in gameplay? | **Out** of first cave; flat collision surface with procedural shading detail. |
+| Physical water simulation? | **Out** of first cave. Puddle scene/ripples require independent future evidence/owner acceptance. |
+| Planet/universe plugin API? | **Deferred**. Reuse only existing product lifecycle and explicitly common workflows. |
+
+## Acceptance evidence, not claims
+
+For the eventual bounded delivery issues, require:
+
+- **Headless deterministic test corpus**: identical complete lineage gives exactly reproducible macro proposals, candidate rankings, valid or failed outcomes and final field products; invalid seeds retained. Graph identity must remain stable under well-defined ordering/canonicalization and seed partitioning.
+- **Invariant tests**: disconnected intended graphs, contrary rules, spatial overlap, severed corridor, invalid metric-SDF bound, actor-footprint clearance failure, extra unwanted adjacency, out-of-budget placement, empty scope, canceled/stale jobs.
+- **End-to-end field proof**: chosen seed's final open/rock mask, distance/metric guarantee, derived geometry, collision queries and rendered boundary agree within stated discretization/error; if not, the feature fails instead of silently projecting a beautiful but incompatible mask.
+- **Editor proof**: generate two seeds with controls, inspect real graph and geo candidates, pan/zoom/select, pick failing edge/region, inspect stage and revision, recover from failure and preserve selection across supported save/load. Real images, no status-only widgets.
+- **Cave shading proof**: source-backed floor/wall material assignment and separate material-noise edits produce identifiable visible native scene pixels, while topology, geometry and strict collision remain unchanged. Ray/lighting features must have exact method/consumer evidence.
+- **Later shallow water proof**: bounded generated puddle over accepted traversable ground; terrain clearly visible beneath the surface; a triggered local disturbance changes water appearance only, no unauthorized mutation of world physics or route geometry.
+- **Performance**: report actual seeds, dimensions, budgets, CPU/GPU device, timings, memory/cost and fail-closed limits for the executed tests. No unmeasured universal performance target and no successful-render claim from a shader compile or DTO test.
+- **Validation**: `cargo validate` via repository-owned exact-head hosted CI plus independent code/design review and protected merge guards for each accepted implementation and design PR; design-only markdown/links can be reviewed and checked separately but are not code conformance.
+
+### Delivery ownership suggested for later issue activation
+
+The investigation issue remains sole current PCG Lab owner. Only after design review and approval:
+
+- cave topology/rule formation and headless conformance — `domain/procgen` owner;
+- cave geometric realization and qualified world/query adapter — Procgen + owning WorldSDF/WorldOps contracts, explicitly coordinated with A0;
+- actual Lab graph/field scene inspector — Editor Tool Suite/provider and existing viewport product paths;
+- qualified cave material/lighting evidence — Material Graph/Texture + actual renderer consumer; coordinate #841;
+- shallow water/ripples and GameTrack input/consumer — separate water/render/game-authorized issues; coordinate #1242/#946.
+
+These are **ownership boundaries and acceptance gates**, not a duplicate roadmap or authorization to create all implementation issues immediately.
+
+## Alternatives critically rejected at this stage
+
+1. **CA + post-hoc repair as the only level structure.** Loses explicit intentional topology and may produce looping/nontermination or constant invalid seeds; retain CA as a candidate organic-shape method.
+2. **Texture2D as authoritative geometry and collision.** Sampling/pixel filtering/LOD/revision may diverge from geometry queries and the world owner; allow texture outputs as declared derived representations.
+3. **Renderer-side procedural displacement for playable walls.** Rendering cannot independently decide where the game can walk; no invisible collision disagreement.
+4. **A new universal generator/rule/field runtime.** The existing Procgen/Graph/Product/World owners already cover shared contracts; adding speculative cross-domain authority would violate single-owner design.
+5. **A standalone PCG viewer with a second cave generator.** Easier initial demo, but duplicates source truth and proves no Editor/game handoff.
+6. **Treating water as “just a blue transparent material.”** Fails visible-bottom depth/occlusion/ripple requirements; later water compositor and event evidence is necessary.
+
+## External technique comparisons (design inputs, not Runenwerk authority)
+
+- [Unreal PCG Overview](https://dev.epicgames.com/documentation/unreal-engine/procedural-content-generation-overview): graph/node inspection and debug rendering are relevant UX comparisons; their node/data/executor authority is not imported.
+- [Unreal PCG data types](https://dev.epicgames.com/documentation/en-us/unreal-engine/procedural-content-generation-framework-data-types-reference-in-unreal-engine): distinguish spatial, composite and attribute data; not a mandate for the same universal IR.
+- [Blender Geometry Nodes Fields](https://docs.blender.org/manual/en/latest/modeling/geometry_nodes/fields.html): lazy/contextual field evaluation reinforces the distinction between a field expression and where/how it is sampled.
+- [Houdini heightfield layers/masks](https://www.sidefx.com/docs/houdini/heightfields/masking.html): masks can control independent procedural operations without becoming geometry itself. Runenwerk is not a heightfield-first cave by assumption.
+- [Godot FastNoiseLite](https://docs.godotengine.org/en/stable/classes/class_fastnoiselite.html): procedural noise families and domain warping are available algorithmic comparisons, not evidence of gameplay-correct geometry.
+- [Linden, Lopes, Bidarra, *Designing Procedurally Generated Levels* (2013)](https://ojs.aaai.org/index.php/AIIDE/article/view/12592): designer constraints can guide a graph-to-space construction. Do not require a graph grammar before the simpler typed cave constraints have a demonstrated need.
+- [van der Linden, Lopes, Bidarra, *Procedural Generation of Dungeons* (2014)](https://research.tudelft.nl/en/publications/procedural-generation-of-dungeons/): highlights controllability of generated levels as a material design challenge.
+
+## Review/acceptance questions still requiring independent resolution
+
+1. What **minimal spatial cave candidate** and world-admission adapter is compatible with A0's final accepted `domain/product`, WorldSDF, and query contracts, without assigning semantic authority to a derived mask?
+2. What exact **distance conservatism / sample error** must be preserved for both collision and the selected ray-based renderer for a noisy derived wall?
+3. What first **macro topology controls** are actually designer-usable without an unnecessary mission grammar or authoring graph requirement?
+4. Which **real cave-material → scene-ray render** path can form acceptable layered cave pixels with current capabilities, and which semantics must be separately delivered under #841 or renderer issue authority?
+5. What **bounded UI frame and rendering path** can present changing cave products without creating a new Editor host/input owner?
+6. What smallest representative **seed corpus, fail-closed budgets and user review** can reject the easy but poor designs before production scope is activated?
+7. Which **water rendering ownership** is appropriate only after initial cave geometry/material and actual rendered scene evidence exists?
+
+#1243 remains open until these architecture questions are reviewed, dispositions recorded in that issue, and the design is accepted through normal repository governance.
