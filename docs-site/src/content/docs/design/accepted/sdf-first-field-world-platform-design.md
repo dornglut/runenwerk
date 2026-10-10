@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-07-24
+last_reviewed: 2026-09-27
 publication: reference
 pagefind: false
 related_adrs:
@@ -76,25 +76,34 @@ diagnostics, ratification, schema, and command contracts. Foundation must not
 own world-field policy, rendering policy, simulation behavior, product
 formation, or runtime execution.
 
-Domain crates own engine-agnostic product contracts, descriptors, ratifiers,
-query contracts, mutation requests, and invariants. Current owners remain:
+Reusable standalone frameworks and Runenwerk domain crates own their
+respective engine-agnostic contracts, descriptors, ratifiers, query contracts,
+mutation requests, and invariants. Current owners include:
 
 - standalone `dornglut/runen-sdf`: analytic SDF math, primitives, composition, sampling, and core
   SDF queries.
-- `domain/spatial`: world, chunk, region, clipmap, ring, and coordinate
-  vocabulary.
-- `domain/chunking`: desired residency planning around focus points.
+- standalone `dornglut/runen-spatial`: host-neutral world-qualified spatial
+  identity, positions, partitioning, hierarchy, clipmap/ring mapping, and
+  checked spatial mechanics. Runenwerk currently consumes the foundation
+  package; spatial demand and streaming remain separate packages adopted only
+  when a proven consumer requires them.
+- `domain/product`: shared engine-agnostic product descriptors, policies,
+  diagnostics, product jobs, query snapshots, render selections, publication
+  outcomes, and ratification vocabulary. It does not own product storage,
+  family-specific truth, or a global product registry.
 - `domain/world_ops`: operation logs, dirty regions, build queues,
   invalidation, and replication deltas.
-- `domain/world_sdf`: current SDF-world payloads, SDF field products, collision
-  query contracts, previews, ratification, and cave summaries.
+- `domain/world_sdf`: SDF-world payloads, SDF field products, collision query
+  contracts, previews, SDF-specific ratification, and cave summaries.
 - future domain crates may own broader product families after accepted
   crate-level designs.
 
-The target generic product contract owner is a domain-level field/product
-contract boundary. It must not be foundation and must not be engine runtime.
-Until that boundary exists in code, existing `world_sdf` product types remain
-the current SDF-world specialization, not a universal product registry.
+`domain/product` is the implemented shared product-contract boundary. It must
+remain contract vocabulary rather than product storage or global product
+authority. Family-specific semantics remain with owning domains such as
+`world_sdf`, `material_graph`, or `texture`; shared vocabulary does not
+transfer their authority. `world_sdf` therefore remains the SDF-world
+specialization rather than a universal product registry.
 
 Engine runtime owns execution: scheduling integration, product job execution,
 runtime resources, GPU residency, renderer submission, streaming execution,
