@@ -29,7 +29,7 @@ Evidence census at Runenwerk accepted main `9d890e59b23ac211f297ae75063eefb06a26
 
 ## Product promise
 
-PCG Lab is the **Runenwerk Editor-hosted visual workbench** where a designer can configure procedural content, generate bounded candidates, inspect intermediate meaning, compare and diagnose candidates, retain a reproducible recipe and, eventually, explicitly publish an accepted product. It is **not** a new generation engine, material/shader editor, simulator, renderer, world source authority, or universal graph type.
+PCG Lab is an **independently launched Runenwerk product application** where a designer can configure procedural content, generate bounded candidates, inspect intermediate meaning, compare and diagnose candidates, retain a reproducible recipe and, eventually, explicitly publish an accepted product. It is **not** a new generation engine, material/shader editor, simulator, renderer, world source authority, or universal graph type.
 
 The **first qualifying scenario** is an organic **top-down cave** with a flat gameplay plane, readable ground and wall regions, seeded topology, rules, geometric shape/noise, procedural field inspection, and surface material composition. Rich stone/dirt appearance, wetness, lighting, and eventually shallow transparent puddles with visual interaction ripples are **desired experience targets**, not accepted current renderer capabilities. The product/game design remains open under GD0; do not impose fixed objectives, combat archetypes, enemy sizes, camera pitch, extraction timings or art palette from this engineering example.
 
@@ -37,7 +37,7 @@ Future world, planet, and universe generators are relevant volatility pressure, 
 
 ### Ordinary first user journey
 
-1. Open PCG Lab in the existing Editor shell; pick a *Cave* generator preset or reopen a versioned recipe. Author seed, bounded scope and intelligible topological/shape controls. A generator execution graph is an *advanced authoring facility*, not required knowledge for the first user.
+1. Launch the PCG Lab app without a Runenwerk Editor scene or project; pick a *Cave* generator preset or reopen a versioned recipe. Author seed, bounded scope and intelligible topological/shape controls. A generator execution graph is an *advanced authoring facility*, not required knowledge for the first user.
 2. Generate a bounded **macro topology candidate**; inspect chambers, intended connections, graph hard-constraint failures, optional paths and diagnostic source identities. Replay exactly, compare seeds and explicitly distinguish an invalid candidate from a valid but lower-ranked one.
 3. Form a **2D spatial embodiment** of a selected valid topology. Inspect open/rock occupancy, derived signed wall-boundary distance, passage clearance and the correspondence between intended edges and actually traversable corridors after every geometry-changing transformation.
 4. Inspect the **formed cave scene** (not a static/mock texture): flat ground, walls, and separately identified ground/wall material products. Changing material noise does not change collision; changing shape noise produces a new candidate and reruns required spatial checks.
@@ -53,8 +53,8 @@ The first usable result is **real topology and actual generated field geometry w
 | `domain/procgen/src/field_preview.rs` | Deterministic bounded **3D** height/noise scalar-distance and material-channel preview (initial 32³ policy). | Not proof of a `Field2D` source, 2D cave producer, playable cave, or valid cave geometry. |
 | `domain/world_sdf` | Current world SDF payloads, sampled metrics, collision queries and field-preview DTOs. | A cave-specific 2D candidate must have an explicit qualified adapter to accepted world/collision truth. Do not equate `world_sdf::caves` summaries with runnable caves. |
 | `domain/product` | Shared descriptor/job/query/publication/consumption vocabulary, not central product semantic authority. | Reuse common product contracts; preserve cave- and world-specific truth at their owners. A0 #1132 is separately reconciling accepted docs to current source. |
-| `domain/editor/editor_viewport/src/expression/product.rs` and Field Visualizer | `ScalarField2D`/`VectorField2D` are **derived viewport product kinds** with presentation controls. | Reuse product target and color-ramp presentation. These are not authoritative queryable source-field types. |
-| `apps/runenwerk_editor/src/shell/providers/procgen_*.rs` | Current graph/preview providers present text/diagnostics and do not map substantive cave actions. | Need real graph/field/scene viewport integration through Tool Suite stable keys, not a parallel host or legacy enum growth. |
+| `domain/editor/editor_viewport/src/expression/product.rs` and Field Visualizer | `ScalarField2D`/`VectorField2D` are **derived Editor viewport kinds**, not source-field truth. | Reuse suitable *neutral product visualization concepts* without binding the standalone app to Editor application internals. |
+| `apps/runenwerk_editor/src/shell/providers/procgen_*.rs` | Current graph/preview providers present text/diagnostics and do not map substantive cave actions. | These are optional **future Editor adapters**, not mandatory PCG Lab or common generator runtime. Do not copy source truth into a second app. |
 | `domain/material_graph`, `domain/texture`, Editor Material Lab | Material graph ratification, PBR/noise/field vocabulary, texture descriptors, source-backed formed products and renderer previews exist. | No duplicate Material Lab; a *real cave-field → material → cave pixels* integration is still an unproved consumer. #841 owns broader P3 gaps. |
 | `dornglut/runen-render` current maintained ray evaluator | Primary rays, sphere/plane and sampled-field intersections, direct spectral radiance and directional occlusion visibility exist. Separate `composition_2d` is a UI/image compositor. | Do not claim ready-made full RGB PBR, multi-bounce GI, refraction, water or normal-rich cave scene from “ray tracing.” Probe the exact selected Runenwerk render/material path and its accepted evidence before scene claims. |
 
@@ -67,6 +67,54 @@ An independent follow-up source review found **two gates that cannot be postpone
 **D0-B2 — The ordinary collision query is not certified metric distance.** In `domain/world_sdf/src/collision.rs`, `sample_sign_from_brick_samples` returns `sample.signum()`, with `occupancy_sign_from_mask` yielding `+1/-1`. Thus the `CollisionQueryService::sample_signed_distance` path can classify solid vs open but cannot be reused without qualification as a physically meaningful distance-to-wall or actor-clearance measure. By contrast, `domain/world_sdf/src/metric.rs::WorldSdfMetricSample` explicitly carries a signed-distance **estimate in meters** plus maximum error and a safe lower bound. The first cave product MUST define which bounded distance/equivalent clearance contract it forms and which **actual game collision and rendering consumers** have compatible guarantees; adapters must handle sampling and errors rather than asserting that a sign-only collision result proves passage width. A successful abstract path or 2D colored distance preview is not an adequate acceptance test.
 
 **Regression counterexamples:** a narrow valid-looking corridor for which sign-only occupancy remains traversable under naive checks but radius-based clearance fails; a field whose interpolated sign is correct but numerical magnitude has no metric meaning; macro generation rejected by the current mandatory output-node ratifier; and a candidate inserted through dummy output records or an unratified publication path. Both D0-B1 and D0-B2 require explicit reviewed dispositions before C1/C2 delivery authority is activated.
+
+## Hosting review and revised product decision — standalone first (2026-10-10)
+
+The initial **Editor-first** proposal reflected the existing Procgen providers, not the best product boundary. The owner requested an independent Lab. The accepted Runenwerk app architecture supports that: `apps/runenwerk_render_lab` is a dedicated Render Lab crate/executable with native and headless execution, while `apps/runenwerk_draw` independently composes UI, engine and domain products without depending on `apps/runenwerk_editor`. By contrast, Material Lab and UI Designer launch dedicated binaries via `RunenwerkRuntimeWorkbench` inside the Editor crate. **A separate launch icon is not necessarily independent application ownership.**
+
+### Host comparison
+
+| Alternative | Evidence-backed advantage | Limitation | Decision |
+| --- | --- | --- | --- |
+| Editor-only primary workbench | Reuse of current Procgen panels, persistence, viewport | Forces an unrelated tool to depend on heavy Editor app/scene/session ownership and encourages editor-local generation truth | Rejected as primary |
+| Dedicated executable inside Editor crate | Material Lab/UI Designer proof exists; lower near-term wiring | Still uses Editor App/host, inputs and presentation; not really independent from Editor | Transitional only if separately justified |
+| Dedicated `apps/runenwerk_pcg_lab` app within Runenwerk | Render Lab/Draw prove distinct product crates can use shared engine, UI and domain APIs; headless parity fits PCG generation; app owns ordinary launch/session/recipe UX | Requires a bounded new app composition, native input/viewport/product adapters; naive copying of Editor runtime is a risk | **Selected long-term and first product-delivery host** |
+
+External tools corroborate the *product* distinction without determining the implementation: [World Machine](https://www.world-machine.com/features.php) and [Gaea](https://docs.gaea.app/ui/index.html) have standalone graph/viewport-centered terrain authoring; [Gaea's automation path](https://docs.gaea.app/developers/automation/index.html) decouples repeatable builds from GUI launch. [Houdini Engine](https://www.sidefx.com/products/houdini-engine/) demonstrates procedural source assets consumed by distinct host applications; [Unreal PCG](https://dev.epicgames.com/documentation/unreal-engine/procedural-content-generation-overview) is an embedded alternative when generation is tightly coupled to the game's world editor. These are UX/product precedents, **not** authority for a Runenwerk global PCG IR, new framework, or plugin API.
+
+### Selected application/domain ownership
+
+```text
+domain/procgen            cave recipe / generator semantics / ratification / candidates
+world_sdf + world_ops     spatial/query/collision/publication authority
+material_graph + texture source-backed material and texture semantics
+domain/product            existing descriptor, job, observation vocabulary
+             |
+      owner-defined products
+             |
+      +------+------------------------+
+      |                               |
+headless formation / tests     apps/runenwerk_pcg_lab (native)
+                                      |
+                            engine::App + app-owned session
+                            ui_composition + neutral UI/render-data
+                            RunenRender/RunenGPU consumer integration
+                                      |
+                         optional future Editor-hosted adapter
+```
+
+Standalone means **app/process launch, lifecycle, file/recipe handling, native input/window routing, workspace and presentation ownership**, not independent generator/world/material/renderer authorities. The PCG Lab app should consume `domain/procgen` directly through legitimate owner contracts and use `engine::App`, `ui_composition`, `ui_render_data` and product/render integrations wherever suitable. Do NOT make ordinary generation depend on `RunenwerkEditorApp`, `EditorHostResource`, the Editor Material Lab application state or Editor-private field visualizer/provider handlers; any genuinely reusable neutral visualization primitive must be qualified and factored without a new universal Lab host.
+
+The current PCG execution/preview/bake adapters live substantially in `apps/runenwerk_editor/src/runtime/procgen/mod.rs`. Therefore **the standalone path is not free**: first form C1's ratified headless owner output, then implement only the app adapter to request and inspect those exact products. Later C2 must similarly use the same authorized world/query bridge and accepted recipe identities rather than recoding generation in the standalone app. A second visual-only cave generator, copied Editor runtime, parallel product registry or global input manager is disallowed.
+
+### Staging and proof
+
+- **C1 headless first:** genuinely ratified topology candidate and constraints with deterministic recipe/seed/version/scope lineage, no GPU/Editor dependency.
+- **L0 standalone native app:** dedicated executable launches with no Editor project or scene, creates/opens a recipe, requests C1 outputs, shows selectable macro nodes/edges and rule diagnostics, compares two seeds and preserves last-good on failure. Headless and native output identities/diagnostics agree.
+- **C2/L1:** world/clearance-qualified geometry plus genuine field and material-scene views, product revision/staleness and resizing/pan/zoom/input evidence through app-neutral integration.
+- **Later** separate Material Lab cave pixels, water/ripples, and optional embedded Editor consumer. A future Editor adapter consumes the **same** source products, not a copied cave algorithm.
+
+**D0 host gate:** accept the new product identity and app dependency direction; confirm the minimal standalone `App`/composition/native/render UI route by independently reusing the Render Lab and Draw patterns; reconcile topology-output admission D0-B1 before C1 and metric clearance D0-B2 before a physical cave viewer. The D0 design issue **does not authorize creating `apps/runenwerk_pcg_lab`**, changing Cargo, or implementing algorithms.
 
 ## Semantic model and one-way dataflow
 
@@ -159,7 +207,7 @@ Do not implement or invent a generalized `domain/water` API under this design. W
 
 ## UI and failure behavior
 
-PCG Lab should use the existing Editor Tool Suite/workbench and viewport product architecture. **No second focus/input/window authority and no legacy central enum expansion merely to register new surfaces.** The initial useful workspace pairs:
+PCG Lab MUST own a dedicated bounded native App composition over accepted app-neutral UI/render/product contracts; it MUST NOT require the full Editor App/Tool Suite runtime or create a competing global input/focus authority. Editor embedding is optional later. The initial useful workspace pairs:
 
 - macro topology view with node/edge selection, violation overlays, graph metrics and seed comparison;
 - field/geometry viewport selecting accepted or candidate products, occupancy/distance/clearance/connected regions and exact stage/source revisions;
@@ -171,7 +219,7 @@ Selecting a macro chamber or connection should correlate it to its placed/formed
 
 | Question | Current disposition and gate |
 | --- | --- |
-| Standalone PCG Lab app now? | **No**. Editor tool suite uses accepted host. Revisit with real integration/performance evidence. |
+| Standalone PCG Lab app now? | **Yes as the target product**: dedicated `apps/runenwerk_pcg_lab` crate/native executable in Runenwerk after D0/C1 authorization. Editor embedding is secondary. This issue does not authorize creating the app. |
 | Universal `Field2D` authoritative Rust abstraction? | **No current mandate**. Establish the smallest typed cave fields with coordinate, unit, error, scope and consumer contracts; promote shared semantics only with multiple qualified consumers. |
 | Generator graph or macro graph first? | **Macro topology proof first** for the cave slice; generator graph editing may follow. Do not confuse the two. |
 | Specific CA vs graph grammar vs solver? | **Not selected**. Require bounded comparative fixtures; topology and geometry invariants independent of implementation. |
@@ -188,7 +236,7 @@ For the eventual bounded delivery issues, require:
 - **Headless deterministic test corpus**: identical complete lineage gives exactly reproducible macro proposals, candidate rankings, valid or failed outcomes and final field products; invalid seeds retained. Graph identity must remain stable under well-defined ordering/canonicalization and seed partitioning.
 - **Invariant tests**: disconnected intended graphs, contrary rules, spatial overlap, severed corridor, invalid metric-SDF bound, actor-footprint clearance failure, extra unwanted adjacency, out-of-budget placement, empty scope, canceled/stale jobs.
 - **End-to-end field proof**: chosen seed's final open/rock mask, distance/metric guarantee, derived geometry, collision queries and rendered boundary agree within stated discretization/error; if not, the feature fails instead of silently projecting a beautiful but incompatible mask.
-- **Editor proof**: generate two seeds with controls, inspect real graph and geo candidates, pan/zoom/select, pick failing edge/region, inspect stage and revision, recover from failure and preserve selection across supported save/load. Real images, no status-only widgets.
+- **Standalone application proof**: launch without the Editor app/project, generate two seeds with controls, inspect real graph and geo candidates, pan/zoom/select, pick failing edge/region, inspect stage and revision, recover from failure and preserve selection across supported save/load. Real images, no status-only widgets.
 - **Cave shading proof**: source-backed floor/wall material assignment and separate material-noise edits produce identifiable visible native scene pixels, while topology, geometry and strict collision remain unchanged. Ray/lighting features must have exact method/consumer evidence.
 - **Later shallow water proof**: bounded generated puddle over accepted traversable ground; terrain clearly visible beneath the surface; a triggered local disturbance changes water appearance only, no unauthorized mutation of world physics or route geometry.
 - **Performance**: report actual seeds, dimensions, budgets, CPU/GPU device, timings, memory/cost and fail-closed limits for the executed tests. No unmeasured universal performance target and no successful-render claim from a shader compile or DTO test.
@@ -200,7 +248,7 @@ The investigation issue remains sole current PCG Lab owner. Only after design re
 
 - cave topology/rule formation and headless conformance — `domain/procgen` owner;
 - cave geometric realization and qualified world/query adapter — Procgen + owning WorldSDF/WorldOps contracts, explicitly coordinated with A0;
-- actual Lab graph/field scene inspector — Editor Tool Suite/provider and existing viewport product paths;
+- actual Lab graph/field scene inspector — dedicated `apps/runenwerk_pcg_lab` native application over the shared App, UI composition, product/renderer and qualified owner adapters. Editor-hosted integration may follow;
 - qualified cave material/lighting evidence — Material Graph/Texture + actual renderer consumer; coordinate #841;
 - shallow water/ripples and GameTrack input/consumer — separate water/render/game-authorized issues; coordinate #1242/#946.
 
@@ -212,7 +260,7 @@ These are **ownership boundaries and acceptance gates**, not a duplicate roadmap
 2. **Texture2D as authoritative geometry and collision.** Sampling/pixel filtering/LOD/revision may diverge from geometry queries and the world owner; allow texture outputs as declared derived representations.
 3. **Renderer-side procedural displacement for playable walls.** Rendering cannot independently decide where the game can walk; no invisible collision disagreement.
 4. **A new universal generator/rule/field runtime.** The existing Procgen/Graph/Product/World owners already cover shared contracts; adding speculative cross-domain authority would violate single-owner design.
-5. **A standalone PCG viewer with a second cave generator.** Easier initial demo, but duplicates source truth and proves no Editor/game handoff.
+5. **A standalone viewer with a duplicated cave generator.** Still rejected: the selected standalone app consumes exactly the same domain-owned Procgen candidates as headless and future Editor/game consumers.
 6. **Treating water as “just a blue transparent material.”** Fails visible-bottom depth/occlusion/ripple requirements; later water compositor and event evidence is necessary.
 
 ## External technique comparisons (design inputs, not Runenwerk authority)
@@ -231,7 +279,7 @@ These are **ownership boundaries and acceptance gates**, not a duplicate roadmap
 2. What exact **distance conservatism / sample error** must be preserved for both collision and the selected ray-based renderer for a noisy derived wall?
 3. What first **macro topology controls** are actually designer-usable without an unnecessary mission grammar or authoring graph requirement?
 4. Which **real cave-material → scene-ray render** path can form acceptable layered cave pixels with current capabilities, and which semantics must be separately delivered under #841 or renderer issue authority?
-5. What **bounded UI frame and rendering path** can present changing cave products without creating a new Editor host/input owner?
+5. What **bounded standalone App/UI/native window/field/rendering path** can present changing cave products without copying the Editor app/runtime or creating a new global input/render authority?
 6. What smallest representative **seed corpus, fail-closed budgets and user review** can reject the easy but poor designs before production scope is activated?
 7. Which **water rendering ownership** is appropriate only after initial cave geometry/material and actual rendered scene evidence exists?
 
