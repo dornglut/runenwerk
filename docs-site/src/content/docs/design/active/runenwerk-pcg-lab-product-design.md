@@ -116,6 +116,39 @@ The current PCG execution/preview/bake adapters live substantially in `apps/rune
 
 **D0 host gate:** accept the new product identity and app dependency direction; confirm the minimal standalone `App`/composition/native/render UI route by independently reusing the Render Lab and Draw patterns; reconcile topology-output admission D0-B1 before C1 and metric clearance D0-B2 before a physical cave viewer. The D0 design issue **does not authorize creating `apps/runenwerk_pcg_lab`**, changing Cargo, or implementing algorithms.
 
+## Editor future and adjacent Visual Lab boundary — exact-current audit (2026-10-10)
+
+**Scope:** PCG Lab is a Runenwerk product, but cannot choose its new UI host merely by cloning today's Editor `UiRuntime`. This audit distinguishes accepted architecture, implemented consumers, planned replacement and *unaccepted* Visual Lab product work.
+
+### Current Editor and UI status
+
+- [ADR 0025](../../adr/accepted/0025-normalize-editor-coordination-and-semantic-ownership.md) and its accepted Editor model normalize explicit owner bindings, surface sessions, interaction routes, projection publication, selection/history/persistence contexts. They do **not** assert that those terms are all implemented public Rust APIs, and do not authorize a standalone `runen-editor` repository.
+- [Current Editor architecture](../../apps/runenwerk-editor/current-architecture.md) documents real `ui_composition` structural authority, target-local Editor viewport/tool sessions and remaining `DocumentKind`/EditorSession migration seams. [Editor roadmap](../../apps/runenwerk-editor/roadmap.md) retains broad M6 authoring ambitions, **but** its current M6 authority is owner-domain formation first, Editor Tool Suite/provider integration second, with Procgen Phase 6D already complete. This is **not** a requirement to locate new cave generation inside the Editor application or extend central enums.
+- Repository architecture program [E0–E3](https://github.com/dornglut/runenwerk/issues/1153) completed structural retirement/internal shell, self-authoring and runtime responsibility decomposition through closed [E1 #1180](https://github.com/dornglut/runenwerk/issues/1180), [E2 #1189](https://github.com/dornglut/runenwerk/issues/1189), [E3 #1204](https://github.com/dornglut/runenwerk/issues/1204). Those were not Editor product replacement, standalone extraction, or UI-framework migration. [Editor #737](https://github.com/dornglut/runenwerk/issues/737) closed with **no-cut-yet** for generic binding/extraction until genuine multi-scope consumer proof.
+- [ADR 0013](../../adr/accepted/0013-app-neutral-ui-composition-clean-cutover.md) makes standalone `dornglut/runen-ui` the target reusable UI runtime, but preserves Runenwerk-owned structural `ui_composition`, authorship, product/Workbench and renderer integration semantics. `ui_tree`, `ui_widgets`, `ui_runtime`, generic `ui_input` and relevant `ui_render_data` publication paths are current **predecessor/mixed** state for nonmigrated consumers, **not default long-term implementation choices for a new standalone PCG product**.
+- [RunenUI adoption #994](https://github.com/dornglut/runenwerk/issues/994) remains **open**. Counter U5 migrated a bounded consumer, not the whole Editor or arbitrary typed apps. [U8 #1238](https://github.com/dornglut/runenwerk/issues/1238) concluded the first full Editor target cut is **deferred**, because the pinned public controls/multi-target host/renderer path do not prove complete replacement. [U9 #1239](https://github.com/dornglut/runenwerk/issues/1239) is investigating general typed `UiApp` host/input/render integration and is **not delivery authorization** for game UI or other products. The latest upstream framework API cannot be assumed compatible with Runenwerk's actual pinned dependency.
+- [Visual Lab #236](https://github.com/dornglut/runenwerk/issues/236) remains **open**; its former PR #237 was **closed unmerged**. Its host-neutral procedural-visual-study composition direction is *an adjacent proposal*, not an accepted `VisualLabCore`, common Lab host, generalized graph, source schema or application. There is real product-workflow overlap (run/update/see/compare/keep), not demonstrated common execution/authoring semantic authority.
+
+### D0 architecture dispositions and new gates
+
+**D0-B7 — Standalone UI consumer readiness:** C1 headless generator formation **does not depend on any GUI framework**, and must proceed through owner contracts independently. Before L0 native work, qualify the **actual selected UI consumer path** using accepted **pinned public RunenUI** View/Element, mounted/runtime/host/input/focus/layout/text/paint and renderer/RunenRender output evidence. Reuse U9's accepted generic typed-host contracts *if and when available*; U9 itself is **not an automatic blocking predecessor** for an independently decision-complete Lab app-host adapter. The new Lab must not establish lasting mounted/runtime/widget semantics using a Runenwerk-local predecessor UI stack selected only for fast initial coding. Nor may it force a premature Editor U8 migration, invent dual RunenUI/legacy mounted authority, pass private RunenUI state to Runenwerk, or ship a generic compatibility-UI framework. If a complete native host cannot yet be qualified, report the exact missing capability; do not mislabel a headless/domain proof as an interactive PCG Lab.
+
+**D0-B8 — Visual Lab overlap resolution:** PCG Lab owns **specialized procedural-generation product workflows**: recipe/seed controls, topology/constraints, stage/field/geometry inspection, reproducible generated candidate comparison and qualified publish/export. Visual Lab #236 proposes **broader visual experiments and cross-domain creative composition** without becoming any owner of Procgen generation. No accepted Visual Lab design currently requires PCG Lab to become one of its modes, depend on a Visual Study schema or use shared `RunenLab` infrastructure. Treat app-host consolidation, product navigation, study interoperability and shared compare/inspection UI as **future evaluated user/product pressures**, not a default generic Lab abstraction. Before D0 acceptance explicitly record the product relationship and avoid duplicating one global recipe/study authority in both labs.
+
+**D0-B9 — Editor integration after standalone:** the completed Editor E0–E3 program and its continued M6 aspirations do not require PCG Lab to be Editor-hosted. A later Editor consumer uses stable Tool Suite keys, provider-family routing and optional owner-backed projections. It must consume the exact accepted PCG candidates and product revisions; it cannot mirror cave truth, introduce a `DocumentKind` variant or depend on hypothetical generic `EditorBinding` Rust APIs. Native/Editor consumer cutover or extracted shared host mechanisms each require separately accepted owner issues and evidence.
+
+### Revised developer/product review matrix
+
+| Concern | Accepted now | Investigating/deferred | Lab consequence |
+| --- | --- | --- | --- |
+| Editor structural composition | `ui_composition`, ADR 0013 | residual Editor coordinator normalization | Standalone may use app-neutral composition; Editor source is not required |
+| Editor live shell/runtime refactor | E0–E3 completed | no whole-Editor replacement plan activated | Do not wait for or reimplement Editor internal cleanup |
+| Generic Editor extraction | ADR 0025 target only | #737 no-cut-yet | No dependency on a future standalone `runen-editor` |
+| Reusable mounted UI framework | RunenUI selected as target; Counter U5 accepted | U8 Editor source cut deferred; U9 typed-App integration open | L0 needs its own exact-public-API UI/host/present qualification |
+| Procedural product | Procgen baseline owner and M6 6D completed | cave topology/C1 and field geometry/C2 missing | Form once at domain; native Lab and later Editor project it |
+| Broad creative Lab | #236 remains unmerged proposed direction | no accepted shared host/VisualStudy schema | Keep specialized PCG Lab and avoid duplicate general workflow authority |
+
+**Critical review conclusion:** the standalone-first PCG Lab product identity still matches Runenwerk's accepted architectural direction. **Its original reuse-by-default wording for Editor UI/viewport modules and local `ui_render_data` was insufficiently future-proof** given the active RunenUI clean-cutover program. The implementation order remains headless owner proof → independently qualified native consumer → optional Editor adapter, not old Editor UI → duplicate standalone UI → later rewrite.
 ## Semantic model and one-way dataflow
 
 ```text
@@ -220,6 +253,8 @@ Selecting a macro chamber or connection should correlate it to its placed/formed
 | Question | Current disposition and gate |
 | --- | --- |
 | Standalone PCG Lab app now? | **Yes as the target product**: dedicated `apps/runenwerk_pcg_lab` crate/native executable in Runenwerk after D0/C1 authorization. Editor embedding is secondary. This issue does not authorize creating the app. |
+| Which UI runtime for L0? | Use an exact accepted public **RunenUI** consumer path where support is verified; U8 Editor cut is deferred and U9 general typed App host is investigation-only. Do not build a new product's long-term mounted/widget runtime on retiring local UI predecessors. D0-B7 must qualify real native interaction/paint/presentation. |
+| Does Visual Lab own PCG Lab? | **No accepted authority**. #236 is an open, unmerged creative Visual Lab proposal. Preserve PCG-specific recipes and generation; evaluate overlap without inventing a shared Lab host or VisualStudy schema (D0-B8). |
 | Universal `Field2D` authoritative Rust abstraction? | **No current mandate**. Establish the smallest typed cave fields with coordinate, unit, error, scope and consumer contracts; promote shared semantics only with multiple qualified consumers. |
 | Generator graph or macro graph first? | **Macro topology proof first** for the cave slice; generator graph editing may follow. Do not confuse the two. |
 | Specific CA vs graph grammar vs solver? | **Not selected**. Require bounded comparative fixtures; topology and geometry invariants independent of implementation. |
@@ -274,6 +309,10 @@ These are **ownership boundaries and acceptance gates**, not a duplicate roadmap
 - [van der Linden, Lopes, Bidarra, *Procedural Generation of Dungeons* (2014)](https://research.tudelft.nl/en/publications/procedural-generation-of-dungeons/): highlights controllability of generated levels as a material design challenge.
 
 ## Review/acceptance questions still requiring independent resolution
+
+8. Is the L0 UI consumer's pinned public RunenUI/Engine/RunenRender/RunenInput path complete enough for actual native graph controls, focus, text, painting, surface lifetime and headless parity **without reintroducing predecessor UI or relying on deferred Editor U8**?
+9. What is the precise non-overlap and possible *later* interoperability between PCG Lab cave-generation/acceptance workflows and the still-unmerged Visual Lab #236 creative-study product?
+
 
 1. What **minimal spatial cave candidate** and world-admission adapter is compatible with A0's final accepted `domain/product`, WorldSDF, and query contracts, without assigning semantic authority to a derived mask?
 2. What exact **distance conservatism / sample error** must be preserved for both collision and the selected ray-based renderer for a noisy derived wall?
