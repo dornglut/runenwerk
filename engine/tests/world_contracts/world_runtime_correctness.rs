@@ -919,6 +919,31 @@ fn current_metric_read_rejects_enqueue_only_and_qualifies_integrated_cpu_payload
         .expect("declared zero metric samples are readable");
     assert_eq!(sample.signed_distance_estimate_meters(), 0.0);
     assert_eq!(sample.max_absolute_error_meters(), 2.0 / 1024.0);
+    drop(view);
+
+    // Enqueue-time metadata now refers to B, while the integrated CPU
+    // payload still contains A. That is not a current metric read.
+    let replacement = metric_sdf_payload(chunk_id, ChunkRevision(5), ChunkGeneration(5), 332);
+    let mut new_descriptor = runtime_sdf_descriptor(7200, &replacement);
+    new_descriptor.lineage.source_revision = 5;
+    enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            new_descriptor,
+            vec![replacement.clone()],
+            RegionSdfSummary::default(),
+        )
+        .with_metric_capability(metric_payload_ref(&replacement, 2)),
+    )
+    .expect("strictly newer pending product should enqueue");
+    assert!(matches!(
+        read(&app),
+        Err(WorldSdfCurrentMetricReadError::PayloadReferenceMismatch)
+    ));
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("replacement geometry should integrate");
+    assert_eq!(read(&app), Ok(metric_payload_ref(&replacement, 2)));
 }
 
 #[test]
