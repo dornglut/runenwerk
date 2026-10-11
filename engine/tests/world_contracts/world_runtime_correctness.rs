@@ -917,8 +917,8 @@ fn current_metric_read_rejects_enqueue_only_and_qualifies_integrated_cpu_payload
     let sample = view
         .sample(&partition, [0.5, 0.5, 0.5])
         .expect("declared zero metric samples are readable");
-    assert_eq!(sample.signed_distance_estimate_meters, 0.0);
-    assert_eq!(sample.max_absolute_error_meters, 2.0 / 1024.0);
+    assert_eq!(sample.signed_distance_estimate_meters(), 0.0);
+    assert_eq!(sample.max_absolute_error_meters(), 2.0 / 1024.0);
 }
 
 #[test]
