@@ -831,7 +831,8 @@ fn completed_runtime_generation_cannot_be_replayed_after_integration() {
             .resource::<WorldAuthorityState>()
             .unwrap()
             .world_revision
-            .0 > revision.0
+            .0
+            > revision.0
     );
 }
 
