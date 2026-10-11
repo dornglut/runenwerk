@@ -723,9 +723,15 @@ fn completed_runtime_generation_cannot_be_replayed_after_integration() {
         .unwrap()
         .clone();
 
-    for generation in [ChunkGeneration(1), ChunkGeneration(2)] {
-        // Even equal declared checksums are not evidence for equal source bytes.
-        let replay = metric_sdf_payload(chunk_id, ChunkRevision(2), generation, 240);
+    for (generation, hierarchy_revision) in [
+        (ChunkGeneration(1), 0),
+        (ChunkGeneration(2), 0),
+        (ChunkGeneration(2), 1),
+    ] {
+        // Exact same-generation retries and altered source bytes that reuse
+        // their declared checksum are both rejected after integration.
+        let mut replay = metric_sdf_payload(chunk_id, ChunkRevision(2), generation, 240);
+        replay.hierarchy_revision = hierarchy_revision;
         let replay_descriptor = runtime_sdf_descriptor(7126, &replay);
         let error = enqueue_runtime_sdf_package(
             &mut app,
