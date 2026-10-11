@@ -3,7 +3,8 @@ use runen_spatial::GridPartitionConfig;
 use std::fmt;
 use world_ops::BuildGeneration;
 use world_sdf::{
-    FieldProductDescriptor, FieldProductKind, SdfChunkPayload, WorldSdfMetricError,
+    FieldProductConsumerClass, FieldProductDescriptor, FieldProductFreshness, FieldProductKind,
+    SdfChunkPayload, WorldSdfMetricError,
     WorldSdfMetricPayloadRef, WorldSdfMetricProductCandidate, WorldSdfMetricSample,
     WorldSdfPayloadRef, ratify_world_sdf_metric_product_candidate,
     sample_world_sdf_metric_distance, validate_world_sdf_metric_payload,
@@ -64,6 +65,8 @@ impl WorldSdfCurrentMetricRead<'_> {
 pub enum WorldSdfCurrentMetricReadError {
     MissingProduct,
     WrongProductKind,
+    NonCurrentProduct,
+    UnsupportedConsumer,
     InvalidProductScope,
     MissingMetricCapability,
     MetricReferenceMismatch,
@@ -81,6 +84,8 @@ impl fmt::Display for WorldSdfCurrentMetricReadError {
         formatter.write_str(match self {
             Self::MissingProduct => "World SDF product is not in the catalog",
             Self::WrongProductKind => "World SDF product is not a chunk-page product",
+            Self::NonCurrentProduct => "World SDF product is not marked current",
+            Self::UnsupportedConsumer => "World SDF product is not a runtime query consumer",
             Self::InvalidProductScope => "World SDF product has no unique chunk scope and ref",
             Self::MissingMetricCapability => "World SDF product has no metric capability",
             Self::MetricReferenceMismatch => "metric capability and product ref disagree",
@@ -114,6 +119,15 @@ pub fn qualify_current_world_sdf_metric_read<'a>(
         || descriptor.product_core().identity != product_id
     {
         return Err(WorldSdfCurrentMetricReadError::WrongProductKind);
+    }
+    if descriptor.freshness != FieldProductFreshness::Current {
+        return Err(WorldSdfCurrentMetricReadError::NonCurrentProduct);
+    }
+    if !matches!(
+        descriptor.consumer_class,
+        FieldProductConsumerClass::RuntimeRead | FieldProductConsumerClass::CollisionQuery
+    ) {
+        return Err(WorldSdfCurrentMetricReadError::UnsupportedConsumer);
     }
     if descriptor.payload_refs.len() != 1
         || descriptor.scope.chunk_ids.len() != 1
