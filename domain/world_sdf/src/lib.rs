@@ -6,6 +6,7 @@ mod preview;
 mod product;
 mod ratification;
 mod storage;
+mod source;
 
 pub use caves::{
     CaveLightVolumeScope, CaveLightingScope, CavePortalEdge, CavePortalGraph, CaveSectorId,
@@ -20,6 +21,7 @@ pub use metric::*;
 pub use preview::*;
 pub use product::*;
 pub use ratification::*;
+pub use source::*;
 pub use storage::{
     RegionSdfSummary, SDF_BRICK_EDGE_SAMPLES, SDF_METRIC_BRICK_EDGE_SAMPLES,
     SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS, SdfBrickMetadata, SdfBrickRecord,

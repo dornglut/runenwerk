@@ -18,13 +18,14 @@ use runenwerk_arena::{
     ARENA_CHUNK_EDGE_METERS, ARENA_FIELD_PRODUCT_ID, ARENA_METRIC_DISTANCE_UNITS_PER_METER,
     ARENA_METRIC_MAX_ABSOLUTE_ERROR_UNITS, ARENA_PLAYER_SPAWN, LOCAL_PARTICIPANT_ID,
     ParticipantCommand, PlayerCommand, TickCommandBatch, apply_game_commands, arena_chunk_id,
-    arena_field_product_descriptor, arena_metric_encoding, arena_metric_error_components_meters,
-    arena_metric_payload_ref, arena_partition_config, arena_signed_distance_meters,
-    build_arena_chunk_payload, build_headless_game_app, player_physical_history_for,
+    arena_field_product_descriptor, arena_geometry_source, arena_metric_encoding, arena_metric_error_components_meters,
+    arena_metric_payload_ref, arena_partition_config, arena_signed_distance_from_source,
+    arena_signed_distance_meters, build_arena_chunk_payload, build_arena_chunk_payload_from_source, build_headless_game_app, player_physical_history_for,
 };
 use world_sdf::{
     SDF_METRIC_BRICK_EDGE_SAMPLES, SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS,
-    WorldSdfPayloadRef, sample_world_sdf_metric_distance, validate_world_sdf_metric_payload,
+    WorldSdfOpenTopRectInteriorSource, WorldSdfPayloadRef, sample_world_sdf_metric_distance,
+    validate_world_sdf_metric_payload,
 };
 
 fn started_app() -> App {
@@ -211,6 +212,52 @@ fn repeated_movement_stops_at_boundary_without_crossing_into_missing_payload_spa
     let history = player_physical_history_for(app.world(), LOCAL_PARTICIPANT_ID).unwrap();
     assert!(history.current.position[0] >= 0.49);
     assert!(history.current.position[0] < ARENA_PLAYER_SPAWN[0]);
+}
+
+#[test]
+fn normalized_arena_source_controls_exact_shape_and_both_formed_outputs() {
+    let original = arena_geometry_source();
+    assert_eq!(original.x_bounds_meters(), [0.5, 3.5]);
+    assert_eq!(original.floor_y_meters(), 0.5);
+    assert_eq!(original.z_bounds_meters(), [0.5, 3.5]);
+    let alternate = WorldSdfOpenTopRectInteriorSource::try_new(
+        [1.25, 3.5],
+        0.5,
+        [0.5, 3.5],
+    )
+    .expect("alternate open-top interior is valid");
+
+    let point = [0.75, 1.0, 1.0];
+    assert_eq!(arena_signed_distance_from_source(original, point), 0.25);
+    assert_eq!(arena_signed_distance_from_source(alternate, point), -0.5);
+    assert_eq!(
+        arena_signed_distance_from_source(original, [2.0, 5.0, 2.0]),
+        1.5,
+        "the source has no artificial upper roof"
+    );
+
+    let default_payload = build_arena_chunk_payload();
+    let original_payload = build_arena_chunk_payload_from_source(original);
+    let alternate_payload = build_arena_chunk_payload_from_source(alternate);
+    assert_eq!(default_payload, original_payload);
+    assert_ne!(original_payload.page_table, alternate_payload.page_table);
+
+    // A declared ref can stay identical while actual formed bytes differ.
+    // World admission must later validate source/formed correspondence.
+    assert_eq!(
+        WorldSdfPayloadRef::from(&original_payload),
+        WorldSdfPayloadRef::from(&alternate_payload)
+    );
+
+    let default_page = original_payload.page_table.values().next().unwrap();
+    let alternate_page = alternate_payload.page_table.values().next().unwrap();
+    let default_edge = &default_page.bricks[&[0, 2, 2]];
+    let alternate_edge = &alternate_page.bricks[&[0, 2, 2]];
+    assert_ne!(default_edge.samples.distances, alternate_edge.samples.distances);
+    assert_ne!(
+        default_edge.metadata.occupancy_mask,
+        alternate_edge.metadata.occupancy_mask
+    );
 }
 
 #[test]
