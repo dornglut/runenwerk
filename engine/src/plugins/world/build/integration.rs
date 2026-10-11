@@ -230,20 +230,35 @@ pub fn enqueue_ratified_world_sdf_payload_package(
             && matches!(output.staleness, WorldBuildStaleness::Current)
     }) {
         let product_id = package.descriptor.product_core().identity;
-        let same_descriptor = products.product(product_id) == Some(&package.descriptor);
-        let same_metric = metric_capabilities.capability(product_id).copied()
-            == package.metric_payload_ref;
+        let same_metadata = match products.product(product_id) {
+            Some(descriptor) => {
+                descriptor == &package.descriptor
+                    && metric_capabilities.capability(product_id).copied()
+                        == package.metric_payload_ref
+            }
+            None => metric_capabilities.capability(product_id).is_none(),
+        };
         let same_pending = chunks
             .by_chunk_id
             .get(&payload.chunk_id)
             .and_then(|record| record.pending_build_generation)
             == Some(generation);
         if same_pending
-            && same_descriptor
-            && same_metric
+            && same_metadata
             && existing.chunk_payload == *payload
             && existing.region_summary == package.region_summary
         {
+            // A different product identity may legitimately reference the exact same
+            // pending bytes; publish its metadata without queueing another build.
+            products.products.insert(product_id, package.descriptor);
+            match package.metric_payload_ref {
+                Some(metric) => {
+                    metric_capabilities.capabilities.insert(product_id, metric);
+                }
+                None => {
+                    metric_capabilities.capabilities.remove(&product_id);
+                }
+            }
             return Ok(0);
         }
         return Err(WorldSdfRuntimePayloadPackageError::PendingGenerationConflict {

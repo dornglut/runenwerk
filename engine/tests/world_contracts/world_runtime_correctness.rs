@@ -433,6 +433,76 @@ fn identical_pending_runtime_package_is_idempotent_but_changed_bytes_are_not() {
 }
 
 #[test]
+fn matching_pending_bytes_support_an_independent_product_identity() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 46, y: 0, z: 0 });
+    let payload = metric_sdf_payload(chunk_id, ChunkRevision(4), ChunkGeneration(8), 226);
+    let primary = runtime_sdf_descriptor(7123, &payload);
+    let secondary = runtime_sdf_descriptor(7124, &payload);
+    let metric = metric_payload_ref(&payload, 2);
+    assert_eq!(
+        enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                primary.clone(),
+                vec![payload.clone()],
+                RegionSdfSummary::default(),
+            )
+            .with_metric_capability(metric),
+        )
+        .unwrap(),
+        1
+    );
+    assert_eq!(
+        enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                secondary.clone(),
+                vec![payload.clone()],
+                RegionSdfSummary::default(),
+            )
+            .with_metric_capability(metric),
+        )
+        .expect("identical geometry may be referenced by another product"),
+        0
+    );
+    assert_eq!(
+        app.world()
+            .resource::<WorldCompletedBuildQueueResource>()
+            .unwrap()
+            .outputs
+            .len(),
+        1
+    );
+    app = app.run_for_fixed_steps(1).expect("one shared chunk integrates");
+    assert_eq!(
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&chunk_id),
+        Some(&payload)
+    );
+    for descriptor in [primary, secondary] {
+        let product_id = descriptor.product_core().identity;
+        assert_eq!(
+            app.world()
+                .resource::<WorldRuntimeSdfProductCatalogResource>()
+                .unwrap()
+                .product(product_id),
+            Some(&descriptor)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+                .unwrap()
+                .capability(product_id),
+            Some(&metric)
+        );
+    }
+}
+
+#[test]
 fn newer_generation_supersedes_older_queued_runtime_package() {
     let mut app = fixed_world_app();
     let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 45, y: 0, z: 0 });
