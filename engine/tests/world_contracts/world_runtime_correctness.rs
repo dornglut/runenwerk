@@ -882,7 +882,9 @@ fn current_metric_read_rejects_enqueue_only_and_qualifies_integrated_cpu_payload
         let world = app.world();
         qualify_current_world_sdf_metric_read(
             product_id,
-            world.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap(),
+            world
+                .resource::<WorldRuntimeSdfProductCatalogResource>()
+                .unwrap(),
             world
                 .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
                 .unwrap(),
@@ -902,7 +904,9 @@ fn current_metric_read_rejects_enqueue_only_and_qualifies_integrated_cpu_payload
     let world = app.world();
     let view = qualify_current_world_sdf_metric_read(
         product_id,
-        world.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap(),
+        world
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap(),
         world
             .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
             .unwrap(),
@@ -912,8 +916,7 @@ fn current_metric_read_rejects_enqueue_only_and_qualifies_integrated_cpu_payload
     .expect("integrated matching metric source must qualify");
     assert_eq!(view.payload(), &payload);
     assert_eq!(view.metric_ref(), metric);
-    let partition =
-        GridPartitionConfig::try_new(4.0, [8, 8, 8]).expect("valid metric partition");
+    let partition = GridPartitionConfig::try_new(4.0, [8, 8, 8]).expect("valid metric partition");
     let sample = view
         .sample(&partition, [0.5, 0.5, 0.5])
         .expect("declared zero metric samples are readable");
@@ -973,7 +976,9 @@ fn current_metric_read_fails_closed_on_dirty_pending_or_wrong_cpu_revision() {
         let world = app.world();
         qualify_current_world_sdf_metric_read(
             product_id,
-            world.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap(),
+            world
+                .resource::<WorldRuntimeSdfProductCatalogResource>()
+                .unwrap(),
             world
                 .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
                 .unwrap(),
