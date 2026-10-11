@@ -1140,8 +1140,8 @@ fn current_metric_read_rejects_missing_mismatched_and_invalid_cpu_authorities() 
         .with_metric_capability(metric_payload_ref(&other_payload, 2)),
     )
     .expect("separate later source enqueues");
-    let other_metrics = other_app
-        .world()
+    let other_world = other_app.world();
+    let other_metrics = other_world
         .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
         .unwrap();
     assert_eq!(
@@ -1149,13 +1149,13 @@ fn current_metric_read_rejects_missing_mismatched_and_invalid_cpu_authorities() 
         Err(WorldSdfCurrentMetricReadError::MetricReferenceMismatch)
     );
 
-    let mut unloaded = runtime.clone();
+    let mut unloaded = (*runtime).clone();
     unloaded.by_chunk_id.get_mut(&chunk_id).unwrap().lifecycle = ChunkLifecycleState::Unloaded;
     assert_eq!(
         admit(metrics, &unloaded, store),
         Err(WorldSdfCurrentMetricReadError::RuntimeNotReady)
     );
-    let mut mismatched_generation = runtime.clone();
+    let mut mismatched_generation = (*runtime).clone();
     mismatched_generation
         .by_chunk_id
         .get_mut(&chunk_id)
@@ -1168,7 +1168,7 @@ fn current_metric_read_rejects_missing_mismatched_and_invalid_cpu_authorities() 
 
     // A producer-declared checksum is not a content hash: layout validation
     // must still reject corrupted stored bytes with unchanged declared ref.
-    let mut invalid_store = store.clone();
+    let mut invalid_store = (*store).clone();
     invalid_store
         .chunks
         .get_mut(&chunk_id)
