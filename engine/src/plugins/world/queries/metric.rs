@@ -3,7 +3,8 @@ use runen_spatial::GridPartitionConfig;
 use std::fmt;
 use world_ops::BuildGeneration;
 use world_sdf::{
-    FieldProductKind, SdfChunkPayload, WorldSdfMetricError, WorldSdfMetricPayloadRef,
+    FieldProductDescriptor, FieldProductKind, SdfChunkPayload, WorldSdfMetricError,
+    WorldSdfMetricPayloadRef,
     WorldSdfMetricProductCandidate, WorldSdfMetricSample, WorldSdfPayloadRef,
     ratify_world_sdf_metric_product_candidate, sample_world_sdf_metric_distance,
     validate_world_sdf_metric_payload,
@@ -13,23 +14,35 @@ use super::super::adapters::resources::SdfChunkStoreResource;
 use super::super::build::integration::{
     WorldRuntimeSdfMetricCapabilityCatalogResource, WorldRuntimeSdfProductCatalogResource,
 };
-use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
+use super::super::chunks::lifecycle::{
+    ChunkLifecycleState, WorldChunkRuntimeMapResource, WorldChunkRuntimeRecord,
+};
 
 /// A borrowed, revision-qualified view of an existing *approximate* metric
 /// WorldSDF payload. It does not certify exact distance or analytic provenance.
 #[derive(Debug)]
 pub struct WorldSdfCurrentMetricRead<'a> {
+    descriptor: &'a FieldProductDescriptor,
+    metric_ref: &'a WorldSdfMetricPayloadRef,
+    record: &'a WorldChunkRuntimeRecord,
     payload: &'a SdfChunkPayload,
-    metric_ref: WorldSdfMetricPayloadRef,
 }
 
 impl WorldSdfCurrentMetricRead<'_> {
+    pub fn descriptor(&self) -> &FieldProductDescriptor {
+        self.descriptor
+    }
+
+    pub fn record(&self) -> &WorldChunkRuntimeRecord {
+        self.record
+    }
+
     pub fn payload(&self) -> &SdfChunkPayload {
         self.payload
     }
 
     pub const fn metric_ref(&self) -> WorldSdfMetricPayloadRef {
-        self.metric_ref
+        *self.metric_ref
     }
 
     /// Uses the existing validated metric sampler. This currently revalidates
@@ -40,7 +53,7 @@ impl WorldSdfCurrentMetricRead<'_> {
         world_position_meters: [f64; 3],
     ) -> Result<WorldSdfMetricSample, WorldSdfMetricError> {
         sample_world_sdf_metric_distance(
-            &self.metric_ref,
+            self.metric_ref,
             self.payload,
             partition,
             world_position_meters,
@@ -90,9 +103,9 @@ impl std::error::Error for WorldSdfCurrentMetricReadError {}
 /// Borrowing the store prevents the returned payload from outliving its read.
 pub fn qualify_current_world_sdf_metric_read<'a>(
     product_id: ProductIdentity,
-    products: &WorldRuntimeSdfProductCatalogResource,
-    metrics: &WorldRuntimeSdfMetricCapabilityCatalogResource,
-    chunks: &WorldChunkRuntimeMapResource,
+    products: &'a WorldRuntimeSdfProductCatalogResource,
+    metrics: &'a WorldRuntimeSdfMetricCapabilityCatalogResource,
+    chunks: &'a WorldChunkRuntimeMapResource,
     store: &'a SdfChunkStoreResource,
 ) -> Result<WorldSdfCurrentMetricRead<'a>, WorldSdfCurrentMetricReadError> {
     let descriptor = products
@@ -115,7 +128,7 @@ pub fn qualify_current_world_sdf_metric_read<'a>(
     }
 
     let payload_ref = descriptor.payload_refs[0];
-    let metric_ref = *metrics
+    let metric_ref = metrics
         .capability(product_id)
         .ok_or(WorldSdfCurrentMetricReadError::MissingMetricCapability)?;
     if metric_ref.payload_ref != payload_ref {
@@ -153,17 +166,19 @@ pub fn qualify_current_world_sdf_metric_read<'a>(
 
     if ratify_world_sdf_metric_product_candidate(&WorldSdfMetricProductCandidate::new(
         descriptor.clone(),
-        metric_ref,
+        *metric_ref,
     ))
     .has_blocking_issues()
     {
         return Err(WorldSdfCurrentMetricReadError::InvalidMetricProduct);
     }
-    validate_world_sdf_metric_payload(&metric_ref, payload)
+    validate_world_sdf_metric_payload(metric_ref, payload)
         .map_err(WorldSdfCurrentMetricReadError::InvalidMetricPayload)?;
 
     Ok(WorldSdfCurrentMetricRead {
-        payload,
+        descriptor,
         metric_ref,
+        record,
+        payload,
     })
 }
