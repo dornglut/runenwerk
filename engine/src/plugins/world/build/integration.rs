@@ -73,6 +73,7 @@ pub enum WorldSdfRuntimePayloadPackageError {
     ProductRatificationRejected { issue_count: usize },
     MetricProductRatificationRejected { issue_count: usize },
     MetricPayloadRejected { error: WorldSdfMetricError },
+    PendingGenerationConflict { chunk_id: ChunkId, generation: BuildGeneration },
 }
 
 impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
@@ -105,6 +106,10 @@ impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
             Self::MetricPayloadRejected { error } => {
                 write!(formatter, "runtime metric SDF payload is invalid: {error}")
             }
+            Self::PendingGenerationConflict { chunk_id, generation } => write!(
+                formatter,
+                "conflicting runtime SDF package for chunk {chunk_id:?} at pending generation {generation:?}"
+            ),
         }
     }
 }
@@ -214,6 +219,38 @@ pub fn enqueue_ratified_world_sdf_payload_package(
     package: WorldSdfRuntimePayloadPackage,
 ) -> Result<usize, WorldSdfRuntimePayloadPackageError> {
     validate_runtime_sdf_payload_package(&package)?;
+
+    // The catalog is published at enqueue, but integration accepts only the first
+    // matching pending generation. Reject a conflicting retry before changing either.
+    let payload = &package.payloads[0];
+    let generation = BuildGeneration(payload.chunk_generation.0);
+    if let Some(existing) = completed.outputs.iter().find(|output| {
+        output.chunk_id == payload.chunk_id
+            && output.target_build_generation == generation
+            && matches!(output.staleness, WorldBuildStaleness::Current)
+    }) {
+        let product_id = package.descriptor.product_core().identity;
+        let same_descriptor = products.product(product_id) == Some(&package.descriptor);
+        let same_metric = metric_capabilities.capability(product_id).copied()
+            == package.metric_payload_ref;
+        let same_pending = chunks
+            .by_chunk_id
+            .get(&payload.chunk_id)
+            .and_then(|record| record.pending_build_generation)
+            == Some(generation);
+        if same_pending
+            && same_descriptor
+            && same_metric
+            && existing.chunk_payload == *payload
+            && existing.region_summary == package.region_summary
+        {
+            return Ok(0);
+        }
+        return Err(WorldSdfRuntimePayloadPackageError::PendingGenerationConflict {
+            chunk_id: payload.chunk_id,
+            generation,
+        });
+    }
 
     let product_id = package.descriptor.product_core().identity;
     let descriptor = package.descriptor.clone();
