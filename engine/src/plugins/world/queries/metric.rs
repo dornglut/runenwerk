@@ -4,9 +4,9 @@ use std::fmt;
 use world_ops::BuildGeneration;
 use world_sdf::{
     FieldProductConsumerClass, FieldProductDescriptor, FieldProductFreshness, FieldProductKind,
-    SdfChunkPayload, WorldSdfMetricError,
-    WorldSdfMetricPayloadRef, WorldSdfMetricProductCandidate, WorldSdfMetricSample,
-    WorldSdfPayloadRef, ratify_world_sdf_metric_product_candidate,
+    SdfChunkPayload, WorldSdfMetricError, WorldSdfMetricPayloadRef,
+    WorldSdfMetricProductCandidate, WorldSdfMetricSample, WorldSdfPayloadRef,
+    ratify_world_sdf_metric_product_candidate,
     sample_world_sdf_metric_distance, validate_world_sdf_metric_payload,
 };
 
