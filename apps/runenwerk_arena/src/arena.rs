@@ -283,10 +283,7 @@ fn encode_arena_distance(distance_meters: f64) -> i16 {
     encoded as i16
 }
 
-fn arena_brick_occupancy_mask(
-    source: WorldSdfOpenTopRectInteriorSource,
-    brick: [u8; 3],
-) -> u8 {
+fn arena_brick_occupancy_mask(source: WorldSdfOpenTopRectInteriorSource, brick: [u8; 3]) -> u8 {
     let mut mask = 0_u8;
     for octant_z in 0..2_u8 {
         for octant_y in 0..2_u8 {
@@ -337,12 +334,30 @@ mod tests {
 
     #[test]
     fn arena_occupancy_encodes_floor_and_boundary_walls() {
-        assert_ne!(arena_brick_occupancy_mask(arena_geometry_source(), [0, 2, 2]), 0);
-        assert_ne!(arena_brick_occupancy_mask(arena_geometry_source(), [3, 2, 2]), 0);
-        assert_ne!(arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 0]), 0);
-        assert_ne!(arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 3]), 0);
-        assert_ne!(arena_brick_occupancy_mask(arena_geometry_source(), [2, 0, 2]), 0);
-        assert_eq!(arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 2]), 0);
+        assert_ne!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [0, 2, 2]),
+            0
+        );
+        assert_ne!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [3, 2, 2]),
+            0
+        );
+        assert_ne!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 0]),
+            0
+        );
+        assert_ne!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 3]),
+            0
+        );
+        assert_ne!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [2, 0, 2]),
+            0
+        );
+        assert_eq!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 2]),
+            0
+        );
     }
 
     #[test]

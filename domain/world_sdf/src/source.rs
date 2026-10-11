@@ -138,9 +138,8 @@ mod tests {
 
     #[test]
     fn canonical_source_roundtrips_and_rejects_invalid_wire() {
-        let source =
-            WorldSdfOpenTopRectInteriorSource::try_new([-0.0, 3.5], -0.0, [-0.0, 3.5])
-                .expect("valid source");
+        let source = WorldSdfOpenTopRectInteriorSource::try_new([-0.0, 3.5], -0.0, [-0.0, 3.5])
+            .expect("valid source");
         assert_eq!(source.x_bounds_meters()[0].to_bits(), 0.0_f64.to_bits());
         assert_eq!(source.floor_y_meters().to_bits(), 0.0_f64.to_bits());
         assert_eq!(source.z_bounds_meters()[0].to_bits(), 0.0_f64.to_bits());
