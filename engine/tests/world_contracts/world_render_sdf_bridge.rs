@@ -93,6 +93,11 @@ fn enqueue(app: &mut App, descriptor: FieldProductDescriptor, payload: SdfChunkP
         .remove_resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
         .expect("metric capability catalog should exist");
     {
+        let sdf_store = app
+            .world()
+            .resource::<SdfChunkStoreResource>()
+            .expect("current World CPU store should exist")
+            .clone();
         let chunks = app
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
@@ -100,6 +105,7 @@ fn enqueue(app: &mut App, descriptor: FieldProductDescriptor, payload: SdfChunkP
         enqueue_ratified_world_sdf_payload_package(
             &mut completed,
             chunks,
+            &sdf_store,
             &mut products,
             &mut metric_capabilities,
             WorldSdfRuntimePayloadPackage::new(
