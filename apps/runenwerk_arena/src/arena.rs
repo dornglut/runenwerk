@@ -12,7 +12,7 @@ use world_sdf::{
     FieldProductLineage, FieldProductScope, RegionSdfSummary, SDF_METRIC_BRICK_EDGE_SAMPLES,
     SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS, SdfBrickMetadata, SdfBrickRecord,
     SdfBrickSamples, SdfChunkPayload, SdfPageCoord3, SdfPageRecord, WorldSdfMetricEncoding,
-    WorldSdfMetricPayloadRef, WorldSdfPayloadRef,
+    WorldSdfMetricPayloadRef, WorldSdfOpenTopRectInteriorSource, WorldSdfPayloadRef,
 };
 
 pub const ARENA_WORLD_ID: WorldId = WorldId::new(0);
@@ -44,8 +44,12 @@ impl Default for ArenaHazardConfig {
 
 const ARENA_PAGE_COORD: SdfPageCoord3 = SdfPageCoord3 { x: 0, y: 0, z: 0 };
 const ARENA_CELL_COUNT_PER_AXIS: u8 = 8;
-const ARENA_INTERIOR_MIN_METERS: f64 = 0.5;
-const ARENA_INTERIOR_MAX_XZ_METERS: f64 = 3.5;
+/// The game selects the authored value; the same normalized value drives all
+/// its existing analytic and sampled producer outputs.
+pub fn arena_geometry_source() -> WorldSdfOpenTopRectInteriorSource {
+    WorldSdfOpenTopRectInteriorSource::try_new([0.5, 3.5], 0.5, [0.5, 3.5])
+        .expect("maintained Arena interior bounds must be valid")
+}
 
 pub struct ArenaWorldPlugin;
 
@@ -129,17 +133,21 @@ pub fn arena_metric_error_components_meters() -> [f64; 3] {
 }
 
 pub fn arena_signed_distance_meters(position: [f64; 3]) -> f64 {
-    let x_violation = interval_violation(
-        position[0],
-        ARENA_INTERIOR_MIN_METERS,
-        ARENA_INTERIOR_MAX_XZ_METERS,
-    );
-    let y_violation = (ARENA_INTERIOR_MIN_METERS - position[1]).max(0.0);
-    let z_violation = interval_violation(
-        position[2],
-        ARENA_INTERIOR_MIN_METERS,
-        ARENA_INTERIOR_MAX_XZ_METERS,
-    );
+    arena_signed_distance_from_source(arena_geometry_source(), position)
+}
+
+/// Producer-local exact analytic oracle for the specified immutable source.
+/// Not a World-admitted collision query or a RunenSDF public numerical API.
+pub fn arena_signed_distance_from_source(
+    source: WorldSdfOpenTopRectInteriorSource,
+    position: [f64; 3],
+) -> f64 {
+    let [min_x, max_x] = source.x_bounds_meters();
+    let [min_z, max_z] = source.z_bounds_meters();
+    let floor = source.floor_y_meters();
+    let x_violation = interval_violation(position[0], min_x, max_x);
+    let y_violation = (floor - position[1]).max(0.0);
+    let z_violation = interval_violation(position[2], min_z, max_z);
     let outside_distance =
         (x_violation * x_violation + y_violation * y_violation + z_violation * z_violation).sqrt();
 
@@ -147,14 +155,22 @@ pub fn arena_signed_distance_meters(position: [f64; 3]) -> f64 {
         return -outside_distance;
     }
 
-    (position[0] - ARENA_INTERIOR_MIN_METERS)
-        .min(ARENA_INTERIOR_MAX_XZ_METERS - position[0])
-        .min(position[1] - ARENA_INTERIOR_MIN_METERS)
-        .min(position[2] - ARENA_INTERIOR_MIN_METERS)
-        .min(ARENA_INTERIOR_MAX_XZ_METERS - position[2])
+    (position[0] - min_x)
+        .min(max_x - position[0])
+        .min(position[1] - floor)
+        .min(position[2] - min_z)
+        .min(max_z - position[2])
 }
 
 pub fn build_arena_chunk_payload() -> SdfChunkPayload {
+    build_arena_chunk_payload_from_source(arena_geometry_source())
+}
+
+/// Current Arena producer, not a source-bound World admission certificate.
+/// The legacy payload checksum is still producer-declared, not content-derived.
+pub fn build_arena_chunk_payload_from_source(
+    source: WorldSdfOpenTopRectInteriorSource,
+) -> SdfChunkPayload {
     let mut page = SdfPageRecord {
         page_generation: 0,
         bricks: Default::default(),
@@ -164,7 +180,7 @@ pub fn build_arena_chunk_payload() -> SdfChunkPayload {
         for brick_y in 0..SDF_PAGE_EDGE_BRICKS as u8 {
             for brick_x in 0..SDF_PAGE_EDGE_BRICKS as u8 {
                 let brick_coord = [brick_x, brick_y, brick_z];
-                let distances = arena_brick_metric_samples(brick_coord);
+                let distances = arena_brick_metric_samples(source, brick_coord);
                 let min_distance = *distances
                     .iter()
                     .min()
@@ -173,7 +189,7 @@ pub fn build_arena_chunk_payload() -> SdfChunkPayload {
                     .iter()
                     .max()
                     .expect("metric arena brick has canonical samples");
-                let occupancy_mask = arena_brick_occupancy_mask(brick_coord);
+                let occupancy_mask = arena_brick_occupancy_mask(source, brick_coord);
                 page.bricks.insert(
                     brick_coord,
                     SdfBrickRecord {
@@ -230,14 +246,17 @@ fn arena_region_summary(payload: &SdfChunkPayload) -> RegionSdfSummary {
     }
 }
 
-fn arena_brick_metric_samples(brick: [u8; 3]) -> Vec<i16> {
+fn arena_brick_metric_samples(
+    source: WorldSdfOpenTopRectInteriorSource,
+    brick: [u8; 3],
+) -> Vec<i16> {
     let mut distances = Vec::with_capacity(SDF_METRIC_BRICK_SAMPLE_COUNT);
     for sample_z in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
         for sample_y in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
             for sample_x in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
                 let position = arena_metric_sample_position(brick, [sample_x, sample_y, sample_z]);
-                distances.push(encode_arena_distance(arena_signed_distance_meters(
-                    position,
+                distances.push(encode_arena_distance(arena_signed_distance_from_source(
+                    source, position,
                 )));
             }
         }
@@ -264,13 +283,13 @@ fn encode_arena_distance(distance_meters: f64) -> i16 {
     encoded as i16
 }
 
-fn arena_brick_occupancy_mask(brick: [u8; 3]) -> u8 {
+fn arena_brick_occupancy_mask(source: WorldSdfOpenTopRectInteriorSource, brick: [u8; 3]) -> u8 {
     let mut mask = 0_u8;
     for octant_z in 0..2_u8 {
         for octant_y in 0..2_u8 {
             for octant_x in 0..2_u8 {
                 let position = arena_occupancy_cell_center(brick, [octant_x, octant_y, octant_z]);
-                if arena_signed_distance_meters(position) < 0.0 {
+                if arena_signed_distance_from_source(source, position) < 0.0 {
                     let octant_index = octant_x | (octant_y << 1) | (octant_z << 2);
                     mask |= 1 << octant_index;
                 }
@@ -315,12 +334,30 @@ mod tests {
 
     #[test]
     fn arena_occupancy_encodes_floor_and_boundary_walls() {
-        assert_ne!(arena_brick_occupancy_mask([0, 2, 2]), 0);
-        assert_ne!(arena_brick_occupancy_mask([3, 2, 2]), 0);
-        assert_ne!(arena_brick_occupancy_mask([2, 2, 0]), 0);
-        assert_ne!(arena_brick_occupancy_mask([2, 2, 3]), 0);
-        assert_ne!(arena_brick_occupancy_mask([2, 0, 2]), 0);
-        assert_eq!(arena_brick_occupancy_mask([2, 2, 2]), 0);
+        assert_ne!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [0, 2, 2]),
+            0
+        );
+        assert_ne!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [3, 2, 2]),
+            0
+        );
+        assert_ne!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 0]),
+            0
+        );
+        assert_ne!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 3]),
+            0
+        );
+        assert_ne!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [2, 0, 2]),
+            0
+        );
+        assert_eq!(
+            arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 2]),
+            0
+        );
     }
 
     #[test]
