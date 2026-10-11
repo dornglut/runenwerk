@@ -855,6 +855,340 @@ fn completed_runtime_generation_cannot_be_replayed_after_integration() {
 }
 
 #[test]
+fn current_metric_read_rejects_enqueue_only_and_qualifies_integrated_cpu_payload() {
+    use engine::plugins::world::queries::{
+        WorldSdfCurrentMetricReadError, qualify_current_world_sdf_metric_read,
+    };
+    use runen_spatial::GridPartitionConfig;
+
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3::default());
+    let payload = metric_sdf_payload(chunk_id, ChunkRevision(4), ChunkGeneration(4), 330);
+    let descriptor = runtime_sdf_descriptor(7200, &payload);
+    let product_id = descriptor.product_core().identity;
+    let metric = metric_payload_ref(&payload, 2);
+    enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            descriptor,
+            vec![payload.clone()],
+            RegionSdfSummary::default(),
+        )
+        .with_metric_capability(metric),
+    )
+    .expect("metric source enqueues before CPU integration");
+
+    let read = |app: &App| {
+        let world = app.world();
+        qualify_current_world_sdf_metric_read(
+            product_id,
+            world
+                .resource::<WorldRuntimeSdfProductCatalogResource>()
+                .unwrap(),
+            world
+                .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+                .unwrap(),
+            world.resource::<WorldChunkRuntimeMapResource>().unwrap(),
+            world.resource::<SdfChunkStoreResource>().unwrap(),
+        )
+        .map(|view| view.metric_ref())
+    };
+    assert!(matches!(
+        read(&app),
+        Err(WorldSdfCurrentMetricReadError::MissingCpuPayload)
+    ));
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("source must integrate on a fixed tick");
+
+    let world = app.world();
+    let view = qualify_current_world_sdf_metric_read(
+        product_id,
+        world
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap(),
+        world
+            .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+            .unwrap(),
+        world.resource::<WorldChunkRuntimeMapResource>().unwrap(),
+        world.resource::<SdfChunkStoreResource>().unwrap(),
+    )
+    .expect("integrated matching metric source must qualify");
+    assert_eq!(view.payload(), &payload);
+    assert_eq!(view.metric_ref(), metric);
+    let partition = GridPartitionConfig::try_new(4.0, [8, 8, 8]).expect("valid metric partition");
+    let sample = view
+        .sample(&partition, [0.5, 0.5, 0.5])
+        .expect("declared zero metric samples are readable");
+    assert_eq!(sample.signed_distance_estimate_meters(), 0.0);
+    assert_eq!(sample.max_absolute_error_meters(), 2.0 / 1024.0);
+    // Enqueue-time metadata now refers to B, while the integrated CPU
+    // payload still contains A. That is not a current metric read.
+    let replacement = metric_sdf_payload(chunk_id, ChunkRevision(5), ChunkGeneration(5), 332);
+    let mut new_descriptor = runtime_sdf_descriptor(7200, &replacement);
+    new_descriptor.lineage.source_revision = 5;
+    enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            new_descriptor,
+            vec![replacement.clone()],
+            RegionSdfSummary::default(),
+        )
+        .with_metric_capability(metric_payload_ref(&replacement, 2)),
+    )
+    .expect("strictly newer pending product should enqueue");
+    assert!(matches!(
+        read(&app),
+        Err(WorldSdfCurrentMetricReadError::PayloadReferenceMismatch)
+    ));
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("replacement geometry should integrate");
+    assert_eq!(read(&app), Ok(metric_payload_ref(&replacement, 2)));
+}
+
+#[test]
+fn current_metric_read_fails_closed_on_dirty_pending_or_wrong_cpu_revision() {
+    use engine::plugins::world::queries::{
+        WorldSdfCurrentMetricReadError, qualify_current_world_sdf_metric_read,
+    };
+
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 49, y: 0, z: 0 });
+    let payload = metric_sdf_payload(chunk_id, ChunkRevision(3), ChunkGeneration(3), 331);
+    let descriptor = runtime_sdf_descriptor(7201, &payload);
+    let product_id = descriptor.product_core().identity;
+    enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            descriptor,
+            vec![payload.clone()],
+            RegionSdfSummary::default(),
+        )
+        .with_metric_capability(metric_payload_ref(&payload, 2)),
+    )
+    .unwrap();
+    app = app.run_for_fixed_steps(1).unwrap();
+
+    let status = |app: &App| {
+        let world = app.world();
+        qualify_current_world_sdf_metric_read(
+            product_id,
+            world
+                .resource::<WorldRuntimeSdfProductCatalogResource>()
+                .unwrap(),
+            world
+                .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+                .unwrap(),
+            world.resource::<WorldChunkRuntimeMapResource>().unwrap(),
+            world.resource::<SdfChunkStoreResource>().unwrap(),
+        )
+        .map(|_| ())
+    };
+    assert!(status(&app).is_ok());
+
+    {
+        let record = app
+            .world_mut()
+            .resource_mut::<WorldChunkRuntimeMapResource>()
+            .unwrap()
+            .by_chunk_id
+            .get_mut(&chunk_id)
+            .unwrap();
+        record.pending_build_generation = Some(BuildGeneration(4));
+    }
+    assert!(matches!(
+        status(&app),
+        Err(WorldSdfCurrentMetricReadError::RuntimeNotReady)
+    ));
+    {
+        let record = app
+            .world_mut()
+            .resource_mut::<WorldChunkRuntimeMapResource>()
+            .unwrap()
+            .by_chunk_id
+            .get_mut(&chunk_id)
+            .unwrap();
+        record.pending_build_generation = None;
+        record.lifecycle = ChunkLifecycleState::Dirty;
+    }
+    assert!(matches!(
+        status(&app),
+        Err(WorldSdfCurrentMetricReadError::RuntimeNotReady)
+    ));
+    {
+        let record = app
+            .world_mut()
+            .resource_mut::<WorldChunkRuntimeMapResource>()
+            .unwrap()
+            .by_chunk_id
+            .get_mut(&chunk_id)
+            .unwrap();
+        record.lifecycle = ChunkLifecycleState::Ready;
+        record.chunk_generation = ChunkGeneration(99);
+    }
+    assert!(matches!(
+        status(&app),
+        Err(WorldSdfCurrentMetricReadError::RuntimeVersionMismatch)
+    ));
+    {
+        let record = app
+            .world_mut()
+            .resource_mut::<WorldChunkRuntimeMapResource>()
+            .unwrap()
+            .by_chunk_id
+            .get_mut(&chunk_id)
+            .unwrap();
+        record.chunk_generation = ChunkGeneration(3);
+    }
+    app.world_mut()
+        .resource_mut::<SdfChunkStoreResource>()
+        .unwrap()
+        .chunks
+        .get_mut(&chunk_id)
+        .unwrap()
+        .checksum = 77;
+    assert!(matches!(
+        status(&app),
+        Err(WorldSdfCurrentMetricReadError::PayloadReferenceMismatch)
+    ));
+}
+
+#[test]
+fn current_metric_read_rejects_missing_mismatched_and_invalid_cpu_authorities() {
+    use engine::plugins::world::queries::{
+        WorldSdfCurrentMetricReadError, qualify_current_world_sdf_metric_read,
+    };
+
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 50, y: 0, z: 0 });
+    let payload = metric_sdf_payload(chunk_id, ChunkRevision(4), ChunkGeneration(4), 440);
+    let descriptor = runtime_sdf_descriptor(7202, &payload);
+    let product_id = descriptor.product_core().identity;
+    enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            descriptor,
+            vec![payload.clone()],
+            RegionSdfSummary::default(),
+        )
+        .with_metric_capability(metric_payload_ref(&payload, 2)),
+    )
+    .expect("qualified metric source enqueues");
+    app = app.run_for_fixed_steps(1).expect("CPU payload integrates");
+
+    let world = app.world();
+    let products = world
+        .resource::<WorldRuntimeSdfProductCatalogResource>()
+        .unwrap();
+    let metrics = world
+        .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+        .unwrap();
+    let runtime = world.resource::<WorldChunkRuntimeMapResource>().unwrap();
+    let store = world.resource::<SdfChunkStoreResource>().unwrap();
+    let admit = |selected_metrics: &WorldRuntimeSdfMetricCapabilityCatalogResource,
+                 selected_runtime: &WorldChunkRuntimeMapResource,
+                 selected_store: &SdfChunkStoreResource| {
+        qualify_current_world_sdf_metric_read(
+            product_id,
+            products,
+            selected_metrics,
+            selected_runtime,
+            selected_store,
+        )
+        .map(|_| ())
+    };
+
+    assert_eq!(admit(metrics, runtime, store), Ok(()));
+    let unknown_id = runtime_sdf_descriptor(7203, &payload)
+        .product_core()
+        .identity;
+    assert!(matches!(
+        qualify_current_world_sdf_metric_read(unknown_id, products, metrics, runtime, store),
+        Err(WorldSdfCurrentMetricReadError::MissingProduct)
+    ));
+    assert_eq!(
+        admit(
+            &WorldRuntimeSdfMetricCapabilityCatalogResource::default(),
+            runtime,
+            store,
+        ),
+        Err(WorldSdfCurrentMetricReadError::MissingMetricCapability)
+    );
+    assert_eq!(
+        admit(metrics, &WorldChunkRuntimeMapResource::default(), store),
+        Err(WorldSdfCurrentMetricReadError::MissingRuntimeRecord)
+    );
+    assert_eq!(
+        admit(metrics, runtime, &SdfChunkStoreResource::default()),
+        Err(WorldSdfCurrentMetricReadError::MissingCpuPayload)
+    );
+
+    // Catalog references must belong to the selected product's actual CPU
+    // source, even when each catalog was independently ratified at intake.
+    let mut other_app = fixed_world_app();
+    let other_payload = metric_sdf_payload(chunk_id, ChunkRevision(5), ChunkGeneration(5), 441);
+    enqueue_runtime_sdf_package(
+        &mut other_app,
+        WorldSdfRuntimePayloadPackage::new(
+            runtime_sdf_descriptor(7202, &other_payload),
+            vec![other_payload.clone()],
+            RegionSdfSummary::default(),
+        )
+        .with_metric_capability(metric_payload_ref(&other_payload, 2)),
+    )
+    .expect("separate later source enqueues");
+    let other_world = other_app.world();
+    let other_metrics = other_world
+        .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+        .unwrap();
+    assert_eq!(
+        admit(other_metrics, runtime, store),
+        Err(WorldSdfCurrentMetricReadError::MetricReferenceMismatch)
+    );
+
+    let mut unloaded = (*runtime).clone();
+    unloaded.by_chunk_id.get_mut(&chunk_id).unwrap().lifecycle = ChunkLifecycleState::Unloaded;
+    assert_eq!(
+        admit(metrics, &unloaded, store),
+        Err(WorldSdfCurrentMetricReadError::RuntimeNotReady)
+    );
+    let mut mismatched_generation = (*runtime).clone();
+    mismatched_generation
+        .by_chunk_id
+        .get_mut(&chunk_id)
+        .unwrap()
+        .build_generation = BuildGeneration(99);
+    assert_eq!(
+        admit(metrics, &mismatched_generation, store),
+        Err(WorldSdfCurrentMetricReadError::RuntimeVersionMismatch)
+    );
+
+    // A producer-declared checksum is not a content hash: layout validation
+    // must still reject corrupted stored bytes with unchanged declared ref.
+    let mut invalid_store = (*store).clone();
+    invalid_store
+        .chunks
+        .get_mut(&chunk_id)
+        .unwrap()
+        .page_table
+        .get_mut(&SdfPageCoord3::default())
+        .unwrap()
+        .bricks
+        .get_mut(&[0, 0, 0])
+        .unwrap()
+        .samples
+        .distances
+        .clear();
+    assert_eq!(
+        admit(metrics, runtime, &invalid_store),
+        Err(WorldSdfCurrentMetricReadError::InvalidMetricPayload(
+            WorldSdfMetricError::InvalidMetricSampleCount { actual: 0 }
+        ))
+    );
+}
+
+#[test]
 fn malformed_runtime_sdf_product_is_rejected_before_intake_mutation() {
     let mut app = fixed_world_app();
     let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 4, y: 0, z: 0 });
