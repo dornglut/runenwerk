@@ -901,12 +901,13 @@ fn current_metric_read_rejects_enqueue_only_and_qualifies_integrated_cpu_payload
         .run_for_fixed_steps(1)
         .expect("source must integrate on a fixed tick");
 
-    let world = app.world();
-    let view = qualify_current_world_sdf_metric_read(
-        product_id,
-        world
-            .resource::<WorldRuntimeSdfProductCatalogResource>()
-            .unwrap(),
+    {
+        let world = app.world();
+        let view = qualify_current_world_sdf_metric_read(
+            product_id,
+            world
+                .resource::<WorldRuntimeSdfProductCatalogResource>()
+                .unwrap(),
         world
             .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
             .unwrap(),
@@ -920,9 +921,9 @@ fn current_metric_read_rejects_enqueue_only_and_qualifies_integrated_cpu_payload
     let sample = view
         .sample(&partition, [0.5, 0.5, 0.5])
         .expect("declared zero metric samples are readable");
-    assert_eq!(sample.signed_distance_estimate_meters(), 0.0);
-    assert_eq!(sample.max_absolute_error_meters(), 2.0 / 1024.0);
-    drop(view);
+        assert_eq!(sample.signed_distance_estimate_meters(), 0.0);
+        assert_eq!(sample.max_absolute_error_meters(), 2.0 / 1024.0);
+    }
 
     // Enqueue-time metadata now refers to B, while the integrated CPU
     // payload still contains A. That is not a current metric read.
