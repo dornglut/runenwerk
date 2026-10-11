@@ -1104,9 +1104,7 @@ fn current_metric_read_rejects_missing_mismatched_and_invalid_cpu_authorities() 
         .product_core()
         .identity;
     assert!(matches!(
-        qualify_current_world_sdf_metric_read(
-            unknown_id, products, metrics, runtime, store
-        ),
+        qualify_current_world_sdf_metric_read(unknown_id, products, metrics, runtime, store),
         Err(WorldSdfCurrentMetricReadError::MissingProduct)
     ));
     assert_eq!(
