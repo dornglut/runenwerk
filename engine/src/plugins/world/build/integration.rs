@@ -65,15 +65,30 @@ impl WorldRuntimeSdfMetricCapabilityCatalogResource {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WorldSdfRuntimePayloadPackageError {
-    UnsupportedProductKind { kind: FieldProductKind },
-    PayloadCount { count: usize },
-    PayloadRefCount { count: usize },
+    UnsupportedProductKind {
+        kind: FieldProductKind,
+    },
+    PayloadCount {
+        count: usize,
+    },
+    PayloadRefCount {
+        count: usize,
+    },
     ScopeMismatch,
     PayloadRefMismatch,
-    ProductRatificationRejected { issue_count: usize },
-    MetricProductRatificationRejected { issue_count: usize },
-    MetricPayloadRejected { error: WorldSdfMetricError },
-    PendingGenerationConflict { chunk_id: ChunkId, generation: BuildGeneration },
+    ProductRatificationRejected {
+        issue_count: usize,
+    },
+    MetricProductRatificationRejected {
+        issue_count: usize,
+    },
+    MetricPayloadRejected {
+        error: WorldSdfMetricError,
+    },
+    PendingGenerationConflict {
+        chunk_id: ChunkId,
+        generation: BuildGeneration,
+    },
 }
 
 impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
@@ -106,7 +121,10 @@ impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
             Self::MetricPayloadRejected { error } => {
                 write!(formatter, "runtime metric SDF payload is invalid: {error}")
             }
-            Self::PendingGenerationConflict { chunk_id, generation } => write!(
+            Self::PendingGenerationConflict {
+                chunk_id,
+                generation,
+            } => write!(
                 formatter,
                 "conflicting runtime SDF package for chunk {chunk_id:?} at pending generation {generation:?}"
             ),
@@ -261,10 +279,12 @@ pub fn enqueue_ratified_world_sdf_payload_package(
             }
             return Ok(0);
         }
-        return Err(WorldSdfRuntimePayloadPackageError::PendingGenerationConflict {
-            chunk_id: payload.chunk_id,
-            generation,
-        });
+        return Err(
+            WorldSdfRuntimePayloadPackageError::PendingGenerationConflict {
+                chunk_id: payload.chunk_id,
+                generation,
+            },
+        );
     }
 
     let product_id = package.descriptor.product_core().identity;

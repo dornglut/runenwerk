@@ -343,7 +343,9 @@ fn conflicting_same_generation_runtime_packages_preserve_first_catalog_and_paylo
         Some(BuildGeneration(5))
     );
 
-    app = app.run_for_fixed_steps(1).expect("first package should integrate");
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("first package should integrate");
     assert_eq!(
         app.world()
             .resource::<SdfChunkStoreResource>()
@@ -374,7 +376,10 @@ fn identical_pending_runtime_package_is_idempotent_but_changed_bytes_are_not() {
         RegionSdfSummary::default(),
     )
     .with_metric_capability(metric);
-    assert_eq!(enqueue_runtime_sdf_package(&mut app, package.clone()).unwrap(), 1);
+    assert_eq!(
+        enqueue_runtime_sdf_package(&mut app, package.clone()).unwrap(),
+        1
+    );
     assert_eq!(
         enqueue_runtime_sdf_package(&mut app, package).expect("identical retry is a no-op"),
         0
@@ -414,7 +419,9 @@ fn identical_pending_runtime_package_is_idempotent_but_changed_bytes_are_not() {
             .len(),
         1
     );
-    app = app.run_for_fixed_steps(1).expect("one candidate should integrate once");
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("one candidate should integrate once");
     assert_eq!(
         app.world()
             .resource::<SdfChunkStoreResource>()
@@ -474,7 +481,9 @@ fn matching_pending_bytes_support_an_independent_product_identity() {
             .len(),
         1
     );
-    app = app.run_for_fixed_steps(1).expect("one shared chunk integrates");
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("one shared chunk integrates");
     assert_eq!(
         app.world()
             .resource::<SdfChunkStoreResource>()
