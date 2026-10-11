@@ -1,5 +1,5 @@
 use engine::plugins::world::adapters::resources::{
-    OperationLogResource, SdfChunkStoreResource, WorldQuantizationScaleResource,
+    BuildQueueResource, OperationLogResource, SdfChunkStoreResource, WorldQuantizationScaleResource,
 };
 use engine::plugins::world::chunks::DirtyChunkMapResource;
 use engine::plugins::world::chunks::lifecycle::{
@@ -16,7 +16,7 @@ use engine::plugins::world::{
         WorldSdfRuntimePayloadPackage, WorldSdfRuntimePayloadPackageError,
         enqueue_ratified_world_sdf_payload_package,
     },
-    build::jobs::WorldBuildStaleness,
+    build::jobs::{WorldBuildJobRuntimeResource, WorldBuildStaleness},
 };
 use engine::plugins::{FixedStepPlugin, SimulationPlugin};
 use engine::prelude::{App, AppFixedStepExt, AppSimulationExt, AuthorityRole};
@@ -569,6 +569,107 @@ fn newer_generation_supersedes_older_queued_runtime_package() {
             .capability(newer_descriptor.product_core().identity),
         None
     );
+}
+
+#[test]
+fn queued_dirty_build_does_not_consume_runtime_package_pending_generation() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 47, y: 0, z: 0 });
+
+    // Leave an already-admitted dirty BuildQueue item unprocessed for one tick.
+    app.world_mut()
+        .resource_mut::<WorldBuildJobRuntimeResource>()
+        .unwrap()
+        .max_jobs_per_update = 0;
+    app.world_mut()
+        .resource_mut::<DirtyChunkMapResource>()
+        .unwrap()
+        .mark_dirty(chunk_id, DirtyReason::Geometry);
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("dirty chunk should enter the queue without dispatch");
+    assert!(
+        app.world()
+            .resource::<BuildQueueResource>()
+            .unwrap()
+            .contains_chunk(chunk_id),
+        "dirty build item must remain queued"
+    );
+
+    // Runtime-package intake claims generation 1, while that older queue item
+    // still exists. Dispatch must not replace the package or erase dirtiness.
+    app.world_mut()
+        .resource_mut::<WorldBuildJobRuntimeResource>()
+        .unwrap()
+        .max_jobs_per_update = 4;
+    let package_payload = sdf_chunk_payload(chunk_id, ChunkRevision(1), ChunkGeneration(1), 231);
+    let package_descriptor = runtime_sdf_descriptor(7125, &package_payload);
+    enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            package_descriptor,
+            vec![package_payload.clone()],
+            RegionSdfSummary::default(),
+        ),
+    )
+    .expect("external package should claim its own pending build generation");
+
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("external payload should integrate without losing dirty reasons");
+    let store = app.world().resource::<SdfChunkStoreResource>().unwrap();
+    assert_eq!(store.chunks.get(&chunk_id), Some(&package_payload));
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&chunk_id)
+        .unwrap();
+    assert!(
+        matches!(record.lifecycle, ChunkLifecycleState::Dirty),
+        "pending package must not consume an unrelated queued dirty build"
+    );
+    assert!(
+        !record.dirty_reasons.is_empty(),
+        "dirty reasons must survive the external payload integration"
+    );
+    assert!(record.pending_build_generation.is_none());
+    assert!(
+        app.world()
+            .resource::<WorldBuildJobRuntimeResource>()
+            .unwrap()
+            .dropped_jobs
+            > 0,
+        "stale queued dispatch should be rejected"
+    );
+
+    // With no pending package left, the still-dirty chunk rebuilds ordinarily.
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("preserved dirty source should rebuild at the next generation");
+    let next = app
+        .world()
+        .resource::<SdfChunkStoreResource>()
+        .unwrap()
+        .chunks
+        .get(&chunk_id)
+        .unwrap();
+    assert_eq!(next.chunk_generation, ChunkGeneration(2));
+    assert_eq!(next.chunk_revision, ChunkRevision(2));
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&chunk_id)
+        .unwrap();
+    assert!(
+        matches!(record.lifecycle, ChunkLifecycleState::Ready),
+        "follow-up rebuild should recover the ordinary ready lifecycle"
+    );
+    assert!(record.dirty_reasons.is_empty());
+    assert!(record.pending_build_generation.is_none());
 }
 
 #[test]

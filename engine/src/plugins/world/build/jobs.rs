@@ -77,6 +77,12 @@ pub fn dispatch_world_build_jobs_system(
 
         let (target_chunk_revision, target_build_generation) = {
             let record = chunks.ensure_chunk(item.chunk_id);
+            if record.pending_build_generation.is_some() {
+                // An external runtime package may have taken this generation after
+                // the queue item was admitted. Preserve dirtiness for the next tick.
+                runtime.dropped_jobs = runtime.dropped_jobs.saturating_add(1);
+                continue;
+            }
             if !matches!(
                 record.lifecycle,
                 ChunkLifecycleState::Dirty | ChunkLifecycleState::Rebuilding
