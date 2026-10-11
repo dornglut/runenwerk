@@ -131,6 +131,11 @@ fn enqueue(
         package
     };
     {
+        let sdf_store = app
+            .world()
+            .resource::<SdfChunkStoreResource>()
+            .expect("current World CPU store should exist")
+            .clone();
         let chunks = app
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
@@ -138,6 +143,7 @@ fn enqueue(
         enqueue_ratified_world_sdf_payload_package(
             &mut completed,
             chunks,
+            &sdf_store,
             &mut products,
             &mut metric_capabilities,
             package,

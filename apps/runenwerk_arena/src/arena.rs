@@ -1,11 +1,11 @@
-use engine::plugins::world::adapters::PartitionConfigResource;
+use engine::plugins::world::adapters::{PartitionConfigResource, SdfChunkStoreResource};
 use engine::plugins::world::build::{
     WorldCompletedBuildQueueResource, WorldRuntimeSdfMetricCapabilityCatalogResource,
     WorldRuntimeSdfProductCatalogResource, WorldSdfRuntimePayloadPackage,
     enqueue_ratified_world_sdf_payload_package,
 };
 use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
-use engine::prelude::{App, Plugin, ResMut, Resource, Startup};
+use engine::prelude::{App, Plugin, Res, ResMut, Resource, Startup};
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use world_sdf::{
     FieldProductConsumerClass, FieldProductDescriptor, FieldProductId, FieldProductKind,
@@ -59,6 +59,7 @@ fn install_arena_world(
     mut partition: ResMut<PartitionConfigResource>,
     mut completed: ResMut<WorldCompletedBuildQueueResource>,
     mut chunks: ResMut<WorldChunkRuntimeMapResource>,
+    sdf_store: Res<SdfChunkStoreResource>,
     mut products: ResMut<WorldRuntimeSdfProductCatalogResource>,
     mut metric_capabilities: ResMut<WorldRuntimeSdfMetricCapabilityCatalogResource>,
 ) {
@@ -71,6 +72,7 @@ fn install_arena_world(
     let enqueued = enqueue_ratified_world_sdf_payload_package(
         &mut completed,
         &mut chunks,
+        &sdf_store,
         &mut products,
         &mut metric_capabilities,
         WorldSdfRuntimePayloadPackage::new(descriptor, vec![payload], region_summary)

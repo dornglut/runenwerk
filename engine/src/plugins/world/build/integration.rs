@@ -89,6 +89,11 @@ pub enum WorldSdfRuntimePayloadPackageError {
         chunk_id: ChunkId,
         generation: BuildGeneration,
     },
+    IntegratedGenerationConflict {
+        chunk_id: ChunkId,
+        requested: BuildGeneration,
+        integrated: BuildGeneration,
+    },
 }
 
 impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
@@ -127,6 +132,14 @@ impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
             } => write!(
                 formatter,
                 "conflicting runtime SDF package for chunk {chunk_id:?} at pending generation {generation:?}"
+            ),
+            Self::IntegratedGenerationConflict {
+                chunk_id,
+                requested,
+                integrated,
+            } => write!(
+                formatter,
+                "runtime SDF package for chunk {chunk_id:?} requests generation {requested:?} but integrated generation {integrated:?} is not older"
             ),
         }
     }
@@ -232,6 +245,7 @@ fn validate_runtime_sdf_payload_package(
 pub fn enqueue_ratified_world_sdf_payload_package(
     completed: &mut WorldCompletedBuildQueueResource,
     chunks: &mut WorldChunkRuntimeMapResource,
+    sdf_store: &SdfChunkStoreResource,
     products: &mut WorldRuntimeSdfProductCatalogResource,
     metric_capabilities: &mut WorldRuntimeSdfMetricCapabilityCatalogResource,
     package: WorldSdfRuntimePayloadPackage,
@@ -242,6 +256,31 @@ pub fn enqueue_ratified_world_sdf_payload_package(
     // matching pending generation. Reject a conflicting retry before changing either.
     let payload = &package.payloads[0];
     let generation = BuildGeneration(payload.chunk_generation.0);
+
+    // A pending retry is distinct from replaying an already integrated chunk.
+    // Check actual CPU geometry first: the catalog may still advertise a newer
+    // candidate and its declared checksum is not proof of integrated content.
+    let integrated = sdf_store
+        .chunks
+        .get(&payload.chunk_id)
+        .map(|chunk| BuildGeneration(chunk.chunk_generation.0));
+    let recorded = chunks
+        .by_chunk_id
+        .get(&payload.chunk_id)
+        .map(|record| record.build_generation);
+    let stale_generation = integrated
+        .filter(|current| generation.0 <= current.0)
+        .or_else(|| recorded.filter(|current| generation.0 < current.0));
+    if let Some(integrated) = stale_generation {
+        return Err(
+            WorldSdfRuntimePayloadPackageError::IntegratedGenerationConflict {
+                chunk_id: payload.chunk_id,
+                requested: generation,
+                integrated,
+            },
+        );
+    }
+
     if let Some(existing) = completed.outputs.iter().find(|output| {
         output.chunk_id == payload.chunk_id
             && output.target_build_generation == generation

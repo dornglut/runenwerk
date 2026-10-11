@@ -139,6 +139,11 @@ fn enqueue_runtime_sdf_package(
         .remove_resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
         .expect("runtime SDF metric capability catalog should exist");
     let result = {
+        let sdf_store = app
+            .world()
+            .resource::<SdfChunkStoreResource>()
+            .expect("SDF CPU store should exist")
+            .clone();
         let chunks = app
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
@@ -146,6 +151,7 @@ fn enqueue_runtime_sdf_package(
         enqueue_ratified_world_sdf_payload_package(
             &mut completed,
             chunks,
+            &sdf_store,
             &mut products,
             &mut metric_capabilities,
             package,
@@ -224,6 +230,11 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
         let descriptor = runtime_sdf_descriptor(7001, &payload);
         let product_id = descriptor.product_core().identity;
         let enqueued = {
+            let sdf_store = app
+                .world()
+                .resource::<SdfChunkStoreResource>()
+                .expect("SDF CPU store should exist")
+                .clone();
             let chunks = app
                 .world_mut()
                 .resource_mut::<WorldChunkRuntimeMapResource>()
@@ -231,6 +242,7 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
             enqueue_ratified_world_sdf_payload_package(
                 &mut completed,
                 chunks,
+                &sdf_store,
                 &mut products,
                 &mut metric_capabilities,
                 WorldSdfRuntimePayloadPackage::new(
@@ -673,6 +685,176 @@ fn queued_dirty_build_does_not_consume_runtime_package_pending_generation() {
 }
 
 #[test]
+fn completed_runtime_generation_cannot_be_replayed_after_integration() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 48, y: 0, z: 0 });
+    let accepted = metric_sdf_payload(chunk_id, ChunkRevision(2), ChunkGeneration(2), 240);
+    let descriptor = runtime_sdf_descriptor(7126, &accepted);
+    let product_id = descriptor.product_core().identity;
+    let metric = metric_payload_ref(&accepted, 2);
+    assert_eq!(
+        enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                descriptor.clone(),
+                vec![accepted.clone()],
+                RegionSdfSummary::default(),
+            )
+            .with_metric_capability(metric),
+        )
+        .unwrap(),
+        1
+    );
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("generation two should integrate");
+
+    let revision = app
+        .world()
+        .resource::<WorldAuthorityState>()
+        .unwrap()
+        .world_revision;
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&chunk_id)
+        .unwrap()
+        .clone();
+
+    for (generation, hierarchy_revision) in [
+        (ChunkGeneration(1), 0),
+        (ChunkGeneration(2), 0),
+        (ChunkGeneration(2), 1),
+    ] {
+        // Exact same-generation retries and altered source bytes that reuse
+        // their declared checksum are both rejected after integration.
+        let mut replay = metric_sdf_payload(chunk_id, ChunkRevision(2), generation, 240);
+        replay.hierarchy_revision = hierarchy_revision;
+        let replay_descriptor = runtime_sdf_descriptor(7126, &replay);
+        let error = enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                replay_descriptor,
+                vec![replay.clone()],
+                RegionSdfSummary::default(),
+            )
+            .with_metric_capability(metric_payload_ref(&replay, 2)),
+        )
+        .expect_err("completed source generation must not be re-admitted");
+        assert!(matches!(
+            error,
+            WorldSdfRuntimePayloadPackageError::IntegratedGenerationConflict {
+                chunk_id: rejected,
+                requested,
+                integrated: BuildGeneration(2),
+            } if rejected == chunk_id && requested.0 == generation.0
+        ));
+        assert_eq!(
+            app.world()
+                .resource::<WorldCompletedBuildQueueResource>()
+                .unwrap()
+                .outputs
+                .len(),
+            0
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WorldRuntimeSdfProductCatalogResource>()
+                .unwrap()
+                .product(product_id),
+            Some(&descriptor)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+                .unwrap()
+                .capability(product_id),
+            Some(&metric)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<SdfChunkStoreResource>()
+                .unwrap()
+                .chunks
+                .get(&chunk_id),
+            Some(&accepted)
+        );
+        let unchanged_record = app
+            .world()
+            .resource::<WorldChunkRuntimeMapResource>()
+            .unwrap()
+            .by_chunk_id
+            .get(&chunk_id)
+            .unwrap();
+        assert_eq!(unchanged_record.chunk_revision, record.chunk_revision);
+        assert_eq!(unchanged_record.chunk_generation, record.chunk_generation);
+        assert_eq!(unchanged_record.build_generation, record.build_generation);
+        assert_eq!(
+            unchanged_record.pending_build_generation,
+            record.pending_build_generation
+        );
+        assert_eq!(unchanged_record.lifecycle, record.lifecycle);
+        assert_eq!(unchanged_record.gameplay_locked, record.gameplay_locked);
+        assert_eq!(
+            unchanged_record.dirty_reasons.is_empty(),
+            record.dirty_reasons.is_empty()
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WorldAuthorityState>()
+                .unwrap()
+                .world_revision,
+            revision
+        );
+    }
+
+    let next = metric_sdf_payload(chunk_id, ChunkRevision(3), ChunkGeneration(3), 241);
+    let mut next_descriptor = runtime_sdf_descriptor(7126, &next);
+    next_descriptor.lineage.source_revision = 2;
+    assert_eq!(
+        enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                next_descriptor.clone(),
+                vec![next.clone()],
+                RegionSdfSummary::default(),
+            )
+            .with_metric_capability(metric_payload_ref(&next, 2)),
+        )
+        .expect("strictly newer generation remains accepted"),
+        1
+    );
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("generation three should integrate");
+    assert_eq!(
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&chunk_id),
+        Some(&next)
+    );
+    assert_eq!(
+        app.world()
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap()
+            .product(product_id),
+        Some(&next_descriptor)
+    );
+    assert!(
+        app.world()
+            .resource::<WorldAuthorityState>()
+            .unwrap()
+            .world_revision
+            .0
+            > revision.0
+    );
+}
+
+#[test]
 fn malformed_runtime_sdf_product_is_rejected_before_intake_mutation() {
     let mut app = fixed_world_app();
     let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 4, y: 0, z: 0 });
@@ -692,6 +874,11 @@ fn malformed_runtime_sdf_product_is_rejected_before_intake_mutation() {
         .remove_resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
         .expect("runtime SDF metric capability catalog should exist");
     let error = {
+        let sdf_store = app
+            .world()
+            .resource::<SdfChunkStoreResource>()
+            .expect("SDF CPU store should exist")
+            .clone();
         let chunks = app
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
@@ -699,6 +886,7 @@ fn malformed_runtime_sdf_product_is_rejected_before_intake_mutation() {
         enqueue_ratified_world_sdf_payload_package(
             &mut completed,
             chunks,
+            &sdf_store,
             &mut products,
             &mut metric_capabilities,
             WorldSdfRuntimePayloadPackage::new(
@@ -741,6 +929,11 @@ fn wrong_runtime_sdf_product_kind_is_rejected_before_intake_mutation() {
         .remove_resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
         .expect("runtime SDF metric capability catalog should exist");
     let error = {
+        let sdf_store = app
+            .world()
+            .resource::<SdfChunkStoreResource>()
+            .expect("SDF CPU store should exist")
+            .clone();
         let chunks = app
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
@@ -748,6 +941,7 @@ fn wrong_runtime_sdf_product_kind_is_rejected_before_intake_mutation() {
         enqueue_ratified_world_sdf_payload_package(
             &mut completed,
             chunks,
+            &sdf_store,
             &mut products,
             &mut metric_capabilities,
             WorldSdfRuntimePayloadPackage::new(
@@ -805,6 +999,11 @@ fn runtime_sdf_package_rejects_zero_or_multiple_payloads_before_intake_mutation(
             .remove_resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
             .expect("runtime SDF metric capability catalog should exist");
         let error = {
+            let sdf_store = app
+                .world()
+                .resource::<SdfChunkStoreResource>()
+                .expect("SDF CPU store should exist")
+                .clone();
             let chunks = app
                 .world_mut()
                 .resource_mut::<WorldChunkRuntimeMapResource>()
@@ -812,6 +1011,7 @@ fn runtime_sdf_package_rejects_zero_or_multiple_payloads_before_intake_mutation(
             enqueue_ratified_world_sdf_payload_package(
                 &mut completed,
                 chunks,
+                &sdf_store,
                 &mut products,
                 &mut metric_capabilities,
                 WorldSdfRuntimePayloadPackage::new(
@@ -881,6 +1081,11 @@ fn runtime_sdf_package_rejects_zero_or_multiple_payload_refs_before_intake_mutat
             .remove_resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
             .expect("runtime SDF metric capability catalog should exist");
         let error = {
+            let sdf_store = app
+                .world()
+                .resource::<SdfChunkStoreResource>()
+                .expect("SDF CPU store should exist")
+                .clone();
             let chunks = app
                 .world_mut()
                 .resource_mut::<WorldChunkRuntimeMapResource>()
@@ -888,6 +1093,7 @@ fn runtime_sdf_package_rejects_zero_or_multiple_payload_refs_before_intake_mutat
             enqueue_ratified_world_sdf_payload_package(
                 &mut completed,
                 chunks,
+                &sdf_store,
                 &mut products,
                 &mut metric_capabilities,
                 WorldSdfRuntimePayloadPackage::new(
@@ -938,6 +1144,11 @@ fn runtime_sdf_scope_mismatch_is_rejected_before_intake_mutation() {
         .remove_resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
         .expect("runtime SDF metric capability catalog should exist");
     let error = {
+        let sdf_store = app
+            .world()
+            .resource::<SdfChunkStoreResource>()
+            .expect("SDF CPU store should exist")
+            .clone();
         let chunks = app
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
@@ -945,6 +1156,7 @@ fn runtime_sdf_scope_mismatch_is_rejected_before_intake_mutation() {
         enqueue_ratified_world_sdf_payload_package(
             &mut completed,
             chunks,
+            &sdf_store,
             &mut products,
             &mut metric_capabilities,
             WorldSdfRuntimePayloadPackage::new(
@@ -1016,6 +1228,11 @@ fn runtime_sdf_payload_ref_chunk_revision_and_checksum_mismatches_are_rejected_b
             .remove_resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
             .expect("runtime SDF metric capability catalog should exist");
         let error = {
+            let sdf_store = app
+                .world()
+                .resource::<SdfChunkStoreResource>()
+                .expect("SDF CPU store should exist")
+                .clone();
             let chunks = app
                 .world_mut()
                 .resource_mut::<WorldChunkRuntimeMapResource>()
@@ -1023,6 +1240,7 @@ fn runtime_sdf_payload_ref_chunk_revision_and_checksum_mismatches_are_rejected_b
             enqueue_ratified_world_sdf_payload_package(
                 &mut completed,
                 chunks,
+                &sdf_store,
                 &mut products,
                 &mut metric_capabilities,
                 WorldSdfRuntimePayloadPackage::new(
