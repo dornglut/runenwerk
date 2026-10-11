@@ -1,5 +1,5 @@
 use engine::plugins::world::adapters::resources::{
-    OperationLogResource, SdfChunkStoreResource, WorldQuantizationScaleResource,
+    BuildQueueResource, OperationLogResource, SdfChunkStoreResource, WorldQuantizationScaleResource,
 };
 use engine::plugins::world::chunks::DirtyChunkMapResource;
 use engine::plugins::world::chunks::lifecycle::{
@@ -16,7 +16,7 @@ use engine::plugins::world::{
         WorldSdfRuntimePayloadPackage, WorldSdfRuntimePayloadPackageError,
         enqueue_ratified_world_sdf_payload_package,
     },
-    build::jobs::WorldBuildStaleness,
+    build::jobs::{WorldBuildJobRuntimeResource, WorldBuildStaleness},
 };
 use engine::plugins::{FixedStepPlugin, SimulationPlugin};
 use engine::prelude::{App, AppFixedStepExt, AppSimulationExt, AuthorityRole};
@@ -265,6 +265,411 @@ fn ratified_world_sdf_payload_package_flows_through_runtime_intake() {
 
     assert_eq!(payload.checksum, 99);
     assert_eq!(payload.chunk_revision, ChunkRevision(11));
+}
+
+#[test]
+fn conflicting_same_generation_runtime_packages_preserve_first_catalog_and_payload() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 43, y: 0, z: 0 });
+    let first = metric_sdf_payload(chunk_id, ChunkRevision(7), ChunkGeneration(5), 221);
+    let first_descriptor = runtime_sdf_descriptor(7120, &first);
+    let product_id = first_descriptor.product_core().identity;
+    let first_metric = metric_payload_ref(&first, 2);
+
+    assert_eq!(
+        enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                first_descriptor.clone(),
+                vec![first.clone()],
+                RegionSdfSummary::default(),
+            )
+            .with_metric_capability(first_metric),
+        )
+        .expect("first package should enqueue"),
+        1
+    );
+
+    let conflicting = metric_sdf_payload(chunk_id, ChunkRevision(8), ChunkGeneration(5), 222);
+    let conflicting_descriptor = runtime_sdf_descriptor(7120, &conflicting);
+    let error = enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            conflicting_descriptor,
+            vec![conflicting.clone()],
+            RegionSdfSummary::default(),
+        )
+        .with_metric_capability(metric_payload_ref(&conflicting, 2)),
+    )
+    .expect_err("same generation must not replace different pending source bytes");
+    assert!(matches!(
+        error,
+        WorldSdfRuntimePayloadPackageError::PendingGenerationConflict {
+            chunk_id: rejected,
+            generation: BuildGeneration(5),
+        } if rejected == chunk_id
+    ));
+
+    assert_eq!(
+        app.world()
+            .resource::<WorldCompletedBuildQueueResource>()
+            .unwrap()
+            .outputs
+            .len(),
+        1
+    );
+    assert_eq!(
+        app.world()
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap()
+            .product(product_id),
+        Some(&first_descriptor)
+    );
+    assert_eq!(
+        app.world()
+            .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+            .unwrap()
+            .capability(product_id),
+        Some(&first_metric)
+    );
+    assert_eq!(
+        app.world()
+            .resource::<WorldChunkRuntimeMapResource>()
+            .unwrap()
+            .by_chunk_id
+            .get(&chunk_id)
+            .unwrap()
+            .pending_build_generation,
+        Some(BuildGeneration(5))
+    );
+
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("first package should integrate");
+    assert_eq!(
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&chunk_id),
+        Some(&first)
+    );
+    assert_eq!(
+        app.world()
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap()
+            .product(product_id),
+        Some(&first_descriptor)
+    );
+}
+
+#[test]
+fn identical_pending_runtime_package_is_idempotent_but_changed_bytes_are_not() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 44, y: 0, z: 0 });
+    let payload = metric_sdf_payload(chunk_id, ChunkRevision(3), ChunkGeneration(6), 223);
+    let descriptor = runtime_sdf_descriptor(7121, &payload);
+    let metric = metric_payload_ref(&payload, 2);
+    let package = WorldSdfRuntimePayloadPackage::new(
+        descriptor.clone(),
+        vec![payload.clone()],
+        RegionSdfSummary::default(),
+    )
+    .with_metric_capability(metric);
+    assert_eq!(
+        enqueue_runtime_sdf_package(&mut app, package.clone()).unwrap(),
+        1
+    );
+    assert_eq!(
+        enqueue_runtime_sdf_package(&mut app, package).expect("identical retry is a no-op"),
+        0
+    );
+
+    // The existing payload reference/checksum is only declared metadata; exact
+    // byte equality must still reject an altered candidate with the same ref.
+    let mut altered = payload.clone();
+    altered
+        .page_table
+        .get_mut(&SdfPageCoord3::default())
+        .unwrap()
+        .bricks
+        .get_mut(&[0, 0, 0])
+        .unwrap()
+        .samples
+        .distances[0] = 1;
+    let error = enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            descriptor.clone(),
+            vec![altered],
+            RegionSdfSummary::default(),
+        )
+        .with_metric_capability(metric),
+    )
+    .expect_err("same ref and generation must not hide changed samples");
+    assert!(matches!(
+        error,
+        WorldSdfRuntimePayloadPackageError::PendingGenerationConflict { .. }
+    ));
+    assert_eq!(
+        app.world()
+            .resource::<WorldCompletedBuildQueueResource>()
+            .unwrap()
+            .outputs
+            .len(),
+        1
+    );
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("one candidate should integrate once");
+    assert_eq!(
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&chunk_id),
+        Some(&payload)
+    );
+    assert_eq!(
+        app.world()
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap()
+            .product(descriptor.product_core().identity),
+        Some(&descriptor)
+    );
+}
+
+#[test]
+fn matching_pending_bytes_support_an_independent_product_identity() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 46, y: 0, z: 0 });
+    let payload = metric_sdf_payload(chunk_id, ChunkRevision(4), ChunkGeneration(8), 226);
+    let primary = runtime_sdf_descriptor(7123, &payload);
+    let secondary = runtime_sdf_descriptor(7124, &payload);
+    let metric = metric_payload_ref(&payload, 2);
+    assert_eq!(
+        enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                primary.clone(),
+                vec![payload.clone()],
+                RegionSdfSummary::default(),
+            )
+            .with_metric_capability(metric),
+        )
+        .unwrap(),
+        1
+    );
+    assert_eq!(
+        enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                secondary.clone(),
+                vec![payload.clone()],
+                RegionSdfSummary::default(),
+            )
+            .with_metric_capability(metric),
+        )
+        .expect("identical geometry may be referenced by another product"),
+        0
+    );
+    assert_eq!(
+        app.world()
+            .resource::<WorldCompletedBuildQueueResource>()
+            .unwrap()
+            .outputs
+            .len(),
+        1
+    );
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("one shared chunk integrates");
+    assert_eq!(
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&chunk_id),
+        Some(&payload)
+    );
+    for descriptor in [primary, secondary] {
+        let product_id = descriptor.product_core().identity;
+        assert_eq!(
+            app.world()
+                .resource::<WorldRuntimeSdfProductCatalogResource>()
+                .unwrap()
+                .product(product_id),
+            Some(&descriptor)
+        );
+        assert_eq!(
+            app.world()
+                .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+                .unwrap()
+                .capability(product_id),
+            Some(&metric)
+        );
+    }
+}
+
+#[test]
+fn newer_generation_supersedes_older_queued_runtime_package() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 45, y: 0, z: 0 });
+    let old = sdf_chunk_payload(chunk_id, ChunkRevision(1), ChunkGeneration(1), 224);
+    let old_descriptor = runtime_sdf_descriptor(7122, &old);
+    assert_eq!(
+        enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                old_descriptor,
+                vec![old],
+                RegionSdfSummary::default(),
+            ),
+        )
+        .unwrap(),
+        1
+    );
+    let newer = sdf_chunk_payload(chunk_id, ChunkRevision(2), ChunkGeneration(2), 225);
+    let mut newer_descriptor = runtime_sdf_descriptor(7122, &newer);
+    newer_descriptor.lineage.source_revision = 2;
+    assert_eq!(
+        enqueue_runtime_sdf_package(
+            &mut app,
+            WorldSdfRuntimePayloadPackage::new(
+                newer_descriptor.clone(),
+                vec![newer.clone()],
+                RegionSdfSummary::default(),
+            ),
+        )
+        .unwrap(),
+        1
+    );
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("newer generation should supersede the old pending candidate");
+    assert_eq!(
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&chunk_id),
+        Some(&newer)
+    );
+    assert_eq!(
+        app.world()
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap()
+            .product(newer_descriptor.product_core().identity),
+        Some(&newer_descriptor)
+    );
+    assert_eq!(
+        app.world()
+            .resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>()
+            .unwrap()
+            .capability(newer_descriptor.product_core().identity),
+        None
+    );
+}
+
+#[test]
+fn queued_dirty_build_does_not_consume_runtime_package_pending_generation() {
+    let mut app = fixed_world_app();
+    let chunk_id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 47, y: 0, z: 0 });
+
+    // Leave an already-admitted dirty BuildQueue item unprocessed for one tick.
+    app.world_mut()
+        .resource_mut::<WorldBuildJobRuntimeResource>()
+        .unwrap()
+        .max_jobs_per_update = 0;
+    app.world_mut()
+        .resource_mut::<DirtyChunkMapResource>()
+        .unwrap()
+        .mark_dirty(chunk_id, DirtyReason::Geometry);
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("dirty chunk should enter the queue without dispatch");
+    assert!(
+        app.world()
+            .resource::<BuildQueueResource>()
+            .unwrap()
+            .contains_chunk(chunk_id),
+        "dirty build item must remain queued"
+    );
+
+    // Runtime-package intake claims generation 1, while that older queue item
+    // still exists. Dispatch must not replace the package or erase dirtiness.
+    app.world_mut()
+        .resource_mut::<WorldBuildJobRuntimeResource>()
+        .unwrap()
+        .max_jobs_per_update = 4;
+    let package_payload = sdf_chunk_payload(chunk_id, ChunkRevision(1), ChunkGeneration(1), 231);
+    let package_descriptor = runtime_sdf_descriptor(7125, &package_payload);
+    enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            package_descriptor,
+            vec![package_payload.clone()],
+            RegionSdfSummary::default(),
+        ),
+    )
+    .expect("external package should claim its own pending build generation");
+
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("external payload should integrate without losing dirty reasons");
+    let store = app.world().resource::<SdfChunkStoreResource>().unwrap();
+    assert_eq!(store.chunks.get(&chunk_id), Some(&package_payload));
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&chunk_id)
+        .unwrap();
+    assert!(
+        matches!(record.lifecycle, ChunkLifecycleState::Dirty),
+        "pending package must not consume an unrelated queued dirty build"
+    );
+    assert!(
+        !record.dirty_reasons.is_empty(),
+        "dirty reasons must survive the external payload integration"
+    );
+    assert!(record.pending_build_generation.is_none());
+    assert!(
+        app.world()
+            .resource::<WorldBuildJobRuntimeResource>()
+            .unwrap()
+            .dropped_jobs
+            > 0,
+        "stale queued dispatch should be rejected"
+    );
+
+    // With no pending package left, the still-dirty chunk rebuilds ordinarily.
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("preserved dirty source should rebuild at the next generation");
+    let next = app
+        .world()
+        .resource::<SdfChunkStoreResource>()
+        .unwrap()
+        .chunks
+        .get(&chunk_id)
+        .unwrap();
+    assert_eq!(next.chunk_generation, ChunkGeneration(2));
+    assert_eq!(next.chunk_revision, ChunkRevision(2));
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&chunk_id)
+        .unwrap();
+    assert!(
+        matches!(record.lifecycle, ChunkLifecycleState::Ready),
+        "follow-up rebuild should recover the ordinary ready lifecycle"
+    );
+    assert!(record.dirty_reasons.is_empty());
+    assert!(record.pending_build_generation.is_none());
 }
 
 #[test]
