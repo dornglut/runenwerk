@@ -781,13 +781,25 @@ fn completed_runtime_generation_cannot_be_replayed_after_integration() {
                 .get(&chunk_id),
             Some(&accepted)
         );
+        let unchanged_record = app
+            .world()
+            .resource::<WorldChunkRuntimeMapResource>()
+            .unwrap()
+            .by_chunk_id
+            .get(&chunk_id)
+            .unwrap();
+        assert_eq!(unchanged_record.chunk_revision, record.chunk_revision);
+        assert_eq!(unchanged_record.chunk_generation, record.chunk_generation);
+        assert_eq!(unchanged_record.build_generation, record.build_generation);
         assert_eq!(
-            app.world()
-                .resource::<WorldChunkRuntimeMapResource>()
-                .unwrap()
-                .by_chunk_id
-                .get(&chunk_id),
-            Some(&record)
+            unchanged_record.pending_build_generation,
+            record.pending_build_generation
+        );
+        assert_eq!(unchanged_record.lifecycle, record.lifecycle);
+        assert_eq!(unchanged_record.gameplay_locked, record.gameplay_locked);
+        assert_eq!(
+            unchanged_record.dirty_reasons.is_empty(),
+            record.dirty_reasons.is_empty()
         );
         assert_eq!(
             app.world()
