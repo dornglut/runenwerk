@@ -7,7 +7,10 @@
 mod session;
 mod topology_view;
 
-pub use session::{CaveInspectionAttempt, CaveInspectionSession};
+pub use session::{
+    CaveInspectedView, CaveInspectionAttempt, CaveInspectionSession, CaveSessionIssue,
+    CaveViewRevision,
+};
 pub use topology_view::{
     CaveSelection, CaveTopologyView, CaveViewError, ChamberView, PassageView, ViewPoint,
     project_cave_topology,

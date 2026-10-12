@@ -9,7 +9,7 @@ use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 
 use crate::{CaveInspectionAttempt, CaveInspectionSession, CaveSelection, project_cave_topology};
 
-fn recipe(seed: &str) -> CaveRecipeDraft {
+pub(crate) fn recipe(seed: &str) -> CaveRecipeDraft {
     let world = WorldId::new(7);
     CaveRecipeDraft {
         document_id: ProcgenDocumentId::new(17),
@@ -33,7 +33,7 @@ fn recipe(seed: &str) -> CaveRecipeDraft {
     }
 }
 
-fn request(attempt_limit: u16) -> CaveGenerationRequest {
+pub(crate) fn request(attempt_limit: u16) -> CaveGenerationRequest {
     CaveGenerationRequest {
         attempt_limit,
         control: CaveGenerationControl::Run,
@@ -43,7 +43,7 @@ fn request(attempt_limit: u16) -> CaveGenerationRequest {
 #[test]
 fn source_backed_view_replays_and_preserves_real_endpoints() {
     let mut session = CaveInspectionSession::default();
-    session.regenerate(recipe("repeatable"), request(5));
+    session.regenerate(recipe("repeatable"), request(5)).unwrap();
     let candidate = session.last_good().unwrap();
     let first = project_cave_topology(candidate).unwrap();
     let replay = project_cave_topology(candidate).unwrap();
@@ -74,8 +74,8 @@ fn source_backed_view_replays_and_preserves_real_endpoints() {
 fn two_seeds_differ_in_actual_graph_connections() {
     let mut left = CaveInspectionSession::default();
     let mut right = CaveInspectionSession::default();
-    left.regenerate(recipe("north-seed"), request(1));
-    right.regenerate(recipe("south-seed"), request(1));
+    left.regenerate(recipe("north-seed"), request(1)).unwrap();
+    right.regenerate(recipe("south-seed"), request(1)).unwrap();
     let a = left.last_good().unwrap();
     let b = right.last_good().unwrap();
     assert_ne!(a.passages(), b.passages());
@@ -87,33 +87,47 @@ fn two_seeds_differ_in_actual_graph_connections() {
 #[test]
 fn selection_is_typed_and_cleared_on_new_candidate() {
     let mut session = CaveInspectionSession::default();
-    assert!(!session.select(CaveSelection::Chamber(procgen::CaveChamberId::new(1))));
-    session.regenerate(recipe("first"), request(1));
+    assert!(session.view().unwrap().is_none());
+    session.regenerate(recipe("first"), request(1)).unwrap();
+    let first_revision = session.view().unwrap().unwrap().revision;
     let first = session.last_good().unwrap();
     let chamber = CaveSelection::Chamber(first.chambers()[0].id);
     let passage = CaveSelection::Passage(first.passages()[0].id);
-    assert!(session.select(chamber));
-    assert!(session.select(passage));
+    assert!(session.select(first_revision, chamber));
+    assert!(session.select(first_revision, passage));
     assert_eq!(session.selection(), Some(passage));
-    assert!(!session.select(CaveSelection::Chamber(procgen::CaveChamberId::new(9999))));
+    assert!(!session.select(
+        first_revision,
+        CaveSelection::Chamber(procgen::CaveChamberId::new(9999))
+    ));
     assert_eq!(session.selection(), Some(passage));
-    session.regenerate(recipe("second"), request(1));
+    session.regenerate(recipe("second"), request(1)).unwrap();
+    let next_revision = session.view().unwrap().unwrap().revision;
+    assert_ne!(first_revision, next_revision);
     assert_eq!(session.selection(), None);
     assert!(session.last_good().is_some());
+    // Identical numeric source IDs are deliberately reused in cave B.
+    assert!(session.last_good().unwrap().chambers().iter().any(|node| {
+        node.id == first.chambers()[0].id
+    }));
+    assert!(!session.select(first_revision, chamber));
+    assert_eq!(session.selection(), None);
+    assert!(session.select(next_revision, chamber));
 }
 
 #[test]
 fn rejected_source_and_generator_failures_preserve_last_good_and_selection() {
     let mut session = CaveInspectionSession::default();
-    session.regenerate(recipe("accepted"), request(1));
+    session.regenerate(recipe("accepted"), request(1)).unwrap();
     let previous = session.last_good().unwrap().clone();
     let selection = CaveSelection::Chamber(previous.chambers()[0].id);
-    assert!(session.select(selection));
+    let revision = session.view().unwrap().unwrap().revision;
+    assert!(session.select(revision, selection));
     let previous_view = session.view().unwrap();
 
     let mut invalid = recipe("invalid");
     invalid.seed.clear();
-    session.regenerate(invalid, request(1));
+    session.regenerate(invalid, request(1)).unwrap();
     assert!(matches!(
         session.latest_attempt(),
         Some(CaveInspectionAttempt::InvalidSource(
@@ -122,7 +136,7 @@ fn rejected_source_and_generator_failures_preserve_last_good_and_selection() {
     ));
     assert_eq!(session.last_good(), Some(&previous));
 
-    session.regenerate(recipe("bad-budget"), request(0));
+    session.regenerate(recipe("bad-budget"), request(0)).unwrap();
     assert!(matches!(
         session.latest_attempt(),
         Some(CaveInspectionAttempt::Generated { outcome, .. })
@@ -136,7 +150,7 @@ fn rejected_source_and_generator_failures_preserve_last_good_and_selection() {
         max_passages: 2,
         required_cycles: 1,
     };
-    session.regenerate(impossible, request(1));
+    session.regenerate(impossible, request(1)).unwrap();
     assert!(matches!(
         session.latest_attempt(),
         Some(CaveInspectionAttempt::Generated { outcome, .. })
@@ -148,13 +162,15 @@ fn rejected_source_and_generator_failures_preserve_last_good_and_selection() {
         CaveGenerationControl::Cancelled,
         CaveGenerationControl::Stale,
     ] {
-        session.regenerate(
-            recipe("new-cancelled"),
-            CaveGenerationRequest {
-                attempt_limit: 1,
-                control,
-            },
-        );
+        session
+            .regenerate(
+                recipe("new-cancelled"),
+                CaveGenerationRequest {
+                    attempt_limit: 1,
+                    control,
+                },
+            )
+            .unwrap();
         assert!(matches!(
             session.latest_attempt(),
             Some(CaveInspectionAttempt::Generated { outcome, .. })
@@ -163,5 +179,7 @@ fn rejected_source_and_generator_failures_preserve_last_good_and_selection() {
         assert_eq!(session.last_good(), Some(&previous));
         assert_eq!(session.selection(), Some(selection));
         assert_eq!(session.view().unwrap(), previous_view);
+        // Failed attempts must not retire the still-displayed candidate revision.
+        assert!(session.select(revision, selection));
     }
 }
