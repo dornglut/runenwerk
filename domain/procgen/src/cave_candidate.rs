@@ -319,7 +319,9 @@ pub fn ratify_cave_topology(
     if let Some(&start) = chamber_ids.iter().next() {
         let mut pending = vec![start];
         while let Some(chamber) = pending.pop() {
-            if reached.insert(chamber) && let Some(neighbors) = adjacency.get(&chamber) {
+            if reached.insert(chamber)
+                && let Some(neighbors) = adjacency.get(&chamber)
+            {
                 pending.extend(neighbors.iter().copied());
             }
         }

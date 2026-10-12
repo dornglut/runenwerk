@@ -257,11 +257,7 @@ pub(crate) mod tests {
             Err(CaveSourceIssue::EmptyVersionOrSeed)
         );
         let mut draft = original.description();
-        draft.scope = ProcgenScope::new(
-            WorldId::new(8),
-            original.scope().chunk_ids.clone(),
-            [],
-        );
+        draft.scope = ProcgenScope::new(WorldId::new(8), original.scope().chunk_ids.clone(), []);
         assert_eq!(
             ProcgenCaveRecipe::try_new(draft),
             Err(CaveSourceIssue::InvalidWorldScope)
@@ -290,7 +286,10 @@ pub(crate) mod tests {
     #[test]
     fn canonical_description_and_source_identity_changes() {
         let original = valid_source();
-        assert_eq!(ProcgenCaveRecipe::try_new(original.description()), Ok(original.clone()));
+        assert_eq!(
+            ProcgenCaveRecipe::try_new(original.description()),
+            Ok(original.clone())
+        );
         assert_eq!(original.determinism_key(), valid_source().determinism_key());
 
         let mut draft = original.description();
