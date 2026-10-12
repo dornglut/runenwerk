@@ -8,14 +8,14 @@
 use std::collections::{HashMap, HashSet};
 
 use runen_render::composition_2d::{
-    Render2dAffineTransform, Render2dColorRgba8, Render2dComposition, Render2dCompositionError,
-    Render2dEntry, Render2dFillRule, Render2dFontBinding, Render2dGeometryError, Render2dGlyph,
-    Render2dItem, Render2dOpacity, Render2dPath, Render2dPathCommand, Render2dPoint,
-    Render2dPrimitive, Render2dResourceBinding, Render2dResourceBindingError,
-    Render2dResourceBindings, Render2dResourceError, Render2dResourceId,
-    Render2dResourceValue, Render2dShapedTextPrimitive, Render2dShapedTextResource,
-    Render2dShape, Render2dRect, Render2dCornerRadii, Render2dBrush,
-    Render2dStrokeStyle, Render2dStrokeCap, Render2dStrokeJoin,
+    Render2dAffineTransform, Render2dBrush, Render2dColorRgba8, Render2dComposition,
+    Render2dCompositionError, Render2dCornerRadii, Render2dEntry, Render2dFillRule,
+    Render2dFontBinding, Render2dGeometryError, Render2dGlyph, Render2dItem, Render2dOpacity,
+    Render2dPath, Render2dPathCommand, Render2dPoint, Render2dPrimitive, Render2dRect,
+    Render2dResourceBinding, Render2dResourceBindingError, Render2dResourceBindings,
+    Render2dResourceError, Render2dResourceId, Render2dResourceValue, Render2dShape,
+    Render2dShapedTextPrimitive, Render2dShapedTextResource, Render2dStrokeCap, Render2dStrokeJoin,
+    Render2dStrokeStyle,
 };
 use runenui_core::{
     Brush, LogicalRect, LogicalTransform, PaintPrimitive, PathFillRule, PathVerb, ResourceRef,
@@ -234,29 +234,26 @@ fn project_item(
     }
     let transform = project_translation(item.local_to_surface())?;
 
-    let primitive = match item.primitive() {
-        PaintPrimitive::Fill { shape, brush } => Render2dPrimitive::Fill {
-            shape: project_shape(shape)?,
-            brush: project_solid_brush(brush)?,
-        },
-        PaintPrimitive::Stroke {
-            shape,
-            brush,
-            style,
-        } => Render2dPrimitive::Stroke {
-            shape: project_shape(shape)?,
-            brush: project_solid_brush(brush)?,
-            style: project_stroke_style(*style)?,
-        },
-        PaintPrimitive::ShapedTextRun(run) => Render2dPrimitive::ShapedText(project_shaped_text(
-            scene,
-            run,
-            identities,
-            bound_resources,
-            bindings,
-        )?),
-        _ => return Err(RunenUi2dProjectionError::Primitive),
-    };
+    let primitive =
+        match item.primitive() {
+            PaintPrimitive::Fill { shape, brush } => Render2dPrimitive::Fill {
+                shape: project_shape(shape)?,
+                brush: project_solid_brush(brush)?,
+            },
+            PaintPrimitive::Stroke {
+                shape,
+                brush,
+                style,
+            } => Render2dPrimitive::Stroke {
+                shape: project_shape(shape)?,
+                brush: project_solid_brush(brush)?,
+                style: project_stroke_style(*style)?,
+            },
+            PaintPrimitive::ShapedTextRun(run) => Render2dPrimitive::ShapedText(
+                project_shaped_text(scene, run, identities, bound_resources, bindings)?,
+            ),
+            _ => return Err(RunenUi2dProjectionError::Primitive),
+        };
 
     Ok(Render2dItem::new(
         primitive,
@@ -348,8 +345,12 @@ fn project_shape(shape: &SceneShape) -> Result<Render2dShape, RunenUi2dProjectio
                 .iter()
                 .map(|verb| {
                     Ok(match *verb {
-                        PathVerb::MoveTo(point) => Render2dPathCommand::MoveTo(project_point(point)?),
-                        PathVerb::LineTo(point) => Render2dPathCommand::LineTo(project_point(point)?),
+                        PathVerb::MoveTo(point) => {
+                            Render2dPathCommand::MoveTo(project_point(point)?)
+                        }
+                        PathVerb::LineTo(point) => {
+                            Render2dPathCommand::LineTo(project_point(point)?)
+                        }
                         PathVerb::QuadraticTo { control, to } => Render2dPathCommand::QuadraticTo {
                             control: project_point(control)?,
                             to: project_point(to)?,
@@ -445,7 +446,10 @@ mod tests {
     fn flat_fills_preserve_rect_colors_and_rounded_ellipse_shapes() {
         let rect = runenui_core::LogicalRect::try_new(3.0, 5.0, 40.0, 24.0).unwrap();
         let shape = project_shape(&SceneShape::rect(rect)).unwrap();
-        assert_eq!(shape.as_rect(), Some(Render2dRect::new(3.0, 5.0, 40.0, 24.0).unwrap()));
+        assert_eq!(
+            shape.as_rect(),
+            Some(Render2dRect::new(3.0, 5.0, 40.0, 24.0).unwrap())
+        );
         let color = runenui_core::Color::rgba(18, 37, 91, 190);
         assert_eq!(
             project_solid_brush(&Brush::solid(color)).unwrap(),
@@ -456,10 +460,18 @@ mod tests {
             runenui_core::Radius::all(runenui_core::LogicalLength::new(8.0).unwrap()),
         );
         let result = project_shape(&rounded).unwrap();
-        assert_eq!(result.kind(), runen_render::composition_2d::Render2dShapeKind::RoundedRect);
-        assert_eq!(result.as_rounded_rect().unwrap().0, project_rect(rect).unwrap());
         assert_eq!(
-            project_shape(&SceneShape::ellipse(rect)).unwrap().as_ellipse(),
+            result.kind(),
+            runen_render::composition_2d::Render2dShapeKind::RoundedRect
+        );
+        assert_eq!(
+            result.as_rounded_rect().unwrap().0,
+            project_rect(rect).unwrap()
+        );
+        assert_eq!(
+            project_shape(&SceneShape::ellipse(rect))
+                .unwrap()
+                .as_ellipse(),
             Some(project_rect(rect).unwrap())
         );
     }
@@ -514,7 +526,9 @@ mod tests {
 
     #[test]
     fn gradient_brushes_fail_closed_and_do_not_fake_solid_coverage() {
-        use runenui_core::{Color, GradientStop, GradientStops, LinearGradient, LogicalPoint, UnitInterval};
+        use runenui_core::{
+            Color, GradientStop, GradientStops, LinearGradient, LogicalPoint, UnitInterval,
+        };
         let stops = GradientStops::new(vec![
             GradientStop::new(UnitInterval::ZERO, Color::BLACK),
             GradientStop::new(UnitInterval::ONE, Color::WHITE),
