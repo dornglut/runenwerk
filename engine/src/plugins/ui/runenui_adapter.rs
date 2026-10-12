@@ -8,8 +8,7 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
     AppRuntime, HostRequestToken, InputObservationError, InputPumpBatch, InputShutdownBatch,
-    PumpBudget,
-    SurfaceBuildContext, SurfacePublication,
+    PumpBudget, SurfaceBuildContext, SurfacePublication,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -1545,6 +1544,24 @@ mod tests {
                 .is_none()
         );
         assert!(associations.displayed_for_mapping(slot, mapping).is_none());
+        assert!(associations.update_mapping(slot, mapping));
+        assert!(
+            associations.displayed_for_mapping(slot, mapping).is_none(),
+            "returning to an identical native mapping cannot resurrect an old Present"
+        );
+        let fresh_id = associations
+            .stage(binding.clone(), mapping, 4, first.clone())
+            .expect("new generation required after native remap");
+        assert!(associations.associate_accepted_submission(fresh_id));
+        assert!(associations.promote_completed_publication(fresh_id).is_some());
+        assert!(associations.displayed_for_mapping(slot, mapping).is_some());
+        associations.invalidate_mapping(slot);
+        assert!(associations.displayed_for_mapping(slot, mapping).is_none());
+        assert!(associations.update_mapping(slot, mapping));
+        assert!(
+            associations.displayed_for_mapping(slot, mapping).is_none(),
+            "detached surface cannot regain stale displayed input on reattach"
+        );
         associations.unbind(slot);
         assert!(associations.binding(slot).is_none());
     }
