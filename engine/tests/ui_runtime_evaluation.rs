@@ -124,7 +124,7 @@ fn ui_runtime_button_activation_egresses_as_runenwerk_route_intent() {
             .is_empty()
     );
 
-    assert!(slots.unmount(slot_id));
+    assert_eq!(slots.unmount(slot_id), Ok(true));
     assert!(!slots.contains(slot_id));
 }
 

@@ -153,8 +153,8 @@ fn ui_mount_unmount_shuts_down_and_removes_engine_slot() {
         .world_mut()
         .resource_mut::<UiRuntimeSlotsResource>()
         .unwrap();
-    assert!(slots.unmount(slot_id));
+    assert_eq!(slots.unmount(slot_id), Ok(true));
     assert!(slots.is_empty());
     assert!(!slots.contains(slot_id));
-    assert!(!slots.unmount(slot_id));
+    assert_eq!(slots.unmount(slot_id), Ok(false));
 }
