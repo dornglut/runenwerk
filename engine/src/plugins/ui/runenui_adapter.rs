@@ -81,6 +81,8 @@ pub enum UiRuntimeSlotMountFailure {
     UnsupportedProjection,
     FontProvisioning,
     RuntimeInitialization,
+    SlotIdentityExhausted,
+    SlotCapacityExhausted,
 }
 
 impl UiRuntimeSlotMountFailure {
@@ -95,6 +97,8 @@ impl UiRuntimeSlotMountFailure {
             Self::RuntimeInitialization => {
                 "RunenUI slot mount could not admit initial application work"
             }
+            Self::SlotIdentityExhausted => "RunenUI slot mount identity space is exhausted",
+            Self::SlotCapacityExhausted => "RunenUI slot mount storage could not be reserved",
         }
     }
 }
@@ -455,6 +459,19 @@ impl UiRuntimeSlotsResource {
             );
         }
 
+        let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::SlotIdentityExhausted,
+            );
+        };
+        if self.slots.try_reserve(1).is_err() {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::SlotCapacityExhausted,
+            );
+        }
+
         let mut runtime = AppRuntime::<RunenwerkProgramUiApp>::mount(RunenwerkProgramUiState {
             source,
             artifact,
@@ -466,12 +483,6 @@ impl UiRuntimeSlotsResource {
             return UiRuntimeSlotMountReport::rejected(screen_id, failure);
         }
 
-        let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
-            return UiRuntimeSlotMountReport::rejected(
-                screen_id,
-                UiRuntimeSlotMountFailure::UnsupportedProjection,
-            );
-        };
         let slot_id = UiRuntimeSlotId(self.next_slot_id);
         self.next_slot_id = next_slot_id;
         self.slots.push(UiRuntimeSlot {
@@ -503,9 +514,15 @@ impl UiRuntimeSlotsResource {
         let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
             return UiRuntimeSlotMountReport::rejected(
                 screen_id,
-                UiRuntimeSlotMountFailure::UnsupportedProjection,
+                UiRuntimeSlotMountFailure::SlotIdentityExhausted,
             );
         };
+        if self.slots.try_reserve(1).is_err() {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::SlotCapacityExhausted,
+            );
+        }
         let mut runtime = AppRuntime::<A>::mount(state);
         if let Err(error) = provision_text_fonts(&mut runtime, fonts) {
             let _ = runtime.shutdown();
@@ -2442,7 +2459,7 @@ mod tests {
         );
         assert_eq!(
             exhausted.failure(),
-            Some(UiRuntimeSlotMountFailure::UnsupportedProjection)
+            Some(UiRuntimeSlotMountFailure::SlotIdentityExhausted)
         );
         assert!(slots.is_empty());
         assert_eq!(slots.next_slot_id, u64::MAX);
