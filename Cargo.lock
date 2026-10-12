@@ -3365,6 +3365,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "runenwerk_pcg_lab"
+version = "0.1.0"
+dependencies = [
+ "procgen",
+ "runen-spatial",
+]
+
+[[package]]
 name = "runenwerk_render_lab"
 version = "0.1.0"
 dependencies = [
