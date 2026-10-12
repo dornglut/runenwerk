@@ -5,6 +5,7 @@
 pub mod bake;
 pub mod catalog;
 pub mod cave_candidate;
+pub mod cave_generation;
 pub mod cave_source;
 pub mod determinism;
 pub mod document;
@@ -28,6 +29,10 @@ pub use cave_candidate::{
     CaveQualityCriterion, CaveQualityEvidence, CaveSubject, CaveTopologyAssessment,
     CaveTopologyIssue, CaveTopologyIssueCode, CaveTopologyProposal, CaveTopologyStatus,
     ProcgenCaveTopologyCandidate, ratify_cave_topology,
+};
+pub use cave_generation::{
+    CaveGenerationControl, CaveGenerationIssue, CaveGenerationOutcome, CaveGenerationRequest,
+    CaveGenerationStatus, generate_cave_topology,
 };
 pub use cave_source::{
     CAVE_MAX_ATTEMPTS, CAVE_MAX_CHAMBERS, CAVE_MAX_PASSAGES, CAVE_TOPOLOGY_SCHEMA_VERSION,
