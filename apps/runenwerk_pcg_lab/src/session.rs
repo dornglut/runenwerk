@@ -6,9 +6,7 @@ use procgen::{
     ProcgenCaveRecipe, ProcgenCaveTopologyCandidate, generate_cave_topology,
 };
 
-use crate::topology_view::{
-    CaveSelection, CaveTopologyView, CaveViewError, project_cave_topology,
-};
+use crate::topology_view::{CaveSelection, CaveTopologyView, CaveViewError, project_cave_topology};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CaveInspectionAttempt {
@@ -58,8 +56,7 @@ impl CaveInspectionSession {
                     self.last_good = Some(accepted.clone());
                     self.selection = None;
                 }
-                self.latest_attempt =
-                    Some(CaveInspectionAttempt::Generated { source, outcome });
+                self.latest_attempt = Some(CaveInspectionAttempt::Generated { source, outcome });
             }
         }
     }
@@ -87,6 +84,9 @@ impl CaveInspectionSession {
     /// Derived layout is cheap (C1A max 64 chambers), so do not keep a second
     /// mutable cache or let its coordinates become procedural source data.
     pub fn view(&self) -> Result<Option<CaveTopologyView>, CaveViewError> {
-        self.last_good.as_ref().map(project_cave_topology).transpose()
+        self.last_good
+            .as_ref()
+            .map(project_cave_topology)
+            .transpose()
     }
 }

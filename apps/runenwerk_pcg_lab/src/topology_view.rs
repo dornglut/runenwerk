@@ -3,9 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use procgen::{
-    CaveChamberId, CavePassageId, ProcgenCaveTopologyCandidate,
-};
+use procgen::{CaveChamberId, CavePassageId, ProcgenCaveTopologyCandidate};
 
 const VIEW_MARGIN: i32 = 96;
 const LAYER_STEP: i32 = 176;
@@ -140,8 +138,5 @@ pub fn project_cave_topology(
             })
         })
         .collect::<Result<Vec<_>, CaveViewError>>()?;
-    Ok(CaveTopologyView {
-        chambers,
-        passages,
-    })
+    Ok(CaveTopologyView { chambers, passages })
 }

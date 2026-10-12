@@ -1,15 +1,13 @@
 //! Headless proof of the real Procgen → PCG Lab inspection boundary.
 
 use procgen::{
-    CaveGenerationBudget, CaveGenerationControl, CaveGenerationIssue, CaveGenerationRequest,
-    CaveGenerationStatus, CaveRecipeDraft, CaveSourceIssue, CaveTopologyRules,
-    ProcgenDocumentId, ProcgenGeneratorId, ProcgenScope, CAVE_TOPOLOGY_SCHEMA_VERSION,
+    CAVE_TOPOLOGY_SCHEMA_VERSION, CaveGenerationBudget, CaveGenerationControl, CaveGenerationIssue,
+    CaveGenerationRequest, CaveGenerationStatus, CaveRecipeDraft, CaveSourceIssue,
+    CaveTopologyRules, ProcgenDocumentId, ProcgenGeneratorId, ProcgenScope,
 };
 use runen_spatial::{ChunkCoord3, ChunkId, WorldId};
 
-use crate::{
-    CaveInspectionAttempt, CaveInspectionSession, CaveSelection, project_cave_topology,
-};
+use crate::{CaveInspectionAttempt, CaveInspectionSession, CaveSelection, project_cave_topology};
 
 fn recipe(seed: &str) -> CaveRecipeDraft {
     let world = WorldId::new(7);
@@ -64,7 +62,12 @@ fn source_backed_view_replays_and_preserves_real_endpoints() {
         assert_eq!(edge.start, from.center);
         assert_eq!(edge.end, to.center);
     }
-    assert!(first.chambers.iter().all(|n| n.center.x >= 96 && n.center.y >= 96));
+    assert!(
+        first
+            .chambers
+            .iter()
+            .all(|n| n.center.x >= 96 && n.center.y >= 96)
+    );
 }
 
 #[test]
@@ -113,7 +116,9 @@ fn rejected_source_and_generator_failures_preserve_last_good_and_selection() {
     session.regenerate(invalid, request(1));
     assert!(matches!(
         session.latest_attempt(),
-        Some(CaveInspectionAttempt::InvalidSource(CaveSourceIssue::EmptyVersionOrSeed))
+        Some(CaveInspectionAttempt::InvalidSource(
+            CaveSourceIssue::EmptyVersionOrSeed
+        ))
     ));
     assert_eq!(session.last_good(), Some(&previous));
 
@@ -139,7 +144,10 @@ fn rejected_source_and_generator_failures_preserve_last_good_and_selection() {
                 && outcome.issue == Some(CaveGenerationIssue::NoFeasibleChamberCount)
     ));
 
-    for control in [CaveGenerationControl::Cancelled, CaveGenerationControl::Stale] {
+    for control in [
+        CaveGenerationControl::Cancelled,
+        CaveGenerationControl::Stale,
+    ] {
         session.regenerate(
             recipe("new-cancelled"),
             CaveGenerationRequest {
