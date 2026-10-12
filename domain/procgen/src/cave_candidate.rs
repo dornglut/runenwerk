@@ -605,11 +605,14 @@ mod tests {
         assert!(has_issue(&assessment, CaveTopologyIssueCode::ChamberCount));
         assert!(assessment.candidate.is_none());
         let mut oversized = valid_proposal();
-        oversized.quality = vec![CaveQualityEvidence {
-            subject: CaveSubject::Topology,
-            criterion: CaveQualityCriterion::Branching,
-            score: 1,
-        }; 513];
+        oversized.quality = vec![
+            CaveQualityEvidence {
+                subject: CaveSubject::Topology,
+                criterion: CaveQualityCriterion::Branching,
+                score: 1,
+            };
+            513
+        ];
         let assessment = evaluate(&source, oversized);
         assert!(has_issue(&assessment, CaveTopologyIssueCode::QualityCount));
         assert!(assessment.candidate.is_none());
