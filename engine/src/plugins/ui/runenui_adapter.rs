@@ -457,7 +457,6 @@ impl UiRuntimeSlotsResource {
     ) -> UiRuntimeSlotMountReport
     where
         A: UiApp + 'static,
-        AppRuntime<A>: Send + Sync + 'static,
     {
         let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
             return UiRuntimeSlotMountReport::rejected(

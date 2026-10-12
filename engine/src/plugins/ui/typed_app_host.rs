@@ -10,7 +10,7 @@ use runenui_runtime::{
 
 /// The only erased work is truly common Engine host plumbing. Application
 /// actions, state and host responses never cross this interface.
-pub(super) trait TypedRuntimeOps: Send + Sync {
+pub(super) trait TypedRuntimeOps {
     fn pending_redraw(&mut self) -> bool;
     fn publish_surface(
         &mut self,
@@ -25,10 +25,7 @@ pub(super) struct TypedRuntime<A: UiApp> {
     pub(super) runtime: AppRuntime<A>,
 }
 
-impl<A: UiApp + 'static> TypedRuntimeOps for TypedRuntime<A>
-where
-    AppRuntime<A>: Send + Sync + 'static,
-{
+impl<A: UiApp + 'static> TypedRuntimeOps for TypedRuntime<A> {
     fn pending_redraw(&mut self) -> bool {
         self.runtime.take_redraw_request().is_some()
     }

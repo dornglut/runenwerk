@@ -51,7 +51,6 @@ impl UiAppMounting<'_> {
     ) -> UiRuntimeSlotMountReport
     where
         A: runenui_core::UiApp + 'static,
-        runenui_runtime::AppRuntime<A>: Send + Sync + 'static,
     {
         self.app.init_resource::<UiRuntimeSlotsResource>();
         self.app
