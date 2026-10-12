@@ -60,10 +60,7 @@ impl CaveGenerationOutcome {
             .and_then(|assessment| assessment.candidate.as_ref())
     }
 
-    fn without_attempts(
-        status: CaveGenerationStatus,
-        issue: Option<CaveGenerationIssue>,
-    ) -> Self {
+    fn without_attempts(status: CaveGenerationStatus, issue: Option<CaveGenerationIssue>) -> Self {
         Self {
             status,
             issue,
@@ -387,7 +384,10 @@ mod tests {
         let source = ProcgenCaveRecipe::try_new(draft).unwrap();
         let outcome = generate_cave_topology(&source, request(4));
         assert_eq!(outcome.status, CaveGenerationStatus::Infeasible);
-        assert_eq!(outcome.issue, Some(CaveGenerationIssue::NoFeasibleChamberCount));
+        assert_eq!(
+            outcome.issue,
+            Some(CaveGenerationIssue::NoFeasibleChamberCount)
+        );
         assert!(outcome.assessments.is_empty());
         assert!(outcome.selected_candidate().is_none());
     }
