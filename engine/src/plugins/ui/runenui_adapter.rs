@@ -7,7 +7,8 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 #[cfg(test)]
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
-    AppRuntime, HostRequestToken, InputObservationError, InputShutdownBatch, PumpBudget,
+    AppRuntime, HostRequestToken, InputObservationError, InputPumpBatch, InputShutdownBatch,
+    PumpBudget,
     SurfaceBuildContext, SurfacePublication,
 };
 use ui_artifacts::UiRuntimeArtifact;
@@ -516,9 +517,9 @@ impl UiRuntimeSlotsResource {
         UiRuntimeSlotMountReport::accepted(screen_id, id)
     }
 
-    /// Typed action ingress; Engine publication epoch advances only after a
-    /// RunenUI admission and complete, fallible pump. M13 observation failures
-    /// remain typed failures, never implicit host quiescence.
+    /// Typed action ingress increments the Engine epoch immediately upon RunenUI
+    /// admission. Incomplete fallible pumps retain the new generation and block
+    /// publication until explicitly settled; they never imply rollback.
     pub fn submit_app_action<A>(
         &mut self,
         slot_id: UiRuntimeSlotId,
