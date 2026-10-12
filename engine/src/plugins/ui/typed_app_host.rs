@@ -15,7 +15,7 @@ pub(super) trait TypedRuntimeOps: Send + Sync {
     fn publish_surface(
         &mut self,
         context: &SurfaceBuildContext<'_>,
-    ) -> Result<SurfacePublication, runenui_runtime::SurfaceBuildError>;
+    ) -> Result<SurfacePublication, runenui_runtime::PublishSurfaceError>;
     fn shutdown(&mut self) -> Result<InputShutdownBatch, InputObservationError>;
     fn as_any(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
@@ -36,7 +36,7 @@ where
     fn publish_surface(
         &mut self,
         context: &SurfaceBuildContext<'_>,
-    ) -> Result<SurfacePublication, runenui_runtime::SurfaceBuildError> {
+    ) -> Result<SurfacePublication, runenui_runtime::PublishSurfaceError> {
         self.runtime.publish_surface(context)
     }
 

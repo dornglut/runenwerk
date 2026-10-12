@@ -738,21 +738,35 @@ impl UiRuntimeSlotsResource {
         publication_facts_for_runtime(runtime)
     }
 
-    /// A failed terminal input-observation preflight does not retire or remove
-    /// the Engine slot. The caller must not reuse its native/presentation identity.
+    /// Returns the actual RunenUI scope-retirement facts to the owning native
+    /// caller, rather than interpreting shutdown success as native-input clearance.
+    /// No slot state is removed if shutdown fails.
     ///
     /// # Errors
-    /// Returns the exact RunenUI input-observation failure before slot removal.
+    /// Returns the exact M13 input-observation error without retiring the slot.
+    pub fn unmount_with_retirement(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<Option<InputShutdownBatch>, UiRuntimeSlotOperationFailure> {
+        let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
+            return Ok(None);
+        };
+        let retirement = self.slots[index].runtime.shutdown()?;
+        self.slots.remove(index);
+        Ok(Some(retirement))
+    }
+
+    /// Counter-compatible unmount result. This is **not** native occurrence
+    /// retirement; U9-C must use the full shutdown batch and exact slot scope.
+    ///
+    /// # Errors
+    /// A failed RunenUI shutdown leaves the slot mounted and identifiable.
     pub fn unmount(
         &mut self,
         slot_id: UiRuntimeSlotId,
     ) -> Result<bool, UiRuntimeSlotOperationFailure> {
-        let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
-            return Ok(false);
-        };
-        let _retirement = self.slots[index].runtime.shutdown()?;
-        self.slots.remove(index);
-        Ok(true)
+        self.unmount_with_retirement(slot_id)
+            .map(|retirement| retirement.is_some())
     }
 
     fn slot(&self, slot_id: UiRuntimeSlotId) -> Option<&UiRuntimeSlot> {
@@ -1850,6 +1864,166 @@ mod tests {
         slots
             .publication_facts(slot_id)
             .expect("RunenUI publication should succeed")
+    }
+
+
+    #[test]
+    fn independent_typed_apps_share_one_slot_namespace_and_counter_publication() {
+        use runenui_core::NoHostProtocol;
+
+        struct IncrementApp;
+        impl UiApp for IncrementApp {
+            type State = i32;
+            type Action = i32;
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(format!("Value {state}"))
+            }
+
+            fn update(
+                state: &mut Self::State,
+                action: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                *state += action;
+                Effects::none()
+            }
+        }
+
+        #[derive(Clone, Debug)]
+        enum ApprovalCommand {
+            Check,
+        }
+        #[derive(Clone, Debug)]
+        enum ApprovalResponse {
+            Accepted,
+        }
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ApprovalKind {
+            Decision,
+        }
+        struct ApprovalProtocol;
+        impl HostProtocol for ApprovalProtocol {
+            type Command = ApprovalCommand;
+            type Response = ApprovalResponse;
+            type ResponseKind = ApprovalKind;
+            fn expected_response(_: &Self::Command) -> Self::ResponseKind {
+                ApprovalKind::Decision
+            }
+            fn response_kind(_: &Self::Response) -> Self::ResponseKind {
+                ApprovalKind::Decision
+            }
+        }
+
+        struct ApprovalApp;
+        enum ApprovalAction {
+            Toggle,
+            Completed,
+        }
+        impl UiApp for ApprovalApp {
+            type State = bool;
+            type Action = ApprovalAction;
+            type HostProtocol = ApprovalProtocol;
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(if *state { "approved" } else { "pending" })
+            }
+            fn update(
+                state: &mut Self::State,
+                action: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                match action {
+                    ApprovalAction::Toggle => {
+                        *state = !*state;
+                        Effects::host_request(None, ApprovalCommand::Check, |_| {
+                            ApprovalAction::Completed
+                        })
+                    }
+                    ApprovalAction::Completed => Effects::none(),
+                }
+            }
+        }
+
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").unwrap()],
+            );
+        let mut slots = UiRuntimeSlotsResource::default();
+        let counter = mount_counter(&mut slots);
+        let increment = slots
+            .mount_app::<IncrementApp>(UiTypedScreenId::new("ordinary.increment"), 1, &fonts)
+            .slot_id()
+            .expect("first ordinary app mounts");
+        let approval = slots
+            .mount_app::<ApprovalApp>(UiTypedScreenId::new("ordinary.approval"), false, &fonts)
+            .slot_id()
+            .expect("second distinct ordinary app mounts");
+        assert_eq!(slots.len(), 3);
+        assert_ne!(counter, increment);
+        assert_ne!(increment, approval);
+        assert_eq!(
+            slots.submit_app_action::<IncrementApp>(approval, 9),
+            Err(UiRuntimeSlotOperationFailure::WrongAppKind),
+        );
+        assert_eq!(
+            slots.submit_app_action::<IncrementApp>(counter, 9),
+            Err(UiRuntimeSlotOperationFailure::WrongAppKind),
+        );
+        let before = slots.ingress_epoch(increment).unwrap();
+        slots.submit_app_action::<IncrementApp>(increment, 4).unwrap();
+        assert_eq!(slots.ingress_epoch(increment), Some(before + 1));
+        assert_eq!(
+            slots.observe_app::<IncrementApp, _>(increment, |runtime| *runtime.state()),
+            Ok(5),
+        );
+
+        slots
+            .submit_app_action::<ApprovalApp>(approval, ApprovalAction::Toggle)
+            .unwrap();
+        assert_eq!(
+            slots.observe_app::<ApprovalApp, _>(approval, |runtime| *runtime.state()),
+            Ok(true)
+        );
+        let token = slots
+            .observe_app::<ApprovalApp, _>(approval, |runtime| {
+                let pending = runtime.pending_host_requests();
+                assert_eq!(pending.len(), 1);
+                assert!(matches!(pending[0].command(), ApprovalCommand::Check));
+                pending[0].token()
+            })
+            .unwrap();
+        slots
+            .complete_app_host_request::<ApprovalApp>(
+                approval,
+                &token,
+                ApprovalResponse::Accepted,
+            )
+            .unwrap();
+        assert!(
+            slots
+                .observe_app::<ApprovalApp, _>(approval, |runtime| runtime
+                    .pending_host_requests()
+                    .is_empty())
+                .unwrap()
+        );
+
+        let style = StyleEnvironment::default();
+        let surface = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(
+                LogicalLength::from(RUNTIME_SURFACE_WIDTH),
+                LogicalLength::from(RUNTIME_SURFACE_HEIGHT),
+            ),
+        );
+        for slot in [increment, approval] {
+            let publication = slots.publish_surface_for_slot(slot, &surface).unwrap();
+            assert!(!publication.paint_scene().items().is_empty());
+        }
+        let retirement = slots.unmount_with_retirement(increment).unwrap();
+        assert!(retirement.is_some());
+        assert!(!slots.contains(increment));
+        assert!(slots.contains(approval));
+        assert!(slots.contains(counter));
     }
 
     fn mount_counter(slots: &mut UiRuntimeSlotsResource) -> UiRuntimeSlotId {
