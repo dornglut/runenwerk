@@ -319,10 +319,8 @@ pub fn ratify_cave_topology(
     if let Some(&start) = chamber_ids.iter().next() {
         let mut pending = vec![start];
         while let Some(chamber) = pending.pop() {
-            if reached.insert(chamber) {
-                if let Some(neighbors) = adjacency.get(&chamber) {
-                    pending.extend(neighbors.iter().copied());
-                }
+            if reached.insert(chamber) && let Some(neighbors) = adjacency.get(&chamber) {
+                pending.extend(neighbors.iter().copied());
             }
         }
     }
@@ -477,18 +475,9 @@ mod tests {
     fn changed_source_and_attempt_change_candidate_identity() {
         let source = valid_source();
         let first = evaluate(&source, valid_proposal()).candidate.unwrap();
-        let changed = ProcgenCaveRecipe::try_new(
-            source.document_id(),
-            source.generator_id(),
-            crate::CAVE_TOPOLOGY_SCHEMA_VERSION,
-            source.generator_version(),
-            source.source_revision(),
-            "seed-B",
-            source.scope().clone(),
-            source.rules(),
-            source.budget(),
-        )
-        .unwrap();
+        let mut changed_draft = source.description();
+        changed_draft.seed = "seed-B".to_owned();
+        let changed = ProcgenCaveRecipe::try_new(changed_draft).unwrap();
         let second = evaluate(&changed, valid_proposal()).candidate.unwrap();
         assert_ne!(first.candidate_id(), second.candidate_id());
         assert_ne!(first.recipe(), second.recipe());
@@ -561,21 +550,9 @@ mod tests {
     #[test]
     fn required_cycle_and_quality_subject_are_verified() {
         let source = valid_source();
-        let cyc = ProcgenCaveRecipe::try_new(
-            source.document_id(),
-            source.generator_id(),
-            crate::CAVE_TOPOLOGY_SCHEMA_VERSION,
-            source.generator_version(),
-            source.source_revision(),
-            source.seed(),
-            source.scope().clone(),
-            crate::CaveTopologyRules {
-                required_cycles: 1,
-                ..source.rules()
-            },
-            source.budget(),
-        )
-        .unwrap();
+        let mut cycle_draft = source.description();
+        cycle_draft.rules.required_cycles = 1;
+        let cyc = ProcgenCaveRecipe::try_new(cycle_draft).unwrap();
         let issue = evaluate(&cyc, valid_proposal());
         assert!(has_issue(&issue, CaveTopologyIssueCode::InsufficientCycles));
         let mut proposal = valid_proposal();

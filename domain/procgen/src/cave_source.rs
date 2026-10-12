@@ -37,6 +37,21 @@ pub enum CaveSourceIssue {
     InvalidAttemptBudget,
 }
 
+/// Editable/untrusted recipe request. Only ProcgenCaveRecipe::try_new
+/// may ratify it; callers may change a description and re-ratify.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaveRecipeDraft {
+    pub document_id: ProcgenDocumentId,
+    pub generator_id: ProcgenGeneratorId,
+    pub schema_version: String,
+    pub generator_version: String,
+    pub source_revision: String,
+    pub seed: String,
+    pub scope: ProcgenScope,
+    pub rules: CaveTopologyRules,
+    pub budget: CaveGenerationBudget,
+}
+
 /// One immutable, validated authored cave source. The ordinary ProcgenDocument
 /// and its required WorldOps/field-output ratification are unchanged.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,26 +67,24 @@ pub struct ProcgenCaveRecipe {
 }
 
 impl ProcgenCaveRecipe {
-    pub fn try_new(
-        document_id: ProcgenDocumentId,
-        generator_id: ProcgenGeneratorId,
-        schema_version: &str,
-        generator_version: impl Into<String>,
-        source_revision: impl Into<String>,
-        seed: impl Into<String>,
-        scope: ProcgenScope,
-        rules: CaveTopologyRules,
-        budget: CaveGenerationBudget,
-    ) -> Result<Self, CaveSourceIssue> {
+    pub fn try_new(draft: CaveRecipeDraft) -> Result<Self, CaveSourceIssue> {
+        let CaveRecipeDraft {
+            document_id,
+            generator_id,
+            schema_version,
+            generator_version,
+            source_revision,
+            seed,
+            scope,
+            rules,
+            budget,
+        } = draft;
         if document_id.is_empty() || generator_id.is_empty() {
             return Err(CaveSourceIssue::MissingIdentity);
         }
         if schema_version != CAVE_TOPOLOGY_SCHEMA_VERSION {
             return Err(CaveSourceIssue::UnsupportedSchema);
         }
-        let generator_version = generator_version.into();
-        let source_revision = source_revision.into();
-        let seed = seed.into();
         if generator_version.trim().is_empty()
             || source_revision.trim().is_empty()
             || seed.trim().is_empty()
@@ -153,6 +166,20 @@ impl ProcgenCaveRecipe {
         self.budget
     }
 
+    pub fn description(&self) -> CaveRecipeDraft {
+        CaveRecipeDraft {
+            document_id: self.document_id,
+            generator_id: self.generator_id,
+            schema_version: CAVE_TOPOLOGY_SCHEMA_VERSION.to_owned(),
+            generator_version: self.generator_version.clone(),
+            source_revision: self.source_revision.clone(),
+            seed: self.seed.clone(),
+            scope: self.scope.clone(),
+            rules: self.rules,
+            budget: self.budget,
+        }
+    }
+
     /// Reproducible candidate namespace, not a collision-free source proof.
     /// Consumers requiring authority must compare the full typed source too.
     pub fn determinism_key(&self) -> String {
@@ -185,178 +212,121 @@ pub(crate) mod tests {
 
     pub(crate) fn valid_source() -> ProcgenCaveRecipe {
         let world = WorldId::new(7);
-        ProcgenCaveRecipe::try_new(
-            ProcgenDocumentId::new(17),
-            ProcgenGeneratorId::new(19),
-            CAVE_TOPOLOGY_SCHEMA_VERSION,
-            "cave-generator.v1",
-            "authored-1",
-            "seed-A",
-            ProcgenScope::new(
+        ProcgenCaveRecipe::try_new(CaveRecipeDraft {
+            document_id: ProcgenDocumentId::new(17),
+            generator_id: ProcgenGeneratorId::new(19),
+            schema_version: CAVE_TOPOLOGY_SCHEMA_VERSION.to_owned(),
+            generator_version: "cave-generator.v1".to_owned(),
+            source_revision: "authored-1".to_owned(),
+            seed: "seed-A".to_owned(),
+            scope: ProcgenScope::new(
                 world,
                 [ChunkId::new(world, ChunkCoord3 { x: 0, y: 0, z: 0 })],
                 [],
             ),
-            CaveTopologyRules {
+            rules: CaveTopologyRules {
                 min_chambers: 2,
                 max_chambers: 4,
                 max_passages: 4,
                 required_cycles: 0,
             },
-            CaveGenerationBudget { max_attempts: 8 },
-        )
+            budget: CaveGenerationBudget { max_attempts: 8 },
+        })
         .expect("valid cave recipe")
     }
 
     #[test]
     fn source_rejects_invalid_identity_scope_rules_and_budget() {
-        let s = valid_source();
-        let attempt = |id, rules, budget| {
-            ProcgenCaveRecipe::try_new(
-                id,
-                s.generator_id(),
-                CAVE_TOPOLOGY_SCHEMA_VERSION,
-                s.generator_version(),
-                s.source_revision(),
-                s.seed(),
-                s.scope().clone(),
-                rules,
-                budget,
-            )
-        };
+        let original = valid_source();
+        let mut draft = original.description();
+        draft.document_id = ProcgenDocumentId::new(0);
         assert_eq!(
-            attempt(ProcgenDocumentId::new(0), s.rules(), s.budget()),
+            ProcgenCaveRecipe::try_new(draft),
             Err(CaveSourceIssue::MissingIdentity)
         );
+        let mut draft = original.description();
+        draft.schema_version = "unknown-schema".to_owned();
         assert_eq!(
-            attempt(
-                s.document_id(),
-                CaveTopologyRules {
-                    min_chambers: 5,
-                    ..s.rules()
-                },
-                s.budget()
-            ),
-            Err(CaveSourceIssue::InvalidChamberBounds)
-        );
-        assert_eq!(
-            attempt(
-                s.document_id(),
-                CaveTopologyRules {
-                    max_passages: 1,
-                    required_cycles: 2,
-                    ..s.rules()
-                },
-                s.budget()
-            ),
-            Err(CaveSourceIssue::ContradictoryCycleRequirement)
-        );
-        assert_eq!(
-            attempt(
-                s.document_id(),
-                s.rules(),
-                CaveGenerationBudget { max_attempts: 0 }
-            ),
-            Err(CaveSourceIssue::InvalidAttemptBudget)
-        );
-        assert_eq!(
-            ProcgenCaveRecipe::try_new(
-                s.document_id(),
-                s.generator_id(),
-                "unrecognized-schema",
-                s.generator_version(),
-                s.source_revision(),
-                s.seed(),
-                s.scope().clone(),
-                s.rules(),
-                s.budget(),
-            ),
+            ProcgenCaveRecipe::try_new(draft),
             Err(CaveSourceIssue::UnsupportedSchema)
         );
+        let mut draft = original.description();
+        draft.source_revision.clear();
         assert_eq!(
-            ProcgenCaveRecipe::try_new(
-                s.document_id(),
-                s.generator_id(),
-                CAVE_TOPOLOGY_SCHEMA_VERSION,
-                s.generator_version(),
-                s.source_revision(),
-                s.seed(),
-                ProcgenScope::new(WorldId::new(8), s.scope().chunk_ids.clone(), []),
-                s.rules(),
-                s.budget(),
-            ),
+            ProcgenCaveRecipe::try_new(draft),
+            Err(CaveSourceIssue::EmptyVersionOrSeed)
+        );
+        let mut draft = original.description();
+        draft.scope = ProcgenScope::new(
+            WorldId::new(8),
+            original.scope().chunk_ids.clone(),
+            [],
+        );
+        assert_eq!(
+            ProcgenCaveRecipe::try_new(draft),
             Err(CaveSourceIssue::InvalidWorldScope)
+        );
+        let mut draft = original.description();
+        draft.rules.min_chambers = 5;
+        assert_eq!(
+            ProcgenCaveRecipe::try_new(draft),
+            Err(CaveSourceIssue::InvalidChamberBounds)
+        );
+        let mut draft = original.description();
+        draft.rules.max_passages = 1;
+        draft.rules.required_cycles = 2;
+        assert_eq!(
+            ProcgenCaveRecipe::try_new(draft),
+            Err(CaveSourceIssue::ContradictoryCycleRequirement)
+        );
+        let mut draft = original.description();
+        draft.budget.max_attempts = 0;
+        assert_eq!(
+            ProcgenCaveRecipe::try_new(draft),
+            Err(CaveSourceIssue::InvalidAttemptBudget)
         );
     }
 
     #[test]
-    fn recipe_identity_changes_with_seed_version_scope_and_rules() {
-        let a = valid_source();
-        let make = |seed: &str, version: &str, scope: ProcgenScope, rules| {
-            ProcgenCaveRecipe::try_new(
-                a.document_id(),
-                a.generator_id(),
-                CAVE_TOPOLOGY_SCHEMA_VERSION,
-                version,
-                a.source_revision(),
-                seed,
-                scope,
-                rules,
-                a.budget(),
-            )
-            .unwrap()
-        };
-        assert_eq!(a, valid_source());
-        assert_eq!(a.determinism_key(), valid_source().determinism_key());
+    fn canonical_description_and_source_identity_changes() {
+        let original = valid_source();
+        assert_eq!(ProcgenCaveRecipe::try_new(original.description()), Ok(original.clone()));
+        assert_eq!(original.determinism_key(), valid_source().determinism_key());
+
+        let mut draft = original.description();
+        draft.seed = "seed-B".to_owned();
         assert_ne!(
-            a.determinism_key(),
-            make(
-                "seed-B",
-                a.generator_version(),
-                a.scope().clone(),
-                a.rules()
-            )
-            .determinism_key()
+            original.determinism_key(),
+            ProcgenCaveRecipe::try_new(draft).unwrap().determinism_key()
         );
+        let mut draft = original.description();
+        draft.generator_version = "gen-2".to_owned();
         assert_ne!(
-            a.determinism_key(),
-            make("seed-A", "gen-2", a.scope().clone(), a.rules()).determinism_key()
+            original.determinism_key(),
+            ProcgenCaveRecipe::try_new(draft).unwrap().determinism_key()
         );
-        let changed_revision = ProcgenCaveRecipe::try_new(
-            a.document_id(),
-            a.generator_id(),
-            CAVE_TOPOLOGY_SCHEMA_VERSION,
-            a.generator_version(),
-            "authored-2",
-            a.seed(),
-            a.scope().clone(),
-            a.rules(),
-            a.budget(),
-        )
-        .unwrap();
-        assert_ne!(a.determinism_key(), changed_revision.determinism_key());
+        let mut draft = original.description();
+        draft.source_revision = "authored-2".to_owned();
         assert_ne!(
-            a.determinism_key(),
-            make(
-                "seed-A",
-                a.generator_version(),
-                a.scope().clone(),
-                CaveTopologyRules {
-                    required_cycles: 1,
-                    ..a.rules()
-                }
-            )
-            .determinism_key()
+            original.determinism_key(),
+            ProcgenCaveRecipe::try_new(draft).unwrap().determinism_key()
         );
-        let world = a.scope().world_id;
-        let another = ProcgenScope::new(
+        let mut draft = original.description();
+        draft.rules.required_cycles = 1;
+        assert_ne!(
+            original.determinism_key(),
+            ProcgenCaveRecipe::try_new(draft).unwrap().determinism_key()
+        );
+        let mut draft = original.description();
+        let world = original.scope().world_id;
+        draft.scope = ProcgenScope::new(
             world,
             [ChunkId::new(world, ChunkCoord3 { x: 1, y: 0, z: 0 })],
             [],
         );
         assert_ne!(
-            a.determinism_key(),
-            make("seed-A", a.generator_version(), another, a.rules()).determinism_key()
+            original.determinism_key(),
+            ProcgenCaveRecipe::try_new(draft).unwrap().determinism_key()
         );
     }
 }

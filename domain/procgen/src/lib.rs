@@ -31,7 +31,7 @@ pub use cave_candidate::{
 };
 pub use cave_source::{
     CAVE_MAX_ATTEMPTS, CAVE_MAX_CHAMBERS, CAVE_MAX_PASSAGES, CAVE_TOPOLOGY_SCHEMA_VERSION,
-    CaveGenerationBudget, CaveSourceIssue, CaveTopologyRules, ProcgenCaveRecipe,
+    CaveGenerationBudget, CaveRecipeDraft, CaveSourceIssue, CaveTopologyRules, ProcgenCaveRecipe,
 };
 pub use determinism::{
     ProcgenDeterminismKey, determinism_key_for_document, parameter_hash_for_document,
