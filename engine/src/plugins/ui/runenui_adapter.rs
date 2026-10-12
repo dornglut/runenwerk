@@ -1982,6 +1982,14 @@ mod tests {
     fn independent_typed_apps_share_one_slot_namespace_and_counter_publication() {
         use runenui_core::NoHostProtocol;
 
+        use crate::plugins::render::RenderFrameProducerId;
+        use crate::plugins::render::host::RenderSurfaceId;
+        use crate::plugins::ui::presentation::{
+            UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
+            UiRuntimePresentationBinding,
+        };
+        use crate::runtime::NativeWindowId;
+
         struct IncrementApp;
         impl UiApp for IncrementApp {
             type State = i32;
@@ -2105,6 +2113,15 @@ mod tests {
                 pending[0].token()
             })
             .unwrap();
+        assert_eq!(
+            slots.complete_app_host_request::<ApprovalApp>(
+                increment,
+                &token,
+                ApprovalResponse::Accepted,
+            ),
+            Err(UiRuntimeSlotOperationFailure::WrongAppKind),
+            "a host request cannot be completed in a different typed application"
+        );
         slots
             .complete_app_host_request::<ApprovalApp>(approval, &token, ApprovalResponse::Accepted)
             .unwrap();
@@ -2124,10 +2141,77 @@ mod tests {
                 LogicalLength::from(RUNTIME_SURFACE_HEIGHT),
             ),
         );
-        for slot in [increment, approval] {
-            let publication = slots.publish_surface_for_slot(slot, &surface).unwrap();
-            assert!(!publication.paint_scene().items().is_empty());
-        }
+        let increment_publication = slots.publish_surface_for_slot(increment, &surface).unwrap();
+        let approval_publication = slots.publish_surface_for_slot(approval, &surface).unwrap();
+        assert!(!increment_publication.paint_scene().items().is_empty());
+        assert!(!approval_publication.paint_scene().items().is_empty());
+
+        // Both unlike apps use the SAME Engine association ledger with
+        // independent slot/producer identity. Synthetic terminal transitions
+        // below test correlation only; native Vulkan proves real GPU execution.
+        let render_surface = RenderSurfaceId::primary();
+        let mapping = UiRuntimeNativeMapping::new(
+            NativeWindowId::primary(),
+            render_surface,
+            (320, 160),
+            1.0,
+        )
+        .expect("native mapping");
+        let increment_binding = UiRuntimePresentationBinding::new(
+            increment,
+            RenderFrameProducerId::try_from_raw(91).expect("producer identity"),
+            render_surface,
+            style.clone(),
+        );
+        let approval_binding = UiRuntimePresentationBinding::new(
+            approval,
+            RenderFrameProducerId::try_from_raw(92).expect("producer identity"),
+            render_surface,
+            style,
+        );
+        let mut associations = UiRuntimePresentationAssociationsResource::default();
+        associations.bind(increment_binding.clone()).unwrap();
+        associations.bind(approval_binding.clone()).unwrap();
+        assert!(associations.update_mapping(increment, mapping));
+        assert!(associations.update_mapping(approval, mapping));
+        let first_id = associations
+            .stage(
+                increment_binding.clone(),
+                mapping,
+                slots.ingress_epoch(increment).unwrap(),
+                increment_publication.clone(),
+            )
+            .unwrap();
+        let second_id = associations
+            .stage(
+                approval_binding,
+                mapping,
+                slots.ingress_epoch(approval).unwrap(),
+                approval_publication,
+            )
+            .unwrap();
+        assert!(associations.associate_accepted_submission(first_id));
+        assert!(associations.associate_accepted_submission(second_id));
+        assert!(associations.displayed_for_mapping(increment, mapping).is_none());
+        assert!(associations.displayed_for_mapping(approval, mapping).is_none());
+        assert!(associations.reject_terminal_publication(first_id));
+        assert!(associations.promote_completed_publication(second_id).is_some());
+        assert!(associations.displayed_for_mapping(increment, mapping).is_none());
+        assert!(associations.displayed_for_mapping(approval, mapping).is_some());
+
+        let retry_id = associations
+            .stage(
+                increment_binding,
+                mapping,
+                slots.ingress_epoch(increment).unwrap(),
+                increment_publication,
+            )
+            .unwrap();
+        assert!(associations.associate_accepted_submission(retry_id));
+        assert!(associations.promote_completed_publication(retry_id).is_some());
+        assert!(associations.displayed_for_mapping(increment, mapping).is_some());
+        assert!(associations.displayed_for_mapping(approval, mapping).is_some());
+
         let retirement = slots.unmount_with_retirement(increment).unwrap();
         assert!(retirement.is_some());
         assert!(!slots.contains(increment));
@@ -2504,7 +2588,10 @@ mod tests {
                 InputObservationError::Capacity
             ))
         ));
-        assert!(slots.contains(id), "failed shutdown cannot destroy its slot");
+        assert!(
+            slots.contains(id),
+            "failed shutdown cannot destroy its slot"
+        );
         assert_eq!(slots.ingress_epoch(id), Some(1));
 
         let retirement = slots
@@ -2512,12 +2599,19 @@ mod tests {
             .expect("retry succeeds")
             .expect("accepted shutdown returns actual retirement");
         assert_eq!(retirement.final_ownership().status(), RuntimeStatus::Closed);
-        assert!(retirement
-            .ordered_records()
-            .iter()
-            .any(|record| matches!(record, InputArbitrationRecord::ScopeRetired(_))));
+        assert!(
+            retirement
+                .ordered_records()
+                .iter()
+                .any(|record| matches!(record, InputArbitrationRecord::ScopeRetired(_)))
+        );
         assert!(!slots.contains(id));
-        assert_eq!(slots.unmount_with_retirement(id).map(|value| value.is_none()), Ok(true));
+        assert_eq!(
+            slots
+                .unmount_with_retirement(id)
+                .map(|value| value.is_none()),
+            Ok(true)
+        );
     }
 
     #[test]
