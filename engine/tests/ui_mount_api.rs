@@ -205,7 +205,10 @@ fn typed_app_mount_rejection_records_the_same_engine_diagnostic_as_counter() {
         .world()
         .resource::<UiRuntimeDiagnosticsResource>()
         .unwrap();
-    let last = diagnostics.entries().last().expect("typed mount rejection diagnostic");
+    let last = diagnostics
+        .entries()
+        .last()
+        .expect("typed mount rejection diagnostic");
     assert_eq!(last.code, UiRuntimeDiagnosticCode::RuntimeSlotMountRejected);
     let facts = last
         .runtime_slot_mount
@@ -217,4 +220,3 @@ fn typed_app_mount_rejection_records_the_same_engine_diagnostic_as_counter() {
         UiRuntimeSlotMountFailure::FontProvisioning
     );
 }
-
