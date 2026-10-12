@@ -2,14 +2,14 @@
 //! C1A defines candidate admission; C1B will own actual graph generation.
 
 use crate::{
-    ProcgenDocumentId, ProcgenGeneratorId, ProcgenScope,
-    determinism::stable_nonzero_hash64,
+    ProcgenDocumentId, ProcgenGeneratorId, ProcgenScope, determinism::stable_nonzero_hash64,
 };
 
 pub const CAVE_TOPOLOGY_SCHEMA_VERSION: &str = "procgen.cave.topology.v1";
 pub const CAVE_MAX_CHAMBERS: u16 = 64;
 pub const CAVE_MAX_PASSAGES: u16 = 256;
 pub const CAVE_MAX_ATTEMPTS: u16 = 128;
+pub const CAVE_MAX_SCOPES: usize = 64;
 
 /// Topological hard requirements; no geometry, agent-radius or game-objective claim.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,7 +78,11 @@ impl ProcgenCaveRecipe {
         {
             return Err(CaveSourceIssue::EmptyVersionOrSeed);
         }
-        if scope.world_id.get() == 0 || !scope.is_bounded() || !scope.all_ids_match_world() {
+        if scope.world_id.get() == 0
+            || !scope.is_bounded()
+            || !scope.all_ids_match_world()
+            || scope.chunk_ids.len().saturating_add(scope.region_ids.len()) > CAVE_MAX_SCOPES
+        {
             return Err(CaveSourceIssue::InvalidWorldScope);
         }
         if rules.min_chambers < 2
@@ -306,13 +310,31 @@ pub(crate) mod tests {
         assert_eq!(a.determinism_key(), valid_source().determinism_key());
         assert_ne!(
             a.determinism_key(),
-            make("seed-B", a.generator_version(), a.scope().clone(), a.rules())
-                .determinism_key()
+            make(
+                "seed-B",
+                a.generator_version(),
+                a.scope().clone(),
+                a.rules()
+            )
+            .determinism_key()
         );
         assert_ne!(
             a.determinism_key(),
             make("seed-A", "gen-2", a.scope().clone(), a.rules()).determinism_key()
         );
+        let changed_revision = ProcgenCaveRecipe::try_new(
+            a.document_id(),
+            a.generator_id(),
+            CAVE_TOPOLOGY_SCHEMA_VERSION,
+            a.generator_version(),
+            "authored-2",
+            a.seed(),
+            a.scope().clone(),
+            a.rules(),
+            a.budget(),
+        )
+        .unwrap();
+        assert_ne!(a.determinism_key(), changed_revision.determinism_key());
         assert_ne!(
             a.determinism_key(),
             make(

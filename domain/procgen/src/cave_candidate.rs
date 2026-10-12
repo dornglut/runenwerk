@@ -5,7 +5,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    ProcgenCandidateId, ProcgenCaveRecipe,
+    CAVE_MAX_CHAMBERS, CAVE_MAX_PASSAGES, ProcgenCandidateId, ProcgenCaveRecipe,
     determinism::stable_nonzero_hash64,
 };
 
@@ -102,6 +102,7 @@ pub enum CaveTopologyIssueCode {
     DuplicatePassageId,
     DuplicateConnection,
     PassageCount,
+    QualityCount,
     SelfConnection,
     UnknownEndpoint,
     Disconnected,
@@ -182,7 +183,7 @@ pub fn ratify_cave_topology(
         status: CaveTopologyStatus::Rejected,
         source: recipe.clone(),
         attempt,
-        proposal: proposal.clone(),
+        proposal,
         issues: Vec::new(),
         candidate: None,
     };
@@ -207,6 +208,24 @@ pub fn ratify_cave_topology(
         return assessment;
     }
 
+    // Bound untrusted generated buffers before sorting, scanning or copying.
+    let excessive = if assessment.proposal.chambers.len() > usize::from(CAVE_MAX_CHAMBERS) {
+        Some(CaveTopologyIssueCode::ChamberCount)
+    } else if assessment.proposal.passages.len() > usize::from(CAVE_MAX_PASSAGES) {
+        Some(CaveTopologyIssueCode::PassageCount)
+    } else if assessment.proposal.quality.len() > 512 {
+        Some(CaveTopologyIssueCode::QualityCount)
+    } else {
+        None
+    };
+    if let Some(code) = excessive {
+        assessment.issues.push(CaveTopologyIssue {
+            code,
+            subject: CaveSubject::Topology,
+        });
+        return assessment;
+    }
+    let proposal = &mut assessment.proposal;
     proposal.chambers.sort_by_key(|chamber| chamber.id);
     proposal.passages.sort_by_key(|passage| passage.id);
     proposal.quality.sort();
@@ -279,8 +298,14 @@ pub fn ratify_cave_topology(
             && chamber_ids.contains(&passage.from)
             && chamber_ids.contains(&passage.to)
         {
-            adjacency.entry(passage.from).or_default().insert(passage.to);
-            adjacency.entry(passage.to).or_default().insert(passage.from);
+            adjacency
+                .entry(passage.from)
+                .or_default()
+                .insert(passage.to);
+            adjacency
+                .entry(passage.to)
+                .or_default()
+                .insert(passage.from);
         }
     }
     if proposal.passages.len() > usize::from(recipe.rules().max_passages) {
@@ -308,7 +333,9 @@ pub fn ratify_cave_topology(
         });
     }
     if reached.len() == chamber_ids.len()
-        && connections.len().saturating_sub(chamber_ids.len().saturating_sub(1))
+        && connections
+            .len()
+            .saturating_sub(chamber_ids.len().saturating_sub(1))
             < usize::from(recipe.rules().required_cycles)
     {
         assessment.issues.push(CaveTopologyIssue {
@@ -338,7 +365,6 @@ pub fn ratify_cave_topology(
         }
     }
 
-    assessment.proposal = proposal.clone();
     if !assessment.issues.is_empty() {
         return assessment;
     }
@@ -416,7 +442,10 @@ mod tests {
         }
     }
 
-    fn evaluate(recipe: &ProcgenCaveRecipe, proposal: CaveTopologyProposal) -> CaveTopologyAssessment {
+    fn evaluate(
+        recipe: &ProcgenCaveRecipe,
+        proposal: CaveTopologyProposal,
+    ) -> CaveTopologyAssessment {
         ratify_cave_topology(recipe, 1, CaveProposalDisposition::Completed, proposal)
     }
 
@@ -463,10 +492,14 @@ mod tests {
         let second = evaluate(&changed, valid_proposal()).candidate.unwrap();
         assert_ne!(first.candidate_id(), second.candidate_id());
         assert_ne!(first.recipe(), second.recipe());
-        let later =
-            ratify_cave_topology(&source, 2, CaveProposalDisposition::Completed, valid_proposal())
-                .candidate
-                .unwrap();
+        let later = ratify_cave_topology(
+            &source,
+            2,
+            CaveProposalDisposition::Completed,
+            valid_proposal(),
+        )
+        .candidate
+        .unwrap();
         assert_ne!(first.candidate_id(), later.candidate_id());
     }
 
@@ -485,7 +518,10 @@ mod tests {
             to: id(2),
         });
         let issue = evaluate(&source, proposal);
-        assert!(has_issue(&issue, CaveTopologyIssueCode::DuplicateConnection));
+        assert!(has_issue(
+            &issue,
+            CaveTopologyIssueCode::DuplicateConnection
+        ));
         assert!(issue.candidate.is_none());
     }
 
@@ -552,7 +588,31 @@ mod tests {
         let mut proposal = valid_proposal();
         proposal.quality[0].subject = CaveSubject::Chamber(id(99));
         let issue = evaluate(&source, proposal);
-        assert!(has_issue(&issue, CaveTopologyIssueCode::UnknownQualitySubject));
+        assert!(has_issue(
+            &issue,
+            CaveTopologyIssueCode::UnknownQualitySubject
+        ));
+    }
+
+    #[test]
+    fn unbounded_untrusted_proposals_are_rejected_before_sorting() {
+        let source = valid_source();
+        let mut oversized = valid_proposal();
+        oversized.chambers = (1..=u32::from(CAVE_MAX_CHAMBERS) + 1)
+            .map(|number| CaveChamber { id: id(number) })
+            .collect();
+        let assessment = evaluate(&source, oversized);
+        assert!(has_issue(&assessment, CaveTopologyIssueCode::ChamberCount));
+        assert!(assessment.candidate.is_none());
+        let mut oversized = valid_proposal();
+        oversized.quality = vec![CaveQualityEvidence {
+            subject: CaveSubject::Topology,
+            criterion: CaveQualityCriterion::Branching,
+            score: 1,
+        }; 513];
+        let assessment = evaluate(&source, oversized);
+        assert!(has_issue(&assessment, CaveTopologyIssueCode::QualityCount));
+        assert!(assessment.candidate.is_none());
     }
 
     #[test]
@@ -560,9 +620,15 @@ mod tests {
         let source = valid_source();
         let initial = evaluate(&source, valid_proposal()).candidate.unwrap();
         for (disposition, expected) in [
-            (CaveProposalDisposition::Cancelled, CaveTopologyStatus::Cancelled),
+            (
+                CaveProposalDisposition::Cancelled,
+                CaveTopologyStatus::Cancelled,
+            ),
             (CaveProposalDisposition::Stale, CaveTopologyStatus::Stale),
-            (CaveProposalDisposition::Exhausted, CaveTopologyStatus::Exhausted),
+            (
+                CaveProposalDisposition::Exhausted,
+                CaveTopologyStatus::Exhausted,
+            ),
         ] {
             let result = ratify_cave_topology(&source, 1, disposition, valid_proposal());
             assert_eq!(result.status, expected);
@@ -576,9 +642,16 @@ mod tests {
         );
         assert_eq!(result.status, CaveTopologyStatus::Exhausted);
         assert!(result.candidate.is_none());
-        let result =
-            ratify_cave_topology(&source, 0, CaveProposalDisposition::Completed, valid_proposal());
+        let result = ratify_cave_topology(
+            &source,
+            0,
+            CaveProposalDisposition::Completed,
+            valid_proposal(),
+        );
         assert!(has_issue(&result, CaveTopologyIssueCode::InvalidAttempt));
-        assert_eq!(initial, evaluate(&source, valid_proposal()).candidate.unwrap());
+        assert_eq!(
+            initial,
+            evaluate(&source, valid_proposal()).candidate.unwrap()
+        );
     }
 }
