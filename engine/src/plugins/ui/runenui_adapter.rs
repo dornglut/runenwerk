@@ -1553,7 +1553,11 @@ mod tests {
             .stage(binding.clone(), mapping, 4, first.clone())
             .expect("new generation required after native remap");
         assert!(associations.associate_accepted_submission(fresh_id));
-        assert!(associations.promote_completed_publication(fresh_id).is_some());
+        assert!(
+            associations
+                .promote_completed_publication(fresh_id)
+                .is_some()
+        );
         assert!(associations.displayed_for_mapping(slot, mapping).is_some());
         associations.invalidate_mapping(slot);
         assert!(associations.displayed_for_mapping(slot, mapping).is_none());
