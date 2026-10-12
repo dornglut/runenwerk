@@ -43,7 +43,9 @@ pub(crate) fn request(attempt_limit: u16) -> CaveGenerationRequest {
 #[test]
 fn source_backed_view_replays_and_preserves_real_endpoints() {
     let mut session = CaveInspectionSession::default();
-    session.regenerate(recipe("repeatable"), request(5)).unwrap();
+    session
+        .regenerate(recipe("repeatable"), request(5))
+        .unwrap();
     let candidate = session.last_good().unwrap();
     let first = project_cave_topology(candidate).unwrap();
     let replay = project_cave_topology(candidate).unwrap();
@@ -108,9 +110,14 @@ fn selection_is_typed_and_cleared_on_new_candidate() {
     assert_eq!(session.selection(), None);
     assert!(session.last_good().is_some());
     // Identical numeric source IDs are deliberately reused in cave B.
-    assert!(session.last_good().unwrap().chambers().iter().any(|node| {
-        node.id == chamber_id
-    }));
+    assert!(
+        session
+            .last_good()
+            .unwrap()
+            .chambers()
+            .iter()
+            .any(|node| { node.id == chamber_id })
+    );
     assert!(!session.select(first_revision, chamber));
     assert_eq!(session.selection(), None);
     assert!(session.select(next_revision, chamber));
@@ -137,7 +144,9 @@ fn rejected_source_and_generator_failures_preserve_last_good_and_selection() {
     ));
     assert_eq!(session.last_good(), Some(&previous));
 
-    session.regenerate(recipe("bad-budget"), request(0)).unwrap();
+    session
+        .regenerate(recipe("bad-budget"), request(0))
+        .unwrap();
     assert!(matches!(
         session.latest_attempt(),
         Some(CaveInspectionAttempt::Generated { outcome, .. })

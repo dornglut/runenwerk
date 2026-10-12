@@ -34,7 +34,12 @@ impl CaveViewRevision {
     fn next(previous: Option<Self>) -> Option<Self> {
         match previous {
             None => NonZeroU64::new(1).map(Self),
-            Some(previous) => previous.0.get().checked_add(1).and_then(NonZeroU64::new).map(Self),
+            Some(previous) => previous
+                .0
+                .get()
+                .checked_add(1)
+                .and_then(NonZeroU64::new)
+                .map(Self),
         }
     }
 }
@@ -172,4 +177,3 @@ mod private_tests {
         assert_eq!(session.view().unwrap().unwrap().revision, saturated);
     }
 }
-
