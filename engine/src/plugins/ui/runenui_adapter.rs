@@ -398,11 +398,12 @@ impl UiRuntimeSlot {
     }
 
     fn settle_pending(&mut self) -> Result<(), UiRuntimeSlotOperationFailure> {
-        if self.requires_settlement {
-            self.runtime.settle()?;
-            self.requires_settlement = false;
-        }
-        Ok(())
+        // Poll framework-owned local work as well as previously admitted host
+        // commands. A later timer/subscription completion must not require a
+        // second Engine action merely to advance the sole RunenUI runtime.
+        let result = self.runtime.settle();
+        self.requires_settlement = result.is_err();
+        result
     }
 }
 
@@ -621,7 +622,8 @@ impl UiRuntimeSlotsResource {
         self.slot(slot_id).map(|slot| slot.ingress_epoch)
     }
 
-    /// Resumes a partially processed ingress on the same RunenUI runtime.
+    /// Polls bounded RunenUI application work on the existing invoker thread,
+    /// including resumed partial ingress and framework-owned wakeups.
     /// Publication stays blocked until the pending work is quiescent.
     pub fn settle_slot(
         &mut self,
@@ -2330,6 +2332,68 @@ mod tests {
         );
         assert_eq!(slots.ingress_epoch(slot), Some(1));
         assert!(slots.has_pending_redraw(slot).is_ok());
+    }
+
+    #[test]
+    fn typed_mount_capacity_pause_is_resumable_without_new_engine_action() {
+        use runenui_core::{IntoEffects, NoHostProtocol};
+
+        struct InitialChainApp;
+        impl UiApp for InitialChainApp {
+            type State = usize;
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(format!("Initial steps {state}"))
+            }
+
+            fn initial_effects(_: &Self::State) -> impl IntoEffects<Self::Action, Self::HostProtocol> {
+                Effects::action(())
+            }
+
+            fn update(
+                state: &mut Self::State,
+                (): Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                *state += 1;
+                if *state < 320 {
+                    Effects::action(())
+                } else {
+                    Effects::none()
+                }
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<InitialChainApp>(
+                UiTypedScreenId::new("ordinary.initial-chain"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("capacity-paused initial work keeps a mounted typed application");
+        let partial = slots
+            .observe_app::<InitialChainApp, _>(slot, |runtime| *runtime.state())
+            .unwrap();
+        assert!(partial > 0 && partial < 320);
+        assert_eq!(slots.ingress_epoch(slot), Some(1));
+        assert_eq!(
+            slots.has_pending_redraw(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        for _ in 0..8 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        assert_eq!(
+            slots.observe_app::<InitialChainApp, _>(slot, |runtime| *runtime.state()),
+            Ok(320)
+        );
+        assert!(slots.has_pending_redraw(slot).is_ok());
+        assert_eq!(slots.ingress_epoch(slot), Some(1));
     }
 
     #[test]
