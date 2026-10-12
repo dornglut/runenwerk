@@ -492,14 +492,20 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
-        let slot = self.slot_mut(slot_id).ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let slot = self
+            .slot_mut(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
         let next = slot
             .ingress_epoch
             .checked_add(1)
             .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
-        let runtime = slot.runtime.typed_mut::<A>()
+        let runtime = slot
+            .runtime
+            .typed_mut::<A>()
             .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
-        runtime.submit_action(action).map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
+        runtime
+            .submit_action(action)
+            .map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
         settle(runtime)?;
         slot.ingress_epoch = next;
         Ok(())
@@ -515,8 +521,12 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
-        let slot = self.slot(slot_id).ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
-        let runtime = slot.runtime.typed::<A>()
+        let slot = self
+            .slot(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let runtime = slot
+            .runtime
+            .typed::<A>()
             .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
         Ok(observe(runtime))
     }
@@ -531,12 +541,19 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
-        let slot = self.slot_mut(slot_id).ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
-        let next = slot.ingress_epoch.checked_add(1)
+        let slot = self
+            .slot_mut(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let next = slot
+            .ingress_epoch
+            .checked_add(1)
             .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
-        let runtime = slot.runtime.typed_mut::<A>()
+        let runtime = slot
+            .runtime
+            .typed_mut::<A>()
             .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
-        runtime.complete_host_request(token, response)
+        runtime
+            .complete_host_request(token, response)
             .map_err(|_| UiRuntimeSlotOperationFailure::HostResponseRejected)?;
         settle(runtime)?;
         slot.ingress_epoch = next;
@@ -629,7 +646,9 @@ impl UiRuntimeSlotsResource {
             .checked_add(1)
             .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
         runtime
-            .submit_action(RunenwerkProgramUiAction::ReplaceResolvedState(resolved_state))
+            .submit_action(RunenwerkProgramUiAction::ReplaceResolvedState(
+                resolved_state,
+            ))
             .map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
         settle(runtime)?;
         slot.ingress_epoch = next;
@@ -879,9 +898,7 @@ fn register_controlled_test_font(
     Ok(())
 }
 
-fn settle<A: UiApp>(
-    runtime: &mut AppRuntime<A>,
-) -> Result<(), UiRuntimeSlotOperationFailure> {
+fn settle<A: UiApp>(runtime: &mut AppRuntime<A>) -> Result<(), UiRuntimeSlotOperationFailure> {
     let batch = runtime
         .pump(PumpBudget::new(
             RUNTIME_PUMP_WORK_LIMIT,
@@ -1866,7 +1883,6 @@ mod tests {
             .expect("RunenUI publication should succeed")
     }
 
-
     #[test]
     fn independent_typed_apps_share_one_slot_namespace_and_counter_publication() {
         use runenui_core::NoHostProtocol;
@@ -1970,7 +1986,9 @@ mod tests {
             Err(UiRuntimeSlotOperationFailure::WrongAppKind),
         );
         let before = slots.ingress_epoch(increment).unwrap();
-        slots.submit_app_action::<IncrementApp>(increment, 4).unwrap();
+        slots
+            .submit_app_action::<IncrementApp>(increment, 4)
+            .unwrap();
         assert_eq!(slots.ingress_epoch(increment), Some(before + 1));
         assert_eq!(
             slots.observe_app::<IncrementApp, _>(increment, |runtime| *runtime.state()),
@@ -1993,11 +2011,7 @@ mod tests {
             })
             .unwrap();
         slots
-            .complete_app_host_request::<ApprovalApp>(
-                approval,
-                &token,
-                ApprovalResponse::Accepted,
-            )
+            .complete_app_host_request::<ApprovalApp>(approval, &token, ApprovalResponse::Accepted)
             .unwrap();
         assert!(
             slots
