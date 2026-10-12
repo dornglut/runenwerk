@@ -110,8 +110,18 @@ pub fn generate_cave_topology(
         ]);
         let mut random = CaveRandom::new(seed);
         let count = feasible_counts[random.index(feasible_counts.len())];
-        let proposal = form_proposal(count, rules.max_passages, rules.required_cycles, &mut random);
-        let assessment = ratify_cave_topology(recipe, attempt, CaveProposalDisposition::Completed, proposal);
+        let proposal = form_proposal(
+            count,
+            rules.max_passages,
+            rules.required_cycles,
+            &mut random,
+        );
+        let assessment = ratify_cave_topology(
+            recipe,
+            attempt,
+            CaveProposalDisposition::Completed,
+            proposal,
+        );
         if let Some(candidate) = &assessment.candidate {
             let quality = (
                 quality_score(candidate, CaveQualityCriterion::RouteAlternatives),
@@ -133,10 +143,7 @@ pub fn generate_cave_topology(
     result
 }
 
-fn quality_score(
-    candidate: &ProcgenCaveTopologyCandidate,
-    criterion: CaveQualityCriterion,
-) -> i32 {
+fn quality_score(candidate: &ProcgenCaveTopologyCandidate, criterion: CaveQualityCriterion) -> i32 {
     candidate
         .quality()
         .iter()
@@ -197,7 +204,11 @@ fn form_proposal(
             }
         })
         .collect::<Vec<_>>();
-    let branches = degrees.iter().skip(1).filter(|&&degree| degree >= 3).count();
+    let branches = degrees
+        .iter()
+        .skip(1)
+        .filter(|&&degree| degree >= 3)
+        .count();
     let alternatives = passages.len() - usize::from(count - 1);
 
     CaveTopologyProposal {
@@ -287,11 +298,13 @@ mod tests {
         assert_eq!(first.assessments.len(), 6);
         assert_eq!(first.assessments[0].attempt, 1);
         assert_eq!(first.assessments[5].attempt, 6);
-        assert!(first.assessments.iter().all(CaveTopologyAssessment::is_qualified));
-        assert_eq!(
-            first.selected_candidate().unwrap().recipe(),
-            &source
+        assert!(
+            first
+                .assessments
+                .iter()
+                .all(CaveTopologyAssessment::is_qualified)
         );
+        assert_eq!(first.selected_candidate().unwrap().recipe(), &source);
     }
 
     #[test]
@@ -326,7 +339,11 @@ mod tests {
                 degrees[edge.from.raw() as usize] += 1;
                 degrees[edge.to.raw() as usize] += 1;
             }
-            let counted_branches = degrees.iter().skip(1).filter(|&&degree| degree >= 3).count();
+            let counted_branches = degrees
+                .iter()
+                .skip(1)
+                .filter(|&&degree| degree >= 3)
+                .count();
             assert_eq!(
                 quality_score(candidate, CaveQualityCriterion::Branching),
                 counted_branches as i32
@@ -373,7 +390,10 @@ mod tests {
             .cloned()
             .unwrap();
         for (control, status) in [
-            (CaveGenerationControl::Cancelled, CaveGenerationStatus::Cancelled),
+            (
+                CaveGenerationControl::Cancelled,
+                CaveGenerationStatus::Cancelled,
+            ),
             (CaveGenerationControl::Stale, CaveGenerationStatus::Stale),
         ] {
             let output = generate_cave_topology(
