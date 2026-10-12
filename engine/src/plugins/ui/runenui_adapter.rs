@@ -7,8 +7,8 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 #[cfg(test)]
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
-    AppRuntime, HostRequestToken, InputObservationError, PumpBudget, SurfaceBuildContext,
-    SurfacePublication,
+    AppRuntime, HostRequestToken, InputObservationError, InputShutdownBatch, PumpBudget,
+    SurfaceBuildContext, SurfacePublication,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -21,6 +21,7 @@ use ui_program::{
 use ui_schema::UiSchemaValue;
 use ui_state::UiStateModel;
 
+use super::typed_app_host::{TypedRuntime, TypedRuntimeOps};
 use super::{UiTypedScreenId, UiTypedSource};
 
 #[cfg(test)]
@@ -107,6 +108,7 @@ pub enum UiRuntimeSlotOperationFailure {
     PublicationRevisionExhausted,
     PublicationRejected,
     InvalidAuthoredId,
+    WrongAppKind,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -287,10 +289,81 @@ impl UiApp for RunenwerkProgramUiApp {
     }
 }
 
+/// Counter-only authored-program behavior is kept separate from common typed
+/// host operations. All variants live in the *same* Engine slot namespace.
+enum UiRuntimeSlotKind {
+    Counter(AppRuntime<RunenwerkProgramUiApp>),
+    Typed(Box<dyn TypedRuntimeOps>),
+}
+
+impl UiRuntimeSlotKind {
+    fn counter(&self) -> Result<&AppRuntime<RunenwerkProgramUiApp>, UiRuntimeSlotOperationFailure> {
+        match self {
+            Self::Counter(runtime) => Ok(runtime),
+            Self::Typed(_) => Err(UiRuntimeSlotOperationFailure::WrongAppKind),
+        }
+    }
+
+    fn counter_mut(
+        &mut self,
+    ) -> Result<&mut AppRuntime<RunenwerkProgramUiApp>, UiRuntimeSlotOperationFailure> {
+        match self {
+            Self::Counter(runtime) => Ok(runtime),
+            Self::Typed(_) => Err(UiRuntimeSlotOperationFailure::WrongAppKind),
+        }
+    }
+
+    fn typed<A: UiApp + 'static>(&self) -> Option<&AppRuntime<A>> {
+        match self {
+            Self::Typed(runtime) => runtime
+                .as_any()
+                .downcast_ref::<TypedRuntime<A>>()
+                .map(|runtime| &runtime.runtime),
+            Self::Counter(_) => None,
+        }
+    }
+
+    fn typed_mut<A: UiApp + 'static>(&mut self) -> Option<&mut AppRuntime<A>> {
+        match self {
+            Self::Typed(runtime) => runtime
+                .as_any_mut()
+                .downcast_mut::<TypedRuntime<A>>()
+                .map(|runtime| &mut runtime.runtime),
+            Self::Counter(_) => None,
+        }
+    }
+
+    fn pending_redraw(&mut self) -> bool {
+        match self {
+            Self::Counter(runtime) => runtime.take_redraw_request().is_some(),
+            Self::Typed(runtime) => runtime.pending_redraw(),
+        }
+    }
+
+    fn publish_surface(
+        &mut self,
+        context: &SurfaceBuildContext<'_>,
+    ) -> Result<SurfacePublication, UiRuntimeSlotOperationFailure> {
+        match self {
+            Self::Counter(runtime) => runtime.publish_surface(context),
+            Self::Typed(runtime) => runtime.publish_surface(context),
+        }
+        .map_err(|_| UiRuntimeSlotOperationFailure::PublicationRejected)
+    }
+
+    fn shutdown(&mut self) -> Result<InputShutdownBatch, UiRuntimeSlotOperationFailure> {
+        match self {
+            Self::Counter(runtime) => runtime.shutdown(),
+            Self::Typed(runtime) => runtime.shutdown(),
+        }
+        .map_err(UiRuntimeSlotOperationFailure::InputObservation)
+    }
+}
+
 struct UiRuntimeSlot {
     id: UiRuntimeSlotId,
     screen_id: UiTypedScreenId,
-    runtime: AppRuntime<RunenwerkProgramUiApp>,
+    runtime: UiRuntimeSlotKind,
     /// Host ingress generation only; RunenUI remains the paint/redraw authority.
     ingress_epoch: u64,
 }
@@ -365,10 +438,109 @@ impl UiRuntimeSlotsResource {
         self.slots.push(UiRuntimeSlot {
             id: slot_id,
             screen_id: screen_id.clone(),
-            runtime,
+            runtime: UiRuntimeSlotKind::Counter(runtime),
             ingress_epoch: 1,
         });
         UiRuntimeSlotMountReport::accepted(screen_id, slot_id)
+    }
+
+    /// Mounts one ordinary concrete UiApp in the *existing* Engine slot registry.
+    /// This does not duplicate the normalized input or GPU presentation owners.
+    ///
+    /// # Errors
+    /// Font admission or exhausted slot identity rejects before publication.
+    pub fn mount_app<A>(
+        &mut self,
+        screen_id: UiTypedScreenId,
+        state: A::State,
+        fonts: &UiRuntimeFontConfiguration,
+    ) -> UiRuntimeSlotMountReport
+    where
+        A: UiApp + 'static,
+        AppRuntime<A>: Send + Sync + 'static,
+    {
+        let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::UnsupportedProjection,
+            );
+        };
+        let mut runtime = AppRuntime::<A>::mount(state);
+        if let Err(error) = provision_text_fonts(&mut runtime, fonts) {
+            let _ = runtime.shutdown();
+            return UiRuntimeSlotMountReport::rejected(screen_id, error);
+        }
+        let id = UiRuntimeSlotId(self.next_slot_id);
+        self.next_slot_id = next_slot_id;
+        self.slots.push(UiRuntimeSlot {
+            id,
+            screen_id: screen_id.clone(),
+            runtime: UiRuntimeSlotKind::Typed(Box::new(TypedRuntime { runtime })),
+            ingress_epoch: 1,
+        });
+        UiRuntimeSlotMountReport::accepted(screen_id, id)
+    }
+
+    /// Typed action ingress; Engine publication epoch advances only after a
+    /// RunenUI admission and complete, fallible pump. M13 observation failures
+    /// remain typed failures, never implicit host quiescence.
+    pub fn submit_app_action<A>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        action: A::Action,
+    ) -> Result<(), UiRuntimeSlotOperationFailure>
+    where
+        A: UiApp + 'static,
+    {
+        let slot = self.slot_mut(slot_id).ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let next = slot
+            .ingress_epoch
+            .checked_add(1)
+            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
+        let runtime = slot.runtime.typed_mut::<A>()
+            .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
+        runtime.submit_action(action).map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
+        settle(runtime)?;
+        slot.ingress_epoch = next;
+        Ok(())
+    }
+
+    /// Observe a concrete application's typed state and host requests without
+    /// exposing a mutable runtime that could bypass the Engine publication epoch.
+    pub fn observe_app<A, R>(
+        &self,
+        slot_id: UiRuntimeSlotId,
+        observe: impl FnOnce(&AppRuntime<A>) -> R,
+    ) -> Result<R, UiRuntimeSlotOperationFailure>
+    where
+        A: UiApp + 'static,
+    {
+        let slot = self.slot(slot_id).ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let runtime = slot.runtime.typed::<A>()
+            .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
+        Ok(observe(runtime))
+    }
+
+    /// Completes only this concrete application's own typed host response.
+    pub fn complete_app_host_request<A>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        token: &HostRequestToken,
+        response: <A::HostProtocol as HostProtocol>::Response,
+    ) -> Result<(), UiRuntimeSlotOperationFailure>
+    where
+        A: UiApp + 'static,
+    {
+        let slot = self.slot_mut(slot_id).ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let next = slot.ingress_epoch.checked_add(1)
+            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
+        let runtime = slot.runtime.typed_mut::<A>()
+            .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
+        runtime.complete_host_request(token, response)
+            .map_err(|_| UiRuntimeSlotOperationFailure::HostResponseRejected)?;
+        settle(runtime)?;
+        slot.ingress_epoch = next;
+        Ok(())
     }
 
     #[must_use]
@@ -399,7 +571,7 @@ impl UiRuntimeSlotsResource {
         let slot = self
             .slot_mut(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
-        Ok(slot.runtime.take_redraw_request().is_some())
+        Ok(slot.runtime.pending_redraw())
     }
 
     /// Publishes a slot's complete aligned paint, layout, semantics, and input snapshot.
@@ -413,7 +585,6 @@ impl UiRuntimeSlotsResource {
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?
             .runtime
             .publish_surface(context)
-            .map_err(|_| UiRuntimeSlotOperationFailure::PublicationRejected)
     }
 
     #[must_use]
@@ -439,29 +610,28 @@ impl UiRuntimeSlotsResource {
         let slot = self
             .slot_mut(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
-        let artifact = slot.runtime.state().artifact.clone();
-        let mut resolved_state = slot.runtime.state().resolved_state.clone();
+        let runtime = slot.runtime.counter_mut()?;
+        let artifact = runtime.state().artifact.clone();
+        let mut resolved_state = runtime.state().resolved_state.clone();
         let output = UiEvaluator.evaluate_with_context(&artifact, &mut resolved_state, context);
         if !output.diagnostics.is_empty() {
             return Err(UiRuntimeSlotOperationFailure::EvaluationDiagnostics);
         }
         validate_projection(
-            &slot.runtime.state().source,
+            &runtime.state().source,
             &artifact,
             &resolved_state,
-            &slot.runtime.state().registry,
+            &runtime.state().registry,
         )
         .map_err(|_| UiRuntimeSlotOperationFailure::UnsupportedProjection)?;
         let next = slot
             .ingress_epoch
             .checked_add(1)
             .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
-        slot.runtime
-            .submit_action(RunenwerkProgramUiAction::ReplaceResolvedState(
-                resolved_state,
-            ))
+        runtime
+            .submit_action(RunenwerkProgramUiAction::ReplaceResolvedState(resolved_state))
             .map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
-        settle(&mut slot.runtime)?;
+        settle(runtime)?;
         slot.ingress_epoch = next;
         Ok(())
     }
@@ -480,10 +650,11 @@ impl UiRuntimeSlotsResource {
             .ingress_epoch
             .checked_add(1)
             .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
-        slot.runtime
+        let runtime = slot.runtime.counter_mut()?;
+        runtime
             .submit_automation_command(authored_id, SemanticCommand::Activate)
             .map_err(|_| UiRuntimeSlotOperationFailure::AutomationRejected)?;
-        settle(&mut slot.runtime)?;
+        settle(runtime)?;
         slot.ingress_epoch = next;
         Ok(())
     }
@@ -501,6 +672,7 @@ impl UiRuntimeSlotsResource {
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
         Ok(slot
             .runtime
+            .counter()?
             .pending_host_requests()
             .into_iter()
             .map(|request| UiRuntimePendingEventRequest {
@@ -529,10 +701,11 @@ impl UiRuntimeSlotsResource {
             .ingress_epoch
             .checked_add(1)
             .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
-        slot.runtime
+        let runtime = slot.runtime.counter_mut()?;
+        runtime
             .complete_host_request(&request.token, response)
             .map_err(|_| UiRuntimeSlotOperationFailure::HostResponseRejected)?;
-        settle(&mut slot.runtime)?;
+        settle(runtime)?;
         slot.ingress_epoch = next;
         Ok(())
     }
@@ -545,6 +718,8 @@ impl UiRuntimeSlotsResource {
     ) -> Option<&UiSchemaValue> {
         self.slot(slot_id)?
             .runtime
+            .counter()
+            .ok()?
             .state()
             .resolved_state
             .value(requirement_id)
@@ -558,8 +733,9 @@ impl UiRuntimeSlotsResource {
         let slot = self
             .slot_mut(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
-        register_controlled_test_font(&mut slot.runtime)?;
-        publication_facts_for_runtime(&mut slot.runtime)
+        let runtime = slot.runtime.counter_mut()?;
+        register_controlled_test_font(runtime)?;
+        publication_facts_for_runtime(runtime)
     }
 
     /// A failed terminal input-observation preflight does not retire or remove
@@ -574,10 +750,7 @@ impl UiRuntimeSlotsResource {
         let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
             return Ok(false);
         };
-        let _retirement = self.slots[index]
-            .runtime
-            .shutdown()
-            .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+        let _retirement = self.slots[index].runtime.shutdown()?;
         self.slots.remove(index);
         Ok(true)
     }
@@ -647,8 +820,8 @@ fn publication_facts_for_runtime(
 
 /// Applies host-owned immutable font sources through RunenUI's text authority.
 /// The slot is not published if this provisioning transaction fails.
-fn provision_text_fonts(
-    runtime: &mut AppRuntime<RunenwerkProgramUiApp>,
+fn provision_text_fonts<A: UiApp>(
+    runtime: &mut AppRuntime<A>,
     configuration: &UiRuntimeFontConfiguration,
 ) -> Result<(), UiRuntimeSlotMountFailure> {
     for bytes in &configuration.font_bytes {
@@ -692,8 +865,8 @@ fn register_controlled_test_font(
     Ok(())
 }
 
-fn settle(
-    runtime: &mut AppRuntime<RunenwerkProgramUiApp>,
+fn settle<A: UiApp>(
+    runtime: &mut AppRuntime<A>,
 ) -> Result<(), UiRuntimeSlotOperationFailure> {
     let batch = runtime
         .pump(PumpBudget::new(
@@ -1564,7 +1737,7 @@ mod tests {
             let slot = slots
                 .slot_mut(slot_id)
                 .expect("mounted slot should remain present for repeated publication");
-            publication_facts_for_runtime(&mut slot.runtime)
+            publication_facts_for_runtime(slot.runtime.counter_mut().unwrap())
                 .expect("repeated publication should succeed without changing font policy")
         };
 
