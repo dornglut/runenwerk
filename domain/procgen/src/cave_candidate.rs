@@ -177,7 +177,7 @@ pub fn ratify_cave_topology(
     recipe: &ProcgenCaveRecipe,
     attempt: u16,
     disposition: CaveProposalDisposition,
-    mut proposal: CaveTopologyProposal,
+    proposal: CaveTopologyProposal,
 ) -> CaveTopologyAssessment {
     let mut assessment = CaveTopologyAssessment {
         status: CaveTopologyStatus::Rejected,
@@ -398,9 +398,9 @@ pub fn ratify_cave_topology(
         recipe: recipe.clone(),
         attempt,
         candidate_id: ProcgenCandidateId::new(stable_nonzero_hash64(key_parts)),
-        chambers: proposal.chambers,
-        passages: proposal.passages,
-        quality: proposal.quality,
+        chambers: proposal.chambers.clone(),
+        passages: proposal.passages.clone(),
+        quality: proposal.quality.clone(),
     });
     assessment.status = CaveTopologyStatus::Qualified;
     assessment
