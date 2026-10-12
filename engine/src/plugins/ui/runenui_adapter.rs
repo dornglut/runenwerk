@@ -80,6 +80,7 @@ pub enum UiRuntimeSlotMountFailure {
     ProgramFormation,
     UnsupportedProjection,
     FontProvisioning,
+    RuntimeInitialization,
 }
 
 impl UiRuntimeSlotMountFailure {
@@ -90,6 +91,9 @@ impl UiRuntimeSlotMountFailure {
             Self::UnsupportedProjection => "RunenUI slot mount rejected an unsupported projection",
             Self::FontProvisioning => {
                 "RunenUI slot mount could not apply caller-provided font sources"
+            }
+            Self::RuntimeInitialization => {
+                "RunenUI slot mount could not admit initial application work"
             }
         }
     }
@@ -483,7 +487,9 @@ impl UiRuntimeSlotsResource {
     /// This does not duplicate the normalized input or GPU presentation owners.
     ///
     /// # Errors
-    /// Font admission or exhausted slot identity rejects before publication.
+    /// Font admission, initial observation errors or exhausted slot identity
+    /// reject before publication. Capacity-paused initial work remains mounted
+    /// but is explicitly unsettled until the existing Engine host resumes it.
     pub fn mount_app<A>(
         &mut self,
         screen_id: UiTypedScreenId,
@@ -504,6 +510,20 @@ impl UiRuntimeSlotsResource {
             let _ = runtime.shutdown();
             return UiRuntimeSlotMountReport::rejected(screen_id, error);
         }
+        // RunenUI mounts may emit initial actions/host requests before any host
+        // command or first frame. Drive the same bounded canonical pump once
+        // here; a capacity pause remains resumable, not a false successful flush.
+        let requires_settlement = match settle(&mut runtime) {
+            Ok(()) => false,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => true,
+            Err(_) => {
+                let _ = runtime.shutdown();
+                return UiRuntimeSlotMountReport::rejected(
+                    screen_id,
+                    UiRuntimeSlotMountFailure::RuntimeInitialization,
+                );
+            }
+        };
         let id = UiRuntimeSlotId(self.next_slot_id);
         self.next_slot_id = next_slot_id;
         self.slots.push(UiRuntimeSlot {
@@ -511,7 +531,7 @@ impl UiRuntimeSlotsResource {
             screen_id: screen_id.clone(),
             runtime: UiRuntimeSlotKind::Typed(Box::new(TypedRuntime { runtime })),
             ingress_epoch: 1,
-            requires_settlement: false,
+            requires_settlement,
         });
         UiRuntimeSlotMountReport::accepted(screen_id, id)
     }
@@ -2263,6 +2283,53 @@ mod tests {
         );
         assert!(slots.has_pending_redraw(slot).is_ok());
         assert_eq!(slots.ingress_epoch(slot), Some(preceding_epoch + 1));
+    }
+
+    #[test]
+    fn typed_mount_settles_initial_app_effects_before_first_publication() {
+        use runenui_core::NoHostProtocol;
+
+        struct InitialApp;
+        impl UiApp for InitialApp {
+            type State = usize;
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(format!("Initialized {state}"))
+            }
+
+            fn initial_effects(
+                _: &Self::State,
+            ) -> impl runenui_core::IntoEffects<Self::Action, Self::HostProtocol> {
+                Effects::action(())
+            }
+
+            fn update(
+                state: &mut Self::State,
+                (): Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                *state += 1;
+                Effects::none()
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<InitialApp>(
+                UiTypedScreenId::new("ordinary.initial-effects"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("typed app initialization is admitted");
+        assert_eq!(
+            slots.observe_app::<InitialApp, _>(slot, |runtime| *runtime.state()),
+            Ok(1),
+            "the typed app's initial effect must not be stranded without later host ingress"
+        );
+        assert_eq!(slots.ingress_epoch(slot), Some(1));
+        assert!(slots.has_pending_redraw(slot).is_ok());
     }
 
     #[test]
