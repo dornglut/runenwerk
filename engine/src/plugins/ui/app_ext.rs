@@ -52,12 +52,16 @@ impl UiAppMounting<'_> {
     where
         A: runenui_core::UiApp + 'static,
     {
+        self.app.init_resource::<UiRuntimeDiagnosticsResource>();
         self.app.init_resource::<UiRuntimeSlotsResource>();
-        self.app
+        let report = self
+            .app
             .world_mut()
             .resource_mut::<UiRuntimeSlotsResource>()
             .expect("UiRuntimeSlotsResource initialized before typed app mounting")
-            .mount_app::<A>(screen_id, state, fonts)
+            .mount_app::<A>(screen_id, state, fonts);
+        record_slot_mount_diagnostic(self.app, &report);
+        report
     }
 
     /// Mounts with explicit caller-provided font sources, without an Engine proof-font default.
