@@ -31,7 +31,8 @@ pub use cave_candidate::{
     ProcgenCaveTopologyCandidate, ratify_cave_topology,
 };
 pub use cave_generation::{
-    CaveGenerationControl, CaveGenerationOutcome, CaveGenerationRequest, CaveGenerationStatus,
+    CaveGenerationControl, CaveGenerationIssue, CaveGenerationOutcome, CaveGenerationRequest,
+    CaveGenerationStatus,
     generate_cave_topology,
 };
 pub use cave_source::{

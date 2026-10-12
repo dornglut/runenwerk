@@ -34,11 +34,19 @@ pub enum CaveGenerationStatus {
     Stale,
 }
 
+/// Stable source-linked reasons for failures before an attempt can run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaveGenerationIssue {
+    InvalidAttemptLimit,
+    NoFeasibleChamberCount,
+}
+
 /// Pure result: attempts are immutable evidence and the selected candidate is
 /// the ratifier's own qualified value, not a second parallel acceptance store.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CaveGenerationOutcome {
     pub status: CaveGenerationStatus,
+    pub issue: Option<CaveGenerationIssue>,
     pub assessments: Vec<CaveTopologyAssessment>,
     pub selected_attempt: Option<u16>,
 }
@@ -52,9 +60,13 @@ impl CaveGenerationOutcome {
             .and_then(|assessment| assessment.candidate.as_ref())
     }
 
-    fn without_attempts(status: CaveGenerationStatus) -> Self {
+    fn without_attempts(
+        status: CaveGenerationStatus,
+        issue: Option<CaveGenerationIssue>,
+    ) -> Self {
         Self {
             status,
+            issue,
             assessments: Vec::new(),
             selected_attempt: None,
         }
@@ -73,14 +85,17 @@ pub fn generate_cave_topology(
     request: CaveGenerationRequest,
 ) -> CaveGenerationOutcome {
     if request.attempt_limit == 0 || request.attempt_limit > recipe.budget().max_attempts {
-        return CaveGenerationOutcome::without_attempts(CaveGenerationStatus::InvalidRequest);
+        return CaveGenerationOutcome::without_attempts(
+            CaveGenerationStatus::InvalidRequest,
+            Some(CaveGenerationIssue::InvalidAttemptLimit),
+        );
     }
     match request.control {
         CaveGenerationControl::Cancelled => {
-            return CaveGenerationOutcome::without_attempts(CaveGenerationStatus::Cancelled);
+            return CaveGenerationOutcome::without_attempts(CaveGenerationStatus::Cancelled, None);
         }
         CaveGenerationControl::Stale => {
-            return CaveGenerationOutcome::without_attempts(CaveGenerationStatus::Stale);
+            return CaveGenerationOutcome::without_attempts(CaveGenerationStatus::Stale, None);
         }
         CaveGenerationControl::Run => {}
     }
@@ -95,10 +110,13 @@ pub fn generate_cave_topology(
         })
         .collect();
     if feasible_counts.is_empty() {
-        return CaveGenerationOutcome::without_attempts(CaveGenerationStatus::Infeasible);
+        return CaveGenerationOutcome::without_attempts(
+            CaveGenerationStatus::Infeasible,
+            Some(CaveGenerationIssue::NoFeasibleChamberCount),
+        );
     }
 
-    let mut result = CaveGenerationOutcome::without_attempts(CaveGenerationStatus::Exhausted);
+    let mut result = CaveGenerationOutcome::without_attempts(CaveGenerationStatus::Exhausted, None);
     let mut best_quality: Option<(i32, i32)> = None;
     let source_key = recipe.determinism_key();
 
@@ -295,6 +313,7 @@ mod tests {
         let second = generate_cave_topology(&source, request(6));
         assert_eq!(first, second);
         assert_eq!(first.status, CaveGenerationStatus::Qualified);
+        assert_eq!(first.issue, None);
         assert_eq!(first.assessments.len(), 6);
         assert_eq!(first.assessments[0].attempt, 1);
         assert_eq!(first.assessments[5].attempt, 6);
@@ -368,6 +387,7 @@ mod tests {
         let source = ProcgenCaveRecipe::try_new(draft).unwrap();
         let outcome = generate_cave_topology(&source, request(4));
         assert_eq!(outcome.status, CaveGenerationStatus::Infeasible);
+        assert_eq!(outcome.issue, Some(CaveGenerationIssue::NoFeasibleChamberCount));
         assert!(outcome.assessments.is_empty());
         assert!(outcome.selected_candidate().is_none());
     }
@@ -410,6 +430,7 @@ mod tests {
         for attempts in [0, source.budget().max_attempts + 1] {
             let output = generate_cave_topology(&source, request(attempts));
             assert_eq!(output.status, CaveGenerationStatus::InvalidRequest);
+            assert_eq!(output.issue, Some(CaveGenerationIssue::InvalidAttemptLimit));
             assert!(output.selected_candidate().is_none());
         }
         assert_eq!(
