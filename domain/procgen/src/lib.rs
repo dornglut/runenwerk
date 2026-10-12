@@ -4,6 +4,8 @@
 
 pub mod bake;
 pub mod catalog;
+pub mod cave_candidate;
+pub mod cave_source;
 pub mod determinism;
 pub mod document;
 pub mod field_preview;
@@ -21,6 +23,16 @@ pub use bake::{
     bake_procgen_document,
 };
 pub use catalog::{ProcgenNodeCatalog, ProcgenNodeDescriptor};
+pub use cave_candidate::{
+    CaveChamber, CaveChamberId, CavePassage, CavePassageId, CaveProposalDisposition,
+    CaveQualityCriterion, CaveQualityEvidence, CaveSubject, CaveTopologyAssessment,
+    CaveTopologyIssue, CaveTopologyIssueCode, CaveTopologyProposal, CaveTopologyStatus,
+    ProcgenCaveTopologyCandidate, ratify_cave_topology,
+};
+pub use cave_source::{
+    CAVE_MAX_ATTEMPTS, CAVE_MAX_CHAMBERS, CAVE_MAX_PASSAGES, CAVE_TOPOLOGY_SCHEMA_VERSION,
+    CaveGenerationBudget, CaveSourceIssue, CaveTopologyRules, ProcgenCaveRecipe,
+};
 pub use determinism::{
     ProcgenDeterminismKey, determinism_key_for_document, parameter_hash_for_document,
     stable_nonzero_hash64,
