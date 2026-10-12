@@ -2348,7 +2348,9 @@ mod tests {
                 text(format!("Initial steps {state}"))
             }
 
-            fn initial_effects(_: &Self::State) -> impl IntoEffects<Self::Action, Self::HostProtocol> {
+            fn initial_effects(
+                _: &Self::State,
+            ) -> impl IntoEffects<Self::Action, Self::HostProtocol> {
                 Effects::action(())
             }
 
