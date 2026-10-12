@@ -98,9 +98,9 @@ runen-spatial = { git = "https://github.com/dornglut/runen-spatial", rev = "2bb6
 runen-gpu = { git = "https://github.com/dornglut/runen-gpu", rev = "b11c5c665ee4e9d13adc20cb6b0b03a8467800ea" }
 runen-render = { git = "https://github.com/dornglut/runen-render", rev = "08f85232d7c47e7cada3decb6e31cfa99c147bfa" }
 runen-input = { git = "https://github.com/dornglut/runen-input", rev = "2751e19fa42255b86e786e7cd837198c917b7b25" }
-runenui_core = { git = "https://github.com/dornglut/runen-ui", rev = "b386e9ade907f4e358ac6ca39b660c9e181b1460" }
-runenui_runtime = { git = "https://github.com/dornglut/runen-ui", rev = "b386e9ade907f4e358ac6ca39b660c9e181b1460" }
-runenui_testing = { git = "https://github.com/dornglut/runen-ui", rev = "b386e9ade907f4e358ac6ca39b660c9e181b1460" }
+runenui_core = { git = "https://github.com/dornglut/runen-ui", rev = "712d9240052cde9dd2ece2516d28f599d3f2465d" }
+runenui_runtime = { git = "https://github.com/dornglut/runen-ui", rev = "712d9240052cde9dd2ece2516d28f599d3f2465d" }
+runenui_testing = { git = "https://github.com/dornglut/runen-ui", rev = "712d9240052cde9dd2ece2516d28f599d3f2465d" }
 world_ops = { path = "domain/world_ops" }
 world_sdf = { path = "domain/world_sdf" }
 

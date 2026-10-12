@@ -7,7 +7,8 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 #[cfg(test)]
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
-    AppRuntime, HostRequestToken, PumpBudget, SurfaceBuildContext, SurfacePublication,
+    AppRuntime, HostRequestToken, InputObservationError, PumpBudget, SurfaceBuildContext,
+    SurfacePublication,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -102,6 +103,7 @@ pub enum UiRuntimeSlotOperationFailure {
     AutomationRejected,
     HostResponseRejected,
     RuntimeDidNotQuiesce,
+    InputObservation(InputObservationError),
     PublicationRevisionExhausted,
     PublicationRejected,
     InvalidAuthoredId,
@@ -560,13 +562,24 @@ impl UiRuntimeSlotsResource {
         publication_facts_for_runtime(&mut slot.runtime)
     }
 
-    pub fn unmount(&mut self, slot_id: UiRuntimeSlotId) -> bool {
+    /// A failed terminal input-observation preflight does not retire or remove
+    /// the Engine slot. The caller must not reuse its native/presentation identity.
+    ///
+    /// # Errors
+    /// Returns the exact RunenUI input-observation failure before slot removal.
+    pub fn unmount(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<bool, UiRuntimeSlotOperationFailure> {
         let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
-            return false;
+            return Ok(false);
         };
-        let mut slot = self.slots.remove(index);
-        let _ = slot.runtime.shutdown();
-        true
+        let _retirement = self.slots[index]
+            .runtime
+            .shutdown()
+            .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+        self.slots.remove(index);
+        Ok(true)
     }
 
     fn slot(&self, slot_id: UiRuntimeSlotId) -> Option<&UiRuntimeSlot> {
@@ -682,13 +695,17 @@ fn register_controlled_test_font(
 fn settle(
     runtime: &mut AppRuntime<RunenwerkProgramUiApp>,
 ) -> Result<(), UiRuntimeSlotOperationFailure> {
-    let report = runtime.pump(PumpBudget::new(
-        RUNTIME_PUMP_WORK_LIMIT,
-        RUNTIME_PUMP_WORK_LIMIT,
-        RUNTIME_PUMP_WORK_LIMIT,
-        RUNTIME_PUMP_WORK_LIMIT,
-    ));
-    if report.is_quiescent() {
+    let batch = runtime
+        .pump(PumpBudget::new(
+            RUNTIME_PUMP_WORK_LIMIT,
+            RUNTIME_PUMP_WORK_LIMIT,
+            RUNTIME_PUMP_WORK_LIMIT,
+            RUNTIME_PUMP_WORK_LIMIT,
+        ))
+        .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+    // A capacity-paused input batch is not terminal even if its work report
+    // might otherwise resemble a quiescent partial prefix.
+    if batch.pause_reason().is_none() && batch.report().is_quiescent() {
         Ok(())
     } else {
         Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
