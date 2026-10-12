@@ -2074,7 +2074,6 @@ mod tests {
         assert!(slots.contains(counter));
     }
 
-
     #[test]
     fn typed_action_partial_pump_advances_epoch_and_defers_publication_until_resettled() {
         use runenui_core::NoHostProtocol;
@@ -2151,6 +2150,100 @@ mod tests {
     }
 
     #[test]
+    fn typed_host_response_partial_pump_cannot_reuse_prior_ingress_epoch() {
+        struct ResponseProtocol;
+        impl HostProtocol for ResponseProtocol {
+            type Command = ();
+            type Response = ();
+            type ResponseKind = ();
+
+            fn expected_response(_: &Self::Command) -> Self::ResponseKind {}
+
+            fn response_kind(_: &Self::Response) -> Self::ResponseKind {}
+        }
+
+        enum ResponseAction {
+            Request,
+            Continue,
+        }
+
+        struct ResponseApp;
+        impl UiApp for ResponseApp {
+            type State = usize;
+            type Action = ResponseAction;
+            type HostProtocol = ResponseProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(format!("Responded {state}"))
+            }
+
+            fn update(
+                state: &mut Self::State,
+                action: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                match action {
+                    ResponseAction::Request => {
+                        Effects::host_request(None, (), |()| ResponseAction::Continue)
+                    }
+                    ResponseAction::Continue => {
+                        *state += 1;
+                        if *state < 320 {
+                            Effects::action(ResponseAction::Continue)
+                        } else {
+                            Effects::none()
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<ResponseApp>(
+                UiTypedScreenId::new("ordinary.response-loop"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("typed host-response app mounts");
+        slots
+            .submit_app_action::<ResponseApp>(slot, ResponseAction::Request)
+            .expect("host request queues");
+        let token = slots
+            .observe_app::<ResponseApp, _>(slot, |runtime| {
+                let requests = runtime.pending_host_requests();
+                assert_eq!(requests.len(), 1);
+                requests[0].token()
+            })
+            .unwrap();
+        let preceding_epoch = slots.ingress_epoch(slot).unwrap();
+        assert_eq!(
+            slots.complete_app_host_request::<ResponseApp>(slot, &token, ()),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        assert_eq!(slots.ingress_epoch(slot), Some(preceding_epoch + 1));
+        let progress = slots
+            .observe_app::<ResponseApp, _>(slot, |runtime| *runtime.state())
+            .unwrap();
+        assert!(progress > 0 && progress < 320);
+        assert_eq!(
+            slots.has_pending_redraw(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        for _ in 0..8 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        assert_eq!(
+            slots.observe_app::<ResponseApp, _>(slot, |runtime| *runtime.state()),
+            Ok(320)
+        );
+        assert!(slots.has_pending_redraw(slot).is_ok());
+        assert_eq!(slots.ingress_epoch(slot), Some(preceding_epoch + 1));
+    }
+
+    #[test]
     fn rejected_typed_font_and_exhausted_identity_preserve_slot_inventory() {
         use runenui_core::NoHostProtocol;
 
@@ -2179,7 +2272,10 @@ mod tests {
             (),
             &invalid_font,
         );
-        assert_eq!(invalid.failure(), Some(UiRuntimeSlotMountFailure::FontProvisioning));
+        assert_eq!(
+            invalid.failure(),
+            Some(UiRuntimeSlotMountFailure::FontProvisioning)
+        );
         assert!(slots.is_empty());
         assert_eq!(slots.next_slot_id, 1);
 
