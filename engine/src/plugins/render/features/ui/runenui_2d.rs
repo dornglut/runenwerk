@@ -8,14 +8,19 @@
 use std::collections::{HashMap, HashSet};
 
 use runen_render::composition_2d::{
-    Render2dAffineTransform, Render2dColorRgba8, Render2dComposition, Render2dCompositionError,
-    Render2dEntry, Render2dFontBinding, Render2dGeometryError, Render2dGlyph, Render2dItem,
-    Render2dOpacity, Render2dPoint, Render2dPrimitive, Render2dResourceBinding,
-    Render2dResourceBindingError, Render2dResourceBindings, Render2dResourceError,
-    Render2dResourceId, Render2dResourceValue, Render2dShapedTextPrimitive,
-    Render2dShapedTextResource,
+    Render2dAffineTransform, Render2dBrush, Render2dColorRgba8, Render2dComposition,
+    Render2dCompositionError, Render2dCornerRadii, Render2dEntry, Render2dFillRule,
+    Render2dFontBinding, Render2dGeometryError, Render2dGlyph, Render2dItem, Render2dOpacity,
+    Render2dPath, Render2dPathCommand, Render2dPoint, Render2dPrimitive, Render2dRect,
+    Render2dResourceBinding, Render2dResourceBindingError, Render2dResourceBindings,
+    Render2dResourceError, Render2dResourceId, Render2dResourceValue, Render2dShape,
+    Render2dShapedTextPrimitive, Render2dShapedTextResource, Render2dStrokeCap, Render2dStrokeJoin,
+    Render2dStrokeStyle,
 };
-use runenui_core::{LogicalTransform, PaintPrimitive, ResourceRef, SceneLayer, SceneOpacity};
+use runenui_core::{
+    Brush, LogicalRect, LogicalTransform, PaintPrimitive, PathFillRule, PathVerb, ResourceRef,
+    SceneLayer, SceneOpacity, SceneShape, StrokeCap, StrokeJoin, StrokeStyle,
+};
 use runenui_runtime::{PaintPublication, PaintSceneItem};
 
 /// Retained, monotonic mapping of opaque source resources into RunenRender identities.
@@ -122,6 +127,8 @@ pub enum RunenUi2dProjectionError {
     RepeatedItem(usize),
     #[error("RunenUI paint item uses an unsupported primitive")]
     Primitive,
+    #[error("RunenUI paint brush is outside the reviewed solid-brush subset")]
+    Brush,
     #[error("RunenUI paint item has unsupported clips")]
     Clips,
     #[error("RunenUI paint item has unsupported opacity")]
@@ -144,7 +151,8 @@ pub enum RunenUi2dProjectionError {
     Binding(#[from] Render2dResourceBindingError),
 }
 
-/// Projects only the actual U5 Counter supported subset in RunenUI root order.
+/// Projects flat, opaque, ungrouped solid Fill/Stroke plus the accepted U5 shaped text
+/// subset in the original RunenUI root order.
 ///
 /// Resource identities are allocated once per immutable source reference and reused
 /// across publications through the caller-retained identity map. Duplicate items
@@ -226,10 +234,42 @@ fn project_item(
     }
     let transform = project_translation(item.local_to_surface())?;
 
-    let PaintPrimitive::ShapedTextRun(run) = item.primitive() else {
-        return Err(RunenUi2dProjectionError::Primitive);
-    };
+    let primitive =
+        match item.primitive() {
+            PaintPrimitive::Fill { shape, brush } => Render2dPrimitive::Fill {
+                shape: project_shape(shape)?,
+                brush: project_solid_brush(brush)?,
+            },
+            PaintPrimitive::Stroke {
+                shape,
+                brush,
+                style,
+            } => Render2dPrimitive::Stroke {
+                shape: project_shape(shape)?,
+                brush: project_solid_brush(brush)?,
+                style: project_stroke_style(*style)?,
+            },
+            PaintPrimitive::ShapedTextRun(run) => Render2dPrimitive::ShapedText(
+                project_shaped_text(scene, run, identities, bound_resources, bindings)?,
+            ),
+            _ => return Err(RunenUi2dProjectionError::Primitive),
+        };
 
+    Ok(Render2dItem::new(
+        primitive,
+        transform,
+        Vec::new(),
+        Render2dOpacity::OPAQUE,
+    ))
+}
+
+fn project_shaped_text(
+    scene: &runenui_runtime::PaintScene,
+    run: &runenui_core::ShapedTextRunPrimitive,
+    identities: &mut RunenUi2dResourceIdentityMap,
+    bound_resources: &mut HashMap<ResourceRef, Render2dResourceId>,
+    bindings: &mut Vec<Render2dResourceBinding>,
+) -> Result<Render2dShapedTextPrimitive, RunenUi2dProjectionError> {
     let resource_id = if let Some(existing) = bound_resources.get(run.resource_ref()) {
         *existing
     } else {
@@ -272,12 +312,116 @@ fn project_item(
     let color = run.foreground();
     let rgba = Render2dColorRgba8::new(color.red(), color.green(), color.blue(), color.alpha());
 
-    Ok(Render2dItem::new(
-        Render2dPrimitive::ShapedText(Render2dShapedTextPrimitive::new(resource_id, point, rgba)),
-        transform,
-        Vec::new(),
-        Render2dOpacity::OPAQUE,
-    ))
+    Ok(Render2dShapedTextPrimitive::new(resource_id, point, rgba))
+}
+
+/// Translate only immutable source-neutral geometry, without choosing a renderer
+/// tessellation, a new hit region, or a second shape/brush authority.
+fn project_shape(shape: &SceneShape) -> Result<Render2dShape, RunenUi2dProjectionError> {
+    match shape {
+        SceneShape::Rect(rect) => Ok(Render2dShape::rect(project_rect(*rect)?)),
+        SceneShape::RoundedRect { rect, .. } => {
+            let radii = shape
+                .normalized_radius()
+                .expect("rounded-rect variants always have normalized radii");
+            Ok(Render2dShape::rounded_rect(
+                project_rect(*rect)?,
+                Render2dCornerRadii::new(
+                    f64::from(radii.top_left().get()),
+                    f64::from(radii.top_right().get()),
+                    f64::from(radii.bottom_right().get()),
+                    f64::from(radii.bottom_left().get()),
+                )?,
+            ))
+        }
+        SceneShape::Ellipse(rect) => Ok(Render2dShape::ellipse(project_rect(*rect)?)),
+        SceneShape::Path(path) => {
+            let fill_rule = match path.fill_rule() {
+                PathFillRule::NonZero => Render2dFillRule::NonZero,
+                PathFillRule::EvenOdd => Render2dFillRule::EvenOdd,
+            };
+            let commands = path
+                .verbs()
+                .iter()
+                .map(|verb| {
+                    Ok(match *verb {
+                        PathVerb::MoveTo(point) => {
+                            Render2dPathCommand::MoveTo(project_point(point)?)
+                        }
+                        PathVerb::LineTo(point) => {
+                            Render2dPathCommand::LineTo(project_point(point)?)
+                        }
+                        PathVerb::QuadraticTo { control, to } => Render2dPathCommand::QuadraticTo {
+                            control: project_point(control)?,
+                            to: project_point(to)?,
+                        },
+                        PathVerb::CubicTo {
+                            control1,
+                            control2,
+                            to,
+                        } => Render2dPathCommand::CubicTo {
+                            control1: project_point(control1)?,
+                            control2: project_point(control2)?,
+                            to: project_point(to)?,
+                        },
+                        PathVerb::Close => Render2dPathCommand::Close,
+                    })
+                })
+                .collect::<Result<Vec<_>, RunenUi2dProjectionError>>()?;
+            Ok(Render2dShape::path(Render2dPath::new(fill_rule, commands)?))
+        }
+    }
+}
+
+fn project_point(
+    point: runenui_core::LogicalPoint,
+) -> Result<Render2dPoint, RunenUi2dProjectionError> {
+    Ok(Render2dPoint::new(
+        f64::from(point.x()),
+        f64::from(point.y()),
+    )?)
+}
+
+fn project_rect(rect: LogicalRect) -> Result<Render2dRect, RunenUi2dProjectionError> {
+    Ok(Render2dRect::new(
+        f64::from(rect.x()),
+        f64::from(rect.y()),
+        f64::from(rect.width()),
+        f64::from(rect.height()),
+    )?)
+}
+
+fn project_solid_brush(brush: &Brush) -> Result<Render2dBrush, RunenUi2dProjectionError> {
+    match brush {
+        Brush::Solid(color) => Ok(Render2dBrush::solid(Render2dColorRgba8::new(
+            color.red(),
+            color.green(),
+            color.blue(),
+            color.alpha(),
+        ))),
+        Brush::Linear(_) | Brush::Radial(_) => Err(RunenUi2dProjectionError::Brush),
+    }
+}
+
+fn project_stroke_style(
+    style: StrokeStyle,
+) -> Result<Render2dStrokeStyle, RunenUi2dProjectionError> {
+    let cap = match style.cap() {
+        StrokeCap::Butt => Render2dStrokeCap::Butt,
+        StrokeCap::Round => Render2dStrokeCap::Round,
+        StrokeCap::Square => Render2dStrokeCap::Square,
+    };
+    let join = match style.join() {
+        StrokeJoin::Miter => Render2dStrokeJoin::Miter,
+        StrokeJoin::Bevel => Render2dStrokeJoin::Bevel,
+        StrokeJoin::Round => Render2dStrokeJoin::Round,
+    };
+    Ok(Render2dStrokeStyle::new(
+        f64::from(style.width().get()),
+        cap,
+        join,
+        f64::from(style.miter_limit()),
+    )?)
 }
 
 fn project_translation(
@@ -297,6 +441,110 @@ fn project_translation(
 mod tests {
     use super::*;
     use runenui_core::ResourceKind;
+
+    #[test]
+    fn flat_fills_preserve_rect_colors_and_rounded_ellipse_shapes() {
+        let rect = runenui_core::LogicalRect::try_new(3.0, 5.0, 40.0, 24.0).unwrap();
+        let shape = project_shape(&SceneShape::rect(rect)).unwrap();
+        assert_eq!(
+            shape.as_rect(),
+            Some(Render2dRect::new(3.0, 5.0, 40.0, 24.0).unwrap())
+        );
+        let color = runenui_core::Color::rgba(18, 37, 91, 190);
+        assert_eq!(
+            project_solid_brush(&Brush::solid(color)).unwrap(),
+            Render2dBrush::solid(Render2dColorRgba8::new(18, 37, 91, 190))
+        );
+        let rounded = SceneShape::rounded_rect(
+            rect,
+            runenui_core::Radius::all(runenui_core::LogicalLength::new(8.0).unwrap()),
+        );
+        let result = project_shape(&rounded).unwrap();
+        assert_eq!(
+            result.kind(),
+            runen_render::composition_2d::Render2dShapeKind::RoundedRect
+        );
+        assert_eq!(
+            result.as_rounded_rect().unwrap().0,
+            project_rect(rect).unwrap()
+        );
+        assert_eq!(
+            project_shape(&SceneShape::ellipse(rect))
+                .unwrap()
+                .as_ellipse(),
+            Some(project_rect(rect).unwrap())
+        );
+    }
+
+    #[test]
+    fn structural_line_and_evenodd_path_keep_exact_commands() {
+        use runenui_core::{LogicalPoint, PathFillRule, PathVerb, ScenePath};
+        let point = |x, y| LogicalPoint::new(x, y).unwrap();
+        let input = ScenePath::new(
+            vec![
+                PathVerb::MoveTo(point(1.0, 2.0)),
+                PathVerb::LineTo(point(10.0, 20.0)),
+                PathVerb::QuadraticTo {
+                    control: point(3.0, 4.0),
+                    to: point(5.0, 6.0),
+                },
+                PathVerb::Close,
+            ],
+            PathFillRule::EvenOdd,
+        )
+        .unwrap();
+        let result = project_shape(&SceneShape::path(input)).unwrap();
+        let path = result.as_path().unwrap();
+        assert_eq!(path.fill_rule(), Render2dFillRule::EvenOdd);
+        assert_eq!(
+            path.commands(),
+            &[
+                Render2dPathCommand::MoveTo(Render2dPoint::new(1.0, 2.0).unwrap()),
+                Render2dPathCommand::LineTo(Render2dPoint::new(10.0, 20.0).unwrap()),
+                Render2dPathCommand::QuadraticTo {
+                    control: Render2dPoint::new(3.0, 4.0).unwrap(),
+                    to: Render2dPoint::new(5.0, 6.0).unwrap(),
+                },
+                Render2dPathCommand::Close,
+            ]
+        );
+    }
+
+    #[test]
+    fn centered_strokes_preserve_nondefault_cap_join_width_and_miter() {
+        let style = StrokeStyle::new(runenui_core::LogicalLength::new(2.5).unwrap())
+            .with_cap(StrokeCap::Square)
+            .with_join(StrokeJoin::Round)
+            .with_miter_limit(7.0)
+            .unwrap();
+        let result = project_stroke_style(style).unwrap();
+        assert_eq!(result.width(), 2.5);
+        assert_eq!(result.cap(), Render2dStrokeCap::Square);
+        assert_eq!(result.join(), Render2dStrokeJoin::Round);
+        assert_eq!(result.miter_limit(), 7.0);
+    }
+
+    #[test]
+    fn gradient_brushes_fail_closed_and_do_not_fake_solid_coverage() {
+        use runenui_core::{
+            Color, GradientStop, GradientStops, LinearGradient, LogicalPoint, UnitInterval,
+        };
+        let stops = GradientStops::new(vec![
+            GradientStop::new(UnitInterval::ZERO, Color::BLACK),
+            GradientStop::new(UnitInterval::ONE, Color::WHITE),
+        ])
+        .unwrap();
+        let gradient = LinearGradient::new(
+            LogicalPoint::new(0.0, 0.0).unwrap(),
+            LogicalPoint::new(10.0, 0.0).unwrap(),
+            stops,
+        )
+        .unwrap();
+        assert!(matches!(
+            project_solid_brush(&Brush::Linear(gradient)),
+            Err(RunenUi2dProjectionError::Brush)
+        ));
+    }
 
     #[test]
     fn idle_retirement_prunes_only_obsolete_exact_sources_without_recycling_ids() {
