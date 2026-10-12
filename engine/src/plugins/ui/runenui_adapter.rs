@@ -2416,6 +2416,111 @@ mod tests {
     }
 
     #[test]
+    fn failed_typed_shutdown_retains_slot_until_real_retirement_is_observed() {
+        use std::any::Any;
+
+        use runenui_core::NoHostProtocol;
+        use runenui_runtime::{InputArbitrationRecord, RuntimeStatus};
+
+        struct EmptyApp;
+        impl UiApp for EmptyApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                text("shutdown")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                (): Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                Effects::none()
+            }
+        }
+
+        // Only the failure boundary is injected. Successful retirement below
+        // uses the actual pinned RunenUI runtime, including its final ownership
+        // snapshot and ordered scope-retirement records.
+        struct FailOnceOnShutdown {
+            runtime: AppRuntime<EmptyApp>,
+            fail_next_shutdown: bool,
+        }
+
+        impl TypedRuntimeOps for FailOnceOnShutdown {
+            fn pump(
+                &mut self,
+                budget: PumpBudget,
+            ) -> Result<InputPumpBatch, InputObservationError> {
+                self.runtime.pump(budget)
+            }
+
+            fn pending_redraw(&mut self) -> bool {
+                self.runtime.take_redraw_request().is_some()
+            }
+
+            fn publish_surface(
+                &mut self,
+                context: &SurfaceBuildContext<'_>,
+            ) -> Result<SurfacePublication, runenui_runtime::PublishSurfaceError> {
+                self.runtime.publish_surface(context)
+            }
+
+            fn shutdown(&mut self) -> Result<InputShutdownBatch, InputObservationError> {
+                if std::mem::take(&mut self.fail_next_shutdown) {
+                    Err(InputObservationError::Capacity)
+                } else {
+                    self.runtime.shutdown()
+                }
+            }
+
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+
+        let id = UiRuntimeSlotId(1);
+        let mut slots = UiRuntimeSlotsResource::default();
+        slots.slots.push(UiRuntimeSlot {
+            id,
+            screen_id: UiTypedScreenId::new("ordinary.shutdown-preflight"),
+            runtime: UiRuntimeSlotKind::Typed(Box::new(FailOnceOnShutdown {
+                runtime: AppRuntime::<EmptyApp>::mount(()),
+                fail_next_shutdown: true,
+            })),
+            ingress_epoch: 1,
+            requires_settlement: false,
+        });
+        slots.next_slot_id = 2;
+
+        assert!(matches!(
+            slots.unmount_with_retirement(id),
+            Err(UiRuntimeSlotOperationFailure::InputObservation(
+                InputObservationError::Capacity
+            ))
+        ));
+        assert!(slots.contains(id), "failed shutdown cannot destroy its slot");
+        assert_eq!(slots.ingress_epoch(id), Some(1));
+
+        let retirement = slots
+            .unmount_with_retirement(id)
+            .expect("retry succeeds")
+            .expect("accepted shutdown returns actual retirement");
+        assert_eq!(retirement.final_ownership().status(), RuntimeStatus::Closed);
+        assert!(retirement
+            .ordered_records()
+            .iter()
+            .any(|record| matches!(record, InputArbitrationRecord::ScopeRetired(_))));
+        assert!(!slots.contains(id));
+        assert_eq!(slots.unmount_with_retirement(id).map(|value| value.is_none()), Ok(true));
+    }
+
+    #[test]
     fn rejected_typed_font_and_exhausted_identity_preserve_slot_inventory() {
         use runenui_core::NoHostProtocol;
 
