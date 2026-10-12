@@ -5,12 +5,14 @@ use std::any::Any;
 
 use runenui_core::UiApp;
 use runenui_runtime::{
-    AppRuntime, InputObservationError, InputShutdownBatch, SurfaceBuildContext, SurfacePublication,
+    AppRuntime, InputObservationError, InputPumpBatch, InputShutdownBatch, PumpBudget,
+    SurfaceBuildContext, SurfacePublication,
 };
 
 /// The only erased work is truly common Engine host plumbing. Application
 /// actions, state and host responses never cross this interface.
 pub(super) trait TypedRuntimeOps {
+    fn pump(&mut self, budget: PumpBudget) -> Result<InputPumpBatch, InputObservationError>;
     fn pending_redraw(&mut self) -> bool;
     fn publish_surface(
         &mut self,
@@ -26,6 +28,10 @@ pub(super) struct TypedRuntime<A: UiApp> {
 }
 
 impl<A: UiApp + 'static> TypedRuntimeOps for TypedRuntime<A> {
+    fn pump(&mut self, budget: PumpBudget) -> Result<InputPumpBatch, InputObservationError> {
+        self.runtime.pump(budget)
+    }
+
     fn pending_redraw(&mut self) -> bool {
         self.runtime.take_redraw_request().is_some()
     }

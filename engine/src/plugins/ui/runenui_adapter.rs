@@ -292,7 +292,7 @@ impl UiApp for RunenwerkProgramUiApp {
 /// Counter-only authored-program behavior is kept separate from common typed
 /// host operations. All variants live in the *same* Engine slot namespace.
 enum UiRuntimeSlotKind {
-    Counter(AppRuntime<RunenwerkProgramUiApp>),
+    Counter(Box<AppRuntime<RunenwerkProgramUiApp>>),
     Typed(Box<dyn TypedRuntimeOps>),
 }
 
@@ -351,6 +351,13 @@ impl UiRuntimeSlotKind {
         .map_err(|_| UiRuntimeSlotOperationFailure::PublicationRejected)
     }
 
+    fn settle(&mut self) -> Result<(), UiRuntimeSlotOperationFailure> {
+        match self {
+            Self::Counter(runtime) => settle(runtime),
+            Self::Typed(runtime) => settle_batch(runtime.pump(runtime_pump_budget())),
+        }
+    }
+
     fn shutdown(&mut self) -> Result<InputShutdownBatch, UiRuntimeSlotOperationFailure> {
         match self {
             Self::Counter(runtime) => runtime.shutdown(),
@@ -364,8 +371,35 @@ struct UiRuntimeSlot {
     id: UiRuntimeSlotId,
     screen_id: UiTypedScreenId,
     runtime: UiRuntimeSlotKind,
-    /// Host ingress generation only; RunenUI remains the paint/redraw authority.
+    /// Every accepted action/response changes this generation, even on pump failure.
     ingress_epoch: u64,
+    /// Incomplete transactions cannot be published or superseded by new ingress.
+    requires_settlement: bool,
+}
+
+impl UiRuntimeSlot {
+    fn next_ingress_epoch(&self) -> Result<u64, UiRuntimeSlotOperationFailure> {
+        if self.requires_settlement {
+            return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
+        }
+        self.ingress_epoch
+            .checked_add(1)
+            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)
+    }
+
+    fn accepted_ingress(&mut self, next: u64) -> Result<(), UiRuntimeSlotOperationFailure> {
+        self.ingress_epoch = next;
+        self.requires_settlement = true;
+        self.settle_pending()
+    }
+
+    fn settle_pending(&mut self) -> Result<(), UiRuntimeSlotOperationFailure> {
+        if self.requires_settlement {
+            self.runtime.settle()?;
+            self.requires_settlement = false;
+        }
+        Ok(())
+    }
 }
 
 #[derive(runen_ecs::Resource)]
@@ -438,8 +472,9 @@ impl UiRuntimeSlotsResource {
         self.slots.push(UiRuntimeSlot {
             id: slot_id,
             screen_id: screen_id.clone(),
-            runtime: UiRuntimeSlotKind::Counter(runtime),
+            runtime: UiRuntimeSlotKind::Counter(Box::new(runtime)),
             ingress_epoch: 1,
+            requires_settlement: false,
         });
         UiRuntimeSlotMountReport::accepted(screen_id, slot_id)
     }
@@ -476,6 +511,7 @@ impl UiRuntimeSlotsResource {
             screen_id: screen_id.clone(),
             runtime: UiRuntimeSlotKind::Typed(Box::new(TypedRuntime { runtime })),
             ingress_epoch: 1,
+            requires_settlement: false,
         });
         UiRuntimeSlotMountReport::accepted(screen_id, id)
     }
@@ -494,10 +530,7 @@ impl UiRuntimeSlotsResource {
         let slot = self
             .slot_mut(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
-        let next = slot
-            .ingress_epoch
-            .checked_add(1)
-            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
+        let next = slot.next_ingress_epoch()?;
         let runtime = slot
             .runtime
             .typed_mut::<A>()
@@ -505,9 +538,7 @@ impl UiRuntimeSlotsResource {
         runtime
             .submit_action(action)
             .map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
-        settle(runtime)?;
-        slot.ingress_epoch = next;
-        Ok(())
+        slot.accepted_ingress(next)
     }
 
     /// Observe a concrete application's typed state and host requests without
@@ -543,10 +574,7 @@ impl UiRuntimeSlotsResource {
         let slot = self
             .slot_mut(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
-        let next = slot
-            .ingress_epoch
-            .checked_add(1)
-            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
+        let next = slot.next_ingress_epoch()?;
         let runtime = slot
             .runtime
             .typed_mut::<A>()
@@ -554,9 +582,7 @@ impl UiRuntimeSlotsResource {
         runtime
             .complete_host_request(token, response)
             .map_err(|_| UiRuntimeSlotOperationFailure::HostResponseRejected)?;
-        settle(runtime)?;
-        slot.ingress_epoch = next;
-        Ok(())
+        slot.accepted_ingress(next)
     }
 
     #[must_use]
@@ -575,6 +601,17 @@ impl UiRuntimeSlotsResource {
         self.slot(slot_id).map(|slot| slot.ingress_epoch)
     }
 
+    /// Resumes a partially processed ingress on the same RunenUI runtime.
+    /// Publication stays blocked until the pending work is quiescent.
+    pub fn settle_slot(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        self.slot_mut(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?
+            .settle_pending()
+    }
+
     /// Checks RunenUI's own redraw authority; no Engine-owned dirty mirror is used.
     ///
     /// RunenUI's take_redraw_request returns a revision witness without consuming
@@ -587,6 +624,9 @@ impl UiRuntimeSlotsResource {
         let slot = self
             .slot_mut(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        if slot.requires_settlement {
+            return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
+        }
         Ok(slot.runtime.pending_redraw())
     }
 
@@ -597,10 +637,13 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         context: &SurfaceBuildContext<'_>,
     ) -> Result<SurfacePublication, UiRuntimeSlotOperationFailure> {
-        self.slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?
-            .runtime
-            .publish_surface(context)
+        let slot = self
+            .slot_mut(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        if slot.requires_settlement {
+            return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
+        }
+        slot.runtime.publish_surface(context)
     }
 
     #[must_use]
@@ -626,6 +669,7 @@ impl UiRuntimeSlotsResource {
         let slot = self
             .slot_mut(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let next = slot.next_ingress_epoch()?;
         let runtime = slot.runtime.counter_mut()?;
         let artifact = runtime.state().artifact.clone();
         let mut resolved_state = runtime.state().resolved_state.clone();
@@ -640,18 +684,12 @@ impl UiRuntimeSlotsResource {
             &runtime.state().registry,
         )
         .map_err(|_| UiRuntimeSlotOperationFailure::UnsupportedProjection)?;
-        let next = slot
-            .ingress_epoch
-            .checked_add(1)
-            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
         runtime
             .submit_action(RunenwerkProgramUiAction::ReplaceResolvedState(
                 resolved_state,
             ))
             .map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
-        settle(runtime)?;
-        slot.ingress_epoch = next;
-        Ok(())
+        slot.accepted_ingress(next)
     }
 
     pub fn activate_authored(
@@ -664,17 +702,12 @@ impl UiRuntimeSlotsResource {
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
         let authored_id = ElementId::new(authored_id)
             .map_err(|_| UiRuntimeSlotOperationFailure::InvalidAuthoredId)?;
-        let next = slot
-            .ingress_epoch
-            .checked_add(1)
-            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
+        let next = slot.next_ingress_epoch()?;
         let runtime = slot.runtime.counter_mut()?;
         runtime
             .submit_automation_command(authored_id, SemanticCommand::Activate)
             .map_err(|_| UiRuntimeSlotOperationFailure::AutomationRejected)?;
-        settle(runtime)?;
-        slot.ingress_epoch = next;
-        Ok(())
+        slot.accepted_ingress(next)
     }
 
     /// Returns currently pending RunenUI route-intent requests without completing them.
@@ -715,17 +748,12 @@ impl UiRuntimeSlotsResource {
             UiRuntimeHostRequestDisposition::Accepted => RunenwerkUiHostResponse::Accepted,
             UiRuntimeHostRequestDisposition::Rejected => RunenwerkUiHostResponse::Rejected,
         };
-        let next = slot
-            .ingress_epoch
-            .checked_add(1)
-            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
+        let next = slot.next_ingress_epoch()?;
         let runtime = slot.runtime.counter_mut()?;
         runtime
             .complete_host_request(&request.token, response)
             .map_err(|_| UiRuntimeSlotOperationFailure::HostResponseRejected)?;
-        settle(runtime)?;
-        slot.ingress_epoch = next;
-        Ok(())
+        slot.accepted_ingress(next)
     }
 
     #[cfg(test)]
@@ -897,17 +925,24 @@ fn register_controlled_test_font(
     Ok(())
 }
 
+fn runtime_pump_budget() -> PumpBudget {
+    PumpBudget::new(
+        RUNTIME_PUMP_WORK_LIMIT,
+        RUNTIME_PUMP_WORK_LIMIT,
+        RUNTIME_PUMP_WORK_LIMIT,
+        RUNTIME_PUMP_WORK_LIMIT,
+    )
+}
+
 fn settle<A: UiApp>(runtime: &mut AppRuntime<A>) -> Result<(), UiRuntimeSlotOperationFailure> {
-    let batch = runtime
-        .pump(PumpBudget::new(
-            RUNTIME_PUMP_WORK_LIMIT,
-            RUNTIME_PUMP_WORK_LIMIT,
-            RUNTIME_PUMP_WORK_LIMIT,
-            RUNTIME_PUMP_WORK_LIMIT,
-        ))
-        .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
-    // A capacity-paused input batch is not terminal even if its work report
-    // might otherwise resemble a quiescent partial prefix.
+    settle_batch(runtime.pump(runtime_pump_budget()))
+}
+
+fn settle_batch(
+    batch: Result<InputPumpBatch, InputObservationError>,
+) -> Result<(), UiRuntimeSlotOperationFailure> {
+    let batch = batch.map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+    // Capacity-paused or partially processed work cannot authorize a new publication.
     if batch.pause_reason().is_none() && batch.report().is_quiescent() {
         Ok(())
     } else {
@@ -2037,6 +2072,129 @@ mod tests {
         assert!(!slots.contains(increment));
         assert!(slots.contains(approval));
         assert!(slots.contains(counter));
+    }
+
+
+    #[test]
+    fn typed_action_partial_pump_advances_epoch_and_defers_publication_until_resettled() {
+        use runenui_core::NoHostProtocol;
+
+        struct ChainedApp;
+        impl UiApp for ChainedApp {
+            type State = usize;
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(format!("Processed {state}"))
+            }
+
+            fn update(
+                state: &mut Self::State,
+                (): Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                *state += 1;
+                if *state < 320 {
+                    Effects::action(())
+                } else {
+                    Effects::none()
+                }
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<ChainedApp>(
+                UiTypedScreenId::new("ordinary.chained"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("typed chained app mounts");
+        assert_eq!(
+            slots.submit_app_action::<ChainedApp>(slot, ()),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        let processed = slots
+            .observe_app::<ChainedApp, _>(slot, |runtime| *runtime.state())
+            .unwrap();
+        assert!(processed > 0 && processed < 320);
+        assert_eq!(slots.ingress_epoch(slot), Some(2));
+        assert_eq!(
+            slots.submit_app_action::<ChainedApp>(slot, ()),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        assert_eq!(
+            slots.has_pending_redraw(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        let style = StyleEnvironment::default();
+        let context = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(LogicalLength::from(320_u16), LogicalLength::from(160_u16)),
+        );
+        assert!(matches!(
+            slots.publish_surface_for_slot(slot, &context),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        ));
+        for _ in 0..8 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        assert_eq!(
+            slots.observe_app::<ChainedApp, _>(slot, |runtime| *runtime.state()),
+            Ok(320)
+        );
+        assert!(slots.has_pending_redraw(slot).is_ok());
+        assert_eq!(slots.ingress_epoch(slot), Some(2));
+    }
+
+    #[test]
+    fn rejected_typed_font_and_exhausted_identity_preserve_slot_inventory() {
+        use runenui_core::NoHostProtocol;
+
+        struct EmptyApp;
+        impl UiApp for EmptyApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                text("empty")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                (): Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                Effects::none()
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let invalid_font = UiRuntimeFontConfiguration::new(vec![vec![1, 2, 3]]);
+        let invalid = slots.mount_app::<EmptyApp>(
+            UiTypedScreenId::new("ordinary.invalid-font"),
+            (),
+            &invalid_font,
+        );
+        assert_eq!(invalid.failure(), Some(UiRuntimeSlotMountFailure::FontProvisioning));
+        assert!(slots.is_empty());
+        assert_eq!(slots.next_slot_id, 1);
+
+        slots.next_slot_id = u64::MAX;
+        let exhausted = slots.mount_app::<EmptyApp>(
+            UiTypedScreenId::new("ordinary.exhausted"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        );
+        assert_eq!(
+            exhausted.failure(),
+            Some(UiRuntimeSlotMountFailure::UnsupportedProjection)
+        );
+        assert!(slots.is_empty());
+        assert_eq!(slots.next_slot_id, u64::MAX);
     }
 
     fn mount_counter(slots: &mut UiRuntimeSlotsResource) -> UiRuntimeSlotId {
