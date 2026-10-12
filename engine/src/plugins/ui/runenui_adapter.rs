@@ -2150,13 +2150,9 @@ mod tests {
         // independent slot/producer identity. Synthetic terminal transitions
         // below test correlation only; native Vulkan proves real GPU execution.
         let render_surface = RenderSurfaceId::primary();
-        let mapping = UiRuntimeNativeMapping::new(
-            NativeWindowId::primary(),
-            render_surface,
-            (320, 160),
-            1.0,
-        )
-        .expect("native mapping");
+        let mapping =
+            UiRuntimeNativeMapping::new(NativeWindowId::primary(), render_surface, (320, 160), 1.0)
+                .expect("native mapping");
         let increment_binding = UiRuntimePresentationBinding::new(
             increment,
             RenderFrameProducerId::try_from_raw(91).expect("producer identity"),
@@ -2192,12 +2188,32 @@ mod tests {
             .unwrap();
         assert!(associations.associate_accepted_submission(first_id));
         assert!(associations.associate_accepted_submission(second_id));
-        assert!(associations.displayed_for_mapping(increment, mapping).is_none());
-        assert!(associations.displayed_for_mapping(approval, mapping).is_none());
+        assert!(
+            associations
+                .displayed_for_mapping(increment, mapping)
+                .is_none()
+        );
+        assert!(
+            associations
+                .displayed_for_mapping(approval, mapping)
+                .is_none()
+        );
         assert!(associations.reject_terminal_publication(first_id));
-        assert!(associations.promote_completed_publication(second_id).is_some());
-        assert!(associations.displayed_for_mapping(increment, mapping).is_none());
-        assert!(associations.displayed_for_mapping(approval, mapping).is_some());
+        assert!(
+            associations
+                .promote_completed_publication(second_id)
+                .is_some()
+        );
+        assert!(
+            associations
+                .displayed_for_mapping(increment, mapping)
+                .is_none()
+        );
+        assert!(
+            associations
+                .displayed_for_mapping(approval, mapping)
+                .is_some()
+        );
 
         let retry_id = associations
             .stage(
@@ -2208,9 +2224,21 @@ mod tests {
             )
             .unwrap();
         assert!(associations.associate_accepted_submission(retry_id));
-        assert!(associations.promote_completed_publication(retry_id).is_some());
-        assert!(associations.displayed_for_mapping(increment, mapping).is_some());
-        assert!(associations.displayed_for_mapping(approval, mapping).is_some());
+        assert!(
+            associations
+                .promote_completed_publication(retry_id)
+                .is_some()
+        );
+        assert!(
+            associations
+                .displayed_for_mapping(increment, mapping)
+                .is_some()
+        );
+        assert!(
+            associations
+                .displayed_for_mapping(approval, mapping)
+                .is_some()
+        );
 
         let retirement = slots.unmount_with_retirement(increment).unwrap();
         assert!(retirement.is_some());
