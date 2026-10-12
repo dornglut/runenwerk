@@ -91,7 +91,8 @@ fn selection_is_typed_and_cleared_on_new_candidate() {
     session.regenerate(recipe("first"), request(1)).unwrap();
     let first_revision = session.view().unwrap().unwrap().revision;
     let first = session.last_good().unwrap();
-    let chamber = CaveSelection::Chamber(first.chambers()[0].id);
+    let chamber_id = first.chambers()[0].id;
+    let chamber = CaveSelection::Chamber(chamber_id);
     let passage = CaveSelection::Passage(first.passages()[0].id);
     assert!(session.select(first_revision, chamber));
     assert!(session.select(first_revision, passage));
@@ -108,7 +109,7 @@ fn selection_is_typed_and_cleared_on_new_candidate() {
     assert!(session.last_good().is_some());
     // Identical numeric source IDs are deliberately reused in cave B.
     assert!(session.last_good().unwrap().chambers().iter().any(|node| {
-        node.id == first.chambers()[0].id
+        node.id == chamber_id
     }));
     assert!(!session.select(first_revision, chamber));
     assert_eq!(session.selection(), None);
