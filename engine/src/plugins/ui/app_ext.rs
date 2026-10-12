@@ -41,6 +41,29 @@ impl UiAppMounting<'_> {
         mount_typed_ui(self.app, screen)
     }
 
+    /// Mounts an ordinary concrete RunenUI application in the same Engine slot
+    /// and renderer publication path as the existing Counter UiProgram consumer.
+    pub fn mount_app<A>(
+        &mut self,
+        screen_id: super::UiTypedScreenId,
+        state: A::State,
+        fonts: &UiRuntimeFontConfiguration,
+    ) -> UiRuntimeSlotMountReport
+    where
+        A: runenui_core::UiApp + 'static,
+    {
+        self.app.init_resource::<UiRuntimeDiagnosticsResource>();
+        self.app.init_resource::<UiRuntimeSlotsResource>();
+        let report = self
+            .app
+            .world_mut()
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("UiRuntimeSlotsResource initialized before typed app mounting")
+            .mount_app::<A>(screen_id, state, fonts);
+        record_slot_mount_diagnostic(self.app, &report);
+        report
+    }
+
     /// Mounts with explicit caller-provided font sources, without an Engine proof-font default.
     pub fn mount_with_fonts<S>(
         &mut self,

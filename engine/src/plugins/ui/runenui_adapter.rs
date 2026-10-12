@@ -7,8 +7,8 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 #[cfg(test)]
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
-    AppRuntime, HostRequestToken, InputObservationError, PumpBudget, SurfaceBuildContext,
-    SurfacePublication,
+    AppRuntime, HostRequestToken, InputObservationError, InputPumpBatch, InputShutdownBatch,
+    PumpBudget, SurfaceBuildContext, SurfacePublication,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -21,6 +21,7 @@ use ui_program::{
 use ui_schema::UiSchemaValue;
 use ui_state::UiStateModel;
 
+use super::typed_app_host::{TypedRuntime, TypedRuntimeOps};
 use super::{UiTypedScreenId, UiTypedSource};
 
 #[cfg(test)]
@@ -79,6 +80,9 @@ pub enum UiRuntimeSlotMountFailure {
     ProgramFormation,
     UnsupportedProjection,
     FontProvisioning,
+    RuntimeInitialization,
+    SlotIdentityExhausted,
+    SlotCapacityExhausted,
 }
 
 impl UiRuntimeSlotMountFailure {
@@ -90,6 +94,11 @@ impl UiRuntimeSlotMountFailure {
             Self::FontProvisioning => {
                 "RunenUI slot mount could not apply caller-provided font sources"
             }
+            Self::RuntimeInitialization => {
+                "RunenUI slot mount could not admit initial application work"
+            }
+            Self::SlotIdentityExhausted => "RunenUI slot mount identity space is exhausted",
+            Self::SlotCapacityExhausted => "RunenUI slot mount storage could not be reserved",
         }
     }
 }
@@ -107,6 +116,7 @@ pub enum UiRuntimeSlotOperationFailure {
     PublicationRevisionExhausted,
     PublicationRejected,
     InvalidAuthoredId,
+    WrongAppKind,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -287,12 +297,118 @@ impl UiApp for RunenwerkProgramUiApp {
     }
 }
 
+/// Counter-only authored-program behavior is kept separate from common typed
+/// host operations. All variants live in the *same* Engine slot namespace.
+enum UiRuntimeSlotKind {
+    Counter(Box<AppRuntime<RunenwerkProgramUiApp>>),
+    Typed(Box<dyn TypedRuntimeOps>),
+}
+
+impl UiRuntimeSlotKind {
+    fn counter(&self) -> Result<&AppRuntime<RunenwerkProgramUiApp>, UiRuntimeSlotOperationFailure> {
+        match self {
+            Self::Counter(runtime) => Ok(runtime),
+            Self::Typed(_) => Err(UiRuntimeSlotOperationFailure::WrongAppKind),
+        }
+    }
+
+    fn counter_mut(
+        &mut self,
+    ) -> Result<&mut AppRuntime<RunenwerkProgramUiApp>, UiRuntimeSlotOperationFailure> {
+        match self {
+            Self::Counter(runtime) => Ok(runtime),
+            Self::Typed(_) => Err(UiRuntimeSlotOperationFailure::WrongAppKind),
+        }
+    }
+
+    fn typed<A: UiApp + 'static>(&self) -> Option<&AppRuntime<A>> {
+        match self {
+            Self::Typed(runtime) => runtime
+                .as_any()
+                .downcast_ref::<TypedRuntime<A>>()
+                .map(|runtime| &runtime.runtime),
+            Self::Counter(_) => None,
+        }
+    }
+
+    fn typed_mut<A: UiApp + 'static>(&mut self) -> Option<&mut AppRuntime<A>> {
+        match self {
+            Self::Typed(runtime) => runtime
+                .as_any_mut()
+                .downcast_mut::<TypedRuntime<A>>()
+                .map(|runtime| &mut runtime.runtime),
+            Self::Counter(_) => None,
+        }
+    }
+
+    fn pending_redraw(&mut self) -> bool {
+        match self {
+            Self::Counter(runtime) => runtime.take_redraw_request().is_some(),
+            Self::Typed(runtime) => runtime.pending_redraw(),
+        }
+    }
+
+    fn publish_surface(
+        &mut self,
+        context: &SurfaceBuildContext<'_>,
+    ) -> Result<SurfacePublication, UiRuntimeSlotOperationFailure> {
+        match self {
+            Self::Counter(runtime) => runtime.publish_surface(context),
+            Self::Typed(runtime) => runtime.publish_surface(context),
+        }
+        .map_err(|_| UiRuntimeSlotOperationFailure::PublicationRejected)
+    }
+
+    fn settle(&mut self) -> Result<(), UiRuntimeSlotOperationFailure> {
+        match self {
+            Self::Counter(runtime) => settle(runtime),
+            Self::Typed(runtime) => settle_batch(runtime.pump(runtime_pump_budget())),
+        }
+    }
+
+    fn shutdown(&mut self) -> Result<InputShutdownBatch, UiRuntimeSlotOperationFailure> {
+        match self {
+            Self::Counter(runtime) => runtime.shutdown(),
+            Self::Typed(runtime) => runtime.shutdown(),
+        }
+        .map_err(UiRuntimeSlotOperationFailure::InputObservation)
+    }
+}
+
 struct UiRuntimeSlot {
     id: UiRuntimeSlotId,
     screen_id: UiTypedScreenId,
-    runtime: AppRuntime<RunenwerkProgramUiApp>,
-    /// Host ingress generation only; RunenUI remains the paint/redraw authority.
+    runtime: UiRuntimeSlotKind,
+    /// Every accepted action/response changes this generation, even on pump failure.
     ingress_epoch: u64,
+    /// Incomplete transactions cannot be published or superseded by new ingress.
+    requires_settlement: bool,
+}
+
+impl UiRuntimeSlot {
+    fn next_ingress_epoch(&self) -> Result<u64, UiRuntimeSlotOperationFailure> {
+        if self.requires_settlement {
+            return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
+        }
+        self.ingress_epoch
+            .checked_add(1)
+            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)
+    }
+
+    fn accepted_ingress(&mut self, next: u64) -> Result<(), UiRuntimeSlotOperationFailure> {
+        self.ingress_epoch = next;
+        self.requires_settlement = true;
+        self.settle_pending()
+    }
+
+    fn settle_pending(&mut self) -> Result<(), UiRuntimeSlotOperationFailure> {
+        // Poll framework-owned local work as well as previously admitted host
+        // commands. A later timer/subscription completion must not require a
+        // second Engine action merely to advance the sole RunenUI runtime.
+        let result = self.runtime.settle();
+        self.requires_settlement = result.is_err();
+        result
+    }
 }
 
 #[derive(runen_ecs::Resource)]
@@ -343,6 +459,19 @@ impl UiRuntimeSlotsResource {
             );
         }
 
+        let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::SlotIdentityExhausted,
+            );
+        };
+        if self.slots.try_reserve(1).is_err() {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::SlotCapacityExhausted,
+            );
+        }
+
         let mut runtime = AppRuntime::<RunenwerkProgramUiApp>::mount(RunenwerkProgramUiState {
             source,
             artifact,
@@ -354,21 +483,144 @@ impl UiRuntimeSlotsResource {
             return UiRuntimeSlotMountReport::rejected(screen_id, failure);
         }
 
-        let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
-            return UiRuntimeSlotMountReport::rejected(
-                screen_id,
-                UiRuntimeSlotMountFailure::UnsupportedProjection,
-            );
-        };
         let slot_id = UiRuntimeSlotId(self.next_slot_id);
         self.next_slot_id = next_slot_id;
         self.slots.push(UiRuntimeSlot {
             id: slot_id,
             screen_id: screen_id.clone(),
-            runtime,
+            runtime: UiRuntimeSlotKind::Counter(Box::new(runtime)),
             ingress_epoch: 1,
+            requires_settlement: false,
         });
         UiRuntimeSlotMountReport::accepted(screen_id, slot_id)
+    }
+
+    /// Mounts one ordinary concrete UiApp in the *existing* Engine slot registry.
+    /// This does not duplicate the normalized input or GPU presentation owners.
+    ///
+    /// # Errors
+    /// Font admission, initial observation errors or exhausted slot identity
+    /// reject before publication. Capacity-paused initial work remains mounted
+    /// but is explicitly unsettled until the existing Engine host resumes it.
+    pub fn mount_app<A>(
+        &mut self,
+        screen_id: UiTypedScreenId,
+        state: A::State,
+        fonts: &UiRuntimeFontConfiguration,
+    ) -> UiRuntimeSlotMountReport
+    where
+        A: UiApp + 'static,
+    {
+        let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::SlotIdentityExhausted,
+            );
+        };
+        if self.slots.try_reserve(1).is_err() {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::SlotCapacityExhausted,
+            );
+        }
+        let mut runtime = AppRuntime::<A>::mount(state);
+        if let Err(error) = provision_text_fonts(&mut runtime, fonts) {
+            let _ = runtime.shutdown();
+            return UiRuntimeSlotMountReport::rejected(screen_id, error);
+        }
+        // RunenUI mounts may emit initial actions/host requests before any host
+        // command or first frame. Drive the same bounded canonical pump once
+        // here; a capacity pause remains resumable, not a false successful flush.
+        let requires_settlement = match settle(&mut runtime) {
+            Ok(()) => false,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => true,
+            Err(_) => {
+                let _ = runtime.shutdown();
+                return UiRuntimeSlotMountReport::rejected(
+                    screen_id,
+                    UiRuntimeSlotMountFailure::RuntimeInitialization,
+                );
+            }
+        };
+        let id = UiRuntimeSlotId(self.next_slot_id);
+        self.next_slot_id = next_slot_id;
+        self.slots.push(UiRuntimeSlot {
+            id,
+            screen_id: screen_id.clone(),
+            runtime: UiRuntimeSlotKind::Typed(Box::new(TypedRuntime { runtime })),
+            ingress_epoch: 1,
+            requires_settlement,
+        });
+        UiRuntimeSlotMountReport::accepted(screen_id, id)
+    }
+
+    /// Typed action ingress increments the Engine epoch immediately upon RunenUI
+    /// admission. Incomplete fallible pumps retain the new generation and block
+    /// publication until explicitly settled; they never imply rollback.
+    pub fn submit_app_action<A>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        action: A::Action,
+    ) -> Result<(), UiRuntimeSlotOperationFailure>
+    where
+        A: UiApp + 'static,
+    {
+        let slot = self
+            .slot_mut(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let next = slot.next_ingress_epoch()?;
+        let runtime = slot
+            .runtime
+            .typed_mut::<A>()
+            .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
+        runtime
+            .submit_action(action)
+            .map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
+        slot.accepted_ingress(next)
+    }
+
+    /// Observe a concrete application's typed state and host requests without
+    /// exposing a mutable runtime that could bypass the Engine publication epoch.
+    pub fn observe_app<A, R>(
+        &self,
+        slot_id: UiRuntimeSlotId,
+        observe: impl FnOnce(&AppRuntime<A>) -> R,
+    ) -> Result<R, UiRuntimeSlotOperationFailure>
+    where
+        A: UiApp + 'static,
+    {
+        let slot = self
+            .slot(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let runtime = slot
+            .runtime
+            .typed::<A>()
+            .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
+        Ok(observe(runtime))
+    }
+
+    /// Completes only this concrete application's own typed host response.
+    pub fn complete_app_host_request<A>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        token: &HostRequestToken,
+        response: <A::HostProtocol as HostProtocol>::Response,
+    ) -> Result<(), UiRuntimeSlotOperationFailure>
+    where
+        A: UiApp + 'static,
+    {
+        let slot = self
+            .slot_mut(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let next = slot.next_ingress_epoch()?;
+        let runtime = slot
+            .runtime
+            .typed_mut::<A>()
+            .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
+        runtime
+            .complete_host_request(token, response)
+            .map_err(|_| UiRuntimeSlotOperationFailure::HostResponseRejected)?;
+        slot.accepted_ingress(next)
     }
 
     #[must_use]
@@ -387,6 +639,18 @@ impl UiRuntimeSlotsResource {
         self.slot(slot_id).map(|slot| slot.ingress_epoch)
     }
 
+    /// Polls bounded RunenUI application work on the existing invoker thread,
+    /// including resumed partial ingress and framework-owned wakeups.
+    /// Publication stays blocked until the pending work is quiescent.
+    pub fn settle_slot(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        self.slot_mut(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?
+            .settle_pending()
+    }
+
     /// Checks RunenUI's own redraw authority; no Engine-owned dirty mirror is used.
     ///
     /// RunenUI's take_redraw_request returns a revision witness without consuming
@@ -399,7 +663,10 @@ impl UiRuntimeSlotsResource {
         let slot = self
             .slot_mut(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
-        Ok(slot.runtime.take_redraw_request().is_some())
+        if slot.requires_settlement {
+            return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
+        }
+        Ok(slot.runtime.pending_redraw())
     }
 
     /// Publishes a slot's complete aligned paint, layout, semantics, and input snapshot.
@@ -409,11 +676,13 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         context: &SurfaceBuildContext<'_>,
     ) -> Result<SurfacePublication, UiRuntimeSlotOperationFailure> {
-        self.slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?
-            .runtime
-            .publish_surface(context)
-            .map_err(|_| UiRuntimeSlotOperationFailure::PublicationRejected)
+        let slot = self
+            .slot_mut(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        if slot.requires_settlement {
+            return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
+        }
+        slot.runtime.publish_surface(context)
     }
 
     #[must_use]
@@ -439,31 +708,27 @@ impl UiRuntimeSlotsResource {
         let slot = self
             .slot_mut(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
-        let artifact = slot.runtime.state().artifact.clone();
-        let mut resolved_state = slot.runtime.state().resolved_state.clone();
+        let next = slot.next_ingress_epoch()?;
+        let runtime = slot.runtime.counter_mut()?;
+        let artifact = runtime.state().artifact.clone();
+        let mut resolved_state = runtime.state().resolved_state.clone();
         let output = UiEvaluator.evaluate_with_context(&artifact, &mut resolved_state, context);
         if !output.diagnostics.is_empty() {
             return Err(UiRuntimeSlotOperationFailure::EvaluationDiagnostics);
         }
         validate_projection(
-            &slot.runtime.state().source,
+            &runtime.state().source,
             &artifact,
             &resolved_state,
-            &slot.runtime.state().registry,
+            &runtime.state().registry,
         )
         .map_err(|_| UiRuntimeSlotOperationFailure::UnsupportedProjection)?;
-        let next = slot
-            .ingress_epoch
-            .checked_add(1)
-            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
-        slot.runtime
+        runtime
             .submit_action(RunenwerkProgramUiAction::ReplaceResolvedState(
                 resolved_state,
             ))
             .map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
-        settle(&mut slot.runtime)?;
-        slot.ingress_epoch = next;
-        Ok(())
+        slot.accepted_ingress(next)
     }
 
     pub fn activate_authored(
@@ -476,16 +741,12 @@ impl UiRuntimeSlotsResource {
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
         let authored_id = ElementId::new(authored_id)
             .map_err(|_| UiRuntimeSlotOperationFailure::InvalidAuthoredId)?;
-        let next = slot
-            .ingress_epoch
-            .checked_add(1)
-            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
-        slot.runtime
+        let next = slot.next_ingress_epoch()?;
+        let runtime = slot.runtime.counter_mut()?;
+        runtime
             .submit_automation_command(authored_id, SemanticCommand::Activate)
             .map_err(|_| UiRuntimeSlotOperationFailure::AutomationRejected)?;
-        settle(&mut slot.runtime)?;
-        slot.ingress_epoch = next;
-        Ok(())
+        slot.accepted_ingress(next)
     }
 
     /// Returns currently pending RunenUI route-intent requests without completing them.
@@ -501,6 +762,7 @@ impl UiRuntimeSlotsResource {
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
         Ok(slot
             .runtime
+            .counter()?
             .pending_host_requests()
             .into_iter()
             .map(|request| UiRuntimePendingEventRequest {
@@ -525,16 +787,12 @@ impl UiRuntimeSlotsResource {
             UiRuntimeHostRequestDisposition::Accepted => RunenwerkUiHostResponse::Accepted,
             UiRuntimeHostRequestDisposition::Rejected => RunenwerkUiHostResponse::Rejected,
         };
-        let next = slot
-            .ingress_epoch
-            .checked_add(1)
-            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)?;
-        slot.runtime
+        let next = slot.next_ingress_epoch()?;
+        let runtime = slot.runtime.counter_mut()?;
+        runtime
             .complete_host_request(&request.token, response)
             .map_err(|_| UiRuntimeSlotOperationFailure::HostResponseRejected)?;
-        settle(&mut slot.runtime)?;
-        slot.ingress_epoch = next;
-        Ok(())
+        slot.accepted_ingress(next)
     }
 
     #[cfg(test)]
@@ -545,6 +803,8 @@ impl UiRuntimeSlotsResource {
     ) -> Option<&UiSchemaValue> {
         self.slot(slot_id)?
             .runtime
+            .counter()
+            .ok()?
             .state()
             .resolved_state
             .value(requirement_id)
@@ -558,28 +818,40 @@ impl UiRuntimeSlotsResource {
         let slot = self
             .slot_mut(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
-        register_controlled_test_font(&mut slot.runtime)?;
-        publication_facts_for_runtime(&mut slot.runtime)
+        let runtime = slot.runtime.counter_mut()?;
+        register_controlled_test_font(runtime)?;
+        publication_facts_for_runtime(runtime)
     }
 
-    /// A failed terminal input-observation preflight does not retire or remove
-    /// the Engine slot. The caller must not reuse its native/presentation identity.
+    /// Returns the actual RunenUI scope-retirement facts to the owning native
+    /// caller, rather than interpreting shutdown success as native-input clearance.
+    /// No slot state is removed if shutdown fails.
     ///
     /// # Errors
-    /// Returns the exact RunenUI input-observation failure before slot removal.
+    /// Returns the exact M13 input-observation error without retiring the slot.
+    pub fn unmount_with_retirement(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<Option<InputShutdownBatch>, UiRuntimeSlotOperationFailure> {
+        let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
+            return Ok(None);
+        };
+        let retirement = self.slots[index].runtime.shutdown()?;
+        self.slots.remove(index);
+        Ok(Some(retirement))
+    }
+
+    /// Counter-compatible unmount result. This is **not** native occurrence
+    /// retirement; U9-C must use the full shutdown batch and exact slot scope.
+    ///
+    /// # Errors
+    /// A failed RunenUI shutdown leaves the slot mounted and identifiable.
     pub fn unmount(
         &mut self,
         slot_id: UiRuntimeSlotId,
     ) -> Result<bool, UiRuntimeSlotOperationFailure> {
-        let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
-            return Ok(false);
-        };
-        let _retirement = self.slots[index]
-            .runtime
-            .shutdown()
-            .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
-        self.slots.remove(index);
-        Ok(true)
+        self.unmount_with_retirement(slot_id)
+            .map(|retirement| retirement.is_some())
     }
 
     fn slot(&self, slot_id: UiRuntimeSlotId) -> Option<&UiRuntimeSlot> {
@@ -647,8 +919,8 @@ fn publication_facts_for_runtime(
 
 /// Applies host-owned immutable font sources through RunenUI's text authority.
 /// The slot is not published if this provisioning transaction fails.
-fn provision_text_fonts(
-    runtime: &mut AppRuntime<RunenwerkProgramUiApp>,
+fn provision_text_fonts<A: UiApp>(
+    runtime: &mut AppRuntime<A>,
     configuration: &UiRuntimeFontConfiguration,
 ) -> Result<(), UiRuntimeSlotMountFailure> {
     for bytes in &configuration.font_bytes {
@@ -692,19 +964,24 @@ fn register_controlled_test_font(
     Ok(())
 }
 
-fn settle(
-    runtime: &mut AppRuntime<RunenwerkProgramUiApp>,
+fn runtime_pump_budget() -> PumpBudget {
+    PumpBudget::new(
+        RUNTIME_PUMP_WORK_LIMIT,
+        RUNTIME_PUMP_WORK_LIMIT,
+        RUNTIME_PUMP_WORK_LIMIT,
+        RUNTIME_PUMP_WORK_LIMIT,
+    )
+}
+
+fn settle<A: UiApp>(runtime: &mut AppRuntime<A>) -> Result<(), UiRuntimeSlotOperationFailure> {
+    settle_batch(runtime.pump(runtime_pump_budget()))
+}
+
+fn settle_batch(
+    batch: Result<InputPumpBatch, InputObservationError>,
 ) -> Result<(), UiRuntimeSlotOperationFailure> {
-    let batch = runtime
-        .pump(PumpBudget::new(
-            RUNTIME_PUMP_WORK_LIMIT,
-            RUNTIME_PUMP_WORK_LIMIT,
-            RUNTIME_PUMP_WORK_LIMIT,
-            RUNTIME_PUMP_WORK_LIMIT,
-        ))
-        .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
-    // A capacity-paused input batch is not terminal even if its work report
-    // might otherwise resemble a quiescent partial prefix.
+    let batch = batch.map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+    // Capacity-paused or partially processed work cannot authorize a new publication.
     if batch.pause_reason().is_none() && batch.report().is_quiescent() {
         Ok(())
     } else {
@@ -1306,6 +1583,28 @@ mod tests {
                 .is_none()
         );
         assert!(associations.displayed_for_mapping(slot, mapping).is_none());
+        assert!(associations.update_mapping(slot, mapping));
+        assert!(
+            associations.displayed_for_mapping(slot, mapping).is_none(),
+            "returning to an identical native mapping cannot resurrect an old Present"
+        );
+        let fresh_id = associations
+            .stage(binding.clone(), mapping, 4, first.clone())
+            .expect("new generation required after native remap");
+        assert!(associations.associate_accepted_submission(fresh_id));
+        assert!(
+            associations
+                .promote_completed_publication(fresh_id)
+                .is_some()
+        );
+        assert!(associations.displayed_for_mapping(slot, mapping).is_some());
+        associations.invalidate_mapping(slot);
+        assert!(associations.displayed_for_mapping(slot, mapping).is_none());
+        assert!(associations.update_mapping(slot, mapping));
+        assert!(
+            associations.displayed_for_mapping(slot, mapping).is_none(),
+            "detached surface cannot regain stale displayed input on reattach"
+        );
         associations.unbind(slot);
         assert!(associations.binding(slot).is_none());
     }
@@ -1564,7 +1863,7 @@ mod tests {
             let slot = slots
                 .slot_mut(slot_id)
                 .expect("mounted slot should remain present for repeated publication");
-            publication_facts_for_runtime(&mut slot.runtime)
+            publication_facts_for_runtime(slot.runtime.counter_mut().unwrap())
                 .expect("repeated publication should succeed without changing font policy")
         };
 
@@ -1677,6 +1976,720 @@ mod tests {
         slots
             .publication_facts(slot_id)
             .expect("RunenUI publication should succeed")
+    }
+
+    #[test]
+    fn independent_typed_apps_share_one_slot_namespace_and_counter_publication() {
+        use runenui_core::NoHostProtocol;
+
+        use crate::plugins::render::RenderFrameProducerId;
+        use crate::plugins::render::host::RenderSurfaceId;
+        use crate::plugins::ui::presentation::{
+            UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
+            UiRuntimePresentationBinding,
+        };
+        use crate::runtime::NativeWindowId;
+
+        struct IncrementApp;
+        impl UiApp for IncrementApp {
+            type State = i32;
+            type Action = i32;
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(format!("Value {state}"))
+            }
+
+            fn update(
+                state: &mut Self::State,
+                action: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                *state += action;
+                Effects::none()
+            }
+        }
+
+        #[derive(Clone, Debug)]
+        enum ApprovalCommand {
+            Check,
+        }
+        #[derive(Clone, Debug)]
+        enum ApprovalResponse {
+            Accepted,
+        }
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+        enum ApprovalKind {
+            Decision,
+        }
+        struct ApprovalProtocol;
+        impl HostProtocol for ApprovalProtocol {
+            type Command = ApprovalCommand;
+            type Response = ApprovalResponse;
+            type ResponseKind = ApprovalKind;
+            fn expected_response(_: &Self::Command) -> Self::ResponseKind {
+                ApprovalKind::Decision
+            }
+            fn response_kind(_: &Self::Response) -> Self::ResponseKind {
+                ApprovalKind::Decision
+            }
+        }
+
+        struct ApprovalApp;
+        enum ApprovalAction {
+            Toggle,
+            Completed,
+        }
+        impl UiApp for ApprovalApp {
+            type State = bool;
+            type Action = ApprovalAction;
+            type HostProtocol = ApprovalProtocol;
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(if *state { "approved" } else { "pending" })
+            }
+            fn update(
+                state: &mut Self::State,
+                action: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                match action {
+                    ApprovalAction::Toggle => {
+                        *state = !*state;
+                        Effects::host_request(None, ApprovalCommand::Check, |_| {
+                            ApprovalAction::Completed
+                        })
+                    }
+                    ApprovalAction::Completed => Effects::none(),
+                }
+            }
+        }
+
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").unwrap()],
+            );
+        let mut slots = UiRuntimeSlotsResource::default();
+        let counter = mount_counter(&mut slots);
+        let increment = slots
+            .mount_app::<IncrementApp>(UiTypedScreenId::new("ordinary.increment"), 1, &fonts)
+            .slot_id()
+            .expect("first ordinary app mounts");
+        let approval = slots
+            .mount_app::<ApprovalApp>(UiTypedScreenId::new("ordinary.approval"), false, &fonts)
+            .slot_id()
+            .expect("second distinct ordinary app mounts");
+        assert_eq!(slots.len(), 3);
+        assert_ne!(counter, increment);
+        assert_ne!(increment, approval);
+        assert_eq!(
+            slots.submit_app_action::<IncrementApp>(approval, 9),
+            Err(UiRuntimeSlotOperationFailure::WrongAppKind),
+        );
+        assert_eq!(
+            slots.submit_app_action::<IncrementApp>(counter, 9),
+            Err(UiRuntimeSlotOperationFailure::WrongAppKind),
+        );
+        let before = slots.ingress_epoch(increment).unwrap();
+        slots
+            .submit_app_action::<IncrementApp>(increment, 4)
+            .unwrap();
+        assert_eq!(slots.ingress_epoch(increment), Some(before + 1));
+        assert_eq!(
+            slots.observe_app::<IncrementApp, _>(increment, |runtime| *runtime.state()),
+            Ok(5),
+        );
+
+        slots
+            .submit_app_action::<ApprovalApp>(approval, ApprovalAction::Toggle)
+            .unwrap();
+        assert_eq!(
+            slots.observe_app::<ApprovalApp, _>(approval, |runtime| *runtime.state()),
+            Ok(true)
+        );
+        let token = slots
+            .observe_app::<ApprovalApp, _>(approval, |runtime| {
+                let pending = runtime.pending_host_requests();
+                assert_eq!(pending.len(), 1);
+                assert!(matches!(pending[0].command(), ApprovalCommand::Check));
+                pending[0].token()
+            })
+            .unwrap();
+        assert_eq!(
+            slots.complete_app_host_request::<ApprovalApp>(
+                increment,
+                &token,
+                ApprovalResponse::Accepted,
+            ),
+            Err(UiRuntimeSlotOperationFailure::WrongAppKind),
+            "a host request cannot be completed in a different typed application"
+        );
+        slots
+            .complete_app_host_request::<ApprovalApp>(approval, &token, ApprovalResponse::Accepted)
+            .unwrap();
+        assert!(
+            slots
+                .observe_app::<ApprovalApp, _>(approval, |runtime| runtime
+                    .pending_host_requests()
+                    .is_empty())
+                .unwrap()
+        );
+
+        let style = StyleEnvironment::default();
+        let surface = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(
+                LogicalLength::from(RUNTIME_SURFACE_WIDTH),
+                LogicalLength::from(RUNTIME_SURFACE_HEIGHT),
+            ),
+        );
+        let increment_publication = slots.publish_surface_for_slot(increment, &surface).unwrap();
+        let approval_publication = slots.publish_surface_for_slot(approval, &surface).unwrap();
+        assert!(!increment_publication.paint_scene().items().is_empty());
+        assert!(!approval_publication.paint_scene().items().is_empty());
+
+        // Both unlike apps use the SAME Engine association ledger with
+        // independent slot/producer identity. Synthetic terminal transitions
+        // below test correlation only; native Vulkan proves real GPU execution.
+        let render_surface = RenderSurfaceId::primary();
+        let mapping =
+            UiRuntimeNativeMapping::new(NativeWindowId::primary(), render_surface, (320, 160), 1.0)
+                .expect("native mapping");
+        let increment_binding = UiRuntimePresentationBinding::new(
+            increment,
+            RenderFrameProducerId::try_from_raw(91).expect("producer identity"),
+            render_surface,
+            style.clone(),
+        );
+        let approval_binding = UiRuntimePresentationBinding::new(
+            approval,
+            RenderFrameProducerId::try_from_raw(92).expect("producer identity"),
+            render_surface,
+            style,
+        );
+        let mut associations = UiRuntimePresentationAssociationsResource::default();
+        associations.bind(increment_binding.clone()).unwrap();
+        associations.bind(approval_binding.clone()).unwrap();
+        assert!(associations.update_mapping(increment, mapping));
+        assert!(associations.update_mapping(approval, mapping));
+        let first_id = associations
+            .stage(
+                increment_binding.clone(),
+                mapping,
+                slots.ingress_epoch(increment).unwrap(),
+                increment_publication.clone(),
+            )
+            .unwrap();
+        let second_id = associations
+            .stage(
+                approval_binding,
+                mapping,
+                slots.ingress_epoch(approval).unwrap(),
+                approval_publication,
+            )
+            .unwrap();
+        assert!(associations.associate_accepted_submission(first_id));
+        assert!(associations.associate_accepted_submission(second_id));
+        assert!(
+            associations
+                .displayed_for_mapping(increment, mapping)
+                .is_none()
+        );
+        assert!(
+            associations
+                .displayed_for_mapping(approval, mapping)
+                .is_none()
+        );
+        assert!(associations.reject_terminal_publication(first_id));
+        assert!(
+            associations
+                .promote_completed_publication(second_id)
+                .is_some()
+        );
+        assert!(
+            associations
+                .displayed_for_mapping(increment, mapping)
+                .is_none()
+        );
+        assert!(
+            associations
+                .displayed_for_mapping(approval, mapping)
+                .is_some()
+        );
+
+        let retry_id = associations
+            .stage(
+                increment_binding,
+                mapping,
+                slots.ingress_epoch(increment).unwrap(),
+                increment_publication,
+            )
+            .unwrap();
+        assert!(associations.associate_accepted_submission(retry_id));
+        assert!(
+            associations
+                .promote_completed_publication(retry_id)
+                .is_some()
+        );
+        assert!(
+            associations
+                .displayed_for_mapping(increment, mapping)
+                .is_some()
+        );
+        assert!(
+            associations
+                .displayed_for_mapping(approval, mapping)
+                .is_some()
+        );
+
+        let retirement = slots.unmount_with_retirement(increment).unwrap();
+        assert!(retirement.is_some());
+        assert!(!slots.contains(increment));
+        assert!(slots.contains(approval));
+        assert!(slots.contains(counter));
+    }
+
+    #[test]
+    fn typed_action_partial_pump_advances_epoch_and_defers_publication_until_resettled() {
+        use runenui_core::NoHostProtocol;
+
+        struct ChainedApp;
+        impl UiApp for ChainedApp {
+            type State = usize;
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(format!("Processed {state}"))
+            }
+
+            fn update(
+                state: &mut Self::State,
+                (): Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                *state += 1;
+                if *state < 320 {
+                    Effects::action(())
+                } else {
+                    Effects::none()
+                }
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<ChainedApp>(
+                UiTypedScreenId::new("ordinary.chained"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("typed chained app mounts");
+        assert_eq!(
+            slots.submit_app_action::<ChainedApp>(slot, ()),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        let processed = slots
+            .observe_app::<ChainedApp, _>(slot, |runtime| *runtime.state())
+            .unwrap();
+        assert!(processed > 0 && processed < 320);
+        assert_eq!(slots.ingress_epoch(slot), Some(2));
+        assert_eq!(
+            slots.submit_app_action::<ChainedApp>(slot, ()),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        assert_eq!(
+            slots.has_pending_redraw(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        let style = StyleEnvironment::default();
+        let context = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(LogicalLength::from(320_u16), LogicalLength::from(160_u16)),
+        );
+        assert!(matches!(
+            slots.publish_surface_for_slot(slot, &context),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        ));
+        for _ in 0..8 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        assert_eq!(
+            slots.observe_app::<ChainedApp, _>(slot, |runtime| *runtime.state()),
+            Ok(320)
+        );
+        assert!(slots.has_pending_redraw(slot).is_ok());
+        assert_eq!(slots.ingress_epoch(slot), Some(2));
+    }
+
+    #[test]
+    fn typed_host_response_partial_pump_cannot_reuse_prior_ingress_epoch() {
+        struct ResponseProtocol;
+        impl HostProtocol for ResponseProtocol {
+            type Command = ();
+            type Response = ();
+            type ResponseKind = ();
+
+            fn expected_response(_: &Self::Command) -> Self::ResponseKind {}
+
+            fn response_kind(_: &Self::Response) -> Self::ResponseKind {}
+        }
+
+        enum ResponseAction {
+            Request,
+            Continue,
+        }
+
+        struct ResponseApp;
+        impl UiApp for ResponseApp {
+            type State = usize;
+            type Action = ResponseAction;
+            type HostProtocol = ResponseProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(format!("Responded {state}"))
+            }
+
+            fn update(
+                state: &mut Self::State,
+                action: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                match action {
+                    ResponseAction::Request => {
+                        Effects::host_request(None, (), |()| ResponseAction::Continue)
+                    }
+                    ResponseAction::Continue => {
+                        *state += 1;
+                        if *state < 320 {
+                            Effects::action(ResponseAction::Continue)
+                        } else {
+                            Effects::none()
+                        }
+                    }
+                }
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<ResponseApp>(
+                UiTypedScreenId::new("ordinary.response-loop"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("typed host-response app mounts");
+        slots
+            .submit_app_action::<ResponseApp>(slot, ResponseAction::Request)
+            .expect("host request queues");
+        let token = slots
+            .observe_app::<ResponseApp, _>(slot, |runtime| {
+                let requests = runtime.pending_host_requests();
+                assert_eq!(requests.len(), 1);
+                requests[0].token()
+            })
+            .unwrap();
+        let preceding_epoch = slots.ingress_epoch(slot).unwrap();
+        assert_eq!(
+            slots.complete_app_host_request::<ResponseApp>(slot, &token, ()),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        assert_eq!(slots.ingress_epoch(slot), Some(preceding_epoch + 1));
+        let progress = slots
+            .observe_app::<ResponseApp, _>(slot, |runtime| *runtime.state())
+            .unwrap();
+        assert!(progress > 0 && progress < 320);
+        assert_eq!(
+            slots.has_pending_redraw(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        for _ in 0..8 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        assert_eq!(
+            slots.observe_app::<ResponseApp, _>(slot, |runtime| *runtime.state()),
+            Ok(320)
+        );
+        assert!(slots.has_pending_redraw(slot).is_ok());
+        assert_eq!(slots.ingress_epoch(slot), Some(preceding_epoch + 1));
+    }
+
+    #[test]
+    fn typed_mount_settles_initial_app_effects_before_first_publication() {
+        use runenui_core::NoHostProtocol;
+
+        struct InitialApp;
+        impl UiApp for InitialApp {
+            type State = usize;
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(format!("Initialized {state}"))
+            }
+
+            fn initial_effects(
+                _: &Self::State,
+            ) -> impl runenui_core::IntoEffects<Self::Action, Self::HostProtocol> {
+                Effects::action(())
+            }
+
+            fn update(
+                state: &mut Self::State,
+                (): Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                *state += 1;
+                Effects::none()
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<InitialApp>(
+                UiTypedScreenId::new("ordinary.initial-effects"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("typed app initialization is admitted");
+        assert_eq!(
+            slots.observe_app::<InitialApp, _>(slot, |runtime| *runtime.state()),
+            Ok(1),
+            "the typed app's initial effect must not be stranded without later host ingress"
+        );
+        assert_eq!(slots.ingress_epoch(slot), Some(1));
+        assert!(slots.has_pending_redraw(slot).is_ok());
+    }
+
+    #[test]
+    fn typed_mount_capacity_pause_is_resumable_without_new_engine_action() {
+        use runenui_core::{IntoEffects, NoHostProtocol};
+
+        struct InitialChainApp;
+        impl UiApp for InitialChainApp {
+            type State = usize;
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                text(format!("Initial steps {state}"))
+            }
+
+            fn initial_effects(
+                _: &Self::State,
+            ) -> impl IntoEffects<Self::Action, Self::HostProtocol> {
+                Effects::action(())
+            }
+
+            fn update(
+                state: &mut Self::State,
+                (): Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                *state += 1;
+                if *state < 320 {
+                    Effects::action(())
+                } else {
+                    Effects::none()
+                }
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<InitialChainApp>(
+                UiTypedScreenId::new("ordinary.initial-chain"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("capacity-paused initial work keeps a mounted typed application");
+        let partial = slots
+            .observe_app::<InitialChainApp, _>(slot, |runtime| *runtime.state())
+            .unwrap();
+        assert!(partial > 0 && partial < 320);
+        assert_eq!(slots.ingress_epoch(slot), Some(1));
+        assert_eq!(
+            slots.has_pending_redraw(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        for _ in 0..8 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        assert_eq!(
+            slots.observe_app::<InitialChainApp, _>(slot, |runtime| *runtime.state()),
+            Ok(320)
+        );
+        assert!(slots.has_pending_redraw(slot).is_ok());
+        assert_eq!(slots.ingress_epoch(slot), Some(1));
+    }
+
+    #[test]
+    fn failed_typed_shutdown_retains_slot_until_real_retirement_is_observed() {
+        use std::any::Any;
+
+        use runenui_core::NoHostProtocol;
+        use runenui_runtime::{InputArbitrationRecord, RuntimeStatus};
+
+        struct EmptyApp;
+        impl UiApp for EmptyApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                text("shutdown")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                (): Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                Effects::none()
+            }
+        }
+
+        // Only the failure boundary is injected. Successful retirement below
+        // uses the actual pinned RunenUI runtime, including its final ownership
+        // snapshot and ordered scope-retirement records.
+        struct FailOnceOnShutdown {
+            runtime: AppRuntime<EmptyApp>,
+            fail_next_shutdown: bool,
+        }
+
+        impl TypedRuntimeOps for FailOnceOnShutdown {
+            fn pump(
+                &mut self,
+                budget: PumpBudget,
+            ) -> Result<InputPumpBatch, InputObservationError> {
+                self.runtime.pump(budget)
+            }
+
+            fn pending_redraw(&mut self) -> bool {
+                self.runtime.take_redraw_request().is_some()
+            }
+
+            fn publish_surface(
+                &mut self,
+                context: &SurfaceBuildContext<'_>,
+            ) -> Result<SurfacePublication, runenui_runtime::PublishSurfaceError> {
+                self.runtime.publish_surface(context)
+            }
+
+            fn shutdown(&mut self) -> Result<InputShutdownBatch, InputObservationError> {
+                if std::mem::take(&mut self.fail_next_shutdown) {
+                    Err(InputObservationError::Capacity)
+                } else {
+                    self.runtime.shutdown()
+                }
+            }
+
+            fn as_any(&self) -> &dyn Any {
+                self
+            }
+
+            fn as_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+        }
+
+        let id = UiRuntimeSlotId(1);
+        let mut slots = UiRuntimeSlotsResource::default();
+        slots.slots.push(UiRuntimeSlot {
+            id,
+            screen_id: UiTypedScreenId::new("ordinary.shutdown-preflight"),
+            runtime: UiRuntimeSlotKind::Typed(Box::new(FailOnceOnShutdown {
+                runtime: AppRuntime::<EmptyApp>::mount(()),
+                fail_next_shutdown: true,
+            })),
+            ingress_epoch: 1,
+            requires_settlement: false,
+        });
+        slots.next_slot_id = 2;
+
+        assert!(matches!(
+            slots.unmount_with_retirement(id),
+            Err(UiRuntimeSlotOperationFailure::InputObservation(
+                InputObservationError::Capacity
+            ))
+        ));
+        assert!(
+            slots.contains(id),
+            "failed shutdown cannot destroy its slot"
+        );
+        assert_eq!(slots.ingress_epoch(id), Some(1));
+
+        let retirement = slots
+            .unmount_with_retirement(id)
+            .expect("retry succeeds")
+            .expect("accepted shutdown returns actual retirement");
+        assert_eq!(retirement.final_ownership().status(), RuntimeStatus::Closed);
+        assert!(
+            retirement
+                .ordered_records()
+                .iter()
+                .any(|record| matches!(record, InputArbitrationRecord::ScopeRetired(_)))
+        );
+        assert!(!slots.contains(id));
+        assert_eq!(
+            slots
+                .unmount_with_retirement(id)
+                .map(|value| value.is_none()),
+            Ok(true)
+        );
+    }
+
+    #[test]
+    fn rejected_typed_font_and_exhausted_identity_preserve_slot_inventory() {
+        use runenui_core::NoHostProtocol;
+
+        struct EmptyApp;
+        impl UiApp for EmptyApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                text("empty")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                (): Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                Effects::none()
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let invalid_font = UiRuntimeFontConfiguration::new(vec![vec![1, 2, 3]]);
+        let invalid = slots.mount_app::<EmptyApp>(
+            UiTypedScreenId::new("ordinary.invalid-font"),
+            (),
+            &invalid_font,
+        );
+        assert_eq!(
+            invalid.failure(),
+            Some(UiRuntimeSlotMountFailure::FontProvisioning)
+        );
+        assert!(slots.is_empty());
+        assert_eq!(slots.next_slot_id, 1);
+
+        slots.next_slot_id = u64::MAX;
+        let exhausted = slots.mount_app::<EmptyApp>(
+            UiTypedScreenId::new("ordinary.exhausted"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        );
+        assert_eq!(
+            exhausted.failure(),
+            Some(UiRuntimeSlotMountFailure::SlotIdentityExhausted)
+        );
+        assert!(slots.is_empty());
+        assert_eq!(slots.next_slot_id, u64::MAX);
     }
 
     fn mount_counter(slots: &mut UiRuntimeSlotsResource) -> UiRuntimeSlotId {

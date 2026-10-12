@@ -107,6 +107,27 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
             continue;
         };
 
+        // Resume previously accepted, capacity-paused RunenUI work on the
+        // existing invoker-thread runtime before any paint/input publication.
+        // A bounded pause is not a failed action and not terminal quiescence.
+        let settlement = world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .settle_slot(slot);
+        match settlement {
+            Ok(()) => {}
+            Err(super::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {
+                // No partially settled snapshot may be published. Retire this
+                // slot's old paint/visible binding while preserving its runtime,
+                // accepted ingress epoch, and queued work for the next frame.
+                withdraw_paint_and_mapping(&mut world, &binding);
+                continue;
+            }
+            Err(error) => {
+                withdraw_paint_and_mapping(&mut world, &binding);
+                return Err(anyhow!("RunenUI slot settlement failed: {error:?}"));
+            }
+        }
+
         let epoch = world
             .resource::<UiRuntimeSlotsResource>()?
             .ingress_epoch(slot)

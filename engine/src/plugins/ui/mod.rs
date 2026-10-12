@@ -22,6 +22,7 @@ pub mod schedule;
 pub mod screen;
 pub mod source;
 pub mod trace;
+mod typed_app_host;
 
 pub use action::*;
 pub use app_ext::*;

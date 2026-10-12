@@ -299,6 +299,7 @@ impl UiRuntimePresentationAssociationsResource {
         if changed {
             self.pending.remove(&slot);
             self.retire_in_flight_for_slot(slot);
+            self.displayed.remove(&slot);
             self.last_publication.remove(&slot);
         }
         changed
@@ -308,6 +309,7 @@ impl UiRuntimePresentationAssociationsResource {
     pub fn invalidate_mapping(&mut self, slot: UiRuntimeSlotId) {
         self.retire_in_flight_for_slot(slot);
         self.pending.remove(&slot);
+        self.displayed.remove(&slot);
         self.current_mappings.remove(&slot);
         self.last_publication.remove(&slot);
     }

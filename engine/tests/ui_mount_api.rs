@@ -1,6 +1,7 @@
 use engine::plugins::ui::{
-    UiPlugin, UiRuntimeDiagnosticCode, UiRuntimeDiagnosticsResource, UiRuntimeSlotId,
-    UiRuntimeSlotMountFailure, UiRuntimeSlotsResource, UiScreen, UiTypedScreenId, UiTypedSource,
+    UiPlugin, UiRuntimeDiagnosticCode, UiRuntimeDiagnosticsResource, UiRuntimeFontConfiguration,
+    UiRuntimeSlotId, UiRuntimeSlotMountFailure, UiRuntimeSlotsResource, UiScreen, UiTypedScreenId,
+    UiTypedSource,
 };
 use engine::prelude::{App, AppUiExt};
 use ui_definition::{AuthoredId, UiNodeDefinition, UiValueBinding};
@@ -157,4 +158,65 @@ fn ui_mount_unmount_shuts_down_and_removes_engine_slot() {
     assert!(slots.is_empty());
     assert!(!slots.contains(slot_id));
     assert_eq!(slots.unmount(slot_id), Ok(false));
+}
+
+struct DiagnosticTypedApp;
+
+impl runenui_core::UiApp for DiagnosticTypedApp {
+    type State = ();
+    type Action = ();
+    type HostProtocol = runenui_core::NoHostProtocol;
+
+    fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+        runenui_core::text("typed")
+    }
+
+    fn update(
+        _: &mut Self::State,
+        (): Self::Action,
+    ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+        runenui_core::Effects::none()
+    }
+}
+
+#[test]
+fn typed_app_mount_rejection_records_the_same_engine_diagnostic_as_counter() {
+    let mut app = App::headless();
+    app.add_plugin(UiPlugin);
+
+    let fonts = UiRuntimeFontConfiguration::new(vec![vec![0, 1, 2, 3]]);
+    let report = app.ui().mount_app::<DiagnosticTypedApp>(
+        UiTypedScreenId::new("typed.invalid-font"),
+        (),
+        &fonts,
+    );
+    assert_eq!(
+        report.failure(),
+        Some(UiRuntimeSlotMountFailure::FontProvisioning)
+    );
+    assert!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .is_empty()
+    );
+
+    let diagnostics = app
+        .world()
+        .resource::<UiRuntimeDiagnosticsResource>()
+        .unwrap();
+    let last = diagnostics
+        .entries()
+        .last()
+        .expect("typed mount rejection diagnostic");
+    assert_eq!(last.code, UiRuntimeDiagnosticCode::RuntimeSlotMountRejected);
+    let facts = last
+        .runtime_slot_mount
+        .as_ref()
+        .expect("typed mount rejection preserves exact screen and reason");
+    assert_eq!(facts.screen_id, "typed.invalid-font");
+    assert_eq!(
+        facts.failure_reason,
+        UiRuntimeSlotMountFailure::FontProvisioning
+    );
 }
