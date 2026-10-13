@@ -344,7 +344,7 @@ fn shade_model_mesh_region(hit: ModelMeshRegionHit) -> vec4<f32> {{
         clamp((local.y + 1.0) * 0.5, 0.0, 1.0),
     ));
     // Screen-aligned model-region proxy: view vector is local +Z.
-    let color = rw_direct_material_light(material, normal, vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.3, 0.6, 0.75));
+    let color = rw_direct_material_light(material, normal, vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.1, 0.2, 0.97));
     let edge = smoothstep(0.88, 1.0, max(abs(local.x), abs(local.y)));
     let framed = mix(color, vec3<f32>(0.025, 0.03, 0.04), edge * 0.45);
     return vec4<f32>(clamp(framed, vec3<f32>(0.0), vec3<f32>(1.0)), material.opacity);
@@ -386,7 +386,13 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {{
         1.0,
         0.0,
     ));
-    let lit = rw_direct_material_light(material, normal, -ray_dir, vec3<f32>(0.5, 0.8, 0.35));
+    // Camera-relative key light, consistent with the Material Lab preview
+    // rather than a claim of globally authored world-space illumination.
+    let key_light = rw_safe_direction(
+        -ray_dir + u.camera_right.xyz * 0.1 + u.camera_up.xyz * 0.2,
+        -ray_dir,
+    );
+    let lit = rw_direct_material_light(material, normal, -ray_dir, key_light);
     return vec4<f32>(lit, material.opacity);
 }}
 "#,

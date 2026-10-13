@@ -5,9 +5,9 @@ use asset::{
 use editor_core::DocumentKind;
 use editor_persistence::{
     ModelMeshMaterialSlotAssignmentRecord, ProjectFileV3, SceneEntityRecordV2, SceneFileV2,
-    SceneMaterialAssignmentsRecord, SceneModelMeshSourceRecord,
-    SceneMaterialSlotRecord, SceneMaterialSourceRefRecord, ScenePrimitiveKind,
-    ScenePrimitiveRecord, SceneTransformRecord, SdfPrimitiveMaterialSlotAssignmentRecord,
+    SceneMaterialAssignmentsRecord, SceneMaterialSlotRecord, SceneMaterialSourceRefRecord,
+    SceneModelMeshSourceRecord, ScenePrimitiveKind, ScenePrimitiveRecord, SceneTransformRecord,
+    SdfPrimitiveMaterialSlotAssignmentRecord,
 };
 use editor_viewport::ViewportPresentationState;
 use engine::App;
@@ -1857,17 +1857,26 @@ struct Wr1282LightPixels {
 #[test]
 #[ignore = "requires explicit windowed GPU execution with RUNENWERK_ENABLE_GPU_SMOKE=1"]
 fn wr1282_source_backed_roughness_metallic_gpu_pixels() {
-    assert!(gpu_smoke_enabled(), "set RUNENWERK_ENABLE_GPU_SMOKE=1; do not silently skip pixel proof");
+    assert!(
+        gpu_smoke_enabled(),
+        "set RUNENWERK_ENABLE_GPU_SMOKE=1; do not silently skip pixel proof"
+    );
     if cfg!(target_os = "macos") {
-        assert!(macos_main_thread_smoke_enabled() && running_on_macos_main_thread(),
-            "macOS GPU proof must run on main thread with explicit opt-in");
+        assert!(
+            macos_main_thread_smoke_enabled() && running_on_macos_main_thread(),
+            "macOS GPU proof must run on main thread with explicit opt-in"
+        );
     }
     let window = create_hidden_window();
     let base = render_wr1282_light_variant(&window, "base", "0.45", "0.0", false);
     let rough = render_wr1282_light_variant(&window, "rough", "0.90", "0.0", false);
     let metal = render_wr1282_light_variant(&window, "metal", "0.45", "0.90", false);
     let delta = |a: [u8; 4], b: [u8; 4]| -> i32 {
-        a[..3].iter().zip(&b[..3]).map(|(a, b)| (*a as i32 - *b as i32).abs()).sum()
+        a[..3]
+            .iter()
+            .zip(&b[..3])
+            .map(|(a, b)| (*a as i32 - *b as i32).abs())
+            .sum()
     };
     for (label, changed) in [("roughness", rough), ("metallic", metal)] {
         let scene_delta = delta(base.left, changed.left);

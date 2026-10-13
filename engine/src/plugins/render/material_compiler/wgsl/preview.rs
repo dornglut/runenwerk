@@ -143,7 +143,7 @@ fn fixture_context(uv: vec2<f32>) -> MaterialEvalContext {{
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {{
     let ctx = fixture_context(in.uv);
     let material = evaluate_material(ctx);
-    let shaded = rw_direct_material_light(material, ctx.normal, vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.35, 0.75, 0.55));
+    let shaded = rw_direct_material_light(material, ctx.normal, vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.1, 0.2, 0.97));
     return vec4<f32>(shaded, material.opacity);
 }}
 "#,
