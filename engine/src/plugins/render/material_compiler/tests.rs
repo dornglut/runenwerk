@@ -5,7 +5,8 @@ use graph::{
 };
 use material_graph::{
     MaterialGraphDocument, MaterialGraphDocumentId, MaterialIr, MaterialNodeCatalog,
-    MaterialNodeOp, MaterialOutputTarget, lower_material_graph,
+    MaterialIrInputSource, MaterialNodeOp, MaterialOutputTarget, MaterialValueType,
+    lower_material_graph,
 };
 use resource_ref::ResourceRef;
 
@@ -680,4 +681,273 @@ fn compiler_rejects_missing_output_node() {
     .expect_err("missing output should fail");
 
     assert_eq!(error, MaterialShaderCompileError::MissingOutputNode);
+}
+
+
+fn output_ir(target: MaterialOutputTarget) -> MaterialIr {
+    let mut ir = ir();
+    ir.output_target = target;
+    ir
+}
+
+fn lowered_authored_output_ir(
+    target: MaterialOutputTarget,
+    input: &str,
+    value: &str,
+) -> MaterialIr {
+    let document = MaterialGraphDocument::new(
+        MaterialGraphDocumentId::new(18),
+        "authored_output",
+        GraphDefinition::new(
+            GraphId::new(1),
+            "authored_output",
+            CyclePolicy::RejectDirectedCycles,
+            [NodeDefinition::new(NodeId::new(1), "pbr.output", []).with_values([
+                GraphMetadataEntry::new(input, GraphValue::Text(value.to_string())),
+            ])],
+            [],
+        ),
+        target,
+    );
+    let lowering = lower_material_graph(&document, &MaterialNodeCatalog::first_slice());
+    assert!(
+        !lowering.report.has_blocking_issues(),
+        "{:?}",
+        lowering.report.issues()
+    );
+    lowering.product.expect("formed").executable_ir.expect("ir")
+}
+
+fn lowered_connected_output_ir(target: MaterialOutputTarget, input: &str) -> MaterialIr {
+    let float = MaterialValueType::Float.port_type_id();
+    let document = MaterialGraphDocument::new(
+        MaterialGraphDocumentId::new(19),
+        "connected_output",
+        GraphDefinition::new(
+            GraphId::new(1),
+            "connected_output",
+            CyclePolicy::RejectDirectedCycles,
+            [
+                NodeDefinition::new(
+                    NodeId::new(10),
+                    "pbr.roughness",
+                    [PortDefinition::new(
+                        PortId::new(1),
+                        "value",
+                        PortDirection::Output,
+                        float,
+                    )],
+                ),
+                NodeDefinition::new(
+                    NodeId::new(11),
+                    "pbr.output",
+                    [PortDefinition::new(
+                        PortId::new(2),
+                        input,
+                        PortDirection::Input,
+                        float,
+                    )],
+                ),
+            ],
+            [graph::EdgeDefinition::new(
+                graph::EdgeId::new(1),
+                PortId::new(1),
+                PortId::new(2),
+            )],
+        ),
+        target,
+    );
+    let lowering = lower_material_graph(&document, &MaterialNodeCatalog::first_slice());
+    assert!(
+        !lowering.report.has_blocking_issues(),
+        "{:?}",
+        lowering.report.issues()
+    );
+    lowering.product.expect("formed").executable_ir.expect("ir")
+}
+
+fn compile_ir(ir: &MaterialIr) -> Result<CompiledMaterialShader, MaterialShaderCompileError> {
+    compile_material_shader(MaterialShaderCompileRequest {
+        ir,
+        fixture: MaterialPreviewFixture::Sphere,
+    })
+}
+
+#[test]
+fn renderer_capabilities_admit_default_output_inputs_for_both_shader_targets() {
+    for target in [MaterialOutputTarget::PbrPreview, MaterialOutputTarget::RenderMaterial] {
+        let ir = output_ir(target);
+        let output = ir
+            .nodes
+            .iter()
+            .find(|node| node.op == MaterialNodeOp::PbrOutput)
+            .expect("output");
+        assert!(output
+            .inputs
+            .iter()
+            .all(|input| matches!(input.source, MaterialIrInputSource::Constant(_))));
+        assert_eq!(compile_ir(&ir).expect("default material"), compile_ir(&ir).unwrap());
+    }
+}
+
+#[test]
+fn renderer_capabilities_admit_only_realized_explicit_pbr_values() {
+    for (target, input, value) in [
+        (MaterialOutputTarget::PbrPreview, "base_color", "0.2 0.4 0.6 1.0"),
+        (MaterialOutputTarget::PbrPreview, "roughness", "0.25"),
+        (MaterialOutputTarget::PbrPreview, "metallic", "0.7"),
+        (MaterialOutputTarget::PbrPreview, "emissive", "0.1 0.2 0.3"),
+        (MaterialOutputTarget::PbrPreview, "opacity", "0.6"),
+        (MaterialOutputTarget::RenderMaterial, "base_color", "0.2 0.4 0.6 1.0"),
+        (MaterialOutputTarget::RenderMaterial, "emissive", "0.1 0.2 0.3"),
+        (MaterialOutputTarget::RenderMaterial, "opacity", "0.6"),
+    ] {
+        let ir = lowered_authored_output_ir(target, input, value);
+        let output = ir.nodes.iter().find(|node| node.op == MaterialNodeOp::PbrOutput).unwrap();
+        assert!(matches!(
+            output.inputs.iter().find(|source| source.name == input).unwrap().source,
+            MaterialIrInputSource::NodeValue { .. }
+        ));
+        compile_ir(&ir).unwrap_or_else(|error| {
+            panic!("{target:?} authored {input} should compile: {error}")
+        });
+    }
+}
+
+#[test]
+fn renderer_capabilities_reject_ignored_explicit_pbr_values() {
+    for (target, input) in [
+        (MaterialOutputTarget::PbrPreview, "normal_strength"),
+        (MaterialOutputTarget::PbrPreview, "material_channel"),
+        (MaterialOutputTarget::RenderMaterial, "roughness"),
+        (MaterialOutputTarget::RenderMaterial, "metallic"),
+        (MaterialOutputTarget::RenderMaterial, "normal_strength"),
+        (MaterialOutputTarget::RenderMaterial, "material_channel"),
+    ] {
+        let ir = lowered_authored_output_ir(target, input, "0.4");
+        assert_eq!(
+            compile_ir(&ir).expect_err("unsupported authored input must reject"),
+            MaterialShaderCompileError::UnsupportedAuthoredOutputInput {
+                target,
+                node_id: 1,
+                input: input.to_string(),
+            }
+        );
+    }
+}
+
+#[test]
+fn renderer_capabilities_reject_ignored_connections_but_keep_supported_connections() {
+    let allowed = lowered_connected_output_ir(MaterialOutputTarget::PbrPreview, "roughness");
+    let output = allowed.nodes.iter().find(|node| node.op == MaterialNodeOp::PbrOutput).unwrap();
+    assert!(matches!(
+        output.inputs.iter().find(|input| input.name == "roughness").unwrap().source,
+        MaterialIrInputSource::Connected { .. }
+    ));
+    compile_ir(&allowed).expect("preview roughness connection is realized");
+
+    for (target, input) in [
+        (MaterialOutputTarget::PbrPreview, "normal_strength"),
+        (MaterialOutputTarget::PbrPreview, "material_channel"),
+        (MaterialOutputTarget::RenderMaterial, "roughness"),
+        (MaterialOutputTarget::RenderMaterial, "metallic"),
+        (MaterialOutputTarget::RenderMaterial, "normal_strength"),
+        (MaterialOutputTarget::RenderMaterial, "material_channel"),
+    ] {
+        let ir = lowered_connected_output_ir(target, input);
+        assert_eq!(
+            compile_ir(&ir).expect_err("unsupported connected input must reject"),
+            MaterialShaderCompileError::UnsupportedAuthoredOutputInput {
+                target,
+                node_id: 11,
+                input: input.to_string(),
+            }
+        );
+    }
+}
+
+#[test]
+fn renderer_capabilities_reject_field_product_target_even_with_default_inputs() {
+    let ir = output_ir(MaterialOutputTarget::FieldMaterialChannel);
+    assert_eq!(
+        compile_ir(&ir).expect_err("field product not realized"),
+        MaterialShaderCompileError::UnsupportedOutputTarget {
+            target: MaterialOutputTarget::FieldMaterialChannel,
+        }
+    );
+
+    assert_eq!(
+        compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+            slots: vec![SceneMaterialTableSlot {
+                slot_index: 0,
+                material_instance_id: "field.material".to_string(),
+                ir: &ir,
+            }],
+        })
+        .expect_err("field product must not compile in table"),
+        MaterialShaderCompileError::UnsupportedOutputTarget {
+            target: MaterialOutputTarget::FieldMaterialChannel,
+        }
+    );
+}
+
+#[test]
+fn renderer_capabilities_reject_mixed_authored_semantics_without_publishing_wgsl() {
+    let mut ir = lowered_authored_output_ir(MaterialOutputTarget::RenderMaterial, "base_color", "0.1 0.2 0.3 1.0");
+    let output = ir.nodes.iter_mut().find(|node| node.op == MaterialNodeOp::PbrOutput).unwrap();
+    output.inputs.iter_mut().find(|input| input.name == "roughness").unwrap().source =
+        MaterialIrInputSource::NodeValue {
+            key: "roughness".to_string(),
+            canonical_value: GraphValue::Text("0.4".to_string()).canonical_component(),
+        };
+    assert_eq!(
+        compile_ir(&ir).expect_err("mixed material must fail as a unit"),
+        MaterialShaderCompileError::UnsupportedAuthoredOutputInput {
+            target: MaterialOutputTarget::RenderMaterial,
+            node_id: 1,
+            input: "roughness".to_string(),
+        }
+    );
+}
+
+#[test]
+fn scene_material_table_rejects_ignored_output_inputs_in_any_slot() {
+    let valid = ir();
+    let invalid = lowered_authored_output_ir(MaterialOutputTarget::RenderMaterial, "metallic", "0.8");
+    assert_eq!(
+        compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+            slots: vec![
+                SceneMaterialTableSlot {
+                    slot_index: 0,
+                    material_instance_id: "valid".to_string(),
+                    ir: &valid,
+                },
+                SceneMaterialTableSlot {
+                    slot_index: 1,
+                    material_instance_id: "invalid".to_string(),
+                    ir: &invalid,
+                },
+            ],
+        })
+        .expect_err("unsupported table slot must reject"),
+        MaterialShaderCompileError::UnsupportedAuthoredOutputInput {
+            target: MaterialOutputTarget::RenderMaterial,
+            node_id: 1,
+            input: "metallic".to_string(),
+        }
+    );
+}
+
+#[test]
+fn unsupported_output_admission_does_not_suppress_structural_validation() {
+    let mut ir = lowered_connected_output_ir(MaterialOutputTarget::RenderMaterial, "roughness");
+    ir.nodes.retain(|node| node.node_id != NodeId::new(10));
+    assert!(matches!(
+        compile_ir(&ir).expect_err("dangling connection"),
+        MaterialShaderCompileError::MissingConnectedOutput {
+            input,
+            source_node_id: 10,
+            ..
+        } if input == "roughness"
+    ));
 }

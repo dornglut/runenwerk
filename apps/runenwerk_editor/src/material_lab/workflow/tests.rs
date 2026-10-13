@@ -902,6 +902,75 @@ fn changed_material_recipe_allocates_new_ledger_entry() {
     let _ = std::fs::remove_dir_all(root);
 }
 
+
+#[test]
+fn unsupported_material_output_preserves_prior_valid_artifact() {
+    let root = unique_temp_dir("material_capability_preserve");
+    let asset_id = asset_id(1);
+    let source_id = asset_source_id(2);
+    let mut session = crate::asset_pipeline::EditorAssetProjectSession::from_project_file(
+        &root,
+        &material_project_with_recipe("render", "render_material"),
+    )
+    .expect("render project session");
+    let source = AssetSourceDescriptor::new(
+        source_id,
+        asset_id,
+        AssetKind::MaterialGraph,
+        "assets/materials/unsupported.material.ron",
+    )
+    .with_hash(SourceHash::new("sha256", "abc"));
+    let mut document = default_material_graph_document_for_source_with_target(
+        asset_id,
+        &source,
+        "Unsupported",
+        MaterialOutputTarget::RenderMaterial,
+    );
+    document
+        .graph
+        .nodes
+        .iter_mut()
+        .find(|node| node.name == "pbr.output")
+        .expect("output node")
+        .values
+        .push(graph::GraphMetadataEntry::new(
+            "normal_strength",
+            graph::GraphValue::Text("0.4".to_string()),
+        ));
+    write_material_graph_document(&root.join(&source.relative_path), &document)
+        .expect("material source");
+
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(
+        AssetRecord::new(asset_id, "material", "Material", AssetKind::MaterialGraph)
+            .with_primary_source(source_id),
+    );
+    catalog.insert_source(source);
+    catalog.insert_artifact(
+        AssetArtifactDescriptor::new(
+            asset_artifact_id(9),
+            asset_id,
+            AssetKind::Material,
+            ArtifactPayloadKind::FormedMaterialProduct {
+                product_id: "3".to_string(),
+            },
+            ArtifactCacheKey::new("prior"),
+        )
+        .with_validity(asset::ArtifactValidity::Valid),
+    );
+
+    let outcome = rebuild_material_preview_for_asset(&catalog, &mut session, asset_id);
+    assert!(outcome.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == AssetDiagnosticCode::RatificationRejected
+            && diagnostic.message.contains("normal_strength")
+            && diagnostic.message.contains("RenderMaterial")
+    }));
+    let publication = outcome.publication.expect("last-good preservation");
+    assert_eq!(publication.artifact.artifact_id, asset_artifact_id(9));
+    assert_eq!(publication.artifact.validity, asset::ArtifactValidity::FailedPreserved);
+    let _ = std::fs::remove_dir_all(root);
+}
+
 #[test]
 fn invalid_material_graph_preserves_prior_valid_artifact() {
     let root = unique_temp_dir("material_preview_preserve");
