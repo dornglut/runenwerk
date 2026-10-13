@@ -546,6 +546,7 @@ pub fn integrate_completed_build_outputs_system(
                 // truth and release the pending generation for a valid future retry.
                 if let Some(record) = chunks.by_chunk_id.get_mut(&output.chunk_id) {
                     record.pending_build_generation = None;
+                    record.exact_read_recovery_required = true;
                     if matches!(output.origin, WorldCompletedBuildOrigin::OperationWindow) {
                         record.dirty_reasons.reasons.insert(DirtyReason::Geometry);
                     }
@@ -567,6 +568,7 @@ pub fn integrate_completed_build_outputs_system(
         record.build_generation = output.target_build_generation;
         record.pending_build_generation = None;
         record.exact_source = output.exact_source;
+        record.exact_read_recovery_required = false;
         if record.dirty_reasons.is_empty() {
             if !matches!(record.lifecycle, ChunkLifecycleState::Resident) {
                 record.lifecycle = ChunkLifecycleState::Ready;
