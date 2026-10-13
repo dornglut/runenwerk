@@ -234,7 +234,8 @@ impl InputState {
                 let genuine = input.origin == ObservationOrigin::SourceReport && !input.repeat;
                 let generation = if genuine {
                     let issued = self.next_keyboard_generation;
-                    self.next_keyboard_generation = issued.and_then(|current| current.checked_add(1));
+                    self.next_keyboard_generation =
+                        issued.and_then(|current| current.checked_add(1));
                     issued
                 } else {
                     None
@@ -257,21 +258,21 @@ impl InputState {
             (DigitalState::Released, Some(index)) => {
                 self.keyboard_held_contributors.remove(index);
                 if input.origin == ObservationOrigin::SourceReport {
-                    self.keyboard_real_release_samples.push(KeyboardRealReleaseSample {
+                    self.keyboard_real_release_samples
+                        .push(KeyboardRealReleaseSample {
+                            context,
+                            physical_key: input.physical_key.clone(),
+                        });
+                }
+            }
+            (DigitalState::Released, None) if input.origin == ObservationOrigin::SourceReport => {
+                // A genuine Up may follow an OS synthetic cancellation. That
+                // is the first authentic release proof for a revoked lifetime.
+                self.keyboard_real_release_samples
+                    .push(KeyboardRealReleaseSample {
                         context,
                         physical_key: input.physical_key.clone(),
                     });
-                }
-            }
-            (DigitalState::Released, None)
-                if input.origin == ObservationOrigin::SourceReport =>
-            {
-                // A genuine Up may follow an OS synthetic cancellation. That
-                // is the first authentic release proof for a revoked lifetime.
-                self.keyboard_real_release_samples.push(KeyboardRealReleaseSample {
-                    context,
-                    physical_key: input.physical_key.clone(),
-                });
             }
             _ => {}
         }

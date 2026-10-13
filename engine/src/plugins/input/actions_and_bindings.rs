@@ -492,15 +492,14 @@ impl ActionState {
         generation: u64,
     ) {
         if !self.revoked_keyboard_lifetimes.iter().any(|revoked| {
-            revoked.context == context
-                && revoked.key == *key
-                && revoked.generation == generation
+            revoked.context == context && revoked.key == *key && revoked.generation == generation
         }) {
-            self.revoked_keyboard_lifetimes.push(RevokedKeyboardLifetime {
-                context,
-                key: key.clone(),
-                generation,
-            });
+            self.revoked_keyboard_lifetimes
+                .push(RevokedKeyboardLifetime {
+                    context,
+                    key: key.clone(),
+                    generation,
+                });
         }
         // If the physical key is still held, deny the whole lifetime even
         // through synthetic cancellation; only an authentic Up can retire it.
@@ -519,9 +518,7 @@ impl ActionState {
         // Retract only the previously accepted contributions from this
         // generation; do not replay historic presses under later bindings.
         self.pressed_contributors.retain(|pressed| {
-            pressed.context != context
-                || pressed.key != *key
-                || pressed.generation != generation
+            pressed.context != context || pressed.key != *key || pressed.generation != generation
         });
         self.actions_pressed = self
             .pressed_contributors
@@ -538,9 +535,7 @@ impl ActionState {
         generation: u64,
     ) -> bool {
         !self.revoked_keyboard_lifetimes.iter().any(|revoked| {
-            revoked.context == context
-                && revoked.key == *key
-                && revoked.generation == generation
+            revoked.context == context && revoked.key == *key && revoked.generation == generation
         })
     }
 
@@ -641,11 +636,11 @@ impl ActionState {
                     |key| {
                         input.physical_key_down_in(context, key)
                             && !self.blocked_held_key(context, key)
-                            && input
-                                .keyboard_down_generation_in(context, key)
-                                .is_none_or(|generation| {
+                            && input.keyboard_down_generation_in(context, key).is_none_or(
+                                |generation| {
                                     self.keyboard_generation_eligible(context, key, generation)
-                                })
+                                },
+                            )
                     },
                     modifiers,
                 )
