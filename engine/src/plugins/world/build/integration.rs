@@ -10,13 +10,13 @@ use super::super::plugin::{WorldAuthorityState, WorldRuntimeState};
 use super::jobs::WorldBuildStaleness;
 use crate::runtime::{Res, ResMut};
 use product::ProductIdentity;
-use runen_spatial::{ChunkId, GridPartitionConfig};
+use runen_spatial::ChunkId;
 use std::collections::{BTreeMap, VecDeque};
 use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason};
 use world_sdf::{
     FieldProductCandidate, FieldProductDescriptor, FieldProductKind, RegionSdfSummary,
     SdfChunkPayload, WorldSdfExactFormationError, WorldSdfMetricError, WorldSdfMetricPayloadRef,
-    WorldSdfMetricProductCandidate, WorldSdfOpenTopRectInteriorSource, WorldSdfVerifiedExactSource,
+    WorldSdfMetricProductCandidate, WorldSdfOpenTopExactFormation, WorldSdfVerifiedExactSource,
     ratify_field_product_candidate, ratify_world_sdf_metric_product_candidate,
     validate_world_sdf_metric_payload, verify_world_sdf_open_top_exact_formation,
 };
@@ -35,8 +35,28 @@ pub struct WorldCompletedBuildOutput {
     pub staleness: WorldBuildStaleness,
     pub chunk_payload: SdfChunkPayload,
     pub region_summary: RegionSdfSummary,
-    pub exact_source: Option<WorldSdfCommittedExactSource>,
+    pub(crate) exact_source: Option<WorldSdfCommittedExactSource>,
     pub origin: WorldCompletedBuildOrigin,
+}
+
+impl WorldCompletedBuildOutput {
+    /// External authors may construct ordinary outputs, never mint or swap
+    /// an exact-source certificate directly in the mutable completion queue.
+    pub fn generic(
+        chunk_id: ChunkId,
+        target_chunk_revision: ChunkRevision,
+        target_build_generation: BuildGeneration,
+        staleness: WorldBuildStaleness,
+        chunk_payload: SdfChunkPayload,
+        region_summary: RegionSdfSummary,
+        origin: WorldCompletedBuildOrigin,
+    ) -> Self {
+        Self {
+            chunk_id, target_chunk_revision, target_build_generation,
+            staleness, chunk_payload, region_summary, origin,
+            exact_source: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
@@ -172,7 +192,7 @@ pub struct WorldSdfRuntimePayloadPackage {
     pub payloads: Vec<SdfChunkPayload>,
     pub region_summary: RegionSdfSummary,
     pub metric_payload_ref: Option<WorldSdfMetricPayloadRef>,
-    pub exact_source: Option<(WorldSdfOpenTopRectInteriorSource, GridPartitionConfig)>,
+    exact_source: Option<WorldSdfOpenTopExactFormation>,
 }
 
 impl WorldSdfRuntimePayloadPackage {
@@ -195,14 +215,17 @@ impl WorldSdfRuntimePayloadPackage {
         self
     }
 
-    /// A candidate, not a World certificate until verified and integrated.
-    pub fn with_exact_source(
-        mut self,
-        source: WorldSdfOpenTopRectInteriorSource,
-        partition: GridPartitionConfig,
-    ) -> Self {
-        self.exact_source = Some((source, partition));
-        self
+    /// Only a domain-formed source+CPU artifact can claim exact provenance.
+    /// There is no overload that attaches an independent analytic source to
+    /// an already constructed payload with indistinguishable quantized bytes.
+    pub fn from_exact_formation(formation: WorldSdfOpenTopExactFormation) -> Self {
+        Self {
+            descriptor: formation.descriptor().clone(),
+            payloads: vec![formation.payload().clone()],
+            region_summary: formation.region_summary(),
+            metric_payload_ref: Some(formation.metric_ref()),
+            exact_source: Some(formation),
+        }
     }
 }
 
@@ -271,16 +294,24 @@ fn validate_runtime_sdf_payload_package(
     }
 
     let qualified = match package.exact_source.as_ref() {
-        Some((source, partition)) => {
-            let metric_ref = package
-                .metric_payload_ref
-                .ok_or(WorldSdfRuntimePayloadPackageError::ExactSourceRequiresMetric)?;
+        Some(formation) => {
+            // Do not permit public package fields to substitute a product,
+            // metric ref, region summary or bytes after the source was formed.
+            if package.descriptor != *formation.descriptor()
+                || payload != formation.payload()
+                || package.region_summary != formation.region_summary()
+                || package.metric_payload_ref != Some(formation.metric_ref())
+            {
+                return Err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected(
+                    WorldSdfExactFormationError::WrongPayloadIdentity,
+                ));
+            }
             Some(
                 verify_world_sdf_open_top_exact_formation(
-                    *source,
-                    partition,
+                    formation.source(),
+                    formation.partition(),
                     &package.descriptor,
-                    metric_ref,
+                    formation.metric_ref(),
                     payload,
                     package.region_summary,
                 )
@@ -306,6 +337,23 @@ pub fn enqueue_ratified_world_sdf_payload_package(
     // matching pending generation. Reject a conflicting retry before changing either.
     let payload = &package.payloads[0];
     let generation = BuildGeneration(payload.chunk_generation.0);
+
+    // Source changes on replacement require explicit lineage revision progress;
+    // matching formed bytes alone must not silently change the committed f64
+    // source under an unchanged source revision.
+    if let Some(candidate) = qualified.as_ref() {
+        if let Some(previous) = chunks.by_chunk_id.get(&payload.chunk_id)
+            .and_then(|record| record.exact_source.as_ref())
+        {
+            if candidate.source() != previous.evidence.source()
+                && candidate.source_revision() <= previous.evidence.source_revision()
+            {
+                return Err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected(
+                    WorldSdfExactFormationError::InvalidProductOrRevision,
+                ));
+            }
+        }
+    }
 
     // A pending retry is distinct from replaying an already integrated chunk.
     // Check actual CPU geometry first: the catalog may still advertise a newer
@@ -491,9 +539,6 @@ pub fn integrate_completed_build_outputs_system(
                 // truth and release the pending generation for a valid future retry.
                 if let Some(record) = chunks.by_chunk_id.get_mut(&output.chunk_id) {
                     record.pending_build_generation = None;
-                    // A rejected intent leaves the old source committed but not current,
-                    // even when an older product alias still appears in the catalog.
-                    record.exact_read_recovery_required = true;
                     if matches!(output.origin, WorldCompletedBuildOrigin::OperationWindow) {
                         record.dirty_reasons.reasons.insert(DirtyReason::Geometry);
                     }
@@ -515,7 +560,6 @@ pub fn integrate_completed_build_outputs_system(
         record.build_generation = output.target_build_generation;
         record.pending_build_generation = None;
         record.exact_source = output.exact_source;
-        record.exact_read_recovery_required = false;
         if record.dirty_reasons.is_empty() {
             if !matches!(record.lifecycle, ChunkLifecycleState::Resident) {
                 record.lifecycle = ChunkLifecycleState::Ready;

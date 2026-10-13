@@ -18,7 +18,7 @@ use runenwerk_arena::{
     ARENA_CHUNK_EDGE_METERS, ARENA_FIELD_PRODUCT_ID, ARENA_METRIC_DISTANCE_UNITS_PER_METER,
     ARENA_METRIC_MAX_ABSOLUTE_ERROR_UNITS, ARENA_PLAYER_SPAWN, LOCAL_PARTICIPANT_ID,
     ParticipantCommand, PlayerCommand, TickCommandBatch, apply_game_commands, arena_chunk_id,
-    arena_field_product_descriptor, arena_geometry_source, arena_metric_encoding,
+    arena_exact_formation, arena_field_product_descriptor, arena_geometry_source, arena_metric_encoding,
     arena_metric_error_components_meters, arena_metric_payload_ref, arena_partition_config,
     arena_signed_distance_from_source, arena_signed_distance_meters, build_arena_chunk_payload,
     build_arena_chunk_payload_from_source, build_headless_game_app, player_physical_history_for,
@@ -790,6 +790,15 @@ fn verified_exact_formation_checks_all_occupancy_samples_metadata_and_summary() 
         )
     };
     assert!(verify(source, &payload, summary).is_ok());
+    // The independent byte verifier is deliberately NOT a source-identity
+    // oracle: sub-quantization changes may preserve every formed byte.
+    let epsilon = WorldSdfOpenTopRectInteriorSource::try_new(
+        [0.500001, 3.5], 0.5, [0.5, 3.5],
+    ).unwrap();
+    assert!(verify(epsilon, &payload, summary).is_ok());
+    let p = [0.5000005, 1.0, 1.0];
+    assert!(source.signed_distance_meters(p) > 0.0);
+    assert!(epsilon.signed_distance_meters(p) < 0.0);
     let alternate =
         WorldSdfOpenTopRectInteriorSource::try_new([0.75, 3.5], 0.5, [0.5, 3.5]).unwrap();
     assert!(verify(alternate, &payload, summary).is_err());
@@ -903,10 +912,11 @@ fn exact_pending_alias_requires_independent_source_proof_and_generic_overwrite_r
         .product_core()
         .identity;
     let summary = w1_region_summary(&payload);
-    let package = |descriptor, source| {
-        WorldSdfRuntimePayloadPackage::new(descriptor, vec![payload.clone()], summary)
-            .with_metric_capability(arena_metric_payload_ref(&payload))
-            .with_exact_source(source, arena_partition_config())
+    let package = |descriptor: world_sdf::FieldProductDescriptor, source| {
+        WorldSdfRuntimePayloadPackage::from_exact_formation(arena_exact_formation(
+            source, descriptor.product_id, descriptor.lineage.source_revision,
+            payload.chunk_revision, payload.chunk_generation,
+        ))
     };
     let divergent =
         WorldSdfOpenTopRectInteriorSource::try_new([0.75, 3.5], 0.5, [0.5, 3.5]).unwrap();
@@ -1000,13 +1010,11 @@ fn terminal_rejected_exact_replacement_preserves_certificate_but_requires_succes
     assert_eq!(
         w1_enqueue(
             &mut app,
-            WorldSdfRuntimePayloadPackage::new(
-                prior_alias,
-                vec![initial.clone()],
-                w1_region_summary(&initial),
-            )
-            .with_metric_capability(arena_metric_payload_ref(&initial))
-            .with_exact_source(arena_geometry_source(), arena_partition_config()),
+            WorldSdfRuntimePayloadPackage::from_exact_formation(arena_exact_formation(
+                arena_geometry_source(), prior_alias.product_id,
+                prior_alias.lineage.source_revision, initial.chunk_revision,
+                initial.chunk_generation,
+            )),
         )
         .unwrap(),
         0
@@ -1026,13 +1034,12 @@ fn terminal_rejected_exact_replacement_preserves_certificate_but_requires_succes
     let mut descriptor = arena_field_product_descriptor(&next);
     descriptor.lineage.source_revision = 2;
     let id = descriptor.product_core().identity;
-    let package = WorldSdfRuntimePayloadPackage::new(
-        descriptor,
-        vec![next.clone()],
-        w1_region_summary(&next),
-    )
-    .with_metric_capability(arena_metric_payload_ref(&next))
-    .with_exact_source(arena_geometry_source(), arena_partition_config());
+    let package = WorldSdfRuntimePayloadPackage::from_exact_formation(
+        arena_exact_formation(
+            arena_geometry_source(), descriptor.product_id,
+            descriptor.lineage.source_revision, next.chunk_revision, next.chunk_generation,
+        ),
+    );
     assert_eq!(w1_enqueue(&mut app, package.clone()).unwrap(), 1);
     {
         let queue = app
@@ -1067,11 +1074,11 @@ fn terminal_rejected_exact_replacement_preserves_certificate_but_requires_succes
         .get(&arena_chunk_id())
         .unwrap();
     assert!(
-        record.exact_source.is_some(),
+        record.has_exact_source(),
         "committed prior source preserved"
     );
     assert!(record.pending_build_generation.is_none());
-    assert!(record.exact_read_recovery_required);
+    assert!(record.exact_read_recovery_required());
     assert!(matches!(record.lifecycle, ChunkLifecycleState::Ready));
 
     // New enqueue-time descriptor is not accepted as the old committed source.
@@ -1156,11 +1163,154 @@ fn queued_dirtiness_rejects_exact_reads_and_ordinary_world_build_retires_source(
         .unwrap();
     assert_eq!(record.chunk_generation, ChunkGeneration(1));
     assert!(
-        record.exact_source.is_none(),
+        !record.has_exact_source(),
         "generic build must retire certified source"
     );
     assert!(matches!(
         qualify(&app),
         Err(WorldSdfExactReadError::UnsupportedExactSource)
     ));
+}
+
+#[test]
+fn exact_source_identity_rejects_epsilon_equivalent_formed_product_alias() {
+    use engine::plugins::world::build::{
+        WorldSdfRuntimePayloadPackage, WorldSdfRuntimePayloadPackageError,
+    };
+    let mut app = started_app();
+    let original = arena_exact_formation(
+        arena_geometry_source(), ARENA_FIELD_PRODUCT_ID, 1,
+        world_ops::ChunkRevision(0), world_ops::ChunkGeneration(0),
+    );
+    let epsilon = WorldSdfOpenTopRectInteriorSource::try_new(
+        [0.500001, 3.5], 0.5, [0.5, 3.5],
+    ).unwrap();
+    let mut candidate = arena_exact_formation(
+        epsilon, ARENA_FIELD_PRODUCT_ID, 1,
+        world_ops::ChunkRevision(0), world_ops::ChunkGeneration(0),
+    );
+    assert_eq!(original.payload(), candidate.payload(), "all quantized bytes coincide");
+    assert_eq!(original.metric_ref(), candidate.metric_ref(), "declared refs coincide");
+    assert_eq!(original.region_summary(), candidate.region_summary());
+    assert_ne!(original.source(), candidate.source());
+    // Cannot combine canonical producer bytes with an independently supplied
+    // exact evaluator. A minted source/formation pair carries its own bytes.
+    let mut old_alias = arena_field_product_descriptor(original.payload());
+    old_alias.product_id = world_sdf::FieldProductId(997);
+    let descriptor = candidate.descriptor().clone();
+    assert_eq!(descriptor.lineage, original.descriptor().lineage);
+    assert_eq!(descriptor.payload_refs, original.descriptor().payload_refs);
+
+    let old_alias_formation = arena_exact_formation(
+        arena_geometry_source(), old_alias.product_id, 1,
+        world_ops::ChunkRevision(0), world_ops::ChunkGeneration(0),
+    );
+    assert_eq!(
+        w1_enqueue(&mut app, WorldSdfRuntimePayloadPackage::from_exact_formation(
+            old_alias_formation,
+        )).unwrap(),
+        0,
+        "canonical source-qualified alias shares pending payload",
+    );
+    // A second product with the *same declared* source revision and bytes
+    // must not inherit the canonical exact source if its f64 wall differs.
+    assert!(matches!(
+        w1_enqueue(&mut app, WorldSdfRuntimePayloadPackage::from_exact_formation(
+            candidate.clone(),
+        )),
+        Err(WorldSdfRuntimePayloadPackageError::PendingGenerationConflict { .. })
+    ));
+    assert_eq!(app.world()
+        .resource::<WorldCompletedBuildQueueResource>().unwrap()
+        .outputs.len(), 1);
+    candidate = arena_exact_formation(
+        arena_geometry_source(), ARENA_FIELD_PRODUCT_ID, 1,
+        world_ops::ChunkRevision(0), world_ops::ChunkGeneration(0),
+    );
+    assert_eq!(w1_enqueue(
+        &mut app, WorldSdfRuntimePayloadPackage::from_exact_formation(candidate),
+    ).unwrap(), 0);
+    app = app.run_for_fixed_steps(1).unwrap();
+    use engine::plugins::world::queries::{
+        WorldSdfExactQueryBounds, qualify_current_world_sdf_exact_source_read,
+    };
+    let world = app.world();
+    let p = [0.5000005, 1.0, 1.0];
+    let bounds = WorldSdfExactQueryBounds::try_new(p, p).unwrap();
+    let view = qualify_current_world_sdf_exact_source_read(
+        original.descriptor().product_core().identity, bounds,
+        world.resource::<PartitionConfigResource>().unwrap(),
+        world.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap(),
+        world.resource::<engine::plugins::world::chunks::DirtyChunkMapResource>().unwrap(),
+        world.resource::<WorldChunkRuntimeMapResource>().unwrap(),
+        world.resource::<SdfChunkStoreResource>().unwrap(),
+    ).unwrap();
+    assert!(view.sample_exact_distance_meters(p).unwrap() > 0.0,
+        "read uses original producer-authored exact geometry");
+}
+
+#[test]
+fn full_precision_replacement_requires_explicit_source_revision_and_sealed_descriptor() {
+    use engine::plugins::world::build::{
+        WorldSdfRuntimePayloadPackage, WorldSdfRuntimePayloadPackageError,
+    };
+    use engine::plugins::world::queries::{
+        WorldSdfExactQueryBounds, qualify_current_world_sdf_exact_source_read,
+    };
+    let original = build_arena_chunk_payload();
+    let original_descriptor = arena_field_product_descriptor(&original);
+    let mut forged = WorldSdfRuntimePayloadPackage::from_exact_formation(
+        arena_exact_formation(arena_geometry_source(), ARENA_FIELD_PRODUCT_ID, 1,
+            world_ops::ChunkRevision(0), world_ops::ChunkGeneration(0)),
+    );
+    forged.descriptor.lineage.source_revision = 7;
+    let mut app = integrated_app();
+    assert!(matches!(
+        w1_enqueue(&mut app, forged),
+        Err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected(
+            world_sdf::WorldSdfExactFormationError::WrongPayloadIdentity
+        ))
+    ), "changing a public descriptor cannot rewrite the sealed producer lineage");
+    assert_eq!(app.world().resource::<SdfChunkStoreResource>().unwrap()
+        .chunks.get(&arena_chunk_id()), Some(&original));
+    let shifted = WorldSdfOpenTopRectInteriorSource::try_new(
+        [0.500001, 3.5], 0.5, [0.5, 3.5],
+    ).unwrap();
+    let next_same_rev = arena_exact_formation(
+        shifted, ARENA_FIELD_PRODUCT_ID, 1,
+        world_ops::ChunkRevision(1), world_ops::ChunkGeneration(1),
+    );
+    assert_eq!(next_same_rev.payload().page_table, original.page_table,
+        "sub-quantization source difference is invisible to metric bytes");
+    assert!(matches!(
+        w1_enqueue(&mut app, WorldSdfRuntimePayloadPackage::from_exact_formation(
+            next_same_rev,
+        )),
+        Err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected(
+            world_sdf::WorldSdfExactFormationError::InvalidProductOrRevision
+        ))
+    ), "replacing an exact source requires advancing the authoritative source revision");
+    assert!(app.world().resource::<WorldCompletedBuildQueueResource>().unwrap().outputs.is_empty());
+
+    let explicit_next = arena_exact_formation(
+        shifted, ARENA_FIELD_PRODUCT_ID, 2,
+        world_ops::ChunkRevision(1), world_ops::ChunkGeneration(1),
+    );
+    assert_eq!(w1_enqueue(&mut app, WorldSdfRuntimePayloadPackage::from_exact_formation(
+        explicit_next,
+    )).unwrap(), 1);
+    app = app.run_for_fixed_steps(1).unwrap();
+    let p = [0.5000005, 1.0, 1.0];
+    let world = app.world();
+    let view = qualify_current_world_sdf_exact_source_read(
+        original_descriptor.product_core().identity,
+        WorldSdfExactQueryBounds::try_new(p,p).unwrap(),
+        world.resource::<PartitionConfigResource>().unwrap(),
+        world.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap(),
+        world.resource::<engine::plugins::world::chunks::DirtyChunkMapResource>().unwrap(),
+        world.resource::<WorldChunkRuntimeMapResource>().unwrap(),
+        world.resource::<SdfChunkStoreResource>().unwrap(),
+    ).unwrap();
+    assert!(view.sample_exact_distance_meters(p).unwrap() < 0.0,
+        "explicitly revised source changes exact truth despite matching renderer bytes");
 }

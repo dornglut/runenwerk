@@ -35,13 +35,22 @@ pub struct WorldChunkRuntimeRecord {
     pub dirty_reasons: DirtyReasonSet,
     pub pending_build_generation: Option<BuildGeneration>,
     pub gameplay_locked: bool,
-    pub exact_source: Option<WorldSdfCommittedExactSource>,
+    // Exact source authority is written only through World BuildIntegrate.
+    pub(crate) exact_source: Option<WorldSdfCommittedExactSource>,
     /// A terminally rejected replacement keeps committed CPU truth but revokes
     /// strict-current exact reads until a successful World integration.
-    pub exact_read_recovery_required: bool,
+    pub(crate) exact_read_recovery_required: bool,
 }
 
 impl WorldChunkRuntimeRecord {
+    pub fn has_exact_source(&self) -> bool {
+        self.exact_source.is_some()
+    }
+
+    pub fn exact_read_recovery_required(&self) -> bool {
+        self.exact_read_recovery_required
+    }
+
     pub fn new(chunk_id: ChunkId) -> Self {
         Self {
             chunk_id,
