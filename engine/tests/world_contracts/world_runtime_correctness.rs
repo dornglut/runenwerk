@@ -2088,8 +2088,19 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
         .expect("runtime record should remain present");
     assert_eq!(
         record.pending_build_generation,
-        Some(BuildGeneration(11)),
-        "rejected integration must keep pending generation unchanged"
+        None,
+        "terminally rejected integration must release the failed pending generation"
+    );
+    assert!(
+        record.exact_read_recovery_required,
+        "old exact sources must not appear current after a failed replacement"
+    );
+    assert_eq!(record.chunk_revision, ChunkRevision(10));
+    assert_eq!(record.chunk_generation, ChunkGeneration(10));
+    assert_eq!(record.build_generation, BuildGeneration(10));
+    assert!(
+        matches!(record.lifecycle, ChunkLifecycleState::Unloaded),
+        "without committed CPU bytes a failed first generation remains unloaded"
     );
 }
 
