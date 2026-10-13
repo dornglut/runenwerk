@@ -7,9 +7,10 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 #[cfg(test)]
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
-    AppRuntime, HostRequestToken, InputObservationError, InputOwnershipSnapshot, InputPumpBatch,
-    InputShutdownBatch, KeyboardSubmission, PumpBudget, SubmitKeyboardError, SurfaceBuildContext,
-    SurfacePublication,
+    AppRuntime, HostRequestToken, InputArbitrationRecord, InputArbitrationScope,
+    InputObservationError, InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch,
+    KeyboardSubmission, PumpBudget, SubmitKeyboardError, SurfaceBuildContext, SurfacePublication,
+    UiInputFamily, UiInputFinality,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -127,6 +128,74 @@ pub enum UiRuntimeSlotOperationFailure {
     WrongAppKind,
     NativeHostClosed,
     RuntimeStopped(runenui_runtime::PumpOutcome),
+}
+
+/// An exact native keyboard observation is an immutable M13 fact, not a
+/// synthesized Engine gameplay grant. Missing or ambiguous evidence fails closed.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum UiRuntimeNativeKeyboardEvidenceFailure {
+    Unsettled,
+    WrongScope,
+    NotProcessed,
+    MissingReceipt,
+    DuplicateReceipt,
+    WrongFamily,
+    InvalidRevision,
+}
+
+/// Decode only the one framework-authored keyboard settlement identified by
+/// the accepted submission and actual mounted runtime scope. Never infer a
+/// positive result from a quiescent pump without the exact ordered receipt.
+///
+/// This function owns no queue, focus, or permission state. Returning an M13
+/// committed nonexclusive conflict does not itself authorize a game action.
+pub fn native_keyboard_finality(
+    scope: &InputArbitrationScope,
+    submission: KeyboardSubmission,
+    batch: &InputPumpBatch,
+    status: &Result<(), UiRuntimeSlotOperationFailure>,
+) -> Result<UiInputFinality, UiRuntimeNativeKeyboardEvidenceFailure> {
+    use UiRuntimeNativeKeyboardEvidenceFailure as Failure;
+    if status.is_err()
+        || batch.pause_reason().is_some()
+        || !batch.report().is_quiescent()
+        || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
+    {
+        return Err(Failure::Unsettled);
+    }
+    if batch.final_ownership().scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if !batch
+        .processed_through()
+        .is_some_and(|through| through >= submission.sequence())
+    {
+        return Err(Failure::NotProcessed);
+    }
+    let mut match_for_sequence = None;
+    for record in batch.ordered_records() {
+        let InputArbitrationRecord::InputSettled(settlement) = record else {
+            continue;
+        };
+        if settlement.sequence() != submission.sequence() {
+            continue;
+        }
+        if match_for_sequence.is_some() {
+            return Err(Failure::DuplicateReceipt);
+        }
+        match_for_sequence = Some(settlement);
+    }
+    let settlement = match_for_sequence.ok_or(Failure::MissingReceipt)?;
+    if settlement.scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if settlement.family() != UiInputFamily::Keyboard {
+        return Err(Failure::WrongFamily);
+    }
+    if settlement.ownership_revision() > batch.final_ownership().revision() {
+        return Err(Failure::InvalidRevision);
+    }
+    Ok(settlement.finality().clone())
 }
 
 /// A rejected host keyboard occurrence retains the exact unaccepted event.
@@ -1857,6 +1926,44 @@ mod tests {
             .expect("exact reached M13 input");
         assert_eq!(settled.scope(), batch.final_ownership().scope());
         assert!(matches!(settled.finality(), UiInputFinality::Committed(_)));
+        assert_eq!(
+            native_keyboard_finality(settled.scope(), receipt, &batch, &status),
+            Ok(settled.finality().clone())
+        );
+
+        let missing_scope_slot = slots
+            .mount_app::<NativeKeyboardApp>(
+                UiTypedScreenId::new("native.keyboard.foreign"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("independent mounted scope");
+        let foreign_scope = slots
+            .input_ownership(missing_scope_slot)
+            .expect("foreign scope is observable");
+        assert_eq!(
+            native_keyboard_finality(foreign_scope.scope(), receipt, &batch, &status),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongScope)
+        );
+
+        let next = slots
+            .submit_native_keyboard(slot, keyboard())
+            .expect("second distinct native keyboard submission");
+        assert_eq!(
+            native_keyboard_finality(settled.scope(), next, &batch, &status),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::NotProcessed)
+        );
+
+        // Another owner pumping before host correlation must not leave an
+        // inferred grant. The first batch cannot stand in for later work.
+        slots.settle_slot(slot).expect("canonical work settles");
+        let (later, later_status) = slots
+            .pump_native_input_records(slot)
+            .expect("later empty canonical pump");
+        let lost_observation =
+            native_keyboard_finality(settled.scope(), next, &later, &later_status);
+        assert!(lost_observation.is_err());
     }
 
     #[test]
