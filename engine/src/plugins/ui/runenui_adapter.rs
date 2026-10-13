@@ -3059,6 +3059,10 @@ mod tests {
                 self.runtime.pump(budget)
             }
 
+            fn input_ownership(&mut self) -> Result<InputOwnershipSnapshot, InputObservationError> {
+                self.runtime.input_ownership()
+            }
+
             fn pending_redraw(&mut self) -> bool {
                 self.runtime.take_redraw_request().is_some()
             }

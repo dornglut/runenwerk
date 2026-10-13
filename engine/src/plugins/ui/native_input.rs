@@ -27,6 +27,8 @@ pub enum NativeInputRecipientError {
     MissingWindow,
     #[error("native input window is not created")]
     InactiveWindow,
+    #[error("a native window with mounted UI runtimes requires an explicit input recipient")]
+    MissingRecipient,
     #[error("native window already has a different semantic input recipient")]
     ConflictingRecipient,
     #[error("RunenUI runtime slot is already assigned to another native window")]
@@ -93,7 +95,11 @@ impl UiNativeInputRecipientsResource {
     ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
         Self::require_created(window, windows)?;
         let Some(binding) = self.bindings.get(&window) else {
-            return Ok(NativeInputRecipient::LegacyNativeConsumer);
+            return if slots.is_empty() {
+                Ok(NativeInputRecipient::LegacyNativeConsumer)
+            } else {
+                Err(NativeInputRecipientError::MissingRecipient)
+            };
         };
         if let NativeInputRecipient::RunenUiSlot(slot) = binding.recipient {
             let ownership = Self::running_ownership(slots, slot)?;
@@ -189,14 +195,25 @@ mod tests {
     }
 
     #[test]
-    fn unbound_game_window_does_not_infer_ui_from_a_mounted_slot() {
+    fn game_only_window_without_any_ui_runtime_retains_existing_route() {
+        let (windows, first, _) = windows();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let recipients = UiNativeInputRecipientsResource::default();
+        assert_eq!(
+            recipients.resolve(first, &windows, &mut slots),
+            Ok(NativeInputRecipient::LegacyNativeConsumer)
+        );
+    }
+
+    #[test]
+    fn unbound_window_with_mounted_ui_runtime_never_defaults_to_game() {
         let (windows, first, _) = windows();
         let mut slots = UiRuntimeSlotsResource::default();
         let _slot = mount(&mut slots, 1);
         let recipients = UiNativeInputRecipientsResource::default();
         assert_eq!(
             recipients.resolve(first, &windows, &mut slots),
-            Ok(NativeInputRecipient::LegacyNativeConsumer)
+            Err(NativeInputRecipientError::MissingRecipient)
         );
     }
 
@@ -246,6 +263,19 @@ mod tests {
         assert_eq!(
             recipients.resolve(first, &windows, &mut slots),
             Ok(NativeInputRecipient::RunenUiSlot(a))
+        );
+        assert_eq!(
+            recipients.resolve(second, &windows, &mut slots),
+            Err(NativeInputRecipientError::MissingRecipient)
+        );
+        assert_eq!(
+            recipients.bind(
+                second,
+                NativeInputRecipient::LegacyNativeConsumer,
+                &windows,
+                &mut slots
+            ),
+            Ok(true)
         );
         assert_eq!(
             recipients.resolve(second, &windows, &mut slots),
