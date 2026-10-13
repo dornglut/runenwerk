@@ -4,13 +4,12 @@ use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::plugin::WorldAuthorityState;
 use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedDetailFeatureResource,
-    PreparedWorldFeatureResource,
-    world::runtime_cache::WorldRuntimeCacheResource,
+    PreparedWorldFeatureResource, world::runtime_cache::WorldRuntimeCacheResource,
 };
 use crate::plugins::render::frame::{
     PreparedDetailCellContribution, PreparedDetailFeatureContribution,
-    PreparedWorldChunkContribution,
-    PreparedWorldDrawBatchRef, PreparedWorldFeatureContribution, PreparedWorldResidencyIntent,
+    PreparedWorldChunkContribution, PreparedWorldDrawBatchRef, PreparedWorldFeatureContribution,
+    PreparedWorldResidencyIntent,
 };
 use crate::plugins::render::inspect::{
     RenderDebugTimingsState, RenderRuntimeResourceInspectorState, WorldRuntimeInspectorSnapshot,
