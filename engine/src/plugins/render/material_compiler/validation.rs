@@ -75,7 +75,11 @@ fn validate_renderer_capabilities(ir: &MaterialIr) -> Result<(), MaterialShaderC
         MaterialOutputTarget::PbrPreview | MaterialOutputTarget::RenderMaterial => {}
     }
 
-    for node in ir.nodes.iter().filter(|node| node.op == MaterialNodeOp::PbrOutput) {
+    for node in ir
+        .nodes
+        .iter()
+        .filter(|node| node.op == MaterialNodeOp::PbrOutput)
+    {
         for input in &node.inputs {
             if matches!(&input.source, MaterialIrInputSource::Constant(_)) {
                 continue;
@@ -89,9 +93,9 @@ fn validate_renderer_capabilities(ir: &MaterialIr) -> Result<(), MaterialShaderC
                 MaterialOutputTarget::RenderMaterial => {
                     matches!(input.name.as_str(), "base_color" | "emissive" | "opacity")
                 }
-                MaterialOutputTarget::FieldMaterialChannel => unreachable!(
-                    "field material target rejected before output input admission"
-                ),
+                MaterialOutputTarget::FieldMaterialChannel => {
+                    unreachable!("field material target rejected before output input admission")
+                }
             };
             if !realized {
                 return Err(MaterialShaderCompileError::UnsupportedAuthoredOutputInput {

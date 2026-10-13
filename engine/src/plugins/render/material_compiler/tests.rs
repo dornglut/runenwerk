@@ -776,10 +776,12 @@ fn renderer_capabilities_admit_default_output_inputs_for_both_shader_targets() {
             .iter()
             .find(|node| node.op == MaterialNodeOp::PbrOutput)
             .expect("output");
-        assert!(output
-            .inputs
-            .iter()
-            .all(|input| matches!(input.source, MaterialIrInputSource::Constant(_))));
+        assert!(
+            output
+                .inputs
+                .iter()
+                .all(|input| matches!(input.source, MaterialIrInputSource::Constant(_)))
+        );
         let shader = compile_ir(&ir).expect("default material");
         assert!(shader.wgsl.contains("fn evaluate_material"));
         assert!(shader.scene_wgsl.contains("fn evaluate_material"));
@@ -789,24 +791,44 @@ fn renderer_capabilities_admit_default_output_inputs_for_both_shader_targets() {
 #[test]
 fn renderer_capabilities_admit_only_realized_explicit_pbr_values() {
     for (target, input, value) in [
-        (MaterialOutputTarget::PbrPreview, "base_color", "0.2 0.4 0.6 1.0"),
+        (
+            MaterialOutputTarget::PbrPreview,
+            "base_color",
+            "0.2 0.4 0.6 1.0",
+        ),
         (MaterialOutputTarget::PbrPreview, "roughness", "0.25"),
         (MaterialOutputTarget::PbrPreview, "metallic", "0.7"),
         (MaterialOutputTarget::PbrPreview, "emissive", "0.1 0.2 0.3"),
         (MaterialOutputTarget::PbrPreview, "opacity", "0.6"),
-        (MaterialOutputTarget::RenderMaterial, "base_color", "0.2 0.4 0.6 1.0"),
-        (MaterialOutputTarget::RenderMaterial, "emissive", "0.1 0.2 0.3"),
+        (
+            MaterialOutputTarget::RenderMaterial,
+            "base_color",
+            "0.2 0.4 0.6 1.0",
+        ),
+        (
+            MaterialOutputTarget::RenderMaterial,
+            "emissive",
+            "0.1 0.2 0.3",
+        ),
         (MaterialOutputTarget::RenderMaterial, "opacity", "0.6"),
     ] {
         let ir = authored_output_ir(target, input, value);
-        let output = ir.nodes.iter().find(|node| node.op == MaterialNodeOp::PbrOutput).unwrap();
+        let output = ir
+            .nodes
+            .iter()
+            .find(|node| node.op == MaterialNodeOp::PbrOutput)
+            .unwrap();
         assert!(matches!(
-            output.inputs.iter().find(|source| source.name == input).unwrap().source,
+            output
+                .inputs
+                .iter()
+                .find(|source| source.name == input)
+                .unwrap()
+                .source,
             MaterialIrInputSource::NodeValue { .. }
         ));
-        compile_ir(&ir).unwrap_or_else(|error| {
-            panic!("{target:?} authored {input} should compile: {error}")
-        });
+        compile_ir(&ir)
+            .unwrap_or_else(|error| panic!("{target:?} authored {input} should compile: {error}"));
     }
 }
 
@@ -835,9 +857,18 @@ fn renderer_capabilities_reject_ignored_explicit_pbr_values() {
 #[test]
 fn renderer_capabilities_reject_ignored_connections_but_keep_supported_connections() {
     let allowed = lowered_connected_output_ir(MaterialOutputTarget::PbrPreview, "roughness");
-    let output = allowed.nodes.iter().find(|node| node.op == MaterialNodeOp::PbrOutput).unwrap();
+    let output = allowed
+        .nodes
+        .iter()
+        .find(|node| node.op == MaterialNodeOp::PbrOutput)
+        .unwrap();
     assert!(matches!(
-        output.inputs.iter().find(|input| input.name == "roughness").unwrap().source,
+        output
+            .inputs
+            .iter()
+            .find(|input| input.name == "roughness")
+            .unwrap()
+            .source,
         MaterialIrInputSource::Connected { .. }
     ));
     compile_ir(&allowed).expect("preview roughness connection is realized");
@@ -889,13 +920,25 @@ fn renderer_capabilities_reject_field_product_target_even_with_default_inputs() 
 
 #[test]
 fn renderer_capabilities_reject_mixed_authored_semantics_without_publishing_wgsl() {
-    let mut ir = authored_output_ir(MaterialOutputTarget::RenderMaterial, "base_color", "0.1 0.2 0.3 1.0");
-    let output = ir.nodes.iter_mut().find(|node| node.op == MaterialNodeOp::PbrOutput).unwrap();
-    output.inputs.iter_mut().find(|input| input.name == "roughness").unwrap().source =
-        MaterialIrInputSource::NodeValue {
-            key: "roughness".to_string(),
-            canonical_value: GraphValue::Text("0.4".to_string()).canonical_component(),
-        };
+    let mut ir = authored_output_ir(
+        MaterialOutputTarget::RenderMaterial,
+        "base_color",
+        "0.1 0.2 0.3 1.0",
+    );
+    let output = ir
+        .nodes
+        .iter_mut()
+        .find(|node| node.op == MaterialNodeOp::PbrOutput)
+        .unwrap();
+    output
+        .inputs
+        .iter_mut()
+        .find(|input| input.name == "roughness")
+        .unwrap()
+        .source = MaterialIrInputSource::NodeValue {
+        key: "roughness".to_string(),
+        canonical_value: GraphValue::Text("0.4".to_string()).canonical_component(),
+    };
     assert_eq!(
         compile_ir(&ir).expect_err("mixed material must fail as a unit"),
         MaterialShaderCompileError::UnsupportedAuthoredOutputInput {
