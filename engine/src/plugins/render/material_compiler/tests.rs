@@ -690,32 +690,26 @@ fn output_ir(target: MaterialOutputTarget) -> MaterialIr {
     ir
 }
 
-fn lowered_authored_output_ir(
-    target: MaterialOutputTarget,
-    input: &str,
-    value: &str,
-) -> MaterialIr {
-    let document = MaterialGraphDocument::new(
-        MaterialGraphDocumentId::new(18),
-        "authored_output",
-        GraphDefinition::new(
-            GraphId::new(1),
-            "authored_output",
-            CyclePolicy::RejectDirectedCycles,
-            [NodeDefinition::new(NodeId::new(1), "pbr.output", []).with_values([
-                GraphMetadataEntry::new(input, GraphValue::Text(value.to_string())),
-            ])],
-            [],
-        ),
-        target,
-    );
-    let lowering = lower_material_graph(&document, &MaterialNodeCatalog::first_slice());
-    assert!(
-        !lowering.report.has_blocking_issues(),
-        "{:?}",
-        lowering.report.issues()
-    );
-    lowering.product.expect("formed").executable_ir.expect("ir")
+fn authored_output_ir(target: MaterialOutputTarget, input: &str, value: &str) -> MaterialIr {
+    // Ratification admits authored input connections, but does not currently
+    // admit inline pbr.output node values. Exercise this normalized IR source
+    // independently; renderer admission must handle both IR source variants.
+    let mut ir = output_ir(target);
+    let output = ir
+        .nodes
+        .iter_mut()
+        .find(|node| node.op == MaterialNodeOp::PbrOutput)
+        .expect("pbr.output");
+    output
+        .inputs
+        .iter_mut()
+        .find(|candidate| candidate.name == input)
+        .expect("first-slice input")
+        .source = MaterialIrInputSource::NodeValue {
+        key: input.to_string(),
+        canonical_value: GraphValue::Text(value.to_string()).canonical_component(),
+    };
+    ir
 }
 
 fn lowered_connected_output_ir(target: MaterialOutputTarget, input: &str) -> MaterialIr {
@@ -786,7 +780,9 @@ fn renderer_capabilities_admit_default_output_inputs_for_both_shader_targets() {
             .inputs
             .iter()
             .all(|input| matches!(input.source, MaterialIrInputSource::Constant(_))));
-        assert_eq!(compile_ir(&ir).expect("default material"), compile_ir(&ir).unwrap());
+        let shader = compile_ir(&ir).expect("default material");
+        assert!(shader.wgsl.contains("fn evaluate_material"));
+        assert!(shader.scene_wgsl.contains("fn evaluate_material"));
     }
 }
 
@@ -802,7 +798,7 @@ fn renderer_capabilities_admit_only_realized_explicit_pbr_values() {
         (MaterialOutputTarget::RenderMaterial, "emissive", "0.1 0.2 0.3"),
         (MaterialOutputTarget::RenderMaterial, "opacity", "0.6"),
     ] {
-        let ir = lowered_authored_output_ir(target, input, value);
+        let ir = authored_output_ir(target, input, value);
         let output = ir.nodes.iter().find(|node| node.op == MaterialNodeOp::PbrOutput).unwrap();
         assert!(matches!(
             output.inputs.iter().find(|source| source.name == input).unwrap().source,
@@ -824,7 +820,7 @@ fn renderer_capabilities_reject_ignored_explicit_pbr_values() {
         (MaterialOutputTarget::RenderMaterial, "normal_strength"),
         (MaterialOutputTarget::RenderMaterial, "material_channel"),
     ] {
-        let ir = lowered_authored_output_ir(target, input, "0.4");
+        let ir = authored_output_ir(target, input, "0.4");
         assert_eq!(
             compile_ir(&ir).expect_err("unsupported authored input must reject"),
             MaterialShaderCompileError::UnsupportedAuthoredOutputInput {
@@ -893,7 +889,7 @@ fn renderer_capabilities_reject_field_product_target_even_with_default_inputs() 
 
 #[test]
 fn renderer_capabilities_reject_mixed_authored_semantics_without_publishing_wgsl() {
-    let mut ir = lowered_authored_output_ir(MaterialOutputTarget::RenderMaterial, "base_color", "0.1 0.2 0.3 1.0");
+    let mut ir = authored_output_ir(MaterialOutputTarget::RenderMaterial, "base_color", "0.1 0.2 0.3 1.0");
     let output = ir.nodes.iter_mut().find(|node| node.op == MaterialNodeOp::PbrOutput).unwrap();
     output.inputs.iter_mut().find(|input| input.name == "roughness").unwrap().source =
         MaterialIrInputSource::NodeValue {
@@ -913,7 +909,7 @@ fn renderer_capabilities_reject_mixed_authored_semantics_without_publishing_wgsl
 #[test]
 fn scene_material_table_rejects_ignored_output_inputs_in_any_slot() {
     let valid = ir();
-    let invalid = lowered_authored_output_ir(MaterialOutputTarget::RenderMaterial, "metallic", "0.8");
+    let invalid = authored_output_ir(MaterialOutputTarget::RenderMaterial, "metallic", "0.8");
     assert_eq!(
         compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
             slots: vec![

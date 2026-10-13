@@ -926,17 +926,38 @@ fn unsupported_material_output_preserves_prior_valid_artifact() {
         "Unsupported",
         MaterialOutputTarget::RenderMaterial,
     );
+    // Author a valid source connection to an output semantic the scene
+    // shader does not realize. This must reach compiler admission, not fail
+    // earlier at source ratification.
+    let float = material_graph::MaterialValueType::Float.port_type_id();
+    document.graph.nodes.push(graph::NodeDefinition::new(
+        graph::NodeId::new(3),
+        "pbr.roughness",
+        [graph::PortDefinition::new(
+            graph::PortId::new(3),
+            "value",
+            graph::PortDirection::Output,
+            float,
+        )],
+    ));
     document
         .graph
         .nodes
         .iter_mut()
         .find(|node| node.name == "pbr.output")
         .expect("output node")
-        .values
-        .push(graph::GraphMetadataEntry::new(
+        .ports
+        .push(graph::PortDefinition::new(
+            graph::PortId::new(4),
             "normal_strength",
-            graph::GraphValue::Text("0.4".to_string()),
+            graph::PortDirection::Input,
+            float,
         ));
+    document.graph.edges.push(graph::EdgeDefinition::new(
+        graph::EdgeId::new(2),
+        graph::PortId::new(3),
+        graph::PortId::new(4),
+    ));
     write_material_graph_document(&root.join(&source.relative_path), &document)
         .expect("material source");
 
