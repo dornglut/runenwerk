@@ -45,18 +45,35 @@ pub struct WorldSdfVerifiedExactSource {
     region_summary: RegionSdfSummary,
 }
 impl WorldSdfVerifiedExactSource {
-    pub fn source(&self) -> WorldSdfOpenTopRectInteriorSource { self.source }
-    pub fn formation_revision(&self) -> u16 { self.formation_revision }
-    pub fn partition(&self) -> &GridPartitionConfig { &self.partition }
-    pub fn metric_ref(&self) -> WorldSdfMetricPayloadRef { self.metric_ref }
-    pub fn source_revision(&self) -> u64 { self.source_revision }
-    pub fn chunk_generation(&self) -> ChunkGeneration { self.chunk_generation }
-    pub fn region_summary(&self) -> RegionSdfSummary { self.region_summary }
+    pub fn source(&self) -> WorldSdfOpenTopRectInteriorSource {
+        self.source
+    }
+    pub fn formation_revision(&self) -> u16 {
+        self.formation_revision
+    }
+    pub fn partition(&self) -> &GridPartitionConfig {
+        &self.partition
+    }
+    pub fn metric_ref(&self) -> WorldSdfMetricPayloadRef {
+        self.metric_ref
+    }
+    pub fn source_revision(&self) -> u64 {
+        self.source_revision
+    }
+    pub fn chunk_generation(&self) -> ChunkGeneration {
+        self.chunk_generation
+    }
+    pub fn region_summary(&self) -> RegionSdfSummary {
+        self.region_summary
+    }
 
     /// Public World store/partition mutation makes acquired-read revalidation mandatory.
     pub fn revalidate(
-        &self, descriptor: &FieldProductDescriptor, payload: &SdfChunkPayload,
-        summary: RegionSdfSummary, partition: &GridPartitionConfig,
+        &self,
+        descriptor: &FieldProductDescriptor,
+        payload: &SdfChunkPayload,
+        summary: RegionSdfSummary,
+        partition: &GridPartitionConfig,
     ) -> Result<(), WorldSdfExactFormationError> {
         if partition != &self.partition {
             return Err(WorldSdfExactFormationError::InvalidPartition);

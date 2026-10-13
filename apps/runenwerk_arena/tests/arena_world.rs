@@ -873,24 +873,49 @@ fn terminal_rejected_exact_replacement_preserves_certificate_but_requires_succes
     descriptor.lineage.source_revision = 2;
     let id = descriptor.product_core().identity;
     let package = WorldSdfRuntimePayloadPackage::new(
-        descriptor, vec![next.clone()], w1_region_summary(&next),
-    ).with_metric_capability(arena_metric_payload_ref(&next))
-        .with_exact_source(arena_geometry_source(), arena_partition_config());
+        descriptor,
+        vec![next.clone()],
+        w1_region_summary(&next),
+    )
+    .with_metric_capability(arena_metric_payload_ref(&next))
+    .with_exact_source(arena_geometry_source(), arena_partition_config());
     assert_eq!(w1_enqueue(&mut app, package.clone()).unwrap(), 1);
     {
-        let queue = app.world_mut().resource_mut::<WorldCompletedBuildQueueResource>().unwrap();
+        let queue = app
+            .world_mut()
+            .resource_mut::<WorldCompletedBuildQueueResource>()
+            .unwrap();
         let output = queue.outputs.front_mut().unwrap();
-        output.chunk_payload.page_table
-            .get_mut(&world_sdf::SdfPageCoord3::default()).unwrap()
-            .bricks.get_mut(&[0, 0, 0]).unwrap().samples.distances[0] += 1;
+        output
+            .chunk_payload
+            .page_table
+            .get_mut(&world_sdf::SdfPageCoord3::default())
+            .unwrap()
+            .bricks
+            .get_mut(&[0, 0, 0])
+            .unwrap()
+            .samples
+            .distances[0] += 1;
     }
     app = app.run_for_fixed_steps(1).unwrap();
     let w = app.world();
-    assert_eq!(w.resource::<SdfChunkStoreResource>().unwrap()
-        .chunks.get(&arena_chunk_id()), Some(&prior));
-    let record = w.resource::<WorldChunkRuntimeMapResource>().unwrap()
-        .by_chunk_id.get(&arena_chunk_id()).unwrap();
-    assert!(record.exact_source.is_some(), "committed prior source preserved");
+    assert_eq!(
+        w.resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&arena_chunk_id()),
+        Some(&prior)
+    );
+    let record = w
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&arena_chunk_id())
+        .unwrap();
+    assert!(
+        record.exact_source.is_some(),
+        "committed prior source preserved"
+    );
     assert!(record.pending_build_generation.is_none());
     assert!(matches!(record.lifecycle, ChunkLifecycleState::Ready));
 
@@ -899,15 +924,21 @@ fn terminal_rejected_exact_replacement_preserves_certificate_but_requires_succes
     let is_exact = |app: &App| {
         let w = app.world();
         qualify_current_world_sdf_exact_source_read(
-            id, bounds,
+            id,
+            bounds,
             w.resource::<PartitionConfigResource>().unwrap(),
-            w.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap(),
+            w.resource::<WorldRuntimeSdfProductCatalogResource>()
+                .unwrap(),
             w.resource::<WorldChunkRuntimeMapResource>().unwrap(),
             w.resource::<SdfChunkStoreResource>().unwrap(),
-        ).is_ok()
+        )
+        .is_ok()
     };
     assert!(!is_exact(&app));
     assert_eq!(w1_enqueue(&mut app, package).unwrap(), 1);
     app = app.run_for_fixed_steps(1).unwrap();
-    assert!(is_exact(&app), "valid newer generation restores exact readiness");
+    assert!(
+        is_exact(&app),
+        "valid newer generation restores exact readiness"
+    );
 }
