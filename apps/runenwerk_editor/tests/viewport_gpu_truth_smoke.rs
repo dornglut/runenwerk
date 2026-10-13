@@ -1873,10 +1873,21 @@ fn wr1282_source_backed_roughness_metallic_gpu_pixels() {
         let scene_delta = delta(base.left, changed.left);
         let preview_delta = delta(base.preview, changed.preview);
         let unchanged_slot_delta = delta(base.right_control, changed.right_control);
-        eprintln!("WR-1282 {label} GPU pixel deltas scene={scene_delta} preview={preview_delta} unchanged_control={unchanged_slot_delta}; base={base:?} changed={changed:?}");
-        assert!(scene_delta >= 4, "{label} must visibly change left SDF scene pixel");
-        assert!(preview_delta >= 4, "{label} must visibly change material preview pixel");
-        assert!(unchanged_slot_delta <= 2, "unmodified source-backed slot must be pixel-stable");
+        eprintln!(
+            "WR-1282 {label} GPU pixel deltas scene={scene_delta} preview={preview_delta} unchanged_control={unchanged_slot_delta}; base={base:?} changed={changed:?}"
+        );
+        assert!(
+            scene_delta >= 4,
+            "{label} must visibly change left SDF scene pixel"
+        );
+        assert!(
+            preview_delta >= 4,
+            "{label} must visibly change material preview pixel"
+        );
+        assert!(
+            unchanged_slot_delta <= 2,
+            "unmodified source-backed slot must be pixel-stable"
+        );
     }
 
     // The source-owned model-material region uses a screen-space proxy in
@@ -1887,15 +1898,27 @@ fn wr1282_source_backed_roughness_metallic_gpu_pixels() {
     let rough_mesh = render_wr1282_light_variant(&window, "rough_mesh", "0.90", "0.0", true);
     let metal_mesh = render_wr1282_light_variant(&window, "metal_mesh", "0.45", "0.90", true);
     for (label, changed) in [("roughness", rough_mesh), ("metallic", metal_mesh)] {
-        let before = base_mesh.model_region.expect("baseline model material region");
+        let before = base_mesh
+            .model_region
+            .expect("baseline model material region");
         let after = changed.model_region.expect("changed model material region");
         let measured = delta(before, after);
-        eprintln!("WR-1282 {label} source-backed model region pixel delta={measured}: {before:?} -> {after:?}");
-        assert!(measured >= 4, "{label} must change the model-region proxy pixels");
+        eprintln!(
+            "WR-1282 {label} source-backed model region pixel delta={measured}: {before:?} -> {after:?}"
+        );
+        assert!(
+            measured >= 4,
+            "{label} must change the model-region proxy pixels"
+        );
     }
 }
 
-fn wr1282_material_preview(product_id: u64, label: &str, roughness: &str, metallic: &str) -> EditorMaterialPreviewProduct {
+fn wr1282_material_preview(
+    product_id: u64,
+    label: &str,
+    roughness: &str,
+    metallic: &str,
+) -> EditorMaterialPreviewProduct {
     let color = PortTypeId::new(1);
     let scalar = PortTypeId::new(2);
     let document = MaterialGraphDocument::new(
@@ -1907,23 +1930,69 @@ fn wr1282_material_preview(product_id: u64, label: &str, roughness: &str, metall
             CyclePolicy::RejectDirectedCycles,
             [
                 NodeDefinition::new(
-                    NodeId::new(10), "pbr.base_color",
-                    [PortDefinition::new(PortId::new(1), "color", PortDirection::Output, color)],
-                ).with_values([GraphMetadataEntry::new("color", GraphValue::Text("0.85 0.3 0.14 1.0".to_string()))]),
+                    NodeId::new(10),
+                    "pbr.base_color",
+                    [PortDefinition::new(
+                        PortId::new(1),
+                        "color",
+                        PortDirection::Output,
+                        color,
+                    )],
+                )
+                .with_values([GraphMetadataEntry::new(
+                    "color",
+                    GraphValue::Text("0.85 0.3 0.14 1.0".to_string()),
+                )]),
                 NodeDefinition::new(
-                    NodeId::new(11), "pbr.roughness",
-                    [PortDefinition::new(PortId::new(2), "value", PortDirection::Output, scalar)],
-                ).with_values([GraphMetadataEntry::new("value", GraphValue::decimal(roughness))]),
+                    NodeId::new(11),
+                    "pbr.roughness",
+                    [PortDefinition::new(
+                        PortId::new(2),
+                        "value",
+                        PortDirection::Output,
+                        scalar,
+                    )],
+                )
+                .with_values([GraphMetadataEntry::new(
+                    "value",
+                    GraphValue::decimal(roughness),
+                )]),
                 NodeDefinition::new(
-                    NodeId::new(12), "pbr.metallic",
-                    [PortDefinition::new(PortId::new(3), "value", PortDirection::Output, scalar)],
-                ).with_values([GraphMetadataEntry::new("value", GraphValue::decimal(metallic))]),
+                    NodeId::new(12),
+                    "pbr.metallic",
+                    [PortDefinition::new(
+                        PortId::new(3),
+                        "value",
+                        PortDirection::Output,
+                        scalar,
+                    )],
+                )
+                .with_values([GraphMetadataEntry::new(
+                    "value",
+                    GraphValue::decimal(metallic),
+                )]),
                 NodeDefinition::new(
-                    NodeId::new(13), "pbr.output",
+                    NodeId::new(13),
+                    "pbr.output",
                     [
-                        PortDefinition::new(PortId::new(4), "base_color", PortDirection::Input, color),
-                        PortDefinition::new(PortId::new(5), "roughness", PortDirection::Input, scalar),
-                        PortDefinition::new(PortId::new(6), "metallic", PortDirection::Input, scalar),
+                        PortDefinition::new(
+                            PortId::new(4),
+                            "base_color",
+                            PortDirection::Input,
+                            color,
+                        ),
+                        PortDefinition::new(
+                            PortId::new(5),
+                            "roughness",
+                            PortDirection::Input,
+                            scalar,
+                        ),
+                        PortDefinition::new(
+                            PortId::new(6),
+                            "metallic",
+                            PortDirection::Input,
+                            scalar,
+                        ),
                     ],
                 ),
             ],
@@ -2156,7 +2225,9 @@ fn render_wr1282_light_variant(
             x: scene_capture.width / 2,
             y: scene_capture.height * 56 / 100,
         };
-        scene_capture.sample_pixel_rgba8(pixel).expect("model proxy pixel")
+        scene_capture
+            .sample_pixel_rgba8(pixel)
+            .expect("model proxy pixel")
     });
     Wr1282LightPixels {
         left,
