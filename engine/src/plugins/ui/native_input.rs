@@ -494,8 +494,8 @@ mod tests {
         let context = SurfaceBuildContext::tight(
             &style,
             LogicalSize::new(
-                LogicalLength::from(640.0_f32),
-                LogicalLength::from(480.0_f32),
+                LogicalLength::from(640_u16),
+                LogicalLength::from(480_u16),
             ),
         );
         let publication = slots
@@ -615,8 +615,8 @@ mod tests {
         let changed_context = SurfaceBuildContext::tight(
             &style,
             LogicalSize::new(
-                LogicalLength::from(400.0_f32),
-                LogicalLength::from(300.0_f32),
+                LogicalLength::from(400_u16),
+                LogicalLength::from(300_u16),
             ),
         )
         .with_raster_scale(RasterScale::new(2.0).expect("valid native raster scale"));
