@@ -911,7 +911,6 @@ fn exact_pending_alias_requires_independent_source_proof_and_generic_overwrite_r
     let primary = arena_field_product_descriptor(&payload)
         .product_core()
         .identity;
-    let summary = w1_region_summary(&payload);
     let package = |descriptor: world_sdf::FieldProductDescriptor, source| {
         WorldSdfRuntimePayloadPackage::from_exact_formation(arena_exact_formation(
             source,

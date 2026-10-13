@@ -3,7 +3,7 @@ use engine::plugins::world::adapters::resources::{
 };
 use engine::plugins::world::chunks::DirtyChunkMapResource;
 use engine::plugins::world::chunks::lifecycle::{
-    ChunkLifecycleState, WorldChunkRuntimeMapResource, WorldChunkRuntimeRecord,
+    ChunkLifecycleState, WorldChunkRuntimeMapResource,
 };
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
 use engine::plugins::world::plugin::{

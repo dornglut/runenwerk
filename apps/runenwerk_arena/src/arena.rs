@@ -11,10 +11,13 @@ use world_ops::{ChunkGeneration, ChunkRevision};
 use world_sdf::{
     FieldProductConsumerClass, FieldProductDescriptor, FieldProductId, FieldProductKind,
     FieldProductLineage, FieldProductScope, SDF_METRIC_BRICK_EDGE_SAMPLES, SDF_PAGE_EDGE_BRICKS,
-    SdfChunkPayload, SdfPageCoord3, WorldSdfMetricEncoding, WorldSdfMetricPayloadRef,
+    SdfChunkPayload, WorldSdfMetricEncoding, WorldSdfMetricPayloadRef,
     WorldSdfOpenTopExactFormation, WorldSdfOpenTopRectInteriorSource, WorldSdfPayloadRef,
     form_world_sdf_open_top_exact_source,
 };
+
+#[cfg(test)]
+use world_sdf::SdfPageCoord3;
 
 pub const ARENA_WORLD_ID: WorldId = WorldId::new(0);
 pub const ARENA_CHUNK_EDGE_METERS: f64 = 4.0;
@@ -43,6 +46,7 @@ impl Default for ArenaHazardConfig {
     }
 }
 
+#[cfg(test)]
 const ARENA_PAGE_COORD: SdfPageCoord3 = SdfPageCoord3 { x: 0, y: 0, z: 0 };
 /// The game selects the authored value; the same normalized value drives all
 /// its existing analytic and sampled producer outputs.
