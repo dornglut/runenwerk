@@ -1734,9 +1734,7 @@ mod tests {
             CommandOrigin, KeyLocation, KeyModifiers, KeyboardCompositionState, KeyboardPhase,
             LogicalKey, NoHostProtocol, PhysicalKey,
         };
-        use runenui_runtime::{
-            InputArbitrationRecord, SubmitKeyboardErrorKind, UiInputFinality,
-        };
+        use runenui_runtime::{InputArbitrationRecord, SubmitKeyboardErrorKind, UiInputFinality};
 
         struct NativeKeyboardApp;
         impl UiApp for NativeKeyboardApp {
@@ -1840,7 +1838,10 @@ mod tests {
             .iter()
             .find_map(|record| match record {
                 InputArbitrationRecord::InputSettled(value)
-                    if value.sequence() == receipt.sequence() => Some(value),
+                    if value.sequence() == receipt.sequence() =>
+                {
+                    Some(value)
+                }
                 _ => None,
             })
             .expect("exact reached M13 input");
