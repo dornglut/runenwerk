@@ -1746,6 +1746,7 @@ mod tests {
                 button("Native focus target")
                     .id("native.keyboard.focus")
                     .key("native.keyboard.focus")
+                    .on_activate(|| ())
             }
 
             fn update(
@@ -1815,6 +1816,7 @@ mod tests {
             .expect("mounted focusable target")
             .id()
             .clone();
+        let focus_id_from_runtime = target.clone();
         runtime
             .submit_command(
                 target,
@@ -1823,6 +1825,14 @@ mod tests {
             )
             .expect("semantic focus admitted");
         slots.settle_slot(slot).expect("focus settles");
+        let focused = slots
+            .input_ownership(slot)
+            .expect("fresh canonical M13 ownership after focus");
+        assert_eq!(
+            focused.keyboard().focused_node(),
+            Some(&focus_id_from_runtime),
+            "the semantic focus request must establish a real keyboard target"
+        );
 
         let receipt = slots
             .submit_native_keyboard(slot, keyboard())
