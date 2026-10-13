@@ -15,12 +15,10 @@ use std::collections::{BTreeMap, VecDeque};
 use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason};
 use world_sdf::{
     FieldProductCandidate, FieldProductDescriptor, FieldProductKind, RegionSdfSummary,
-    SdfChunkPayload, WorldSdfExactFormationError, WorldSdfMetricError,
-    WorldSdfMetricPayloadRef, WorldSdfMetricProductCandidate,
-    WorldSdfOpenTopRectInteriorSource, WorldSdfVerifiedExactSource,
-    verify_world_sdf_open_top_exact_formation,
+    SdfChunkPayload, WorldSdfExactFormationError, WorldSdfMetricError, WorldSdfMetricPayloadRef,
+    WorldSdfMetricProductCandidate, WorldSdfOpenTopRectInteriorSource, WorldSdfVerifiedExactSource,
     ratify_field_product_candidate, ratify_world_sdf_metric_product_candidate,
-    validate_world_sdf_metric_payload,
+    validate_world_sdf_metric_payload, verify_world_sdf_open_top_exact_formation,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -141,8 +139,12 @@ impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
             Self::MetricPayloadRejected { error } => {
                 write!(formatter, "runtime metric SDF payload is invalid: {error}")
             }
-            Self::ExactSourceRequiresMetric => formatter.write_str("exact source requires a metric product"),
-            Self::ExactSourceRejected(error) => write!(formatter, "exact source formation rejected: {error}"),
+            Self::ExactSourceRequiresMetric => {
+                formatter.write_str("exact source requires a metric product")
+            }
+            Self::ExactSourceRejected(error) => {
+                write!(formatter, "exact source formation rejected: {error}")
+            }
             Self::PendingGenerationConflict {
                 chunk_id,
                 generation,
@@ -270,12 +272,20 @@ fn validate_runtime_sdf_payload_package(
 
     let qualified = match package.exact_source.as_ref() {
         Some((source, partition)) => {
-            let metric_ref = package.metric_payload_ref
+            let metric_ref = package
+                .metric_payload_ref
                 .ok_or(WorldSdfRuntimePayloadPackageError::ExactSourceRequiresMetric)?;
-            Some(verify_world_sdf_open_top_exact_formation(
-                *source, partition, &package.descriptor, metric_ref,
-                payload, package.region_summary,
-            ).map_err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected)?)
+            Some(
+                verify_world_sdf_open_top_exact_formation(
+                    *source,
+                    partition,
+                    &package.descriptor,
+                    metric_ref,
+                    payload,
+                    package.region_summary,
+                )
+                .map_err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected)?,
+            )
         }
         None => None,
     };

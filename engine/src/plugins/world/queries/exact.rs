@@ -1,8 +1,8 @@
 use super::super::adapters::resources::{PartitionConfigResource, SdfChunkStoreResource};
 use super::super::build::integration::WorldRuntimeSdfProductCatalogResource;
+use super::super::chunks::lifecycle::WorldChunkRuntimeRecord;
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use product::ProductIdentity;
-use super::super::chunks::lifecycle::WorldChunkRuntimeRecord;
 use runen_spatial::GridPartitionConfig;
 use world_ops::BuildGeneration;
 use world_sdf::{

@@ -187,17 +187,23 @@ pub fn verify_world_sdf_open_top_exact_formation(
             }
         }
     }
-    if region_summary != (RegionSdfSummary {
-        min_distance: min, max_distance: max,
-        occupied_chunk_count: u32::from(occupied),
-        surface_chunk_count: u32::from(surface),
-    }) {
+    if region_summary
+        != (RegionSdfSummary {
+            min_distance: min,
+            max_distance: max,
+            occupied_chunk_count: u32::from(occupied),
+            surface_chunk_count: u32::from(surface),
+        })
+    {
         return Err(E::InvalidRegionSummary);
     }
     Ok(WorldSdfVerifiedExactSource {
-        source, formation_revision: WORLD_SDF_OPEN_TOP_EXACT_FORMATION_REVISION,
-        partition: partition.clone(), metric_ref,
+        source,
+        formation_revision: WORLD_SDF_OPEN_TOP_EXACT_FORMATION_REVISION,
+        partition: partition.clone(),
+        metric_ref,
         source_revision: descriptor.lineage.source_revision,
-        chunk_generation: payload.chunk_generation, region_summary,
+        chunk_generation: payload.chunk_generation,
+        region_summary,
     })
 }
