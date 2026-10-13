@@ -1427,11 +1427,21 @@ fn exact_replacement_cannot_roll_back_source_lineage_even_for_identical_geometry
 
     assert_eq!(w1_enqueue(&mut app, package(2, 1)).unwrap(), 1);
     app = app.run_for_fixed_steps(1).unwrap();
-    let current = app.world().resource::<SdfChunkStoreResource>().unwrap()
-        .chunks.get(&arena_chunk_id()).unwrap().clone();
-    let catalog_before = app.world()
-        .resource::<WorldRuntimeSdfProductCatalogResource>().unwrap()
-        .product(product_id).unwrap().clone();
+    let current = app
+        .world()
+        .resource::<SdfChunkStoreResource>()
+        .unwrap()
+        .chunks
+        .get(&arena_chunk_id())
+        .unwrap()
+        .clone();
+    let catalog_before = app
+        .world()
+        .resource::<WorldRuntimeSdfProductCatalogResource>()
+        .unwrap()
+        .product(product_id)
+        .unwrap()
+        .clone();
 
     assert!(matches!(
         w1_enqueue(&mut app, package(1, 2)),
@@ -1439,22 +1449,39 @@ fn exact_replacement_cannot_roll_back_source_lineage_even_for_identical_geometry
             WorldSdfExactFormationError::InvalidProductOrRevision
         ))
     ));
-    assert!(app.world().resource::<WorldCompletedBuildQueueResource>().unwrap()
-        .outputs.is_empty());
+    assert!(
+        app.world()
+            .resource::<WorldCompletedBuildQueueResource>()
+            .unwrap()
+            .outputs
+            .is_empty()
+    );
     assert_eq!(
-        app.world().resource::<SdfChunkStoreResource>().unwrap()
-            .chunks.get(&arena_chunk_id()),
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&arena_chunk_id()),
         Some(&current)
     );
     assert_eq!(
-        app.world().resource::<WorldRuntimeSdfProductCatalogResource>().unwrap()
+        app.world()
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap()
             .product(product_id),
         Some(&catalog_before),
         "rejected source-revision rollback must not replace catalog truth"
     );
-    assert!(app.world().resource::<WorldChunkRuntimeMapResource>().unwrap()
-        .by_chunk_id.get(&arena_chunk_id()).unwrap()
-        .pending_build_generation.is_none());
+    assert!(
+        app.world()
+            .resource::<WorldChunkRuntimeMapResource>()
+            .unwrap()
+            .by_chunk_id
+            .get(&arena_chunk_id())
+            .unwrap()
+            .pending_build_generation
+            .is_none()
+    );
 
     assert_eq!(
         w1_enqueue(&mut app, package(2, 2)).unwrap(),
@@ -1463,13 +1490,23 @@ fn exact_replacement_cannot_roll_back_source_lineage_even_for_identical_geometry
     );
     app = app.run_for_fixed_steps(1).unwrap();
     assert_eq!(
-        app.world().resource::<WorldRuntimeSdfProductCatalogResource>().unwrap()
-            .product(product_id).unwrap().lineage.source_revision,
+        app.world()
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap()
+            .product(product_id)
+            .unwrap()
+            .lineage
+            .source_revision,
         2
     );
     assert_eq!(
-        app.world().resource::<SdfChunkStoreResource>().unwrap()
-            .chunks.get(&arena_chunk_id()).unwrap().chunk_generation,
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&arena_chunk_id())
+            .unwrap()
+            .chunk_generation,
         ChunkGeneration(2)
     );
 }
