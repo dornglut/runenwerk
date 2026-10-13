@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 
 use runenui_runtime::{InputArbitrationScope, InputOwnershipSnapshot, RuntimeStatus};
 
+use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::runtime::{NativeWindowId, NativeWindowLifecycleState, WindowStateRegistryResource};
 
 use super::{
@@ -124,6 +125,7 @@ impl UiNativeInputRecipientsResource {
         windows: &WindowStateRegistryResource,
         slots: &mut UiRuntimeSlotsResource,
         presentations: &UiRuntimePresentationAssociationsResource,
+        render_surfaces: &RenderSurfaceRegistryResource,
     ) -> Result<Option<UiRuntimeDisplayedPresentation>, NativeInputRecipientError> {
         match self.resolve(window, windows, slots)? {
             NativeInputRecipient::LegacyNativeConsumer => Ok(None),
@@ -139,6 +141,19 @@ impl UiNativeInputRecipientsResource {
                 // Never route input against old pixels during that interval.
                 if displayed.mapping.target_size_px() != live.size_px
                     || displayed.mapping.native_scale_factor() != live.scale_factor
+                {
+                    return Err(NativeInputRecipientError::NoCompletedPresentation);
+                }
+                // Render-surface retirement can precede the next RenderPrepare
+                // refresh without retiring the native window itself.
+                let attached = render_surfaces
+                    .record(displayed.render_surface_id)
+                    .ok_or(NativeInputRecipientError::NoCompletedPresentation)?;
+                if attached.lifecycle_state != RenderSurfaceLifecycleState::Attached
+                    || attached.native_window_id != window
+                    || attached.target_size_px != displayed.mapping.target_size_px()
+                    || render_surfaces.surface_for_native_window(window)
+                        != Some(displayed.render_surface_id)
                 {
                     return Err(NativeInputRecipientError::NoCompletedPresentation);
                 }
@@ -439,18 +454,34 @@ mod tests {
             .expect("explicit native recipient");
 
         let mut presentations = UiRuntimePresentationAssociationsResource::default();
+        let mut render_surfaces = RenderSurfaceRegistryResource::default();
+        let render_surface = RenderSurfaceId::primary();
+        render_surfaces
+            .confirm_surface_attachment(render_surface, first, (640, 480))
+            .expect("realized render surface");
         assert!(matches!(
-            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            recipients.displayed_pointer_input(
+                first,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+            ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
         assert_eq!(
             recipients
-                .displayed_pointer_input(second, &windows, &mut slots, &presentations)
+                .displayed_pointer_input(
+                    second,
+                    &windows,
+                    &mut slots,
+                    &presentations,
+                    &render_surfaces,
+                )
                 .unwrap_err(),
             NativeInputRecipientError::MissingRecipient
         );
 
-        let render_surface = RenderSurfaceId::primary();
         let producer = RenderFrameProducerId::try_from_raw(71).expect("valid producer");
         let style = StyleEnvironment::default();
         let binding =
@@ -481,12 +512,24 @@ mod tests {
             .expect("valid prepared publication");
 
         assert!(matches!(
-            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            recipients.displayed_pointer_input(
+                first,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+            ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
         assert!(presentations.associate_accepted_submission(publication_id));
         assert!(matches!(
-            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            recipients.displayed_pointer_input(
+                first,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+            ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
         assert!(
@@ -495,7 +538,13 @@ mod tests {
                 .is_some()
         );
         let displayed = recipients
-            .displayed_pointer_input(first, &windows, &mut slots, &presentations)
+            .displayed_pointer_input(
+                first,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+            )
             .expect("live mounted recipient")
             .expect("only completed display is available");
         assert_eq!(displayed.input_context, expected);
@@ -511,22 +560,41 @@ mod tests {
         // itself must reject either changed dimension or DPI immediately.
         windows.record_mut(first).expect("created window").scale_factor = 2.0;
         assert!(matches!(
-            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            recipients.displayed_pointer_input(
+                first,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+            ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
         windows.record_mut(first).expect("created window").scale_factor = 1.0;
         windows.record_mut(first).expect("created window").size_px = (800, 600);
         assert!(matches!(
-            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            recipients.displayed_pointer_input(
+                first,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+            ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
         windows.record_mut(first).expect("created window").scale_factor = 2.0;
+        assert!(render_surfaces.update_surface_extent_for_native_window(first, (800, 600)));
 
         let changed = UiRuntimeNativeMapping::new(first, render_surface, (800, 600), 2.0)
             .expect("valid changed host mapping");
         assert!(presentations.update_mapping(slot, changed));
         assert!(matches!(
-            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            recipients.displayed_pointer_input(
+                first,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+            ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
 
@@ -562,10 +630,33 @@ mod tests {
         );
         assert!(
             recipients
-                .displayed_pointer_input(first, &windows, &mut slots, &presentations)
+                .displayed_pointer_input(
+                    first,
+                    &windows,
+                    &mut slots,
+                    &presentations,
+                    &render_surfaces,
+                )
                 .expect("valid recipient")
                 .is_some()
         );
+
+        // A renderer detach is immediately authoritative even before a UI
+        // RenderPrepare withdrawal and while the native window still exists.
+        assert_eq!(
+            render_surfaces.retire_surface_for_native_window(first),
+            Some(render_surface)
+        );
+        assert!(matches!(
+            recipients.displayed_pointer_input(
+                first,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+            ),
+            Err(NativeInputRecipientError::NoCompletedPresentation)
+        ));
 
         assert!(recipients.retire_window(first, &mut presentations));
         assert!(
@@ -583,7 +674,13 @@ mod tests {
             Ok(true)
         );
         assert!(matches!(
-            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            recipients.displayed_pointer_input(
+                first,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+            ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
     }
