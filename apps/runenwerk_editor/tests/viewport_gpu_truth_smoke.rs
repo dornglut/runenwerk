@@ -1926,33 +1926,51 @@ fn wr1282_material_preview(product_id: u64, label: &str, roughness: &str, metall
     let source: MaterialGraphSourceFileV2 = ron::de::from_str(&source_text).expect("source decode");
     let document = source.into_document().expect("source document");
     let lowering = lower_material_graph(&document, &MaterialNodeCatalog::first_slice());
-    assert!(!lowering.report.has_blocking_issues(), "ratified source: {:?}", lowering.report.issues());
+    assert!(
+        !lowering.report.has_blocking_issues(),
+        "ratified source: {:?}",
+        lowering.report.issues()
+    );
     let product = lowering.product.expect("formed material");
     let compiled = compile_material_shader(MaterialShaderCompileRequest {
         ir: product.executable_ir.as_ref().expect("IR"),
         fixture: MaterialPreviewFixture::Sphere,
-    }).expect("compiled material");
+    })
+    .expect("compiled material");
     let preview_path = write_gpu_truth_shader(
-        format!("wr1282-preview-{label}.wgsl").as_str(), &compiled.wgsl,
+        format!("wr1282-preview-{label}.wgsl").as_str(),
+        &compiled.wgsl,
     );
     let scene_path = write_gpu_truth_shader(
-        format!("wr1282-scene-{label}.wgsl").as_str(), &compiled.scene_wgsl,
+        format!("wr1282-scene-{label}.wgsl").as_str(),
+        &compiled.scene_wgsl,
     );
     EditorMaterialPreviewProduct::new(
-        asset_id(product_id + 100), asset_source_id(product_id + 200),
+        asset_id(product_id + 100),
+        asset_source_id(product_id + 200),
         asset_artifact_id(product_id + 300),
         ArtifactCacheKey::new(product.cache_key.as_str()),
-        product, MaterialRendererParameterProfile::RenderMaterial,
+        product,
+        MaterialRendererParameterProfile::RenderMaterial,
         asset_artifact_id(product_id + 400),
         ArtifactCacheKey::new(format!("material-shader:{}", compiled.identity)),
-        preview_path, compiled.identity,
+        preview_path,
+        compiled.identity,
         asset_artifact_id(product_id + 500),
         ArtifactCacheKey::new(format!("material-scene-shader:{}", compiled.scene_identity)),
-        scene_path, compiled.scene_identity, [],
-    ).with_compiler_resource_bindings(compiled.resource_bindings)
+        scene_path,
+        compiled.scene_identity,
+        [],
+    )
+    .with_compiler_resource_bindings(compiled.resource_bindings)
 }
 
-fn render_wr1282_light_variant(window: &Arc<Window>, label: &str, roughness: &str, metallic: &str) -> Wr1282LightPixels {
+fn render_wr1282_light_variant(
+    window: &Arc<Window>,
+    label: &str,
+    roughness: &str,
+    metallic: &str,
+) -> Wr1282LightPixels {
     let gfx = Gfx::new(Arc::clone(window)).expect("windowed GPU device");
     let mut app = runenwerk_editor::runtime::build_headless_app().expect("editor app");
     app.world_mut().insert_resource(gfx);
@@ -1960,24 +1978,43 @@ fn render_wr1282_light_variant(window: &Arc<Window>, label: &str, roughness: &st
     let size = window.inner_size();
     let size_px = (size.width.max(1), size.height.max(1));
     let factor = window.scale_factor();
-    app.world_mut().insert_resource(PrimaryPresentationMetricsResource::new(size_px, factor));
-    app.world_mut().insert_resource(WindowStateRegistryResource::default());
-    app.world_mut().resource_mut::<WindowStateRegistryResource>().unwrap()
+    app.world_mut()
+        .insert_resource(PrimaryPresentationMetricsResource::new(size_px, factor));
+    app.world_mut()
+        .insert_resource(WindowStateRegistryResource::default());
+    app.world_mut()
+        .resource_mut::<WindowStateRegistryResource>()
+        .unwrap()
         .register_primary_window(window.title(), size_px, factor, window.has_focus());
-    app.world_mut().resource_mut::<RenderSurfaceRegistryResource>().unwrap()
-        .confirm_surface_attachment(RenderSurfaceId::primary(), NativeWindowId::primary(), size_px)
+    app.world_mut()
+        .resource_mut::<RenderSurfaceRegistryResource>()
+        .unwrap()
+        .confirm_surface_attachment(
+            RenderSurfaceId::primary(),
+            NativeWindowId::primary(),
+            size_px,
+        )
         .expect("surface attachment");
 
     let left = wr1282_material_preview(200_100, label, roughness, metallic);
     let right = wr1282_material_preview(200_101, "control", "0.45", "0.0");
     {
-        let host = app.world_mut().resource_mut::<EditorHostResource>().expect("host");
+        let host = app
+            .world_mut()
+            .resource_mut::<EditorHostResource>()
+            .expect("host");
         register_mvp_component_types(host.app.runtime_mut());
         apply_scene_file_to_runtime(
-            host.app.runtime_mut(), &wr028_two_sdf_primitive_scene_file(&left, &right),
-        ).expect("source-backed 2-slot SDF scene");
-        host.app.material_lab_runtime_mut().set_active_preview(right);
-        host.app.material_lab_runtime_mut().set_active_preview(left.clone());
+            host.app.runtime_mut(),
+            &wr028_two_sdf_primitive_scene_file(&left, &right),
+        )
+        .expect("source-backed 2-slot SDF scene");
+        host.app
+            .material_lab_runtime_mut()
+            .set_active_preview(right);
+        host.app
+            .material_lab_runtime_mut()
+            .set_active_preview(left.clone());
     }
     let mut app = app.run_for_frames(8).expect("scene material frames");
     {
