@@ -139,22 +139,35 @@ fn prepublication_wind_fields_complete_source_census() {
         for entry in fs::read_dir(&dir).unwrap_or_else(|err| panic!("{}: {err}", dir.display())) {
             let entry = entry.expect("repository directory entry must be readable");
             let path = entry.path();
-            let kind = entry.file_type().expect("repository file type must be readable");
+            let kind = entry
+                .file_type()
+                .expect("repository file type must be readable");
             if kind.is_dir() {
                 let name = entry.file_name();
-                if [".git", "target", "node_modules", "dist", ".astro", ".cache", ".venv"]
-                    .iter()
-                    .any(|excluded| name == *excluded)
+                if [
+                    ".git",
+                    "target",
+                    "node_modules",
+                    "dist",
+                    ".astro",
+                    ".cache",
+                    ".venv",
+                ]
+                .iter()
+                .any(|excluded| name == *excluded)
                 {
                     continue;
                 }
                 pending.push(path);
                 continue;
             }
-            assert!(kind.is_file(), "unexpected repository entry: {}", path.display());
+            assert!(
+                kind.is_file(),
+                "unexpected repository entry: {}",
+                path.display()
+            );
             total_files += 1;
-            let bytes = fs::read(&path)
-                .unwrap_or_else(|err| panic!("{}: {err}", path.display()));
+            let bytes = fs::read(&path).unwrap_or_else(|err| panic!("{}: {err}", path.display()));
             let Ok(content) = std::str::from_utf8(&bytes) else {
                 continue;
             };
@@ -164,8 +177,7 @@ fn prepublication_wind_fields_complete_source_census() {
                 .expect("repository file path must be underneath root")
                 .to_string_lossy()
                 .replace('\\', "/");
-            if relative == "engine/tests/architecture_guards/world_prepare_submit_cutoff_guard.rs"
-            {
+            if relative == "engine/tests/architecture_guards/world_prepare_submit_cutoff_guard.rs" {
                 continue;
             }
             if former_owners.contains(&relative.as_str()) {
@@ -203,7 +215,11 @@ fn prepublication_wind_fields_complete_source_census() {
         text_files >= 2_460,
         "incomplete maintained text traversal: read only {text_files} files"
     );
-    assert_eq!(owner_files, former_owners.len(), "missing owning source files");
+    assert_eq!(
+        owner_files,
+        former_owners.len(),
+        "missing owning source files"
+    );
     assert!(
         unowned_references.is_empty(),
         "WindFields compatibility references outside seven known owners: {unowned_references:#?}"
