@@ -1190,9 +1190,8 @@ fn exact_source_identity_rejects_epsilon_equivalent_formed_product_alias() {
         world_ops::ChunkRevision(0),
         world_ops::ChunkGeneration(0),
     );
-    let epsilon = WorldSdfOpenTopRectInteriorSource::try_new(
-        [0.500001, 3.5], 0.5, [0.5, 3.5],
-    ).unwrap();
+    let epsilon =
+        WorldSdfOpenTopRectInteriorSource::try_new([0.500001, 3.5], 0.5, [0.5, 3.5]).unwrap();
     let mut candidate = arena_exact_formation(
         epsilon,
         ARENA_FIELD_PRODUCT_ID,
@@ -1254,8 +1253,11 @@ fn exact_source_identity_rejects_epsilon_equivalent_formed_product_alias() {
         1
     );
     candidate = arena_exact_formation(
-        arena_geometry_source(), ARENA_FIELD_PRODUCT_ID, 1,
-        world_ops::ChunkRevision(0), world_ops::ChunkGeneration(0),
+        arena_geometry_source(),
+        ARENA_FIELD_PRODUCT_ID,
+        1,
+        world_ops::ChunkRevision(0),
+        world_ops::ChunkGeneration(0),
     );
     assert_eq!(
         w1_enqueue(

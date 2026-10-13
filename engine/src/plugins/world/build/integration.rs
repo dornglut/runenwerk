@@ -52,8 +52,13 @@ impl WorldCompletedBuildOutput {
         origin: WorldCompletedBuildOrigin,
     ) -> Self {
         Self {
-            chunk_id, target_chunk_revision, target_build_generation,
-            staleness, chunk_payload, region_summary, origin,
+            chunk_id,
+            target_chunk_revision,
+            target_build_generation,
+            staleness,
+            chunk_payload,
+            region_summary,
+            origin,
             exact_source: None,
         }
     }
