@@ -25,6 +25,14 @@ struct Binding {
     scope: Option<InputArbitrationScope>,
 }
 
+/// Explicit retirement is not absence. A formerly UI-owned native window must
+/// not become an implicit game recipient when its final UI mount disappears.
+#[derive(Clone, Debug)]
+enum WindowRecipientBinding {
+    Bound(Binding),
+    Retired,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
 pub enum NativeInputRecipientError {
     #[error("native input window does not exist")]
@@ -51,7 +59,7 @@ pub enum NativeInputRecipientError {
 /// RunenUI focus, presentation, physical input or game permission authority.
 #[derive(Default, runen_ecs::Resource)]
 pub struct UiNativeInputRecipientsResource {
-    bindings: BTreeMap<NativeWindowId, Binding>,
+    bindings: BTreeMap<NativeWindowId, WindowRecipientBinding>,
 }
 
 impl UiNativeInputRecipientsResource {
@@ -71,7 +79,7 @@ impl UiNativeInputRecipientsResource {
                 Some(Self::running_ownership(slots, slot)?.scope().clone())
             }
         };
-        if let Some(existing) = self.bindings.get(&window) {
+        if let Some(WindowRecipientBinding::Bound(existing)) = self.bindings.get(&window) {
             return if existing.recipient == recipient && existing.scope == scope {
                 Ok(false)
             } else {
@@ -82,11 +90,20 @@ impl UiNativeInputRecipientsResource {
             && self
                 .bindings
                 .values()
-                .any(|binding| binding.recipient == NativeInputRecipient::RunenUiSlot(slot))
+                .any(|binding| matches!(
+                    binding,
+                    WindowRecipientBinding::Bound(Binding {
+                        recipient: NativeInputRecipient::RunenUiSlot(bound),
+                        ..
+                    }) if *bound == slot
+                ))
         {
             return Err(NativeInputRecipientError::SlotAlreadyBound);
         }
-        self.bindings.insert(window, Binding { recipient, scope });
+        self.bindings.insert(
+            window,
+            WindowRecipientBinding::Bound(Binding { recipient, scope }),
+        );
         Ok(true)
     }
 
@@ -100,12 +117,13 @@ impl UiNativeInputRecipientsResource {
         slots: &mut UiRuntimeSlotsResource,
     ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
         Self::require_created(window, windows)?;
-        let Some(binding) = self.bindings.get(&window) else {
-            return if slots.is_empty() {
-                Ok(NativeInputRecipient::LegacyNativeConsumer)
-            } else {
-                Err(NativeInputRecipientError::MissingRecipient)
-            };
+        let binding = match self.bindings.get(&window) {
+            Some(WindowRecipientBinding::Bound(binding)) => binding,
+            Some(WindowRecipientBinding::Retired) => {
+                return Err(NativeInputRecipientError::MissingRecipient);
+            }
+            None if slots.is_empty() => return Ok(NativeInputRecipient::LegacyNativeConsumer),
+            None => return Err(NativeInputRecipientError::MissingRecipient),
         };
         if let NativeInputRecipient::RunenUiSlot(slot) = binding.recipient {
             let ownership = Self::running_ownership(slots, slot)?;
@@ -171,27 +189,65 @@ impl UiNativeInputRecipientsResource {
         window: NativeWindowId,
         presentations: &mut UiRuntimePresentationAssociationsResource,
     ) -> bool {
-        let Some(binding) = self.bindings.remove(&window) else {
+        let Some(binding) = self.bindings.get_mut(&window) else {
             return false;
         };
-        if let NativeInputRecipient::RunenUiSlot(slot) = binding.recipient {
+        let WindowRecipientBinding::Bound(previous) = binding else {
+            return false;
+        };
+        if let NativeInputRecipient::RunenUiSlot(slot) = previous.recipient {
             presentations.invalidate_mapping(slot);
         }
+        *binding = WindowRecipientBinding::Retired;
         true
     }
 
     /// Retire a mounted runtime's recipient and its old displayed input.
-    /// No separate presentation state is maintained in this registry.
+    /// Preserve an explicit unbound marker until the surviving native window
+    /// has a newly validated recipient or has itself been destroyed.
     pub fn retire_slot(
         &mut self,
         slot: UiRuntimeSlotId,
         presentations: &mut UiRuntimePresentationAssociationsResource,
     ) -> usize {
-        let old_len = self.bindings.len();
-        self.bindings
-            .retain(|_, binding| binding.recipient != NativeInputRecipient::RunenUiSlot(slot));
+        let mut retired = 0;
+        for binding in self.bindings.values_mut() {
+            if matches!(
+                binding,
+                WindowRecipientBinding::Bound(Binding {
+                    recipient: NativeInputRecipient::RunenUiSlot(bound),
+                    ..
+                }) if *bound == slot
+            ) {
+                *binding = WindowRecipientBinding::Retired;
+                retired += 1;
+            }
+        }
         presentations.invalidate_mapping(slot);
-        old_len - self.bindings.len()
+        retired
+    }
+
+    /// Release a retired window's identity only after its native record is
+    /// actually gone. This bounds registry state to real window lifetimes;
+    /// retiring a still-live input source never silently grants gameplay.
+    pub fn forget_destroyed_window(
+        &mut self,
+        window: NativeWindowId,
+        windows: &WindowStateRegistryResource,
+    ) -> Result<bool, NativeInputRecipientError> {
+        if windows.record(window).is_some() {
+            return Err(NativeInputRecipientError::InactiveWindow);
+        }
+        match self.bindings.get(&window) {
+            Some(WindowRecipientBinding::Bound(_)) => {
+                Err(NativeInputRecipientError::ConflictingRecipient)
+            }
+            Some(WindowRecipientBinding::Retired) => {
+                self.bindings.remove(&window);
+                Ok(true)
+            }
+            None => Ok(false),
+        }
     }
 
     fn require_created(
@@ -393,6 +449,76 @@ mod tests {
         );
         assert_eq!(
             recipients.resolve(first, &windows, &mut slots),
+            Err(NativeInputRecipientError::MissingRecipient)
+        );
+        // A deliberate new semantic target can restore gameplay, but source
+        // retirement and mount removal alone must never do so.
+        assert_eq!(
+            recipients.bind(
+                first,
+                NativeInputRecipient::LegacyNativeConsumer,
+                &windows,
+                &mut slots,
+            ),
+            Ok(true)
+        );
+        assert_eq!(
+            recipients.resolve(first, &windows, &mut slots),
+            Ok(NativeInputRecipient::LegacyNativeConsumer)
+        );
+    }
+
+    #[test]
+    fn live_source_retirement_requires_rebind_and_destroyed_source_can_be_pruned() {
+        let (mut windows, first, second) = windows();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = mount(&mut slots, 99);
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        let mut presentations = UiRuntimePresentationAssociationsResource::default();
+
+        assert_eq!(
+            recipients.bind(
+                first,
+                NativeInputRecipient::RunenUiSlot(slot),
+                &windows,
+                &mut slots,
+            ),
+            Ok(true)
+        );
+        assert!(recipients.retire_window(first, &mut presentations));
+        assert_eq!(
+            recipients.resolve(first, &windows, &mut slots),
+            Err(NativeInputRecipientError::MissingRecipient)
+        );
+        // Even with zero UI mounts, retirement cannot auto-promote game input.
+        slots.unmount_with_retirement(slot).expect("retire slot");
+        assert_eq!(
+            recipients.resolve(first, &windows, &mut slots),
+            Err(NativeInputRecipientError::MissingRecipient)
+        );
+        assert_eq!(
+            recipients.forget_destroyed_window(first, &windows),
+            Err(NativeInputRecipientError::InactiveWindow)
+        );
+        assert_eq!(
+            recipients.bind(
+                first,
+                NativeInputRecipient::LegacyNativeConsumer,
+                &windows,
+                &mut slots,
+            ),
+            Ok(true)
+        );
+        windows.remove_window(first);
+        assert_eq!(
+            recipients.forget_destroyed_window(first, &windows),
+            Err(NativeInputRecipientError::ConflictingRecipient)
+        );
+        assert!(recipients.retire_window(first, &mut presentations));
+        assert_eq!(recipients.forget_destroyed_window(first, &windows), Ok(true));
+        assert_eq!(recipients.forget_destroyed_window(first, &windows), Ok(false));
+        assert_eq!(
+            recipients.resolve(second, &windows, &mut slots),
             Ok(NativeInputRecipient::LegacyNativeConsumer)
         );
     }
