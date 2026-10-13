@@ -527,16 +527,24 @@ mod tests {
             )
             .expect("stage new native mapping");
         assert!(presentations.associate_accepted_submission(next_id));
-        assert!(presentations.promote_completed_publication(next_id).is_some());
-        assert!(recipients
-            .displayed_pointer_input(first, &windows, &mut slots, &presentations)
-            .expect("valid recipient")
-            .is_some());
+        assert!(
+            presentations
+                .promote_completed_publication(next_id)
+                .is_some()
+        );
+        assert!(
+            recipients
+                .displayed_pointer_input(first, &windows, &mut slots, &presentations)
+                .expect("valid recipient")
+                .is_some()
+        );
 
         assert!(recipients.retire_window(first, &mut presentations));
-        assert!(presentations
-            .displayed_for_native_recipient(slot, first)
-            .is_none());
+        assert!(
+            presentations
+                .displayed_for_native_recipient(slot, first)
+                .is_none()
+        );
         assert_eq!(
             recipients.bind(
                 first,
