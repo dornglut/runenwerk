@@ -44,3 +44,4 @@ pub use schedule::*;
 pub use screen::*;
 pub use source::*;
 pub use trace::*;
+pub use typed_app_host::UiAppObservation;

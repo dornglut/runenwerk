@@ -1,6 +1,7 @@
 use crate::app::WindowedAppState;
 use crate::plugins::InputState;
 use crate::plugins::render::host::native as render_native_host;
+use crate::plugins::ui::UiRuntimeSlotsResource;
 use crate::runtime::PrimaryPresentationMetricsResource;
 use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use crate::runtime::frame_pacing::{
@@ -20,8 +21,10 @@ use crate::runtime::winit_input::{
     scroll_input, text_input,
 };
 use crate::runtime::winit_window_realizer::WinitWindowRealizer;
+use crate::runtime::{NativeHostEvent, NativeWakeTransport};
 use anyhow::{Context, Result, anyhow};
 use runen_input::{ContinuityLoss, InputContext};
+use std::collections::HashSet;
 use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, WindowEvent};
@@ -31,11 +34,25 @@ use winit::window::{Window, WindowId};
 pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
     install_native_window_provider_resources(&mut state.world);
 
-    let mut event_loop_builder = EventLoop::builder();
+    let mut event_loop_builder = EventLoop::<NativeHostEvent>::with_user_event();
     with_native_window_hooks(&mut state.world, |registry, _world| {
         registry.configure_event_loop(&mut event_loop_builder);
     });
-    let event_loop = event_loop_builder.build()?;
+    let event_loop = match event_loop_builder.build() {
+        Ok(event_loop) => event_loop,
+        Err(error) => {
+            let cleanup = shutdown_native_ui(&mut state.world);
+            return combine_execution_and_cleanup(Err(error.into()), cleanup);
+        }
+    };
+    let transport = NativeWakeTransport::new(event_loop.create_proxy());
+    if state.world.has_resource::<UiRuntimeSlotsResource>() {
+        state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .attach_native_transport(transport.clone());
+    }
+    state.world.insert_resource(transport);
     event_loop.set_control_flow(ControlFlow::Wait);
     let mut runner = WinitRunner {
         state,
@@ -44,15 +61,39 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         last_primary_redraw_at: None,
         frame_pacing_schedule: FramePacingSchedule::default(),
         fatal_error: None,
+        frame_requested: false,
+        owned_redraws: HashSet::new(),
+        shutdown_done: false,
     };
-    event_loop
-        .run_app(&mut runner)
-        .map_err(anyhow::Error::from)?;
-    if let Some(err) = runner.fatal_error.take() {
-        Err(err)
-    } else {
-        Ok(())
+    let execution = event_loop.run_app(&mut runner).map_err(anyhow::Error::from);
+    let execution = match (runner.fatal_error.take(), execution) {
+        (Some(error), Err(loop_error)) => {
+            Err(error.context(format!("native event loop also failed: {loop_error:#}")))
+        }
+        (Some(error), Ok(())) => Err(error),
+        (None, execution) => execution,
+    };
+    let cleanup = runner.shutdown_native();
+    combine_execution_and_cleanup(execution, cleanup)
+}
+
+fn combine_execution_and_cleanup(execution: Result<()>, cleanup: Result<()>) -> Result<()> {
+    match (execution, cleanup) {
+        (Err(error), Err(cleanup)) => {
+            Err(error.context(format!("native cleanup also failed: {cleanup:#}")))
+        }
+        (Err(error), _) | (_, Err(error)) => Err(error),
+        _ => Ok(()),
     }
+}
+
+fn shutdown_native_ui(world: &mut runen_ecs::World) -> Result<()> {
+    if world.has_resource::<UiRuntimeSlotsResource>() {
+        world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .shutdown_native_slots()?;
+    }
+    Ok(())
 }
 
 fn install_native_window_provider_resources(world: &mut runen_ecs::World) {
@@ -72,6 +113,10 @@ struct WinitRunner {
     last_primary_redraw_at: Option<Instant>,
     frame_pacing_schedule: FramePacingSchedule,
     fatal_error: Option<anyhow::Error>,
+    frame_requested: bool,
+    /// Acknowledges host-requested redraws without advancing the frame twice.
+    owned_redraws: HashSet<NativeWindowId>,
+    shutdown_done: bool,
 }
 
 impl WinitRunner {
@@ -97,19 +142,21 @@ impl WinitRunner {
         native_window_id: NativeWindowId,
         focused: bool,
     ) -> Result<()> {
-        self.apply_event_for_native_window(native_window_id, PlatformEvent::Focused { focused })?;
         if !focused
             && let Some(context) = self.input_adapter.window_source_context(native_window_id)
         {
-            self.apply_event_for_native_window(
+            return self.apply_event_group(
                 native_window_id,
-                PlatformEvent::InputContinuityLost {
-                    context,
-                    loss: ContinuityLoss::Source,
-                },
-            )?;
+                [
+                    PlatformEvent::Focused { focused },
+                    PlatformEvent::InputContinuityLost {
+                        context,
+                        loss: ContinuityLoss::Source,
+                    },
+                ],
+            );
         }
-        Ok(())
+        self.apply_event_for_native_window(native_window_id, PlatformEvent::Focused { focused })
     }
 
     fn retire_window_input_source(&mut self, native_window_id: NativeWindowId) -> Result<bool> {
@@ -132,7 +179,7 @@ impl WinitRunner {
     }
 
     fn apply_raw_device_removal(&mut self, device_id: winit::event::DeviceId) -> Result<bool> {
-        let Some(context) = self.input_adapter.retire_raw_device(device_id) else {
+        let Some(context) = self.input_adapter.retire_raw_device(device_id)? else {
             return Ok(false);
         };
         let input = self
@@ -149,13 +196,77 @@ impl WinitRunner {
         native_window_id: NativeWindowId,
         event: PlatformEvent,
     ) -> Result<()> {
+        self.apply_event_group(native_window_id, [event])
+    }
+
+    fn apply_event_group<const N: usize>(
+        &mut self,
+        native_window_id: NativeWindowId,
+        events: [PlatformEvent; N],
+    ) -> Result<()> {
+        // Journal capacity is checked for the entire observed callback before
+        // any physical state or native record receives its members.
+        self.state
+            .world
+            .resource_mut::<PlatformWindowEventQueueResource>()?
+            .reserve_native_group(&events)?;
+        let is_input = |event: &PlatformEvent| {
+            matches!(
+                event,
+                PlatformEvent::KeyboardInput { .. }
+                    | PlatformEvent::InputContinuityLost { .. }
+                    | PlatformEvent::TextInput { .. }
+                    | PlatformEvent::MouseWheel { .. }
+                    | PlatformEvent::CursorMoved { .. }
+                    | PlatformEvent::MouseInput { .. }
+                    | PlatformEvent::Touch { .. }
+            )
+        };
+        if events.iter().any(is_input) {
+            self.state
+                .world
+                .resource::<InputState>()
+                .context("missing InputState resource")?;
+        }
+        if events.iter().any(|event| !is_input(event)) {
+            self.state
+                .world
+                .resource::<WindowStateRegistryResource>()?
+                .record(native_window_id)
+                .context("native Host event targets an unknown window")?;
+        }
+        if native_window_id == NativeWindowId::primary()
+            && events.iter().any(|event| {
+                matches!(
+                    event,
+                    PlatformEvent::Resized { .. } | PlatformEvent::ScaleFactorChanged { .. }
+                )
+            })
+        {
+            self.state
+                .world
+                .resource::<PrimaryPresentationMetricsResource>()?;
+        }
+        // Move owned payloads once. Admission does not require infallible String
+        // clones after the explicit allocation/capacity check.
+        let journal = events.map(|event| PlatformWindowEvent::new(native_window_id, event));
+        for entry in &journal {
+            self.apply_admitted_event(native_window_id, &entry.event)?;
+        }
         self.state
             .world
             .resource_mut::<PlatformWindowEventQueueResource>()
             .context("native Host platform-window event queue is unavailable")?
-            .publish(PlatformWindowEvent::new(native_window_id, event.clone()));
+            .publish_group(journal)?;
+        Ok(())
+    }
 
-        match &event {
+    fn apply_admitted_event(
+        &mut self,
+        native_window_id: NativeWindowId,
+        event: &PlatformEvent,
+    ) -> Result<()> {
+        match event {
             PlatformEvent::KeyboardInput { .. }
             | PlatformEvent::InputContinuityLost { .. }
             | PlatformEvent::TextInput { .. }
@@ -168,7 +279,7 @@ impl WinitRunner {
                     .world
                     .resource_mut::<InputState>()
                     .context("missing InputState resource")?;
-                apply_platform_input_event(input, &event);
+                apply_platform_input_event(input, event);
             }
             PlatformEvent::Resumed
             | PlatformEvent::CloseRequested
@@ -185,7 +296,7 @@ impl WinitRunner {
                     let record = registry
                         .record_mut(native_window_id)
                         .context("native Host event targets an unknown window")?;
-                    apply_native_window_event(record, &event);
+                    apply_native_window_event(record, event);
                     if native_window_id == NativeWindowId::primary()
                         && matches!(
                             event,
@@ -244,7 +355,37 @@ impl WinitRunner {
                 registry.dispatch_frame(&window, world);
             });
         }
+        if self.state.world.has_resource::<UiRuntimeSlotsResource>() {
+            self.state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()?
+                .settle_native_slots()?;
+        }
         run_runtime_frame(&mut self.state.world, &mut self.state.scheduler)
+    }
+
+    fn shutdown_native(&mut self) -> Result<()> {
+        if self.shutdown_done {
+            return Ok(());
+        }
+        if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>() {
+            transport.close();
+        }
+        let cleanup = shutdown_native_ui(&mut self.state.world);
+        self.shutdown_done = cleanup.is_ok();
+        cleanup
+    }
+
+    fn request_native_redraw(&mut self, id: NativeWindowId, window: &Window) {
+        if self.owned_redraws.insert(id) {
+            WinitWindowRealizer::request_redraw(window);
+        }
+    }
+
+    fn acknowledge_native_redraw(&mut self, id: NativeWindowId) {
+        if !self.owned_redraws.remove(&id) {
+            self.frame_requested = true;
+        }
     }
 
     fn attach_native_window_hooks(&mut self, window: &Window) {
@@ -311,7 +452,7 @@ impl WinitRunner {
         }
 
         self.attach_native_window_hooks(&window);
-        WinitWindowRealizer::request_redraw(&window);
+        self.request_native_redraw(request.native_window_id, &window);
         self.window_realizer
             .publish_window(request.native_window_id, window);
         Ok(())
@@ -364,6 +505,8 @@ impl WinitRunner {
 
             if record.close_requested {
                 if native_window_id == NativeWindowId::primary() {
+                    // Windows winit must not enter a blocking wait after exit.
+                    event_loop.set_control_flow(ControlFlow::Poll);
                     event_loop.exit();
                     return Ok(());
                 }
@@ -377,6 +520,7 @@ impl WinitRunner {
                     window_registry.remove_window(native_window_id);
                 }
                 self.window_realizer.remove_window(window_id);
+                self.owned_redraws.remove(&native_window_id);
                 continue;
             }
 
@@ -384,7 +528,7 @@ impl WinitRunner {
                 let request_now = native_window_id != NativeWindowId::primary()
                     || self.should_request_primary_redraw_now(Instant::now());
                 if request_now {
-                    WinitWindowRealizer::request_redraw(&window);
+                    self.request_native_redraw(native_window_id, &window);
                     if let Ok(registry) = self
                         .state
                         .world
@@ -434,6 +578,7 @@ impl WinitRunner {
     }
 
     fn request_redraw_for_native_window(&mut self, native_window_id: NativeWindowId) {
+        self.frame_requested = true;
         if let Ok(registry) = self
             .state
             .world
@@ -464,45 +609,106 @@ impl WinitRunner {
         self.last_primary_redraw_at = Some(now);
     }
 
-    fn apply_frame_pacing(&mut self, event_loop: &ActiveEventLoop) {
+    fn frame_is_ready(&self, now: Instant) -> bool {
+        self.last_primary_redraw_at
+            .zip(self.frame_pacing_policy().target_frame_interval())
+            .is_none_or(|(previous, interval)| now.saturating_duration_since(previous) >= interval)
+    }
+
+    fn ui_readiness(&self) -> Result<(bool, Option<Instant>)> {
+        if self.state.world.has_resource::<UiRuntimeSlotsResource>() {
+            self.state
+                .world
+                .resource::<UiRuntimeSlotsResource>()?
+                .native_readiness()
+        } else {
+            Ok((false, None))
+        }
+    }
+
+    fn apply_frame_pacing(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+        if event_loop.exiting() {
+            return Ok(());
+        }
+        if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>() {
+            transport.ensure_delivery()?;
+        }
         let now = Instant::now();
         let policy = self.frame_pacing_policy();
         let decision = self.frame_pacing_schedule.decide(policy, now);
+        let (unfinished, ui_deadline) = self.ui_readiness()?;
+        if unfinished
+            || ui_deadline.is_some_and(|deadline| deadline <= now)
+            || decision.request_redraw
+        {
+            self.frame_requested = true;
+        }
         if decision.request_redraw
             && let Some(window) = self.window_realizer.primary_window()
         {
-            WinitWindowRealizer::request_redraw(&window);
+            self.request_native_redraw(NativeWindowId::primary(), &window);
         }
-        match decision.next_deadline {
-            Some(deadline) => event_loop.set_control_flow(ControlFlow::wait_duration(
-                deadline.saturating_duration_since(Instant::now()),
-            )),
+        let capped_deadline = if self.frame_requested && !self.frame_is_ready(now) {
+            self.last_primary_redraw_at
+                .zip(policy.target_frame_interval())
+                .and_then(|(last, interval)| last.checked_add(interval))
+        } else {
+            None
+        };
+        // Due work is represented by the pending frame bit. Never schedule a
+        // past WaitUntil that would spin while waiting for a continuous cap.
+        let next_deadline = [
+            decision.next_deadline,
+            ui_deadline.filter(|deadline| *deadline > now),
+            capped_deadline,
+        ]
+        .into_iter()
+        .flatten()
+        .min();
+        match next_deadline {
+            Some(deadline) => event_loop.set_control_flow(ControlFlow::WaitUntil(deadline)),
             None => event_loop.set_control_flow(ControlFlow::Wait),
         }
-        self.observe_frame_pacing_decision(
-            policy,
-            now,
-            decision.next_deadline,
-            decision.request_redraw,
-        );
+        self.observe_frame_pacing_decision(policy, now, next_deadline, decision.request_redraw);
+        Ok(())
+    }
+
+    fn pace_or_exit(&mut self, event_loop: &ActiveEventLoop) {
+        if let Err(error) = self.apply_frame_pacing(event_loop) {
+            self.exit_with_error(event_loop, error);
+        }
     }
 
     fn exit_with_error(&mut self, event_loop: &ActiveEventLoop, err: anyhow::Error) {
         tracing::error!(error = %format!("{err:#}"), "runtime windowed execution failed");
         self.fatal_error = Some(err);
+        event_loop.set_control_flow(ControlFlow::Poll);
         event_loop.exit();
     }
 }
 
 impl Drop for WinitRunner {
     fn drop(&mut self) {
+        if let Err(error) = self.shutdown_native() {
+            tracing::error!(%error, "native UI destructor cleanup failed");
+        }
         with_native_window_hooks(&mut self.state.world, |registry, world| {
             registry.detach_hooks(world);
         });
     }
 }
 
-impl ApplicationHandler for WinitRunner {
+impl ApplicationHandler<NativeHostEvent> for WinitRunner {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, _event: NativeHostEvent) {
+        if event_loop.exiting() {
+            return;
+        }
+        if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>() {
+            transport.acknowledge();
+        }
+        self.frame_requested = true;
+    }
+
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window_realizer.has_primary_window() {
             return;
@@ -549,10 +755,11 @@ impl ApplicationHandler for WinitRunner {
             return;
         }
 
-        WinitWindowRealizer::request_redraw(&window);
+        self.frame_requested = true;
+        self.request_native_redraw(NativeWindowId::primary(), &window);
         self.window_realizer
             .publish_window(NativeWindowId::primary(), window);
-        self.apply_frame_pacing(event_loop);
+        self.pace_or_exit(event_loop);
     }
 
     fn window_event(
@@ -561,6 +768,9 @@ impl ApplicationHandler for WinitRunner {
         window_id: WindowId,
         event: WindowEvent,
     ) {
+        if event_loop.exiting() {
+            return;
+        }
         let Some(window) = self.window_realizer.window(window_id) else {
             tracing::debug!(
                 target = "engine.runtime.window",
@@ -579,8 +789,11 @@ impl ApplicationHandler for WinitRunner {
         };
 
         self.dispatch_native_window_event(&window, &event);
+        if !matches!(event, WindowEvent::RedrawRequested) {
+            self.frame_requested = true;
+        }
 
-        let result = match event {
+        let result: Result<()> = (|| match event {
             WindowEvent::CloseRequested => {
                 self.apply_event_for_native_window(native_window_id, PlatformEvent::CloseRequested)
             }
@@ -612,21 +825,22 @@ impl ApplicationHandler for WinitRunner {
             } => {
                 let context = self
                     .input_adapter
-                    .window_context(native_window_id, device_id);
+                    .window_context(native_window_id, device_id)?;
                 let text = text_input(&event, is_synthetic);
                 let input = keyboard_input(&event, is_synthetic);
-                let mut result = self.apply_event_for_native_window(
-                    native_window_id,
-                    PlatformEvent::KeyboardInput { context, input },
-                );
-                if result.is_ok()
-                    && let Some(text) = text
-                {
-                    result = self.apply_event_for_native_window(
+                let result = match text {
+                    Some(text) => self.apply_event_group(
                         native_window_id,
-                        PlatformEvent::TextInput { text },
-                    );
-                }
+                        [
+                            PlatformEvent::KeyboardInput { context, input },
+                            PlatformEvent::TextInput { text },
+                        ],
+                    ),
+                    None => self.apply_event_for_native_window(
+                        native_window_id,
+                        PlatformEvent::KeyboardInput { context, input },
+                    ),
+                };
                 if result.is_ok() {
                     self.request_redraw_for_native_window(native_window_id);
                 }
@@ -639,7 +853,7 @@ impl ApplicationHandler for WinitRunner {
             } => {
                 let context = self
                     .input_adapter
-                    .window_context(native_window_id, device_id);
+                    .window_context(native_window_id, device_id)?;
                 let input = scroll_input(delta, phase);
                 let result = self.apply_event_for_native_window(
                     native_window_id,
@@ -656,7 +870,7 @@ impl ApplicationHandler for WinitRunner {
             } => {
                 let context = self
                     .input_adapter
-                    .window_context(native_window_id, device_id);
+                    .window_context(native_window_id, device_id)?;
                 let position = cursor_position(position);
                 let result = self.apply_event_for_native_window(
                     native_window_id,
@@ -674,7 +888,7 @@ impl ApplicationHandler for WinitRunner {
             } => {
                 let context = self
                     .input_adapter
-                    .window_context(native_window_id, device_id);
+                    .window_context(native_window_id, device_id)?;
                 let input = pointer_button_input(state, button);
                 let result = self.apply_event_for_native_window(
                     native_window_id,
@@ -688,7 +902,7 @@ impl ApplicationHandler for WinitRunner {
             WindowEvent::Touch(touch) => {
                 let context = self
                     .input_adapter
-                    .window_context(native_window_id, touch.device_id);
+                    .window_context(native_window_id, touch.device_id)?;
                 let input = contact_input(touch);
                 let result = self.apply_event_for_native_window(
                     native_window_id,
@@ -700,43 +914,17 @@ impl ApplicationHandler for WinitRunner {
                 result
             }
             WindowEvent::RedrawRequested => {
-                if native_window_id != NativeWindowId::primary() {
-                    let frame_result = self
-                        .apply_event_for_native_window(
-                            native_window_id,
-                            PlatformEvent::RedrawRequested,
-                        )
-                        .and_then(|_| self.apply_window_effects(event_loop));
-                    if let Err(err) = frame_result {
-                        self.exit_with_error(
-                            event_loop,
-                            anyhow!("runtime secondary-window redraw failed: {err:#}"),
-                        );
-                    }
-                    return;
-                }
-                let frame_result = self
-                    .apply_event(PlatformEvent::RedrawRequested)
-                    .and_then(|_| {
-                        self.observe_primary_frame_started();
-                        self.run_frame()
-                    })
-                    .and_then(|_| self.apply_window_effects(event_loop));
-                if let Err(err) = frame_result {
-                    self.exit_with_error(event_loop, anyhow!("runtime frame failed: {err:#}"));
-                    return;
-                }
-                self.apply_frame_pacing(event_loop);
-                return;
+                self.acknowledge_native_redraw(native_window_id);
+                self.apply_event_for_native_window(native_window_id, PlatformEvent::RedrawRequested)
             }
             _ => Ok(()),
-        };
+        })();
 
         if let Err(err) = result.and_then(|_| self.apply_window_effects(event_loop)) {
             self.exit_with_error(event_loop, anyhow!("runtime window event failed: {err:#}"));
             return;
         }
-        self.apply_frame_pacing(event_loop);
+        self.pace_or_exit(event_loop);
     }
 
     fn device_event(
@@ -747,9 +935,9 @@ impl ApplicationHandler for WinitRunner {
     ) {
         self.dispatch_native_device_event(&event);
 
-        let result = match event {
+        let result: Result<()> = (|| match event {
             DeviceEvent::MouseMotion { delta } => {
-                let context = self.input_adapter.raw_device_context(device_id);
+                let context = self.input_adapter.raw_device_context(device_id)?;
                 let result = self.apply_raw_mouse_motion(context, delta.0 as f32, delta.1 as f32);
                 if result.is_ok() {
                     self.request_redraw_for_native_window(NativeWindowId::primary());
@@ -764,17 +952,59 @@ impl ApplicationHandler for WinitRunner {
                 result.map(|_| ())
             }
             _ => Ok(()),
-        };
+        })();
 
         if let Err(err) = result.and_then(|_| self.apply_window_effects(event_loop)) {
             self.exit_with_error(event_loop, anyhow!("runtime device event failed: {err:#}"));
             return;
         }
-        self.apply_frame_pacing(event_loop);
+        self.pace_or_exit(event_loop);
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        self.apply_frame_pacing(event_loop);
+        if event_loop.exiting() {
+            return;
+        }
+        self.pace_or_exit(event_loop);
+        if event_loop.exiting() {
+            return;
+        }
+        if self.frame_requested
+            && self.window_realizer.has_primary_window()
+            && self.frame_is_ready(Instant::now())
+        {
+            self.frame_requested = false;
+            self.observe_primary_frame_started();
+            if let Err(error) = self
+                .run_frame()
+                .and_then(|_| self.apply_window_effects(event_loop))
+            {
+                self.exit_with_error(event_loop, anyhow!("runtime frame failed: {error:#}"));
+                return;
+            }
+            self.pace_or_exit(event_loop);
+            if !event_loop.exiting() && self.frame_requested && self.frame_is_ready(Instant::now())
+            {
+                // A deadline or bounded continuation can become due during the
+                // frame. Supply another native turn rather than strand it in Wait.
+                if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>()
+                    && let Err(error) = transport.notify()
+                {
+                    self.exit_with_error(event_loop, error.into());
+                }
+            }
+        }
+    }
+
+    fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        if let Err(error) = self.shutdown_native() {
+            self.fatal_error = Some(match self.fatal_error.take() {
+                Some(previous) => {
+                    previous.context(format!("native cleanup also failed: {error:#}"))
+                }
+                None => error,
+            });
+        }
     }
 }
 
@@ -820,6 +1050,9 @@ mod tests {
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
             fatal_error: None,
+            frame_requested: false,
+            owned_redraws: HashSet::new(),
+            shutdown_done: false,
         }
     }
 
@@ -865,6 +1098,9 @@ mod tests {
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
             fatal_error: None,
+            frame_requested: false,
+            owned_redraws: HashSet::new(),
+            shutdown_done: false,
         };
         runner
             .run_startup_if_needed()
@@ -923,7 +1159,8 @@ mod tests {
         let backend_device = winit::event::DeviceId::dummy();
         let context = runner
             .input_adapter
-            .window_context(NativeWindowId::primary(), backend_device);
+            .window_context(NativeWindowId::primary(), backend_device)
+            .unwrap();
         runner
             .apply_event(normalized_shift_press(context))
             .expect("normalized key press should apply");
@@ -988,7 +1225,8 @@ mod tests {
         let backend_device = winit::event::DeviceId::dummy();
         let context = runner
             .input_adapter
-            .window_context(secondary, backend_device);
+            .window_context(secondary, backend_device)
+            .unwrap();
         runner
             .apply_event_for_native_window(secondary, normalized_shift_press(context))
             .expect("secondary key press should apply");
@@ -1010,7 +1248,8 @@ mod tests {
 
         let replacement = runner
             .input_adapter
-            .window_context(secondary, backend_device);
+            .window_context(secondary, backend_device)
+            .unwrap();
         assert_ne!(replacement.source, context.source);
         assert_eq!(replacement.device, context.device);
     }
@@ -1022,21 +1261,29 @@ mod tests {
         let backend_device = winit::event::DeviceId::dummy();
         let window = runner
             .input_adapter
-            .window_context(NativeWindowId::primary(), backend_device);
-        let raw = runner.input_adapter.raw_device_context(backend_device);
+            .window_context(NativeWindowId::primary(), backend_device)
+            .unwrap();
+        let raw = runner
+            .input_adapter
+            .raw_device_context(backend_device)
+            .unwrap();
 
         assert!(
             runner
                 .apply_raw_device_removal(backend_device)
                 .expect("raw device removal should apply")
         );
-        let replacement = runner.input_adapter.raw_device_context(backend_device);
+        let replacement = runner
+            .input_adapter
+            .raw_device_context(backend_device)
+            .unwrap();
         assert_ne!(replacement.source, raw.source);
         assert_ne!(replacement.device, raw.device);
         assert_eq!(
             runner
                 .input_adapter
-                .window_context(NativeWindowId::primary(), backend_device),
+                .window_context(NativeWindowId::primary(), backend_device)
+                .unwrap(),
             window
         );
     }
@@ -1208,5 +1455,117 @@ mod tests {
 
         assert!(runner.should_request_primary_redraw_now(now));
         assert!(runner.should_request_primary_redraw_now(now + std::time::Duration::from_secs(1)));
+    }
+
+    #[test]
+    fn any_window_readiness_respects_continuous_cap_and_owned_redraw_does_not_duplicate() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::continuous_capped(60));
+        let start = Instant::now();
+        runner.last_primary_redraw_at = Some(start);
+        let secondary = NativeWindowId::try_from_raw(2).unwrap();
+        runner.request_redraw_for_native_window(secondary);
+        assert!(runner.frame_requested);
+        assert!(!runner.frame_is_ready(start));
+        assert!(runner.frame_is_ready(start + std::time::Duration::from_millis(17)));
+        runner.frame_requested = false;
+        runner.owned_redraws.insert(secondary);
+        runner.acknowledge_native_redraw(secondary);
+        assert!(!runner.frame_requested);
+        runner.acknowledge_native_redraw(secondary);
+        assert!(
+            runner.frame_requested,
+            "an independent native redraw requests an Engine turn"
+        );
+    }
+
+    #[test]
+    fn native_group_overflow_changes_neither_physical_state_nor_journal() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        let context = runner
+            .input_adapter
+            .window_context(NativeWindowId::primary(), winit::event::DeviceId::dummy())
+            .unwrap();
+        for _ in 0..4095 {
+            runner
+                .state
+                .world
+                .resource_mut::<PlatformWindowEventQueueResource>()
+                .unwrap()
+                .publish(PlatformWindowEvent::new(
+                    NativeWindowId::primary(),
+                    PlatformEvent::RedrawRequested,
+                ))
+                .unwrap();
+        }
+        assert!(
+            runner
+                .apply_event_group(
+                    NativeWindowId::primary(),
+                    [
+                        normalized_shift_press(context),
+                        PlatformEvent::TextInput { text: "x".into() },
+                    ]
+                )
+                .is_err()
+        );
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .shift_down()
+        );
+        assert_eq!(
+            runner
+                .state
+                .world
+                .resource::<PlatformWindowEventQueueResource>()
+                .unwrap()
+                .events()
+                .len(),
+            4095
+        );
+    }
+
+    #[test]
+    fn missing_physical_owner_rejects_focus_group_before_window_or_journal_mutation() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.remove_resource::<InputState>();
+        let primary = NativeWindowId::primary();
+        runner
+            .input_adapter
+            .window_context(primary, winit::event::DeviceId::dummy())
+            .unwrap();
+        let before = runner
+            .state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .unwrap()
+            .record(primary)
+            .unwrap()
+            .focused;
+        assert!(runner.apply_window_focus_event(primary, false).is_err());
+        assert_eq!(
+            runner
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .unwrap()
+                .record(primary)
+                .unwrap()
+                .focused,
+            before
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<PlatformWindowEventQueueResource>()
+                .unwrap()
+                .events()
+                .is_empty()
+        );
     }
 }

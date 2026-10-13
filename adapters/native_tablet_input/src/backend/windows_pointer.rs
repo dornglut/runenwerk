@@ -241,7 +241,10 @@ impl NativeTabletBackendAdapter for WindowsPointerBackend {
         NativeTabletBackendKind::WindowsPointer
     }
 
-    fn configure_event_loop(&mut self, builder: &mut EventLoopBuilder<()>) {
+    fn configure_event_loop(
+        &mut self,
+        builder: &mut EventLoopBuilder<engine::runtime::NativeHostEvent>,
+    ) {
         platform::install_windows_pointer_message_hook(builder, self.queue.clone());
     }
 
@@ -545,7 +548,7 @@ mod platform {
     use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 
     pub(super) fn install_windows_pointer_message_hook(
-        builder: &mut EventLoopBuilder<()>,
+        builder: &mut EventLoopBuilder<engine::runtime::NativeHostEvent>,
         queue: SharedWindowsPointerQueue,
     ) {
         builder.with_msg_hook(move |message| {
@@ -947,7 +950,7 @@ mod platform {
     use super::*;
 
     pub(super) fn install_windows_pointer_message_hook(
-        _builder: &mut EventLoopBuilder<()>,
+        _builder: &mut EventLoopBuilder<engine::runtime::NativeHostEvent>,
         _queue: SharedWindowsPointerQueue,
     ) {
     }

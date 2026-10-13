@@ -12,7 +12,7 @@ use engine::plugins::render::{
 use engine::plugins::ui::{
     AppUiExt, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
     UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
-    UiScreen, UiTypedActionDescriptor, UiTypedScreenId, UiTypedSource,
+    UiRuntimeSlotsResource, UiScreen, UiTypedActionDescriptor, UiTypedScreenId, UiTypedSource,
 };
 use engine::plugins::{RenderPlugin, UiPlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt, Res, Startup, Update};
@@ -104,6 +104,16 @@ fn native_counter_fonts() -> UiRuntimeFontConfiguration {
 }
 
 fn main() {
+    if let Ok(mode) = std::env::var("RUNENWERK_NATIVE_UI_READINESS_SMOKE") {
+        assert!(
+            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV]
+                .iter()
+                .all(|flag| std::env::var_os(flag).is_none()),
+            "native Host smoke modes are mutually exclusive"
+        );
+        native_readiness::run(&mode).expect("native UI readiness smoke must succeed");
+        return;
+    }
     match (
         std::env::var_os(NO_RENDER_ENV).is_some(),
         std::env::var_os(RENDER_HOST_ENV).is_some(),
@@ -122,6 +132,547 @@ fn main() {
             native_render_host_smoke(true).expect("native Render + UI Host smoke should succeed")
         }
         _ => panic!("native Host smoke modes are mutually exclusive"),
+    }
+}
+
+/// Actual App-configured runtimes and native callback execution, with no UI/game
+/// arbitration or synthetic scheduler/deadline implementation in the fixture.
+mod native_readiness {
+    use super::*;
+    use engine::app::AppNativeHostExt;
+    use engine::runtime::{
+        FrameEnd, FramePacingPolicyResource, NativeHostEvent, NativeWakeTransport,
+        SystemMobilityExt, WorldMut,
+    };
+    use runenui_core::{
+        Effects, IntoEffects, IntoUpdateOutput, NoHostProtocol, TimerEffect, UiApp, View,
+        WorkFamily, WorkKey, text,
+    };
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::sync::{Mutex, mpsc};
+    use std::task::{Poll, Waker};
+    use std::thread::ThreadId;
+    use std::time::{Duration, Instant};
+    use winit::event::WindowEvent;
+    use winit::event_loop::EventLoop;
+
+    struct External {
+        ready: AtomicBool,
+        waker: Mutex<Option<Waker>>,
+        registered: Mutex<Option<mpsc::Sender<()>>>,
+    }
+
+    struct State {
+        owner: ThreadId,
+        events: Rc<RefCell<Vec<&'static str>>>,
+        external: Option<Arc<External>>,
+    }
+
+    #[derive(Clone, Copy)]
+    enum Action {
+        Timer,
+        Async,
+        Cancel,
+        Replace,
+        Secondary,
+        ArmWatchdog,
+    }
+
+    struct TimedApp;
+    impl UiApp for TimedApp {
+        type State = State;
+        type Action = Action;
+        type HostProtocol = NoHostProtocol;
+        fn root(_: &State) -> impl View<Action> {
+            text("native timed application")
+        }
+        fn initial_effects(_: &State) -> impl IntoEffects<Action, NoHostProtocol> {
+            Effects::timer(
+                TimerEffect::once(Duration::from_secs(5), || Action::Timer)
+                    .keyed(WorkKey::new("native-timer").unwrap()),
+            )
+        }
+        fn update(
+            state: &mut State,
+            action: Action,
+        ) -> impl IntoUpdateOutput<Action, NoHostProtocol> {
+            assert_eq!(state.owner, std::thread::current().id());
+            match action {
+                Action::Timer => {
+                    state.events.borrow_mut().push("timer");
+                    Effects::none()
+                }
+                Action::Secondary => {
+                    state.events.borrow_mut().push("secondary");
+                    Effects::none()
+                }
+                Action::Cancel => {
+                    Effects::cancel(WorkFamily::Timer, WorkKey::new("native-timer").unwrap())
+                }
+                Action::Replace => Effects::timer(
+                    TimerEffect::once(Duration::from_millis(50), || Action::Timer)
+                        .keyed(WorkKey::new("native-timer").unwrap()),
+                ),
+                Action::Async | Action::ArmWatchdog => {
+                    unreachable!("TimedApp has no asynchronous effect")
+                }
+            }
+        }
+    }
+
+    struct AsyncApp;
+    impl UiApp for AsyncApp {
+        type State = State;
+        type Action = Action;
+        type HostProtocol = NoHostProtocol;
+        fn root(_: &State) -> impl View<Action> {
+            text("native asynchronous application")
+        }
+        fn initial_effects(state: &State) -> impl IntoEffects<Action, NoHostProtocol> {
+            let external = state.external.as_ref().unwrap().clone();
+            Effects::local_task(std::future::poll_fn(move |cx| {
+                if external.ready.load(Ordering::Acquire) {
+                    Poll::Ready(Some(Action::Async))
+                } else {
+                    *external.waker.lock().unwrap() = Some(cx.waker().clone());
+                    if let Some(sender) = external.registered.lock().unwrap().take() {
+                        sender.send(()).unwrap();
+                    }
+                    Poll::Pending
+                }
+            }))
+        }
+        fn update(
+            state: &mut State,
+            action: Action,
+        ) -> impl IntoUpdateOutput<Action, NoHostProtocol> {
+            assert_eq!(state.owner, std::thread::current().id());
+            if matches!(action, Action::ArmWatchdog) {
+                return Effects::timer(TimerEffect::once(Duration::from_millis(600), || {
+                    Action::Timer
+                }));
+            }
+            state.events.borrow_mut().push(match action {
+                Action::Async => "async",
+                Action::Timer => "second-timer",
+                _ => unreachable!("AsyncApp only handles its own effect completions"),
+            });
+            Effects::none()
+        }
+    }
+
+    struct Probe {
+        timed: UiRuntimeSlotId,
+        asynchronous: UiRuntimeSlotId,
+        events: Rc<RefCell<Vec<&'static str>>>,
+        other: Rc<RefCell<Vec<&'static str>>>,
+        frames: usize,
+        motion_events: usize,
+        observed_motion_events: usize,
+        unexplained_frames: usize,
+        continuous: bool,
+        last_frame: Option<Instant>,
+        hook_frames: usize,
+        replaced: bool,
+        cross: bool,
+        fail: bool,
+        start: Instant,
+        transport: Option<NativeWakeTransport>,
+        retired: Arc<AtomicBool>,
+        worker_release: Option<mpsc::Sender<()>>,
+        armed_at: Option<Instant>,
+        idle_started: Option<Instant>,
+        async_validated: bool,
+    }
+    impl runen_ecs::Resource for Probe {}
+
+    struct Hook {
+        visible: bool,
+        primary_window: Option<winit::window::WindowId>,
+    }
+    impl NativeWindowHook for Hook {
+        fn name(&self) -> &'static str {
+            "native_ui_readiness_smoke"
+        }
+        fn attach(&mut self, window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+            // Winit's X11 title getter returns an empty string. Identify the
+            // first (primary) attachment by native identity, never its title.
+            let primary = *self.primary_window.get_or_insert(window.id());
+            let secondary = window.id() != primary;
+            window.set_visible(self.visible || secondary);
+            let transport = world.resource::<NativeWakeTransport>()?.clone();
+            world.resource_mut::<Probe>()?.transport = Some(transport);
+            if secondary {
+                let _ = window.request_inner_size(winit::dpi::PhysicalSize::new(641, 481));
+            }
+            Ok(())
+        }
+        fn window_event(
+            &mut self,
+            window: &Window,
+            event: &WindowEvent,
+            world: &mut runen_ecs::World,
+        ) -> anyhow::Result<()> {
+            if Some(window.id()) != self.primary_window && matches!(event, WindowEvent::Resized(_))
+            {
+                let slot = world.resource::<Probe>()?.timed;
+                world
+                    .resource_mut::<UiRuntimeSlotsResource>()?
+                    .submit_app_action::<TimedApp>(slot, Action::Secondary)
+                    .map_err(|error| {
+                        anyhow::anyhow!("secondary callback action failed: {error:?}")
+                    })?;
+            }
+            Ok(())
+        }
+        fn device_event(
+            &mut self,
+            event: &winit::event::DeviceEvent,
+            world: &mut runen_ecs::World,
+        ) -> anyhow::Result<()> {
+            if matches!(event, winit::event::DeviceEvent::MouseMotion { .. }) {
+                let probe = world.resource_mut::<Probe>()?;
+                probe.motion_events = probe.motion_events.saturating_add(1);
+            }
+            Ok(())
+        }
+        fn frame(&mut self, _window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+            world.resource_mut::<Probe>()?.hook_frames += 1;
+            Ok(())
+        }
+        fn detach(&mut self, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+            anyhow::ensure!(
+                world.resource::<UiRuntimeSlotsResource>()?.is_empty(),
+                "native slot retirement was not completed"
+            );
+            let probe = world.resource::<Probe>()?;
+            anyhow::ensure!(
+                probe.transport.as_ref().unwrap().notify().is_err(),
+                "late wake was accepted after terminal cleanup"
+            );
+            probe.retired.store(true, Ordering::Release);
+            Ok(())
+        }
+    }
+
+    fn update(mut world: WorldMut) -> anyhow::Result<()> {
+        let (slot, replace, cross, finish) = {
+            let probe = world.resource_mut::<Probe>()?;
+            let now = Instant::now();
+            if probe.continuous
+                && let Some(last) = probe.last_frame
+            {
+                anyhow::ensure!(
+                    now.duration_since(last) >= Duration::from_millis(30),
+                    "continuous native frames exceeded the 30 FPS cap"
+                );
+            }
+            probe.last_frame = Some(now);
+            probe.frames += 1;
+            // Raw motion legitimately wakes OnDemand on an interactive desktop.
+            // Credit only this frame when new motion arrived; discard coalesced
+            // surplus so it cannot mask later self-driven polling frames.
+            if probe.motion_events == probe.observed_motion_events {
+                probe.unexplained_frames += 1;
+            }
+            probe.observed_motion_events = probe.motion_events;
+            anyhow::ensure!(
+                probe.hook_frames == probe.frames,
+                "window callbacks advanced duplicate Engine frames"
+            );
+            if probe.fail {
+                anyhow::bail!("injected native readiness frame failure");
+            }
+            anyhow::ensure!(
+                probe.unexplained_frames < 80 && probe.start.elapsed() < Duration::from_secs(3),
+                "native readiness failed to make bounded progress: frames={}, unexplained={}, motions={}, elapsed={:?}, timed={:?}, asynchronous={:?}, idle_started={:?}",
+                probe.frames,
+                probe.unexplained_frames,
+                probe.motion_events,
+                probe.start.elapsed(),
+                probe.events.borrow(),
+                probe.other.borrow(),
+                probe.idle_started.map(|start| start.elapsed())
+            );
+            let async_seen = probe.other.borrow().contains(&"async");
+            let secondary = probe.events.borrow().contains(&"secondary");
+            if async_seen && !probe.async_validated {
+                anyhow::ensure!(
+                    probe
+                        .idle_started
+                        .is_some_and(|start| start.elapsed() < Duration::from_millis(350)),
+                    "async completion relied on a due timer"
+                );
+                probe.async_validated = true;
+            }
+            let replace = async_seen && secondary && !probe.replaced;
+            if replace {
+                probe.replaced = true;
+            }
+            let finish = probe.replaced
+                && probe.events.borrow().contains(&"timer")
+                && probe.other.borrow().contains(&"second-timer");
+            (probe.timed, replace, probe.cross, finish)
+        };
+        if replace {
+            let slots = world.resource_mut::<UiRuntimeSlotsResource>()?;
+            slots
+                .submit_app_action::<TimedApp>(slot, Action::Cancel)
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            slots
+                .submit_app_action::<TimedApp>(slot, Action::Replace)
+                .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+            if cross {
+                std::thread::sleep(Duration::from_millis(75));
+            }
+        }
+        if finish {
+            world
+                .resource_mut::<WindowStateRegistryResource>()?
+                .record_mut(NativeWindowId::primary())
+                .unwrap()
+                .request_close();
+        }
+        Ok(())
+    }
+
+    fn release_idle_worker(mut world: WorldMut) -> anyhow::Result<()> {
+        if world.resource::<Probe>()?.armed_at.is_none() {
+            let slot = world.resource::<Probe>()?.asynchronous;
+            world
+                .resource_mut::<UiRuntimeSlotsResource>()?
+                .submit_app_action::<AsyncApp>(slot, Action::ArmWatchdog)
+                .map_err(|error| anyhow::anyhow!("idle watchdog admission failed: {error:?}"))?;
+            world.resource_mut::<Probe>()?.armed_at = Some(Instant::now());
+            // Arming posts a native notification. Drain that turn before
+            // allowing external completion to make the application ready.
+            return Ok(());
+        }
+        let sender = world.resource_mut::<Probe>()?.worker_release.take();
+        if let Some(sender) = sender {
+            anyhow::ensure!(
+                world.resource::<Probe>()?.armed_at.unwrap().elapsed() < Duration::from_millis(100),
+                "watchdog is not safely later than the idle receipt interval"
+            );
+            anyhow::ensure!(
+                !world
+                    .resource::<Probe>()?
+                    .other
+                    .borrow()
+                    .contains(&"second-timer"),
+                "watchdog already fired before idle release"
+            );
+            world.resource_mut::<Probe>()?.idle_started = Some(Instant::now());
+            // The async effect was Pending at configuration and stays unready
+            // through the complete arming turn and its subsequent native frame.
+            // The worker alone supplies its later completion notification.
+            sender.send(()).unwrap();
+        }
+        Ok(())
+    }
+
+    pub(super) fn run(mode: &str) -> anyhow::Result<()> {
+        if mode == "late-manual-registry" {
+            struct RetirementProbe(Arc<AtomicBool>);
+            impl NativeWindowHook for RetirementProbe {
+                fn name(&self) -> &'static str {
+                    "late_manual_registry_smoke"
+                }
+                fn attach(
+                    &mut self,
+                    window: &Window,
+                    _: &mut runen_ecs::World,
+                ) -> anyhow::Result<()> {
+                    window.set_visible(false);
+                    Ok(())
+                }
+                fn detach(&mut self, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+                    anyhow::ensure!(
+                        world.resource::<UiRuntimeSlotsResource>()?.is_empty(),
+                        "rejected late registry did not retire"
+                    );
+                    anyhow::ensure!(
+                        world.resource::<NativeWakeTransport>()?.notify().is_err(),
+                        "late rejected registry left wake gate open"
+                    );
+                    self.0.store(true, Ordering::Release);
+                    Ok(())
+                }
+            }
+            fn install_manual_registry(mut world: WorldMut) -> anyhow::Result<()> {
+                let mut slots = UiRuntimeSlotsResource::default();
+                anyhow::ensure!(
+                    slots
+                        .mount_app::<TimedApp>(
+                            UiTypedScreenId::new("late.manual"),
+                            State {
+                                owner: std::thread::current().id(),
+                                events: Rc::new(RefCell::new(Vec::new())),
+                                external: None,
+                            },
+                            &UiRuntimeFontConfiguration::default()
+                        )
+                        .slot_id()
+                        .is_some(),
+                    "manual mount failed"
+                );
+                world.insert_resource(slots);
+                Ok(())
+            }
+            let retired = Arc::new(AtomicBool::new(false));
+            let mut app = App::new();
+            app.add_plugin(engine::plugins::InputFinalizePlugin);
+            app.with_frame_pacing(FramePacingPolicyResource::on_demand());
+            app.init_resource::<NativeWindowHookRegistryResource>();
+            app.world_mut()
+                .resource_mut::<NativeWindowHookRegistryResource>()?
+                .register_hook(RetirementProbe(retired.clone()));
+            app.add_systems(Startup, install_manual_registry.on_invoker_thread());
+            anyhow::ensure!(app.run().is_err_and(|error| format!("{error:#}").contains("native clock qualification")),
+                "late manual runtime silently entered native execution");
+            anyhow::ensure!(
+                retired.load(Ordering::Acquire),
+                "late registry retirement was not observed"
+            );
+            println!("native_ui_readiness_smoke=pass mode=late-manual-registry");
+            return Ok(());
+        }
+        if mode == "closed-proxy" {
+            let event_loop = EventLoop::<NativeHostEvent>::with_user_event().build()?;
+            let transport = NativeWakeTransport::new(event_loop.create_proxy());
+            drop(event_loop);
+            anyhow::ensure!(transport.notify().is_err(), "destroyed loop accepted wake");
+            anyhow::ensure!(
+                transport.notify().is_err(),
+                "rejected wake became falsely coalesced success"
+            );
+            println!("native_ui_readiness_smoke=pass mode=closed-proxy");
+            return Ok(());
+        }
+        anyhow::ensure!(
+            matches!(
+                mode,
+                "hidden" | "visible" | "crossed-deadline" | "failed-frame" | "continuous"
+            ),
+            "unknown readiness mode"
+        );
+        let (registered, registration) = mpsc::channel();
+        let external = Arc::new(External {
+            ready: AtomicBool::new(false),
+            waker: Mutex::new(None),
+            registered: Mutex::new(Some(registered)),
+        });
+        let events = Rc::new(RefCell::new(Vec::new()));
+        let other = Rc::new(RefCell::new(Vec::new()));
+        let retired = Arc::new(AtomicBool::new(false));
+        let owner = std::thread::current().id();
+        let start = Instant::now();
+        let mut app = App::new();
+        app.add_plugin(engine::plugins::InputFinalizePlugin);
+        app.with_frame_pacing(if mode == "continuous" {
+            FramePacingPolicyResource::continuous_capped(30)
+        } else {
+            FramePacingPolicyResource::on_demand()
+        });
+        let timed = app
+            .ui()
+            .mount_app::<TimedApp>(
+                UiTypedScreenId::new("native.timed"),
+                State {
+                    owner,
+                    events: events.clone(),
+                    external: None,
+                },
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .ok_or_else(|| anyhow::anyhow!("native timer mount rejected"))?;
+        let asynchronous = app
+            .ui()
+            .mount_app::<AsyncApp>(
+                UiTypedScreenId::new("native.async"),
+                State {
+                    owner,
+                    events: other.clone(),
+                    external: Some(external.clone()),
+                },
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .ok_or_else(|| anyhow::anyhow!("native async mount rejected"))?;
+        // First Pending poll must occur during App configuration before proxy attachment.
+        registration.recv_timeout(Duration::from_secs(1))?;
+        let (worker_release, idle_gate) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            match idle_gate.recv_timeout(Duration::from_secs(3)) {
+                Ok(()) => {}
+                // A failed frame never reaches FrameEnd. World retirement
+                // drops its sender, so the worker exits without UI execution.
+                Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                Err(mpsc::RecvTimeoutError::Timeout) => {
+                    panic!("native idle gate did not complete")
+                }
+            }
+            std::thread::sleep(Duration::from_millis(120));
+            external.ready.store(true, Ordering::Release);
+            external.waker.lock().unwrap().take().unwrap().wake();
+        });
+        app.init_resource::<WindowStateRegistryResource>();
+        app.world_mut()
+            .resource_mut::<WindowStateRegistryResource>()?
+            .request_window("Native readiness secondary", (640, 480));
+        app.insert_resource(Probe {
+            timed,
+            asynchronous,
+            events,
+            other,
+            frames: 0,
+            motion_events: 0,
+            observed_motion_events: 0,
+            unexplained_frames: 0,
+            continuous: mode == "continuous",
+            last_frame: None,
+            hook_frames: 0,
+            replaced: false,
+            cross: mode == "crossed-deadline",
+            fail: mode == "failed-frame",
+            start,
+            transport: None,
+            retired: retired.clone(),
+            worker_release: Some(worker_release),
+            armed_at: None,
+            idle_started: None,
+            async_validated: false,
+        });
+        app.add_systems(Update, update.on_invoker_thread());
+        app.add_systems(FrameEnd, release_idle_worker.on_invoker_thread());
+        app.init_resource::<NativeWindowHookRegistryResource>();
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()?
+            .register_hook(Hook {
+                visible: mode == "visible",
+                primary_window: None,
+            });
+        let result = app.run();
+        worker
+            .join()
+            .map_err(|_| anyhow::anyhow!("native wake worker panicked"))?;
+        anyhow::ensure!(
+            retired.load(Ordering::Acquire),
+            "native shutdown was not observed"
+        );
+        if mode == "failed-frame" {
+            anyhow::ensure!(
+                result.is_err_and(|error| format!("{error:#}")
+                    .contains("injected native readiness frame failure")),
+                "expected native frame failure was not returned"
+            );
+        } else {
+            result?;
+        }
+        println!("native_ui_readiness_smoke=pass mode={mode}");
+        Ok(())
     }
 }
 

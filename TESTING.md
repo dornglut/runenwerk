@@ -83,6 +83,65 @@ RUNENWERK_SOURCE_REVISION=<full-clean-source-SHA> cargo +stable run -p runenwerk
 The source SHA in an artifact records provenance; verify the checkout and clean tree
 before claiming exact-revision evidence.
 
+## Native host readiness
+
+The existing process-isolated `native_host_smoke` executable exercises the native
+host with ordinary App-configured, thread-affine RunenUI applications. Select one
+`RUNENWERK_NATIVE_UI_READINESS_SMOKE` mode per process:
+
+| Mode | Owning proof |
+|---|---|
+| `hidden` | Hidden primary, secondary-window callbacks, cross-thread effect wake, timer cancellation and earlier replacement under OnDemand. |
+| `visible` | The same readiness and retirement path with visible windows. |
+| `crossed-deadline` | Replacement deadline crossing during Engine Update retains another native execution opportunity. |
+| `continuous` | Readiness respects the 30 FPS continuous cap and invokes the canonical frame once. |
+| `failed-frame` | Update failure is returned after native slot retirement and late-wake closure. |
+| `closed-proxy` | Destroying the real typed event loop makes initial and repeated notification fail. |
+| `late-manual-registry` | A directly mounted manual registry installed during Startup fails native qualification and receives observed retirement. |
+
+For example, in PowerShell:
+
+```powershell
+$env:RUNENWERK_NATIVE_UI_READINESS_SMOKE = 'hidden'
+cargo test -p engine --test native_host_smoke --locked
+Remove-Item Env:RUNENWERK_NATIVE_UI_READINESS_SMOKE
+```
+
+In a POSIX shell, set the same variable on the Cargo invocation. Linux native
+execution requires an available display; record X11/XWayland or Wayland explicitly.
+These host proofs supplement the existing native no-Render, Render/UI terminal
+Present, and Editor surface-identity smokes in the Vulkan lane. They do not establish
+pen/touch hardware, IME hardware, macOS/iOS or AccessKit action-routing evidence.
+On an interactive desktop, the broader readiness fixture credits at most one
+frame for new raw mouse motion since the preceding canonical Update. Coalesced
+surplus never credits later frames; the bound on unexplained frames and the
+wall-time, frame-hook and receipt checks remain active.
+
+The owning Engine unit tests exercise initial typed/program clock qualification,
+deterministic headless time, real framework motion/type-ahead deadlines, bounded
+journal admission and FrameEnd retirement. The public typed observation contract
+also has compile-fail doctests protecting native clock/wake ownership:
+
+```text
+cargo test -p engine --lib --locked
+cargo test -p engine --doc --locked
+```
+
+The timer-free native wake owner probe runs in a separate process with
+`RUNENWERK_NATIVE_IDLE_WAKE_SMOKE=1`:
+
+```text
+cargo test -p engine --lib runtime::native_host_wake::tests::native_idle_wake_reaches_real_thread_affine_runtime --locked -- --exact --nocapture --test-threads=1
+```
+
+It releases a worker only after the concrete native gate is idle and the real UI
+registry has no deadline or continuation. Acceptance observes the actual worker
+waker call, native proxy acknowledgement, invoker-thread application update and
+slot retirement. Enforce an external process timeout when running it; a missing
+wake must fail rather than be helped by an application timer.
+This autonomous probe rejects external raw mouse motion as contaminated evidence;
+run it on a quiet native display.
+
 ## Evidence
 
 Report focused checks, `cargo validate`, exact-head CI, and anything not run. Do not convert source inspection or user-reported output into a stronger validation claim.

@@ -23,6 +23,9 @@ use ui_state::UiStateModel;
 
 use super::typed_app_host::{TypedRuntime, TypedRuntimeOps};
 use super::{UiTypedScreenId, UiTypedSource};
+use crate::runtime::NativeWakeTransport;
+use crate::runtime::native_host_wake::NativeHostClock;
+use runenui_runtime::MonotonicInstant;
 
 #[cfg(test)]
 const CONTROLLED_FONT_BYTES: &[u8] = include_bytes!(concat!(
@@ -83,6 +86,7 @@ pub enum UiRuntimeSlotMountFailure {
     RuntimeInitialization,
     SlotIdentityExhausted,
     SlotCapacityExhausted,
+    IncompatibleNativeClock,
 }
 
 impl UiRuntimeSlotMountFailure {
@@ -99,6 +103,9 @@ impl UiRuntimeSlotMountFailure {
             }
             Self::SlotIdentityExhausted => "RunenUI slot mount identity space is exhausted",
             Self::SlotCapacityExhausted => "RunenUI slot mount storage could not be reserved",
+            Self::IncompatibleNativeClock => {
+                "RunenUI native clock must be configured before mounting; an existing time domain cannot be replaced"
+            }
         }
     }
 }
@@ -117,6 +124,8 @@ pub enum UiRuntimeSlotOperationFailure {
     PublicationRejected,
     InvalidAuthoredId,
     WrongAppKind,
+    NativeHostClosed,
+    RuntimeStopped(runenui_runtime::PumpOutcome),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -359,10 +368,17 @@ impl UiRuntimeSlotKind {
         .map_err(|_| UiRuntimeSlotOperationFailure::PublicationRejected)
     }
 
-    fn settle(&mut self) -> Result<(), UiRuntimeSlotOperationFailure> {
+    fn pump(&mut self, budget: PumpBudget) -> Result<InputPumpBatch, InputObservationError> {
         match self {
-            Self::Counter(runtime) => settle(runtime),
-            Self::Typed(runtime) => settle_batch(runtime.pump(runtime_pump_budget())),
+            Self::Counter(runtime) => runtime.pump(budget),
+            Self::Typed(runtime) => runtime.pump(budget),
+        }
+    }
+
+    fn set_native_wake_transport(&self, transport: NativeWakeTransport) {
+        match self {
+            Self::Counter(runtime) => runtime.set_wake_transport(transport),
+            Self::Typed(runtime) => runtime.set_native_wake_transport(transport),
         }
     }
 
@@ -383,6 +399,12 @@ struct UiRuntimeSlot {
     ingress_epoch: u64,
     /// Incomplete transactions cannot be published or superseded by new ingress.
     requires_settlement: bool,
+    /// Derived from the last actual framework observation, replaced after each pump.
+    next_deadline: Option<MonotonicInstant>,
+    native_clock: Option<NativeHostClock>,
+    /// A deadline already covered by a quiescent checkpoint needs publication,
+    /// not an endless sequence of identical pumps when no surface is bound.
+    deadline_observed_at: Option<MonotonicInstant>,
 }
 
 impl UiRuntimeSlot {
@@ -405,9 +427,35 @@ impl UiRuntimeSlot {
         // Poll framework-owned local work as well as previously admitted host
         // commands. A later timer/subscription completion must not require a
         // second Engine action merely to advance the sole RunenUI runtime.
-        let result = self.runtime.settle();
-        self.requires_settlement = result.is_err();
-        result
+        self.begin_readiness_checkpoint();
+        let batch = self.runtime.pump(runtime_pump_budget());
+        self.observe_batch(batch)
+    }
+
+    fn begin_readiness_checkpoint(&mut self) {
+        use runenui_runtime::MonotonicClock;
+        self.deadline_observed_at = self.native_clock.as_ref().map(MonotonicClock::now);
+    }
+
+    fn observe_batch(
+        &mut self,
+        batch: Result<InputPumpBatch, InputObservationError>,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        self.requires_settlement = true;
+        let batch = batch.map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+        if let Err(error @ UiRuntimeSlotOperationFailure::RuntimeStopped(_)) =
+            settlement_result(&batch)
+        {
+            self.next_deadline = None;
+            return Err(error);
+        }
+        self.next_deadline = batch.report().next_deadline();
+        self.requires_settlement = batch.pause_reason().is_some() || !batch.report().is_quiescent();
+        if self.requires_settlement {
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -415,6 +463,9 @@ impl UiRuntimeSlot {
 pub struct UiRuntimeSlotsResource {
     slots: Vec<UiRuntimeSlot>,
     next_slot_id: u64,
+    native_clock: Option<NativeHostClock>,
+    native_transport: Option<NativeWakeTransport>,
+    native_closed: bool,
 }
 
 impl Default for UiRuntimeSlotsResource {
@@ -422,11 +473,137 @@ impl Default for UiRuntimeSlotsResource {
         Self {
             slots: Vec::new(),
             next_slot_id: 1,
+            native_clock: None,
+            native_transport: None,
+            native_closed: false,
         }
     }
 }
 
 impl UiRuntimeSlotsResource {
+    pub(crate) fn configure_host_clock(
+        &mut self,
+        clock: Option<NativeHostClock>,
+    ) -> Result<(), UiRuntimeSlotMountFailure> {
+        if self.native_closed {
+            return Err(UiRuntimeSlotMountFailure::IncompatibleNativeClock);
+        }
+        match (&self.native_clock, clock) {
+            (None, None) => Ok(()),
+            (Some(current), Some(clock)) if current.same_epoch(&clock) => Ok(()),
+            (None, Some(clock)) if self.slots.is_empty() => {
+                self.native_clock = Some(clock);
+                Ok(())
+            }
+            _ => Err(UiRuntimeSlotMountFailure::IncompatibleNativeClock),
+        }
+    }
+
+    pub(crate) fn attach_native_transport(&mut self, transport: NativeWakeTransport) {
+        if self.native_clock.is_none() || self.native_closed {
+            return;
+        }
+        for slot in &self.slots {
+            slot.runtime.set_native_wake_transport(transport.clone());
+        }
+        self.native_transport = Some(transport);
+        // The runner always imports initial readiness. A settled mount may have
+        // acknowledged its wake already; installation alone is not the trigger.
+    }
+
+    pub(crate) fn native_readiness(&self) -> anyhow::Result<(bool, Option<std::time::Instant>)> {
+        let Some(clock) = &self.native_clock else {
+            anyhow::ensure!(
+                self.slots.is_empty(),
+                "native UI registry was mounted before native clock qualification"
+            );
+            return Ok((false, None));
+        };
+        if self.native_closed {
+            return Ok((false, None));
+        }
+        clock.ensure_valid()?;
+        let deadline = self
+            .slots
+            .iter()
+            .filter_map(|slot| {
+                slot.next_deadline.filter(|deadline| {
+                    slot.requires_settlement
+                        || slot
+                            .deadline_observed_at
+                            .is_none_or(|observed| *deadline > observed)
+                })
+            })
+            .min()
+            .map(|deadline| clock.deadline(deadline))
+            .transpose()?;
+        Ok((
+            self.slots.iter().any(|slot| slot.requires_settlement),
+            deadline,
+        ))
+    }
+
+    pub(crate) fn settle_native_slots(&mut self) -> anyhow::Result<()> {
+        self.native_readiness()?;
+        if self.native_clock.is_none() || self.native_closed {
+            return Ok(());
+        }
+        for slot in &mut self.slots {
+            match slot.settle_pending() {
+                Ok(()) | Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {}
+                Err(error) => {
+                    return Err(anyhow::anyhow!(
+                        "native RunenUI slot {:?} settlement failed: {error:?}",
+                        slot.id
+                    ));
+                }
+            }
+        }
+        self.native_readiness()?;
+        Ok(())
+    }
+
+    pub(crate) fn settle_for_publication(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        if self.native_closed {
+            return Err(UiRuntimeSlotOperationFailure::NativeHostClosed);
+        }
+        if self.native_clock.is_none() {
+            return self.settle_slot(slot_id);
+        }
+        let slot = self
+            .slot(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        if slot.requires_settlement {
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(crate) fn shutdown_native_slots(&mut self) -> anyhow::Result<()> {
+        self.native_closed = true;
+        if let Some(transport) = &self.native_transport {
+            transport.close();
+        }
+        let mut errors = Vec::new();
+        for index in (0..self.slots.len()).rev() {
+            let id = self.slots[index].id;
+            match self.unmount_with_retirement(id) {
+                Ok(_) => {}
+                Err(error) => errors.push(format!("{id:?}: {error:?}")),
+            }
+        }
+        anyhow::ensure!(
+            errors.is_empty(),
+            "native RunenUI shutdown failed: {}",
+            errors.join("; ")
+        );
+        Ok(())
+    }
+
     pub(crate) fn mount(
         &mut self,
         source: UiTypedSource,
@@ -442,6 +619,12 @@ impl UiRuntimeSlotsResource {
         fonts: &UiRuntimeFontConfiguration,
     ) -> UiRuntimeSlotMountReport {
         let screen_id = source.screen_id().clone();
+        if self.native_closed {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::RuntimeInitialization,
+            );
+        }
         let lowering = source.lower_with_registry_snapshot(registry);
         if !lowering.passed() {
             return UiRuntimeSlotMountReport::rejected(
@@ -478,20 +661,42 @@ impl UiRuntimeSlotsResource {
             resolved_state,
             registry: registry.clone(),
         });
+        if let Some(clock) = &self.native_clock {
+            runtime.set_monotonic_clock(clock.clone());
+        }
+        if let Some(transport) = &self.native_transport {
+            runtime.set_wake_transport(transport.clone());
+        }
         if let Err(failure) = provision_text_fonts(&mut runtime, fonts) {
             let _ = runtime.shutdown();
             return UiRuntimeSlotMountReport::rejected(screen_id, failure);
         }
 
         let slot_id = UiRuntimeSlotId(self.next_slot_id);
-        self.next_slot_id = next_slot_id;
-        self.slots.push(UiRuntimeSlot {
+        let mut slot = UiRuntimeSlot {
             id: slot_id,
             screen_id: screen_id.clone(),
             runtime: UiRuntimeSlotKind::Counter(Box::new(runtime)),
             ingress_epoch: 1,
             requires_settlement: false,
-        });
+            next_deadline: None,
+            native_clock: self.native_clock.clone(),
+            deadline_observed_at: None,
+        };
+        if self.native_clock.is_some() {
+            match slot.settle_pending() {
+                Ok(()) | Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {}
+                Err(_) => {
+                    let _ = slot.runtime.shutdown();
+                    return UiRuntimeSlotMountReport::rejected(
+                        screen_id,
+                        UiRuntimeSlotMountFailure::RuntimeInitialization,
+                    );
+                }
+            }
+        }
+        self.next_slot_id = next_slot_id;
+        self.slots.push(slot);
         UiRuntimeSlotMountReport::accepted(screen_id, slot_id)
     }
 
@@ -511,6 +716,12 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
+        if self.native_closed {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::RuntimeInitialization,
+            );
+        }
         let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
             return UiRuntimeSlotMountReport::rejected(
                 screen_id,
@@ -524,6 +735,12 @@ impl UiRuntimeSlotsResource {
             );
         }
         let mut runtime = AppRuntime::<A>::mount(state);
+        if let Some(clock) = &self.native_clock {
+            runtime.set_monotonic_clock(clock.clone());
+        }
+        if let Some(transport) = &self.native_transport {
+            runtime.set_wake_transport(transport.clone());
+        }
         if let Err(error) = provision_text_fonts(&mut runtime, fonts) {
             let _ = runtime.shutdown();
             return UiRuntimeSlotMountReport::rejected(screen_id, error);
@@ -531,7 +748,14 @@ impl UiRuntimeSlotsResource {
         // RunenUI mounts may emit initial actions/host requests before any host
         // command or first frame. Drive the same bounded canonical pump once
         // here; a capacity pause remains resumable, not a false successful flush.
-        let requires_settlement = match settle(&mut runtime) {
+        use runenui_runtime::MonotonicClock;
+        let deadline_observed_at = self.native_clock.as_ref().map(MonotonicClock::now);
+        let initial = runtime.pump(runtime_pump_budget());
+        let next_deadline = initial
+            .as_ref()
+            .ok()
+            .and_then(|batch| batch.report().next_deadline());
+        let requires_settlement = match settle_batch(initial) {
             Ok(()) => false,
             Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => true,
             Err(_) => {
@@ -550,6 +774,9 @@ impl UiRuntimeSlotsResource {
             runtime: UiRuntimeSlotKind::Typed(Box::new(TypedRuntime { runtime })),
             ingress_epoch: 1,
             requires_settlement,
+            next_deadline,
+            native_clock: self.native_clock.clone(),
+            deadline_observed_at,
         });
         UiRuntimeSlotMountReport::accepted(screen_id, id)
     }
@@ -565,9 +792,7 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
-        let slot = self
-            .slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let slot = self.slot_mut(slot_id)?;
         let next = slot.next_ingress_epoch()?;
         let runtime = slot
             .runtime
@@ -580,15 +805,18 @@ impl UiRuntimeSlotsResource {
     }
 
     /// Observe a concrete application's typed state and host requests without
-    /// exposing a mutable runtime that could bypass the Engine publication epoch.
+    /// exposing runtime host mutators that could replace native clock/wake wiring.
     pub fn observe_app<A, R>(
         &self,
         slot_id: UiRuntimeSlotId,
-        observe: impl FnOnce(&AppRuntime<A>) -> R,
+        observe: impl FnOnce(super::UiAppObservation<'_, A>) -> R,
     ) -> Result<R, UiRuntimeSlotOperationFailure>
     where
         A: UiApp + 'static,
     {
+        if self.native_closed {
+            return Err(UiRuntimeSlotOperationFailure::NativeHostClosed);
+        }
         let slot = self
             .slot(slot_id)
             .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
@@ -596,7 +824,10 @@ impl UiRuntimeSlotsResource {
             .runtime
             .typed::<A>()
             .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
-        Ok(observe(runtime))
+        Ok(observe(super::UiAppObservation {
+            state: runtime.state(),
+            pending_host_requests: runtime.pending_host_requests(),
+        }))
     }
 
     /// Completes only this concrete application's own typed host response.
@@ -609,9 +840,7 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
-        let slot = self
-            .slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let slot = self.slot_mut(slot_id)?;
         let next = slot.next_ingress_epoch()?;
         let runtime = slot
             .runtime
@@ -646,9 +875,7 @@ impl UiRuntimeSlotsResource {
         &mut self,
         slot_id: UiRuntimeSlotId,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        self.slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?
-            .settle_pending()
+        self.slot_mut(slot_id)?.settle_pending()
     }
 
     /// Checks RunenUI's own redraw authority; no Engine-owned dirty mirror is used.
@@ -660,9 +887,7 @@ impl UiRuntimeSlotsResource {
         &mut self,
         slot_id: UiRuntimeSlotId,
     ) -> Result<bool, UiRuntimeSlotOperationFailure> {
-        let slot = self
-            .slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let slot = self.slot_mut(slot_id)?;
         if slot.requires_settlement {
             return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
         }
@@ -676,13 +901,23 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         context: &SurfaceBuildContext<'_>,
     ) -> Result<SurfacePublication, UiRuntimeSlotOperationFailure> {
-        let slot = self
-            .slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let native = self.native_clock.is_some();
+        let slot = self.slot_mut(slot_id)?;
         if slot.requires_settlement {
             return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
         }
-        slot.runtime.publish_surface(context)
+        let publication = slot.runtime.publish_surface(context)?;
+        if native {
+            // Publication can create motion deadlines after the preceding pump.
+            // Observe through the public API without executing application work.
+            slot.begin_readiness_checkpoint();
+            let batch = slot.runtime.pump(PumpBudget::new(0, 0, 0, 0));
+            match slot.observe_batch(batch) {
+                Ok(()) | Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(publication)
     }
 
     #[must_use]
@@ -705,9 +940,7 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         context: UiEvaluationContext,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        let slot = self
-            .slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let slot = self.slot_mut(slot_id)?;
         let next = slot.next_ingress_epoch()?;
         let runtime = slot.runtime.counter_mut()?;
         let artifact = runtime.state().artifact.clone();
@@ -736,9 +969,7 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         authored_id: &str,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        let slot = self
-            .slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let slot = self.slot_mut(slot_id)?;
         let authored_id = ElementId::new(authored_id)
             .map_err(|_| UiRuntimeSlotOperationFailure::InvalidAuthoredId)?;
         let next = slot.next_ingress_epoch()?;
@@ -780,9 +1011,7 @@ impl UiRuntimeSlotsResource {
         request: UiRuntimePendingEventRequest,
         disposition: UiRuntimeHostRequestDisposition,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        let slot = self
-            .slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let slot = self.slot_mut(slot_id)?;
         let response = match disposition {
             UiRuntimeHostRequestDisposition::Accepted => RunenwerkUiHostResponse::Accepted,
             UiRuntimeHostRequestDisposition::Rejected => RunenwerkUiHostResponse::Rejected,
@@ -815,9 +1044,7 @@ impl UiRuntimeSlotsResource {
         &mut self,
         slot_id: UiRuntimeSlotId,
     ) -> Result<UiRuntimeSlotPublicationFacts, UiRuntimeSlotOperationFailure> {
-        let slot = self
-            .slot_mut(slot_id)
-            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        let slot = self.slot_mut(slot_id)?;
         let runtime = slot.runtime.counter_mut()?;
         register_controlled_test_font(runtime)?;
         publication_facts_for_runtime(runtime)
@@ -858,8 +1085,17 @@ impl UiRuntimeSlotsResource {
         self.slots.iter().find(|slot| slot.id == slot_id)
     }
 
-    fn slot_mut(&mut self, slot_id: UiRuntimeSlotId) -> Option<&mut UiRuntimeSlot> {
-        self.slots.iter_mut().find(|slot| slot.id == slot_id)
+    fn slot_mut(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<&mut UiRuntimeSlot, UiRuntimeSlotOperationFailure> {
+        if self.native_closed {
+            return Err(UiRuntimeSlotOperationFailure::NativeHostClosed);
+        }
+        self.slots
+            .iter_mut()
+            .find(|slot| slot.id == slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)
     }
 }
 
@@ -973,14 +1209,19 @@ fn runtime_pump_budget() -> PumpBudget {
     )
 }
 
-fn settle<A: UiApp>(runtime: &mut AppRuntime<A>) -> Result<(), UiRuntimeSlotOperationFailure> {
-    settle_batch(runtime.pump(runtime_pump_budget()))
-}
-
 fn settle_batch(
     batch: Result<InputPumpBatch, InputObservationError>,
 ) -> Result<(), UiRuntimeSlotOperationFailure> {
     let batch = batch.map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+    settlement_result(&batch)
+}
+
+fn settlement_result(batch: &InputPumpBatch) -> Result<(), UiRuntimeSlotOperationFailure> {
+    match batch.report().outcome() {
+        runenui_runtime::PumpOutcome::Quiescent | runenui_runtime::PumpOutcome::BudgetExhausted => {
+        }
+        outcome => return Err(UiRuntimeSlotOperationFailure::RuntimeStopped(outcome)),
+    }
     // Capacity-paused or partially processed work cannot authorize a new publication.
     if batch.pause_reason().is_none() && batch.report().is_quiescent() {
         Ok(())
@@ -1333,6 +1574,7 @@ fn project_node(
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;
+    use std::time::Duration;
 
     use ui_binding::HostDataSnapshot;
     use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
@@ -1345,6 +1587,229 @@ mod tests {
     use crate::plugins::ui::UiTypedActionDescriptor;
 
     use super::*;
+
+    struct InitialTimerApp;
+
+    impl UiApp for InitialTimerApp {
+        type State = usize;
+        type Action = bool;
+        type HostProtocol = runenui_core::NoHostProtocol;
+
+        fn root(_: &usize) -> impl View<bool> {
+            text("timer")
+        }
+
+        fn initial_effects(_: &usize) -> impl runenui_core::IntoEffects<bool, Self::HostProtocol> {
+            Effects::timer(
+                runenui_core::TimerEffect::once(Duration::from_secs(3600), || true)
+                    .keyed(runenui_core::WorkKey::new("initial-timer").unwrap()),
+            )
+        }
+
+        fn update(
+            state: &mut usize,
+            fired: bool,
+        ) -> impl runenui_core::IntoUpdateOutput<bool, Self::HostProtocol> {
+            if fired {
+                *state += 1;
+                Effects::none()
+            } else {
+                Effects::cancel(
+                    runenui_core::WorkFamily::Timer,
+                    runenui_core::WorkKey::new("initial-timer").unwrap(),
+                )
+            }
+        }
+    }
+
+    #[test]
+    fn app_configuration_installs_one_native_epoch_before_initial_timer_settlement() {
+        use crate::app::App;
+        use crate::plugins::ui::AppUiExt;
+        use runenui_runtime::MonotonicClock;
+        let mut app = App::new();
+        let first = app
+            .ui()
+            .mount_app::<InitialTimerApp>(
+                UiTypedScreenId::new("native.first"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        let clock = app.world().resource::<NativeHostClock>().unwrap().clone();
+        let before = clock.now();
+        let second = app
+            .ui()
+            .mount_app::<InitialTimerApp>(
+                UiTypedScreenId::new("native.second"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        let slots = app.world().resource::<UiRuntimeSlotsResource>().unwrap();
+        assert!(slots.native_clock.as_ref().unwrap().same_epoch(&clock));
+        assert!(
+            slots.slot(first).unwrap().next_deadline.unwrap().as_nanos()
+                > Duration::from_secs(3600).as_nanos() as u64
+        );
+        assert!(
+            slots.slot(second).unwrap().next_deadline.unwrap()
+                >= before.checked_add(Duration::from_secs(3600)).unwrap()
+        );
+        assert!(
+            slots.native_transport.is_none(),
+            "initial timers precede proxy creation"
+        );
+        assert!(slots.native_readiness().unwrap().1.is_some());
+    }
+
+    #[test]
+    fn headless_initial_timer_remains_manual_and_late_native_binding_is_rejected() {
+        use crate::app::App;
+        use crate::plugins::ui::AppUiExt;
+        let mut app = App::headless();
+        let id = app
+            .ui()
+            .mount_app::<InitialTimerApp>(
+                UiTypedScreenId::new("headless.timer"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        assert!(!app.world().has_resource::<NativeHostClock>());
+        let slots = app
+            .world_mut()
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .unwrap();
+        let deadline = MonotonicInstant::ZERO
+            .checked_add(Duration::from_secs(3600))
+            .unwrap();
+        assert_eq!(slots.slot(id).unwrap().next_deadline, Some(deadline));
+        assert_eq!(
+            slots.configure_host_clock(Some(NativeHostClock::new())),
+            Err(UiRuntimeSlotMountFailure::IncompatibleNativeClock)
+        );
+        assert!(slots.native_clock.is_none());
+        let runtime = slots
+            .slot_mut(id)
+            .unwrap()
+            .runtime
+            .typed_mut::<InitialTimerApp>()
+            .unwrap();
+        runtime.advance_time(Duration::from_secs(3600)).unwrap();
+        slots.settle_slot(id).unwrap();
+        assert_eq!(
+            slots.observe_app::<InitialTimerApp, _>(id, |runtime| *runtime.state()),
+            Ok(1)
+        );
+        assert!(slots.slot(id).unwrap().next_deadline.is_none());
+    }
+
+    #[test]
+    fn native_host_preparation_rejects_direct_manual_slot_registration_without_rebasing() {
+        let mut slots = UiRuntimeSlotsResource::default();
+        let id = slots
+            .mount_app::<InitialTimerApp>(
+                UiTypedScreenId::new("direct.manual"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        let deadline = slots.slot(id).unwrap().next_deadline;
+        let mut app = crate::app::App::new();
+        app.insert_resource(slots);
+        assert!(app.prepare_native_ui_host().is_err());
+        let slots = app.world().resource::<UiRuntimeSlotsResource>().unwrap();
+        assert!(slots.native_clock.is_none());
+        assert_eq!(slots.slot(id).unwrap().next_deadline, deadline);
+        let slots = app
+            .world_mut()
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .unwrap();
+        assert!(
+            slots.native_readiness().is_err(),
+            "late native enrollment is fail-closed too"
+        );
+        assert!(slots.settle_native_slots().is_err());
+        assert_eq!(slots.slot(id).unwrap().next_deadline, deadline);
+        slots.shutdown_native_slots().unwrap();
+        assert!(
+            slots.is_empty(),
+            "even rejected native enrollment has observed retirement"
+        );
+    }
+
+    #[test]
+    fn native_counter_font_admission_obeys_pre_mount_clock_and_rejects_rebinding() {
+        let mut slots = UiRuntimeSlotsResource::default();
+        let clock = NativeHostClock::new();
+        slots.configure_host_clock(Some(clock.clone())).unwrap();
+        let (source, _, _, registry) = counter_projection_fixture();
+        let id = slots
+            .mount_with_fonts(
+                source,
+                &registry,
+                &UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()]),
+            )
+            .slot_id()
+            .unwrap();
+        assert!(slots.slot(id).unwrap().runtime.counter().is_ok());
+        assert!(slots.native_clock.as_ref().unwrap().same_epoch(&clock));
+        assert_eq!(
+            slots.configure_host_clock(Some(NativeHostClock::new())),
+            Err(UiRuntimeSlotMountFailure::IncompatibleNativeClock)
+        );
+        assert!(slots.native_clock.as_ref().unwrap().same_epoch(&clock));
+        slots.shutdown_native_slots().unwrap();
+        assert!(slots.is_empty());
+        assert!(slots.native_readiness().unwrap().1.is_none());
+        assert!(
+            slots
+                .mount_app::<InitialTimerApp>(
+                    UiTypedScreenId::new("native.closed"),
+                    0,
+                    &UiRuntimeFontConfiguration::default()
+                )
+                .failure()
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn cancellation_removes_native_deadline_and_closed_runtime_is_not_retriable_work() {
+        let mut slots = UiRuntimeSlotsResource::default();
+        slots
+            .configure_host_clock(Some(NativeHostClock::new()))
+            .unwrap();
+        let id = slots
+            .mount_app::<InitialTimerApp>(
+                UiTypedScreenId::new("native.cancel"),
+                0,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        assert!(slots.native_readiness().unwrap().1.is_some());
+        slots
+            .submit_app_action::<InitialTimerApp>(id, false)
+            .unwrap();
+        assert!(slots.native_readiness().unwrap().1.is_none());
+        slots.slot_mut(id).unwrap().runtime.shutdown().unwrap();
+        assert!(matches!(
+            slots.settle_slot(id),
+            Err(UiRuntimeSlotOperationFailure::RuntimeStopped(
+                runenui_runtime::PumpOutcome::Closed
+            ))
+        ));
+        assert!(
+            slots.settle_native_slots().is_err(),
+            "terminal runtime must fail the host, not self-wake forever"
+        );
+    }
 
     #[test]
     fn mounted_slot_publishes_runenui_semantics_and_layout_after_state_ingress() {
@@ -2561,6 +3026,10 @@ mod tests {
         }
 
         impl TypedRuntimeOps for FailOnceOnShutdown {
+            fn set_native_wake_transport(&self, transport: NativeWakeTransport) {
+                self.runtime.set_wake_transport(transport);
+            }
+
             fn pump(
                 &mut self,
                 budget: PumpBudget,
@@ -2607,6 +3076,9 @@ mod tests {
             })),
             ingress_epoch: 1,
             requires_settlement: false,
+            next_deadline: None,
+            native_clock: None,
+            deadline_observed_at: None,
         });
         slots.next_slot_id = 2;
 
@@ -2621,6 +3093,32 @@ mod tests {
             "failed shutdown cannot destroy its slot"
         );
         assert_eq!(slots.ingress_epoch(id), Some(1));
+
+        // A native shutdown failure retains the runtime for retirement retry,
+        // but neither observations nor ingress may reopen its host authority.
+        let UiRuntimeSlotKind::Typed(runtime) = &mut slots.slots[0].runtime else {
+            unreachable!("typed shutdown fixture");
+        };
+        runtime
+            .as_any_mut()
+            .downcast_mut::<FailOnceOnShutdown>()
+            .unwrap()
+            .fail_next_shutdown = true;
+        slots.native_clock = Some(NativeHostClock::new());
+        assert!(slots.shutdown_native_slots().is_err());
+        assert!(slots.contains(id));
+        assert_eq!(
+            slots.observe_app::<EmptyApp, _>(id, |_| ()),
+            Err(UiRuntimeSlotOperationFailure::NativeHostClosed)
+        );
+        assert_eq!(
+            slots.submit_app_action::<EmptyApp>(id, ()),
+            Err(UiRuntimeSlotOperationFailure::NativeHostClosed)
+        );
+        assert_eq!(
+            slots.settle_slot(id),
+            Err(UiRuntimeSlotOperationFailure::NativeHostClosed)
+        );
 
         let retirement = slots
             .unmount_with_retirement(id)
@@ -2734,6 +3232,190 @@ mod tests {
             UiSchemaValue::bool(selected),
             revision,
         ))
+    }
+
+    #[test]
+    fn publication_imports_real_motion_deadline_and_quiescent_due_observation_does_not_spin() {
+        use runenui_core::{
+            AnimationId, ExplicitTimeline, MotionEasing, MotionKeyframe, MotionRepeat, MotionValue,
+            ReducedMotionStrategy, SceneOpacity, TimelineSpec, UnitInterval,
+        };
+        struct MotionApp;
+        impl UiApp for MotionApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+            fn root(_: &()) -> impl View<()> {
+                text("motion").key("root").timeline(ExplicitTimeline::new(
+                    AnimationId::from_static("native-delayed").unwrap(),
+                    TimelineSpec::new(
+                        vec![
+                            MotionKeyframe::new(
+                                UnitInterval::ZERO,
+                                MotionValue::Opacity(SceneOpacity::TRANSPARENT),
+                            ),
+                            MotionKeyframe::new(
+                                UnitInterval::ONE,
+                                MotionValue::Opacity(SceneOpacity::OPAQUE),
+                            ),
+                        ],
+                        vec![MotionEasing::Linear],
+                        Duration::from_millis(100),
+                        Duration::from_millis(50),
+                        MotionRepeat::ONCE,
+                        Some(ReducedMotionStrategy::PreserveEssential),
+                    )
+                    .unwrap(),
+                ))
+            }
+            fn update(
+                _: &mut (),
+                _: (),
+            ) -> impl runenui_core::IntoUpdateOutput<(), Self::HostProtocol> {
+            }
+        }
+        let mut slots = UiRuntimeSlotsResource::default();
+        slots
+            .configure_host_clock(Some(NativeHostClock::new()))
+            .unwrap();
+        let id = slots
+            .mount_app::<MotionApp>(
+                UiTypedScreenId::new("native.motion"),
+                (),
+                &UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()]),
+            )
+            .slot_id()
+            .unwrap();
+        assert!(slots.slot(id).unwrap().next_deadline.is_none());
+        let style = StyleEnvironment::default();
+        slots
+            .publish_surface_for_slot(
+                id,
+                &SurfaceBuildContext::tight(
+                    &style,
+                    LogicalSize::new(320_u16.into(), 160_u16.into()),
+                ),
+            )
+            .unwrap();
+        assert!(
+            slots.native_readiness().unwrap().1.is_some(),
+            "publication-created motion must enter host scheduling"
+        );
+        std::thread::sleep(Duration::from_millis(60));
+        slots.settle_native_slots().unwrap();
+        assert!(
+            slots.slot(id).unwrap().next_deadline.is_some(),
+            "framework motion deadline is preserved"
+        );
+        assert_eq!(
+            slots.native_readiness().unwrap(),
+            (false, None),
+            "already observed quiescent deadline cannot busy-loop without a bound publisher"
+        );
+    }
+
+    #[test]
+    fn native_type_ahead_deadline_is_imported_and_expires_without_application_timer() {
+        use runenui_core::{
+            CommandOrigin, Element, ElementId, FocusGroup, FocusGroupActivationPolicy,
+            FocusGroupTypeAhead, KeyLocation, KeyModifiers, KeyboardCompositionState,
+            KeyboardEvent, KeyboardPhase, LogicalKey, PhysicalKey, SemanticCommand, button, column,
+        };
+        struct SearchApp;
+        impl UiApp for SearchApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+            fn root(_: &()) -> impl View<()> {
+                let member = |id: &'static str| -> Element<()> {
+                    button(id)
+                        .id(id)
+                        .key(id)
+                        .on_activate(|| ())
+                        .into_element()
+                        .focus_group_search_text(id)
+                };
+                column(vec![member("alpha"), member("beta")])
+                    .key("group")
+                    .into_element()
+                    .focus_group(
+                        FocusGroup::new()
+                            .with_activation(FocusGroupActivationPolicy::Manual)
+                            .with_type_ahead(
+                                FocusGroupTypeAhead::new(Duration::from_millis(30)).unwrap(),
+                            ),
+                    )
+            }
+            fn update(
+                _: &mut (),
+                _: (),
+            ) -> impl runenui_core::IntoUpdateOutput<(), Self::HostProtocol> {
+            }
+        }
+        let mut slots = UiRuntimeSlotsResource::default();
+        slots
+            .configure_host_clock(Some(NativeHostClock::new()))
+            .unwrap();
+        let id = slots
+            .mount_app::<SearchApp>(
+                UiTypedScreenId::new("native.search"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        let runtime = slots
+            .slot_mut(id)
+            .unwrap()
+            .runtime
+            .typed_mut::<SearchApp>()
+            .unwrap();
+        let beta = ElementId::new("beta").unwrap();
+        let target = runtime
+            .index()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&beta))
+            .unwrap()
+            .id()
+            .clone();
+        runtime
+            .submit_command(
+                target,
+                SemanticCommand::RequestFocus,
+                CommandOrigin::programmatic(),
+            )
+            .unwrap();
+        slots.settle_slot(id).unwrap();
+        slots
+            .slot_mut(id)
+            .unwrap()
+            .runtime
+            .typed_mut::<SearchApp>()
+            .unwrap()
+            .submit_keyboard(KeyboardEvent::new(
+                KeyboardPhase::Down,
+                PhysicalKey::Code("KeyA".into()),
+                LogicalKey::Character("a".into()),
+                KeyModifiers::NONE,
+                false,
+                KeyLocation::Standard,
+                KeyboardCompositionState::Inactive,
+                None,
+            ))
+            .unwrap();
+        slots.settle_slot(id).unwrap();
+        assert!(
+            slots.native_readiness().unwrap().1.is_some(),
+            "type-ahead timeout is native readiness"
+        );
+        std::thread::sleep(Duration::from_millis(40));
+        slots.settle_native_slots().unwrap();
+        assert!(
+            slots.slot(id).unwrap().next_deadline.is_none(),
+            "framework timeout actually retired"
+        );
+        assert_eq!(slots.native_readiness().unwrap(), (false, None));
     }
 
     fn counter_source() -> UiTypedSource {
