@@ -7,7 +7,8 @@ use crate::{
     validate_world_sdf_metric_payload,
 };
 use runen_spatial::GridPartitionConfig;
-use world_ops::ChunkGeneration;
+// The exact formation contract exposes its existing typed World revisions.
+pub use world_ops::{ChunkGeneration, ChunkRevision};
 
 /// First version of the Arena one-page source formation; not a general cave certificate.
 pub const WORLD_SDF_OPEN_TOP_EXACT_FORMATION_REVISION: u16 = 1;
@@ -289,11 +290,12 @@ impl WorldSdfOpenTopExactFormation {
 /// The only way to mint an exact open-top source formation. It constructs
 /// bytes and provenance together, rather than certifying an independently
 /// supplied source after quantization has erased distinctions.
+#[allow(clippy::too_many_arguments)]
 pub fn form_world_sdf_open_top_exact_source(
     source: WorldSdfOpenTopRectInteriorSource,
     partition: GridPartitionConfig,
     chunk_id: runen_spatial::ChunkId,
-    chunk_revision: world_ops::ChunkRevision,
+    chunk_revision: ChunkRevision,
     chunk_generation: ChunkGeneration,
     checksum: u64,
     product_id: crate::FieldProductId,
