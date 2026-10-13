@@ -127,11 +127,23 @@ impl UiNativeInputRecipientsResource {
     ) -> Result<Option<UiRuntimeDisplayedPresentation>, NativeInputRecipientError> {
         match self.resolve(window, windows, slots)? {
             NativeInputRecipient::LegacyNativeConsumer => Ok(None),
-            NativeInputRecipient::RunenUiSlot(slot) => presentations
-                .displayed_for_native_recipient(slot, window)
-                .cloned()
-                .map(Some)
-                .ok_or(NativeInputRecipientError::NoCompletedPresentation),
+            NativeInputRecipient::RunenUiSlot(slot) => {
+                let displayed = presentations
+                    .displayed_for_native_recipient(slot, window)
+                    .ok_or(NativeInputRecipientError::NoCompletedPresentation)?;
+                let live = windows
+                    .record(window)
+                    .ok_or(NativeInputRecipientError::MissingWindow)?;
+                // Native resize/DPI callbacks update this record immediately.
+                // RenderPrepare mapping invalidation may run only next frame.
+                // Never route input against old pixels during that interval.
+                if displayed.mapping.target_size_px() != live.size_px
+                    || displayed.mapping.native_scale_factor() != live.scale_factor
+                {
+                    return Err(NativeInputRecipientError::NoCompletedPresentation);
+                }
+                Ok(Some(displayed.clone()))
+            }
         }
     }
 
@@ -413,7 +425,7 @@ mod tests {
     fn displayed_pointer_input_requires_exact_terminal_present_and_current_native_mapping() {
         // Structural correlation proof only: the actual GPU completed-Present
         // producer/observer is independently exercised by the native GPU lane.
-        let (windows, first, second) = windows();
+        let (mut windows, first, second) = windows();
         let mut slots = UiRuntimeSlotsResource::default();
         let slot = mount(&mut slots, 1);
         let mut recipients = UiNativeInputRecipientsResource::default();
@@ -493,6 +505,22 @@ mod tests {
                 .displayed_for_native_recipient(slot, second)
                 .is_none()
         );
+
+        // A real native callback changes the live host record before the
+        // next RenderPrepare refreshes the association mapping. The lookup
+        // itself must reject either changed dimension or DPI immediately.
+        windows.record_mut(first).expect("created window").scale_factor = 2.0;
+        assert!(matches!(
+            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            Err(NativeInputRecipientError::NoCompletedPresentation)
+        ));
+        windows.record_mut(first).expect("created window").scale_factor = 1.0;
+        windows.record_mut(first).expect("created window").size_px = (800, 600);
+        assert!(matches!(
+            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            Err(NativeInputRecipientError::NoCompletedPresentation)
+        ));
+        windows.record_mut(first).expect("created window").scale_factor = 2.0;
 
         let changed = UiRuntimeNativeMapping::new(first, render_surface, (800, 600), 2.0)
             .expect("valid changed host mapping");
