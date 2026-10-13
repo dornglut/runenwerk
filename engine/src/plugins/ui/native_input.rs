@@ -7,7 +7,10 @@ use runenui_runtime::{InputArbitrationScope, InputOwnershipSnapshot, RuntimeStat
 
 use crate::runtime::{NativeWindowId, NativeWindowLifecycleState, WindowStateRegistryResource};
 
-use super::{UiRuntimeSlotId, UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource};
+use super::{
+    UiRuntimeDisplayedPresentation, UiRuntimePresentationAssociationsResource, UiRuntimeSlotId,
+    UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
+};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeInputRecipient {
@@ -37,6 +40,8 @@ pub enum NativeInputRecipientError {
     StaleSlot,
     #[error("RunenUI runtime is not running")]
     RuntimeNotRunning,
+    #[error("selected UI slot has no completed Present for the current native target")]
+    NoCompletedPresentation,
     #[error("fresh RunenUI M13 ownership observation unavailable: {0:?}")]
     OwnershipUnavailable(UiRuntimeSlotOperationFailure),
 }
@@ -110,16 +115,55 @@ impl UiNativeInputRecipientsResource {
         Ok(binding.recipient)
     }
 
-    /// Retire on window destruction, explicit rebind and native source loss.
-    pub fn retire_window(&mut self, window: NativeWindowId) -> bool {
-        self.bindings.remove(&window).is_some()
+    /// Returns only the existing terminal completed-Present snapshot for this
+    /// explicitly selected native recipient. Prepared paint and GPU admission
+    /// are not display evidence, and this does not grant gameplay permission.
+    pub fn displayed_pointer_input(
+        &self,
+        window: NativeWindowId,
+        windows: &WindowStateRegistryResource,
+        slots: &mut UiRuntimeSlotsResource,
+        presentations: &UiRuntimePresentationAssociationsResource,
+    ) -> Result<Option<UiRuntimeDisplayedPresentation>, NativeInputRecipientError> {
+        match self.resolve(window, windows, slots)? {
+            NativeInputRecipient::LegacyNativeConsumer => Ok(None),
+            NativeInputRecipient::RunenUiSlot(slot) => presentations
+                .displayed_for_native_recipient(slot, window)
+                .cloned()
+                .map(Some)
+                .ok_or(NativeInputRecipientError::NoCompletedPresentation),
+        }
     }
 
-    /// Retire any consumer of a RunenUI mount before releasing that mount.
-    pub fn retire_slot(&mut self, slot: UiRuntimeSlotId) -> usize {
+    /// Retire on native window destruction, target change or source loss.
+    /// The *existing* completed-Present ledger also loses that slot's mapping;
+    /// rebind must wait for a fresh terminal display rather than reviving an
+    /// obsolete context from the previous window/source lifetime.
+    pub fn retire_window(
+        &mut self,
+        window: NativeWindowId,
+        presentations: &mut UiRuntimePresentationAssociationsResource,
+    ) -> bool {
+        let Some(binding) = self.bindings.remove(&window) else {
+            return false;
+        };
+        if let NativeInputRecipient::RunenUiSlot(slot) = binding.recipient {
+            presentations.invalidate_mapping(slot);
+        }
+        true
+    }
+
+    /// Retire a mounted runtime's recipient and its old displayed input.
+    /// No separate presentation state is maintained in this registry.
+    pub fn retire_slot(
+        &mut self,
+        slot: UiRuntimeSlotId,
+        presentations: &mut UiRuntimePresentationAssociationsResource,
+    ) -> usize {
         let old_len = self.bindings.len();
         self.bindings
             .retain(|_, binding| binding.recipient != NativeInputRecipient::RunenUiSlot(slot));
+        presentations.invalidate_mapping(slot);
         old_len - self.bindings.len()
     }
 
@@ -152,10 +196,16 @@ impl UiNativeInputRecipientsResource {
 
 #[cfg(test)]
 mod tests {
-    use runenui_core::{NoHostProtocol, UiApp, View, text};
+    use runenui_core::{LogicalLength, NoHostProtocol, StyleEnvironment, UiApp, View, text};
+    use runenui_runtime::{LogicalSize, SurfaceBuildContext};
 
     use super::*;
-    use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+    use crate::plugins::render::RenderFrameProducerId;
+    use crate::plugins::render::host::RenderSurfaceId;
+    use crate::plugins::ui::{
+        UiRuntimeFontConfiguration, UiRuntimeNativeMapping, UiRuntimePresentationBinding,
+        UiTypedScreenId,
+    };
 
     struct TestApp;
 
@@ -306,8 +356,9 @@ mod tests {
                 UiRuntimeSlotOperationFailure::MissingSlot
             ))
         ));
-        assert_eq!(recipients.retire_slot(a), 1);
-        assert_eq!(recipients.retire_slot(a), 0);
+        let mut presentations = UiRuntimePresentationAssociationsResource::default();
+        assert_eq!(recipients.retire_slot(a, &mut presentations), 1);
+        assert_eq!(recipients.retire_slot(a, &mut presentations), 0);
         windows.remove_window(second);
         assert_eq!(
             recipients.resolve(second, &windows, &mut slots),
@@ -343,7 +394,10 @@ mod tests {
             ),
             Err(NativeInputRecipientError::ConflictingRecipient)
         );
-        assert!(recipients.retire_window(first));
+        assert!(recipients.retire_window(
+            first,
+            &mut UiRuntimePresentationAssociationsResource::default()
+        ));
         assert_eq!(
             recipients.bind(
                 first,
@@ -353,5 +407,95 @@ mod tests {
             ),
             Ok(true)
         );
+    }
+
+    #[test]
+    fn displayed_pointer_input_requires_exact_terminal_present_and_current_native_mapping() {
+        // Structural correlation proof only: the actual GPU completed-Present
+        // producer/observer is independently exercised by the native GPU lane.
+        let (windows, first, second) = windows();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = mount(&mut slots, 1);
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                first,
+                NativeInputRecipient::RunenUiSlot(slot),
+                &windows,
+                &mut slots,
+            )
+            .expect("explicit native recipient");
+
+        let mut presentations = UiRuntimePresentationAssociationsResource::default();
+        assert!(matches!(
+            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            Err(NativeInputRecipientError::NoCompletedPresentation)
+        ));
+        assert_eq!(
+            recipients.displayed_pointer_input(second, &windows, &mut slots, &presentations)
+                .unwrap_err(),
+            NativeInputRecipientError::MissingRecipient
+        );
+
+        let render_surface = RenderSurfaceId::primary();
+        let producer = RenderFrameProducerId::try_from_raw(71).expect("valid producer");
+        let style = StyleEnvironment::default();
+        let binding = UiRuntimePresentationBinding::new(
+            slot,
+            producer,
+            render_surface,
+            style.clone(),
+        );
+        let mapping = UiRuntimeNativeMapping::new(first, render_surface, (640, 480), 1.0)
+            .expect("valid host mapping");
+        presentations.bind(binding.clone()).expect("exact binding");
+        assert!(presentations.update_mapping(slot, mapping));
+
+        let context = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(LogicalLength::from(640.0_f32), LogicalLength::from(480.0_f32)),
+        );
+        let publication = slots
+            .publish_surface_for_slot(slot, &context)
+            .expect("real RunenUI runtime publication");
+        let expected = publication.input_context().clone();
+        let publication_id = presentations
+            .stage(
+                binding,
+                mapping,
+                slots.ingress_epoch(slot).expect("mounted epoch"),
+                publication,
+            )
+            .expect("valid prepared publication");
+
+        assert!(matches!(
+            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            Err(NativeInputRecipientError::NoCompletedPresentation)
+        ));
+        assert!(presentations.associate_accepted_submission(publication_id));
+        assert!(matches!(
+            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            Err(NativeInputRecipientError::NoCompletedPresentation)
+        ));
+        assert!(presentations
+            .promote_completed_publication(publication_id)
+            .is_some());
+        let displayed = recipients
+            .displayed_pointer_input(first, &windows, &mut slots, &presentations)
+            .expect("live mounted recipient")
+            .expect("only completed display is available");
+        assert_eq!(displayed.input_context, expected);
+        assert_eq!(displayed.mapping.native_window_id(), first);
+        assert!(presentations
+            .displayed_for_native_recipient(slot, second)
+            .is_none());
+
+        let changed = UiRuntimeNativeMapping::new(first, render_surface, (800, 600), 2.0)
+            .expect("valid changed host mapping");
+        assert!(presentations.update_mapping(slot, changed));
+        assert!(matches!(
+            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            Err(NativeInputRecipientError::NoCompletedPresentation)
+        ));
     }
 }
