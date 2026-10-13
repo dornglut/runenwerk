@@ -1,6 +1,7 @@
 use super::state::{InputState, ModifiersSnapshot};
 use runen_input::{InputContext, PhysicalKeyIdentity};
 use std::collections::{HashMap, HashSet};
+use winit::keyboard::KeyCode;
 
 // Owner: Engine Input Plugin - Runenwerk Product Action Bindings and Projection
 pub mod action {
@@ -504,6 +505,9 @@ impl ActionState {
         // If the physical key is still held, deny the whole lifetime even
         // through synthetic cancellation; only an authentic Up can retire it.
         if input.physical_key_down_in(context, key)
+            && input
+                .keyboard_down_generation_in(context, key)
+                .is_none_or(|held_generation| held_generation == generation)
             && !self
                 .blocked_held_keys
                 .iter()
@@ -623,6 +627,42 @@ impl ActionState {
         }
     }
 
+    fn eligible_held_key(
+        &self,
+        input: &InputState,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+    ) -> bool {
+        input.physical_key_down_in(context, key)
+            && !self.blocked_held_key(context, key)
+            && input
+                .keyboard_down_generation_in(context, key)
+                .is_none_or(|generation| self.keyboard_generation_eligible(context, key, generation))
+    }
+
+    /// Modifiers are physical keys in the SAME source/device context, subject
+    /// to the SAME revoked-lifetime rule as ordinary action contributors.
+    /// UI-owned Shift cannot silently help a game chord remain held.
+    fn eligible_held_modifiers(
+        &self,
+        input: &InputState,
+        context: InputContext,
+    ) -> ModifiersSnapshot {
+        let down = |code: KeyCode| {
+            self.eligible_held_key(
+                input,
+                context,
+                &PhysicalKeyIdentity::code(format!("{code:?}")),
+            )
+        };
+        ModifiersSnapshot {
+            shift: down(KeyCode::ShiftLeft) || down(KeyCode::ShiftRight),
+            ctrl: down(KeyCode::ControlLeft) || down(KeyCode::ControlRight),
+            alt: down(KeyCode::AltLeft) || down(KeyCode::AltRight),
+            super_key: down(KeyCode::SuperLeft) || down(KeyCode::SuperRight),
+        }
+    }
+
     fn recompute_action_down_states(&mut self, input: &InputState) {
         let mut actions_down = HashSet::new();
         for action in self.bindings.action_ids() {
@@ -630,19 +670,10 @@ impl ActionState {
             // source/device context. Keys from different windows or devices
             // must not synthesize a combined held chord.
             if input.keyboard_held_contexts().any(|context| {
-                let modifiers = input.modifiers_snapshot_in(context);
                 self.bindings.action_down(
                     action,
-                    |key| {
-                        input.physical_key_down_in(context, key)
-                            && !self.blocked_held_key(context, key)
-                            && input.keyboard_down_generation_in(context, key).is_none_or(
-                                |generation| {
-                                    self.keyboard_generation_eligible(context, key, generation)
-                                },
-                            )
-                    },
-                    modifiers,
+                    |key| self.eligible_held_key(input, context, key),
+                    self.eligible_held_modifiers(input, context),
                 )
             }) {
                 actions_down.insert(action.clone());

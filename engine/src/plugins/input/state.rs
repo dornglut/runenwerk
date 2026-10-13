@@ -776,19 +776,6 @@ impl InputState {
         self.key_down(KeyCode::ShiftLeft) || self.key_down(KeyCode::ShiftRight)
     }
 
-    pub(super) fn modifiers_snapshot_in(&self, context: InputContext) -> ModifiersSnapshot {
-        let down = |key| {
-            self.neutral
-                .key_down_in(context, &physical_identity_for_key_code(key))
-        };
-        ModifiersSnapshot {
-            shift: down(KeyCode::ShiftLeft) || down(KeyCode::ShiftRight),
-            ctrl: down(KeyCode::ControlLeft) || down(KeyCode::ControlRight),
-            alt: down(KeyCode::AltLeft) || down(KeyCode::AltRight),
-            super_key: down(KeyCode::SuperLeft) || down(KeyCode::SuperRight),
-        }
-    }
-
     fn key_down(&self, key: KeyCode) -> bool {
         self.neutral
             .key_down_anywhere(&physical_identity_for_key_code(key))

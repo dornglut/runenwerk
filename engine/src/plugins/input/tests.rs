@@ -979,3 +979,55 @@ fn revocation_preserves_other_source_pressed_contributors_without_rebinding_repl
     assert!(!actions.action_pressed("new.mapping"));
     assert!(!actions.action_down("new.mapping"));
 }
+
+#[test]
+fn ui_owned_modifier_cannot_keep_a_game_chord_held() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(317), Some(InputDeviceId::new(4)));
+    let shift = physical_key(KeyCode::ShiftLeft);
+    actions.map_chord(
+        &input,
+        "game.shift-w",
+        KeyChord::code("KeyW").with_shift_required(),
+    );
+    let shift_down = KeyboardInput {
+        physical_key: shift.clone(),
+        ..normalized_key(DigitalState::Pressed)
+    };
+    input.handle_normalized_keyboard(context, &shift_down);
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(actions.action_down("game.shift-w"));
+
+    let generation = input
+        .keyboard_down_generation_in(context, &shift)
+        .expect("real modifier Down");
+    actions.revoke_keyboard_lifetime(&input, context, &shift, generation);
+    assert!(!actions.action_down("game.shift-w"));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+    clear_frame(&mut input, &mut actions);
+    assert!(!actions.action_down("game.shift-w"));
+}
+
+#[test]
+fn delayed_old_m13_denial_never_claims_new_physical_down_generation() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(318), Some(InputDeviceId::new(5)));
+    let key = physical_key(KeyCode::KeyW);
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    let old_generation = input.keyboard_down_generation_in(context, &key).unwrap();
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Released));
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    let new_generation = input.keyboard_down_generation_in(context, &key).unwrap();
+    assert_ne!(old_generation, new_generation);
+    actions.project(&input);
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+
+    // A late exact M13 receipt for the first generation may cancel that
+    // press, never a later independent genuine physical Down.
+    actions.revoke_keyboard_lifetime(&input, context, &key, old_generation);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+}
