@@ -20,8 +20,9 @@ pub enum ChunkLifecycleState {
 /// never to enqueue-time catalog residency.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorldSdfCommittedExactSource {
-    pub evidence: WorldSdfVerifiedExactSource,
-    pub eligible_products: BTreeMap<ProductIdentity, FieldProductDescriptor>,
+    // Only World-owned intake/integration may change product eligibility.
+    pub(crate) evidence: WorldSdfVerifiedExactSource,
+    pub(crate) eligible_products: BTreeMap<ProductIdentity, FieldProductDescriptor>,
 }
 
 #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
