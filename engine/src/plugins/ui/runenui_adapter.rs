@@ -9,8 +9,8 @@ use runenui_runtime::LogicalSize;
 use runenui_runtime::{
     AppRuntime, HostRequestToken, InputArbitrationRecord, InputArbitrationScope,
     InputObservationError, InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch,
-    KeyboardSubmission, PumpBudget, SubmitKeyboardError, SurfaceBuildContext, SurfacePublication,
-    UiInputFamily, UiInputFinality,
+    KeyboardSubmission, PumpBudget, SubmitKeyboardError, SubmitKeyboardErrorKind,
+    SurfaceBuildContext, SurfacePublication, UiInputFamily, UiInputFinality,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -206,6 +206,39 @@ pub enum UiRuntimeNativeKeyboardAdmissionError {
         event: KeyboardEvent,
     },
     Framework(SubmitKeyboardError),
+}
+
+/// The exact M13 pre-sequence `NoFocusedTarget` evidence, not a gameplay
+/// permission result. The native owner MUST separately prove original window,
+/// source/device, slot binding and unrevoked physical Down lifetime.
+pub fn native_no_focused_keyboard_claim_witness(
+    before: &InputOwnershipSnapshot,
+    after: &InputOwnershipSnapshot,
+    error: &UiRuntimeNativeKeyboardAdmissionError,
+) -> bool {
+    let UiRuntimeNativeKeyboardAdmissionError::Framework(framework) = error else {
+        return false;
+    };
+    if framework.kind() != SubmitKeyboardErrorKind::NoFocusedTarget
+        || before != after
+        || before.status() != runenui_runtime::RuntimeStatus::Running
+    {
+        return false;
+    }
+    let keyboard = before.keyboard();
+    keyboard.focused_node().is_none()
+        && keyboard.composition_generation().is_none()
+        && keyboard.composition_device_id().is_none()
+        && keyboard.space_activation_owner().is_none()
+        && keyboard.space_activation_device_id().is_none()
+        && before
+            .surfaces()
+            .iter()
+            .all(|surface| surface.modal_blocker().is_none())
+        && before
+            .pointers()
+            .iter()
+            .all(|pointer| pointer.capture_owner().is_none() && pointer.pressed_owner().is_none())
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1848,6 +1881,9 @@ mod tests {
         };
 
         let epoch = slots.ingress_epoch(slot).expect("mount generation");
+        let before_unfocused = slots
+            .input_ownership(slot)
+            .expect("fresh M13 ownership before rejected input");
         let missing = slots
             .submit_native_keyboard(UiRuntimeSlotId(u64::MAX), keyboard())
             .expect_err("unknown slot cannot admit native input");
@@ -1869,6 +1905,19 @@ mod tests {
                         == &PhysicalKey::Code(String::from("KeyW"))
         ));
         assert_eq!(slots.ingress_epoch(slot), Some(epoch));
+        let after_unfocused = slots
+            .input_ownership(slot)
+            .expect("fresh M13 ownership after rejected input");
+        assert!(native_no_focused_keyboard_claim_witness(
+            &before_unfocused,
+            &after_unfocused,
+            &rejected,
+        ));
+        assert!(!native_no_focused_keyboard_claim_witness(
+            &before_unfocused,
+            &after_unfocused,
+            &missing,
+        ));
 
         let focus_id = ElementId::new("native.keyboard.focus").expect("valid authored target");
         let runtime = slots
@@ -1902,6 +1951,11 @@ mod tests {
             Some(&focus_id_from_runtime),
             "the semantic focus request must establish a real keyboard target"
         );
+        assert!(!native_no_focused_keyboard_claim_witness(
+            &before_unfocused,
+            &focused,
+            &rejected,
+        ));
 
         let receipt = slots
             .submit_native_keyboard(slot, keyboard())

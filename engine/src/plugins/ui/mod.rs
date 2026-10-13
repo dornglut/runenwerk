@@ -38,9 +38,11 @@ pub use publish::*;
 pub use report::*;
 pub use resources::*;
 pub use runenui_adapter::{
-    UiRuntimeFontConfiguration, UiRuntimeHostRequestDisposition, UiRuntimePendingEventRequest,
-    UiRuntimeSlotId, UiRuntimeSlotMountFailure, UiRuntimeSlotMountReport,
-    UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
+    UiRuntimeFontConfiguration, UiRuntimeHostRequestDisposition,
+    UiRuntimeNativeKeyboardAdmissionError, UiRuntimeNativeKeyboardEvidenceFailure,
+    UiRuntimePendingEventRequest, UiRuntimeSlotId, UiRuntimeSlotMountFailure,
+    UiRuntimeSlotMountReport, UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
+    native_keyboard_finality, native_no_focused_keyboard_claim_witness,
 };
 pub use schedule::*;
 pub use screen::*;
