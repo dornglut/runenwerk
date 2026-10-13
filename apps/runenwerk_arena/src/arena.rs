@@ -80,7 +80,8 @@ fn install_arena_world(
         &mut products,
         &mut metric_capabilities,
         WorldSdfRuntimePayloadPackage::new(descriptor, vec![payload], region_summary)
-            .with_metric_capability(metric_payload_ref),
+            .with_metric_capability(metric_payload_ref)
+            .with_exact_source(arena_geometry_source(), arena_partition_config()),
     )
     .expect("maintained arena field product should satisfy runtime SDF intake");
     debug_assert_eq!(enqueued, 1);
@@ -142,24 +143,7 @@ pub fn arena_signed_distance_from_source(
     source: WorldSdfOpenTopRectInteriorSource,
     position: [f64; 3],
 ) -> f64 {
-    let [min_x, max_x] = source.x_bounds_meters();
-    let [min_z, max_z] = source.z_bounds_meters();
-    let floor = source.floor_y_meters();
-    let x_violation = interval_violation(position[0], min_x, max_x);
-    let y_violation = (floor - position[1]).max(0.0);
-    let z_violation = interval_violation(position[2], min_z, max_z);
-    let outside_distance =
-        (x_violation * x_violation + y_violation * y_violation + z_violation * z_violation).sqrt();
-
-    if outside_distance > 0.0 {
-        return -outside_distance;
-    }
-
-    (position[0] - min_x)
-        .min(max_x - position[0])
-        .min(position[1] - floor)
-        .min(position[2] - min_z)
-        .min(max_z - position[2])
+    source.signed_distance_meters(position)
 }
 
 pub fn build_arena_chunk_payload() -> SdfChunkPayload {
@@ -306,16 +290,6 @@ fn arena_occupancy_cell_center(brick: [u8; 3], octant: [u8; 3]) -> [f64; 3] {
         f64::from(brick[1] * 2 + octant[1]) * cell_edge_meters + cell_edge_meters * 0.5,
         f64::from(brick[2] * 2 + octant[2]) * cell_edge_meters + cell_edge_meters * 0.5,
     ]
-}
-
-fn interval_violation(value: f64, minimum: f64, maximum: f64) -> f64 {
-    if value < minimum {
-        minimum - value
-    } else if value > maximum {
-        value - maximum
-    } else {
-        0.0
-    }
 }
 
 #[cfg(test)]

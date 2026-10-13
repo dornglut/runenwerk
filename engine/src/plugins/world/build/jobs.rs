@@ -4,7 +4,9 @@ use super::super::adapters::resources::{
 };
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use super::super::debug::metrics::WorldDebugMetricsResource;
-use super::integration::{WorldCompletedBuildOutput, WorldCompletedBuildQueueResource};
+use super::integration::{
+    WorldCompletedBuildOrigin, WorldCompletedBuildOutput, WorldCompletedBuildQueueResource,
+};
 use crate::runtime::{Res, ResMut};
 use runen_spatial::{ChunkId, GridPartitionConfig, SpatialMathError};
 use std::collections::BTreeMap;
@@ -135,6 +137,8 @@ pub fn dispatch_world_build_jobs_system(
             staleness: WorldBuildStaleness::Current,
             chunk_payload: payload,
             region_summary,
+            exact_source: None,
+            origin: WorldCompletedBuildOrigin::OperationWindow,
         });
         runtime.completed_jobs = runtime.completed_jobs.saturating_add(1);
     }
