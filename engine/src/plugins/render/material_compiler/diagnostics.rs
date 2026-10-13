@@ -3,6 +3,8 @@
 use std::error::Error;
 use std::fmt;
 
+use material_graph::MaterialOutputTarget;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MaterialShaderCompileError {
     UnsupportedIrVersion {
@@ -10,6 +12,14 @@ pub enum MaterialShaderCompileError {
         expected: u32,
     },
     MissingOutputNode,
+    UnsupportedOutputTarget {
+        target: MaterialOutputTarget,
+    },
+    UnsupportedAuthoredOutputInput {
+        target: MaterialOutputTarget,
+        node_id: u64,
+        input: String,
+    },
     DuplicateOutputNode,
     MissingInput {
         node_id: u64,
@@ -47,6 +57,20 @@ impl fmt::Display for MaterialShaderCompileError {
             Self::UnsupportedIrVersion { found, expected } => write!(
                 formatter,
                 "unsupported material IR contract version {found}; expected {expected}"
+            ),
+            Self::UnsupportedOutputTarget { target } => {
+                write!(
+                    formatter,
+                    "material renderer does not realize output target {target:?}"
+                )
+            }
+            Self::UnsupportedAuthoredOutputInput {
+                target,
+                node_id,
+                input,
+            } => write!(
+                formatter,
+                "material output node {node_id} explicitly authors '{input}', which target {target:?} does not realize"
             ),
             Self::MissingOutputNode => formatter.write_str("material IR has no pbr.output node"),
             Self::DuplicateOutputNode => {

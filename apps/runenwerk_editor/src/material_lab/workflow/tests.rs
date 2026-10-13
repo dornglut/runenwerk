@@ -903,6 +903,98 @@ fn changed_material_recipe_allocates_new_ledger_entry() {
 }
 
 #[test]
+fn unsupported_material_output_preserves_prior_valid_artifact() {
+    let root = unique_temp_dir("material_capability_preserve");
+    let asset_id = asset_id(1);
+    let source_id = asset_source_id(2);
+    let mut session = crate::asset_pipeline::EditorAssetProjectSession::from_project_file(
+        &root,
+        &material_project_with_recipe("render", "render_material"),
+    )
+    .expect("render project session");
+    let source = AssetSourceDescriptor::new(
+        source_id,
+        asset_id,
+        AssetKind::MaterialGraph,
+        "assets/materials/unsupported.material.ron",
+    )
+    .with_hash(SourceHash::new("sha256", "abc"));
+    let mut document = default_material_graph_document_for_source_with_target(
+        asset_id,
+        &source,
+        "Unsupported",
+        MaterialOutputTarget::RenderMaterial,
+    );
+    // Author a valid source connection to an output semantic the scene
+    // shader does not realize. This must reach compiler admission, not fail
+    // earlier at source ratification.
+    let float = material_graph::MaterialValueType::Float.port_type_id();
+    document.graph.nodes.push(graph::NodeDefinition::new(
+        graph::NodeId::new(3),
+        "pbr.roughness",
+        [graph::PortDefinition::new(
+            graph::PortId::new(3),
+            "value",
+            graph::PortDirection::Output,
+            float,
+        )],
+    ));
+    document
+        .graph
+        .nodes
+        .iter_mut()
+        .find(|node| node.name == "pbr.output")
+        .expect("output node")
+        .ports
+        .push(graph::PortDefinition::new(
+            graph::PortId::new(4),
+            "normal_strength",
+            graph::PortDirection::Input,
+            float,
+        ));
+    document.graph.edges.push(graph::EdgeDefinition::new(
+        graph::EdgeId::new(2),
+        graph::PortId::new(3),
+        graph::PortId::new(4),
+    ));
+    write_material_graph_document(&root.join(&source.relative_path), &document)
+        .expect("material source");
+
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(
+        AssetRecord::new(asset_id, "material", "Material", AssetKind::MaterialGraph)
+            .with_primary_source(source_id),
+    );
+    catalog.insert_source(source);
+    catalog.insert_artifact(
+        AssetArtifactDescriptor::new(
+            asset_artifact_id(9),
+            asset_id,
+            AssetKind::Material,
+            ArtifactPayloadKind::FormedMaterialProduct {
+                product_id: "3".to_string(),
+            },
+            ArtifactCacheKey::new("prior"),
+        )
+        .with_validity(asset::ArtifactValidity::Valid),
+    );
+
+    let outcome = rebuild_material_preview_for_asset(&catalog, &mut session, asset_id);
+    assert!(outcome.diagnostics.iter().any(|diagnostic| {
+        diagnostic.code == AssetDiagnosticCode::RatificationRejected
+            && diagnostic.message.contains("normal_strength")
+            && diagnostic.message.contains("RenderMaterial")
+    }));
+    let publication = outcome.publication.expect("last-good preservation");
+    assert_eq!(publication.artifact.artifact_id, asset_artifact_id(9));
+    assert_eq!(
+        publication.artifact.validity,
+        asset::ArtifactValidity::FailedPreserved
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn invalid_material_graph_preserves_prior_valid_artifact() {
     let root = unique_temp_dir("material_preview_preserve");
     let asset_id = asset_id(1);

@@ -4,6 +4,7 @@ use std::collections::BTreeSet;
 
 use material_graph::{
     MATERIAL_IR_CONTRACT_VERSION, MaterialIr, MaterialIrInputSource, MaterialNodeOp,
+    MaterialOutputTarget,
 };
 
 use super::{MaterialShaderCompileError, SceneMaterialTableSlot};
@@ -52,6 +53,55 @@ pub(super) fn validate_ir(ir: &MaterialIr) -> Result<(), MaterialShaderCompileEr
                     input: input.name.clone(),
                     source_node_id: node_id.raw(),
                     output: output_name.clone(),
+                });
+            }
+        }
+    }
+    validate_renderer_capabilities(ir)
+}
+
+/// Renderer-owned admission of explicitly authored PBR output semantics.
+///
+/// Domain lowering preserves authored connections/values separately from
+/// untouched catalog constants. Transporting an output value through WGSL
+/// does not mean that the selected renderer target shades with it.
+fn validate_renderer_capabilities(ir: &MaterialIr) -> Result<(), MaterialShaderCompileError> {
+    match ir.output_target {
+        MaterialOutputTarget::FieldMaterialChannel => {
+            return Err(MaterialShaderCompileError::UnsupportedOutputTarget {
+                target: ir.output_target,
+            });
+        }
+        MaterialOutputTarget::PbrPreview | MaterialOutputTarget::RenderMaterial => {}
+    }
+
+    for node in ir
+        .nodes
+        .iter()
+        .filter(|node| node.op == MaterialNodeOp::PbrOutput)
+    {
+        for input in &node.inputs {
+            if matches!(&input.source, MaterialIrInputSource::Constant(_)) {
+                continue;
+            }
+
+            let realized = match ir.output_target {
+                MaterialOutputTarget::PbrPreview => matches!(
+                    input.name.as_str(),
+                    "base_color" | "roughness" | "metallic" | "emissive" | "opacity"
+                ),
+                MaterialOutputTarget::RenderMaterial => {
+                    matches!(input.name.as_str(), "base_color" | "emissive" | "opacity")
+                }
+                MaterialOutputTarget::FieldMaterialChannel => {
+                    unreachable!("field material target rejected before output input admission")
+                }
+            };
+            if !realized {
+                return Err(MaterialShaderCompileError::UnsupportedAuthoredOutputInput {
+                    target: ir.output_target,
+                    node_id: node.node_id.raw(),
+                    input: input.name.clone(),
                 });
             }
         }
