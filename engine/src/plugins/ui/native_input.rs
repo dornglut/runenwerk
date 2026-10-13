@@ -87,16 +87,15 @@ impl UiNativeInputRecipientsResource {
             };
         }
         if let NativeInputRecipient::RunenUiSlot(slot) = recipient
-            && self
-                .bindings
-                .values()
-                .any(|binding| matches!(
+            && self.bindings.values().any(|binding| {
+                matches!(
                     binding,
                     WindowRecipientBinding::Bound(Binding {
                         recipient: NativeInputRecipient::RunenUiSlot(bound),
                         ..
                     }) if *bound == slot
-                ))
+                )
+            })
         {
             return Err(NativeInputRecipientError::SlotAlreadyBound);
         }
@@ -515,8 +514,14 @@ mod tests {
             Err(NativeInputRecipientError::ConflictingRecipient)
         );
         assert!(recipients.retire_window(first, &mut presentations));
-        assert_eq!(recipients.forget_destroyed_window(first, &windows), Ok(true));
-        assert_eq!(recipients.forget_destroyed_window(first, &windows), Ok(false));
+        assert_eq!(
+            recipients.forget_destroyed_window(first, &windows),
+            Ok(true)
+        );
+        assert_eq!(
+            recipients.forget_destroyed_window(first, &windows),
+            Ok(false)
+        );
         assert_eq!(
             recipients.resolve(second, &windows, &mut slots),
             Ok(NativeInputRecipient::LegacyNativeConsumer)

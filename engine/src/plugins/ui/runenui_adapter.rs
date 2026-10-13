@@ -1,6 +1,6 @@
 use runenui_core::{
-    Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, SemanticCommand,
-    UiApp, View, button, column, text,
+    Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, KeyboardEvent,
+    SemanticCommand, UiApp, View, button, column, text,
 };
 #[cfg(test)]
 use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment};
@@ -8,7 +8,8 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
     AppRuntime, HostRequestToken, InputObservationError, InputOwnershipSnapshot, InputPumpBatch,
-    InputShutdownBatch, PumpBudget, SurfaceBuildContext, SurfacePublication,
+    InputShutdownBatch, KeyboardSubmission, PumpBudget, SubmitKeyboardError, SurfaceBuildContext,
+    SurfacePublication,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -126,6 +127,16 @@ pub enum UiRuntimeSlotOperationFailure {
     WrongAppKind,
     NativeHostClosed,
     RuntimeStopped(runenui_runtime::PumpOutcome),
+}
+
+/// A rejected host keyboard occurrence retains the exact unaccepted event.
+#[derive(Debug)]
+pub enum UiRuntimeNativeKeyboardAdmissionError {
+    Slot {
+        failure: UiRuntimeSlotOperationFailure,
+        event: KeyboardEvent,
+    },
+    Framework(SubmitKeyboardError),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -382,6 +393,16 @@ impl UiRuntimeSlotKind {
         }
     }
 
+    fn submit_keyboard(
+        &mut self,
+        event: KeyboardEvent,
+    ) -> Result<KeyboardSubmission, SubmitKeyboardError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_keyboard(event),
+            Self::Typed(runtime) => runtime.submit_keyboard(event),
+        }
+    }
+
     fn set_native_wake_transport(&self, transport: NativeWakeTransport) {
         match self {
             Self::Counter(runtime) => runtime.set_wake_transport(transport),
@@ -450,8 +471,18 @@ impl UiRuntimeSlot {
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
         self.requires_settlement = true;
         let batch = batch.map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+        self.observe_batch_report(&batch)
+    }
+
+    /// Update the existing runtime readiness state without consuming its
+    /// ordered M13 records. Native callers own the returned batch directly.
+    fn observe_batch_report(
+        &mut self,
+        batch: &InputPumpBatch,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        self.requires_settlement = true;
         if let Err(error @ UiRuntimeSlotOperationFailure::RuntimeStopped(_)) =
-            settlement_result(&batch)
+            settlement_result(batch)
         {
             self.next_deadline = None;
             return Err(error);
@@ -898,6 +929,59 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
         self.slot_mut(slot_id)?.settle_pending()
+    }
+
+    /// Admit an exact native-normalized keyboard occurrence without inventing
+    /// a UI or gameplay disposition. Rejection returns the original event and
+    /// framework kind; acceptance retains the framework's work sequence.
+    ///
+    /// The host MUST pump/correlate the exact M13 record before allowing a
+    /// competing gameplay transition.
+    pub fn submit_native_keyboard(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        event: KeyboardEvent,
+    ) -> Result<KeyboardSubmission, UiRuntimeNativeKeyboardAdmissionError> {
+        let slot = match self.slot_mut(slot_id) {
+            Ok(slot) => slot,
+            Err(failure) => {
+                return Err(UiRuntimeNativeKeyboardAdmissionError::Slot { failure, event });
+            }
+        };
+        let next = match slot.next_ingress_epoch() {
+            Ok(next) => next,
+            Err(failure) => {
+                return Err(UiRuntimeNativeKeyboardAdmissionError::Slot { failure, event });
+            }
+        };
+        let receipt = slot
+            .runtime
+            .submit_keyboard(event)
+            .map_err(UiRuntimeNativeKeyboardAdmissionError::Framework)?;
+        slot.ingress_epoch = next;
+        slot.requires_settlement = true;
+        Ok(receipt)
+    }
+
+    /// Return one actual canonical pump result with ALL ordered M13 records.
+    /// Paused and terminal batches remain inspectable, never silently equated
+    /// to successful input settlement. There is no additional input queue.
+    pub fn pump_native_input_records(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<
+        (InputPumpBatch, Result<(), UiRuntimeSlotOperationFailure>),
+        UiRuntimeSlotOperationFailure,
+    > {
+        let slot = self.slot_mut(slot_id)?;
+        slot.begin_readiness_checkpoint();
+        slot.requires_settlement = true;
+        let batch = slot
+            .runtime
+            .pump(runtime_pump_budget())
+            .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+        let settlement = slot.observe_batch_report(&batch);
+        Ok((batch, settlement))
     }
 
     /// Checks RunenUI's own redraw authority; no Engine-owned dirty mirror is used.
@@ -1642,6 +1726,126 @@ mod tests {
                 )
             }
         }
+    }
+
+    #[test]
+    fn native_keyboard_admission_preserves_exact_rejection_and_ordered_m13_settlement() {
+        use runenui_core::{
+            CommandOrigin, KeyLocation, KeyModifiers, KeyboardCompositionState, KeyboardPhase,
+            LogicalKey, NoHostProtocol, PhysicalKey,
+        };
+        use runenui_runtime::{
+            InputArbitrationRecord, SubmitKeyboardErrorKind, UiInputFinality,
+        };
+
+        struct NativeKeyboardApp;
+        impl UiApp for NativeKeyboardApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                button("Native focus target")
+                    .id("native.keyboard.focus")
+                    .key("native.keyboard.focus")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<NativeKeyboardApp>(
+                UiTypedScreenId::new("native.keyboard.probe"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("actual RunenUI typed runtime mounts");
+        let keyboard = || {
+            KeyboardEvent::new(
+                KeyboardPhase::Down,
+                PhysicalKey::Code(String::from("KeyW")),
+                LogicalKey::Character(String::from("w")),
+                KeyModifiers::NONE,
+                false,
+                KeyLocation::Standard,
+                KeyboardCompositionState::Inactive,
+                None,
+            )
+        };
+
+        let epoch = slots.ingress_epoch(slot).expect("mount generation");
+        let missing = slots
+            .submit_native_keyboard(UiRuntimeSlotId(u64::MAX), keyboard())
+            .expect_err("unknown slot cannot admit native input");
+        assert!(matches!(
+            missing,
+            UiRuntimeNativeKeyboardAdmissionError::Slot {
+                failure: UiRuntimeSlotOperationFailure::MissingSlot,
+                ref event,
+            } if event.physical_key() == &PhysicalKey::Code(String::from("KeyW"))
+        ));
+        let rejected = slots
+            .submit_native_keyboard(slot, keyboard())
+            .expect_err("missing focus rejects before M13 sequence reservation");
+        assert!(matches!(
+            rejected,
+            UiRuntimeNativeKeyboardAdmissionError::Framework(ref error)
+                if error.kind() == SubmitKeyboardErrorKind::NoFocusedTarget
+                    && error.event().physical_key()
+                        == &PhysicalKey::Code(String::from("KeyW"))
+        ));
+        assert_eq!(slots.ingress_epoch(slot), Some(epoch));
+
+        let focus_id = ElementId::new("native.keyboard.focus").expect("valid authored target");
+        let runtime = slots
+            .slot_mut(slot)
+            .expect("mounted")
+            .runtime
+            .typed_mut::<NativeKeyboardApp>()
+            .expect("exact UiApp");
+        let target = runtime
+            .index()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&focus_id))
+            .expect("mounted focusable target")
+            .id()
+            .clone();
+        runtime
+            .submit_command(
+                target,
+                SemanticCommand::RequestFocus,
+                CommandOrigin::programmatic(),
+            )
+            .expect("semantic focus admitted");
+        slots.settle_slot(slot).expect("focus settles");
+
+        let receipt = slots
+            .submit_native_keyboard(slot, keyboard())
+            .expect("focused keyboard event accepted");
+        assert_eq!(slots.ingress_epoch(slot), Some(epoch + 1));
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("bounded input observation succeeds");
+        assert_eq!(status, Ok(()));
+        assert_eq!(batch.processed_through(), Some(receipt.sequence()));
+        let settled = batch
+            .ordered_records()
+            .iter()
+            .find_map(|record| match record {
+                InputArbitrationRecord::InputSettled(value)
+                    if value.sequence() == receipt.sequence() => Some(value),
+                _ => None,
+            })
+            .expect("exact reached M13 input");
+        assert_eq!(settled.scope(), batch.final_ownership().scope());
+        assert!(matches!(settled.finality(), UiInputFinality::Committed(_)));
     }
 
     #[test]
@@ -3061,6 +3265,13 @@ mod tests {
 
             fn input_ownership(&mut self) -> Result<InputOwnershipSnapshot, InputObservationError> {
                 self.runtime.input_ownership()
+            }
+
+            fn submit_keyboard(
+                &mut self,
+                event: KeyboardEvent,
+            ) -> Result<KeyboardSubmission, SubmitKeyboardError> {
+                self.runtime.submit_keyboard(event)
             }
 
             fn pending_redraw(&mut self) -> bool {
