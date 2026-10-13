@@ -2645,15 +2645,30 @@ fn failed_external_replacement_preserves_cpu_clears_pending_and_accepts_retry() 
     assert_eq!(record.chunk_generation, ChunkGeneration(1));
     assert!(matches!(record.lifecycle, ChunkLifecycleState::Ready));
     // Enqueue-time catalog points to N+1, yet the committed CPU is still N.
-    assert_eq!(w.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap()
-        .product(next_desc.product_core().identity), Some(&next_desc));
+    assert_eq!(
+        w.resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap()
+            .product(next_desc.product_core().identity),
+        Some(&next_desc)
+    );
 
     assert_eq!(enqueue_runtime_sdf_package(&mut app, package).unwrap(), 1);
     app = app.run_for_fixed_steps(1).expect("valid retry commits");
-    assert_eq!(app.world().resource::<SdfChunkStoreResource>().unwrap()
-        .chunks.get(&id), Some(&next));
-    let record = app.world().resource::<WorldChunkRuntimeMapResource>().unwrap()
-        .by_chunk_id.get(&id).unwrap();
+    assert_eq!(
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&id),
+        Some(&next)
+    );
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&id)
+        .unwrap();
     assert!(record.pending_build_generation.is_none());
     assert_eq!(record.chunk_generation, ChunkGeneration(2));
 }
@@ -2668,45 +2683,71 @@ fn failed_generic_completion_recovers_dirty_retry_authority() {
         &mut app,
         WorldSdfRuntimePayloadPackage::new(
             runtime_sdf_descriptor(7291, &first),
-            vec![first.clone()], RegionSdfSummary::default(),
+            vec![first.clone()],
+            RegionSdfSummary::default(),
         ),
-    ).unwrap();
+    )
+    .unwrap();
     app = app.run_for_fixed_steps(1).unwrap();
 
     // A generic job has already claimed generation N+1; its completed bytes
     // fail the revision contract. The same World lifecycle must release N+1.
     {
-        let record = app.world_mut().resource_mut::<WorldChunkRuntimeMapResource>().unwrap();
+        let record = app
+            .world_mut()
+            .resource_mut::<WorldChunkRuntimeMapResource>()
+            .unwrap();
         let r = record.by_chunk_id.get_mut(&id).unwrap();
         r.pending_build_generation = Some(BuildGeneration(2));
         r.lifecycle = ChunkLifecycleState::Rebuilding;
     }
-    app.world_mut().resource_mut::<WorldCompletedBuildQueueResource>().unwrap()
-        .outputs.push_back(WorldCompletedBuildOutput {
+    app.world_mut()
+        .resource_mut::<WorldCompletedBuildQueueResource>()
+        .unwrap()
+        .outputs
+        .push_back(WorldCompletedBuildOutput {
             chunk_id: id,
             target_chunk_revision: ChunkRevision(2),
             target_build_generation: BuildGeneration(2),
             staleness: WorldBuildStaleness::Current,
-            chunk_payload: sdf_chunk_payload(
-                id, ChunkRevision(999), ChunkGeneration(2), 801,
-            ),
+            chunk_payload: sdf_chunk_payload(id, ChunkRevision(999), ChunkGeneration(2), 801),
             region_summary: RegionSdfSummary::default(),
             exact_source: None,
             origin: engine::plugins::world::build::WorldCompletedBuildOrigin::OperationWindow,
         });
-    app = app.run_for_fixed_steps(1).expect("failed operation job releases intent");
-    assert_eq!(app.world().resource::<SdfChunkStoreResource>().unwrap()
-        .chunks.get(&id), Some(&first));
-    let record = app.world().resource::<WorldChunkRuntimeMapResource>().unwrap()
-        .by_chunk_id.get(&id).unwrap();
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("failed operation job releases intent");
+    assert_eq!(
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&id),
+        Some(&first)
+    );
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&id)
+        .unwrap();
     assert!(record.pending_build_generation.is_none());
     assert!(matches!(record.lifecycle, ChunkLifecycleState::Dirty));
     assert!(!record.dirty_reasons.is_empty());
 
     // The built-in dirty dispatch, not a second lifecycle manager, retries N+1.
-    app = app.run_for_fixed_steps(1).expect("dirty job dispatched and integrated");
-    let record = app.world().resource::<WorldChunkRuntimeMapResource>().unwrap()
-        .by_chunk_id.get(&id).unwrap();
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("dirty job dispatched and integrated");
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&id)
+        .unwrap();
     assert!(record.pending_build_generation.is_none());
     assert_eq!(record.chunk_generation, ChunkGeneration(2));
 }
