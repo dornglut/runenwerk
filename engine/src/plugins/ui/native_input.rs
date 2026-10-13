@@ -71,9 +71,10 @@ impl UiNativeInputRecipientsResource {
             };
         }
         if let NativeInputRecipient::RunenUiSlot(slot) = recipient
-            && self.bindings.values().any(|binding| {
-                binding.recipient == NativeInputRecipient::RunenUiSlot(slot)
-            })
+            && self
+                .bindings
+                .values()
+                .any(|binding| binding.recipient == NativeInputRecipient::RunenUiSlot(slot))
         {
             return Err(NativeInputRecipientError::SlotAlreadyBound);
         }
@@ -111,9 +112,8 @@ impl UiNativeInputRecipientsResource {
     /// Retire any consumer of a RunenUI mount before releasing that mount.
     pub fn retire_slot(&mut self, slot: UiRuntimeSlotId) -> usize {
         let old_len = self.bindings.len();
-        self.bindings.retain(|_, binding| {
-            binding.recipient != NativeInputRecipient::RunenUiSlot(slot)
-        });
+        self.bindings
+            .retain(|_, binding| binding.recipient != NativeInputRecipient::RunenUiSlot(slot));
         old_len - self.bindings.len()
     }
 
@@ -264,10 +264,12 @@ mod tests {
                 first,
                 NativeInputRecipient::RunenUiSlot(a),
                 &windows,
-                &mut slots
+                &mut slots,
             )
             .expect("bind first");
-        slots.unmount_with_retirement(a).expect("runtime retirement");
+        slots
+            .unmount_with_retirement(a)
+            .expect("runtime retirement");
         assert!(matches!(
             recipients.resolve(first, &windows, &mut slots),
             Err(NativeInputRecipientError::OwnershipUnavailable(

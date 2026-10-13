@@ -6,8 +6,7 @@ use std::any::Any;
 use runenui_core::UiApp;
 use runenui_runtime::{
     AppRuntime, InputObservationError, InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch,
-    PumpBudget,
-    SurfaceBuildContext, SurfacePublication,
+    PumpBudget, SurfaceBuildContext, SurfacePublication,
 };
 
 /// Typed application observations without access to host clock or wake wiring.
