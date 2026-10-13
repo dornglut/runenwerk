@@ -1,5 +1,6 @@
 use super::super::adapters::resources::{PartitionConfigResource, SdfChunkStoreResource};
 use super::super::build::integration::WorldRuntimeSdfProductCatalogResource;
+use super::super::chunks::DirtyChunkMapResource;
 use super::super::chunks::lifecycle::WorldChunkRuntimeRecord;
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use product::ProductIdentity;
@@ -60,6 +61,7 @@ pub struct WorldSdfCurrentExactSourceRead<'a> {
     _cpu: &'a SdfChunkPayload,
     _partition: &'a GridPartitionConfig,
     _record: &'a WorldChunkRuntimeRecord,
+    _dirty: &'a DirtyChunkMapResource,
     _descriptor: &'a world_sdf::FieldProductDescriptor,
 }
 impl WorldSdfCurrentExactSourceRead<'_> {
@@ -88,6 +90,7 @@ pub fn qualify_current_world_sdf_exact_source_read<'a>(
     required_bounds: WorldSdfExactQueryBounds,
     partition: &'a PartitionConfigResource,
     products: &'a WorldRuntimeSdfProductCatalogResource,
+    dirty: &'a DirtyChunkMapResource,
     chunks: &'a WorldChunkRuntimeMapResource,
     store: &'a SdfChunkStoreResource,
 ) -> Result<WorldSdfCurrentExactSourceRead<'a>, WorldSdfExactReadError> {
@@ -122,7 +125,8 @@ pub fn qualify_current_world_sdf_exact_source_read<'a>(
     if committed.eligible_products.get(&product_id) != Some(descriptor) {
         return Err(E::ProductSourceMismatch);
     }
-    if record.exact_read_recovery_required
+    if dirty.by_chunk.get(&reference.chunk_id).is_some_and(|reasons| !reasons.is_empty())
+        || record.exact_read_recovery_required
         || record.pending_build_generation.is_some()
         || !record.dirty_reasons.is_empty()
         || !matches!(
@@ -176,6 +180,7 @@ pub fn qualify_current_world_sdf_exact_source_read<'a>(
         _cpu: payload,
         _partition: partition,
         _record: record,
+        _dirty: dirty,
         _descriptor: descriptor,
     })
 }

@@ -695,6 +695,8 @@ fn exact_source_is_not_enqueue_ready_and_limits_world_scope_to_formed_bytes() {
             b,
             w.resource::<PartitionConfigResource>().unwrap(),
             products,
+            w.resource::<engine::plugins::world::chunks::DirtyChunkMapResource>()
+                .unwrap(),
             w.resource::<WorldChunkRuntimeMapResource>().unwrap(),
             w.resource::<SdfChunkStoreResource>().unwrap(),
         )
@@ -932,6 +934,8 @@ fn exact_pending_alias_requires_independent_source_proof_and_generic_overwrite_r
             w.resource::<PartitionConfigResource>().unwrap(),
             w.resource::<WorldRuntimeSdfProductCatalogResource>()
                 .unwrap(),
+            w.resource::<engine::plugins::world::chunks::DirtyChunkMapResource>()
+                .unwrap(),
             w.resource::<WorldChunkRuntimeMapResource>().unwrap(),
             w.resource::<SdfChunkStoreResource>().unwrap(),
         )
@@ -1080,6 +1084,8 @@ fn terminal_rejected_exact_replacement_preserves_certificate_but_requires_succes
             w.resource::<PartitionConfigResource>().unwrap(),
             w.resource::<WorldRuntimeSdfProductCatalogResource>()
                 .unwrap(),
+            w.resource::<engine::plugins::world::chunks::DirtyChunkMapResource>()
+                .unwrap(),
             w.resource::<WorldChunkRuntimeMapResource>().unwrap(),
             w.resource::<SdfChunkStoreResource>().unwrap(),
         )
@@ -1100,4 +1106,41 @@ fn terminal_rejected_exact_replacement_preserves_certificate_but_requires_succes
         !is_exact(&app, alias_id),
         "old alias remains bound to the retired generation"
     );
+}
+
+#[test]
+fn queued_dirtiness_rejects_exact_reads_and_ordinary_world_build_retires_source() {
+    use engine::plugins::world::chunks::DirtyChunkMapResource;
+    use engine::plugins::world::queries::{
+        WorldSdfExactQueryBounds, WorldSdfExactReadError,
+        qualify_current_world_sdf_exact_source_read,
+    };
+    use world_ops::{ChunkGeneration, DirtyReason};
+    let mut app = integrated_app();
+    let product_id = arena_field_product_descriptor(&build_arena_chunk_payload())
+        .product_core().identity;
+    let bounds = WorldSdfExactQueryBounds::try_new([0.75; 3], [0.75; 3]).unwrap();
+    let qualify = |app: &App| {
+        let w = app.world();
+        qualify_current_world_sdf_exact_source_read(
+            product_id, bounds,
+            w.resource::<PartitionConfigResource>().unwrap(),
+            w.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap(),
+            w.resource::<DirtyChunkMapResource>().unwrap(),
+            w.resource::<WorldChunkRuntimeMapResource>().unwrap(),
+            w.resource::<SdfChunkStoreResource>().unwrap(),
+        ).map(|_| ())
+    };
+    assert!(qualify(&app).is_ok());
+    app.world_mut()
+        .resource_mut::<DirtyChunkMapResource>().unwrap()
+        .mark_dirty(arena_chunk_id(), DirtyReason::Geometry);
+    assert!(matches!(qualify(&app), Err(WorldSdfExactReadError::RuntimeNotReady)),
+        "unconsumed geometry dirtiness must revoke strict-current exactness");
+    app = app.run_for_fixed_steps(1).expect("ordinary World dirty build integrates");
+    let record = app.world().resource::<WorldChunkRuntimeMapResource>().unwrap()
+        .by_chunk_id.get(&arena_chunk_id()).unwrap();
+    assert_eq!(record.chunk_generation, ChunkGeneration(1));
+    assert!(record.exact_source.is_none(), "generic build must retire certified source");
+    assert!(matches!(qualify(&app), Err(WorldSdfExactReadError::UnsupportedExactSource)));
 }
