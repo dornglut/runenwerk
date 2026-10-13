@@ -1401,3 +1401,75 @@ fn full_precision_replacement_requires_explicit_source_revision_and_sealed_descr
         "explicitly revised source changes exact truth despite matching renderer bytes"
     );
 }
+
+#[test]
+fn exact_replacement_cannot_roll_back_source_lineage_even_for_identical_geometry() {
+    use engine::plugins::world::build::{
+        WorldSdfRuntimePayloadPackage, WorldSdfRuntimePayloadPackageError,
+    };
+    use world_ops::{ChunkGeneration, ChunkRevision};
+    use world_sdf::WorldSdfExactFormationError;
+
+    let mut app = integrated_app();
+    let source = arena_geometry_source();
+    let product_id = arena_field_product_descriptor(&build_arena_chunk_payload())
+        .product_core()
+        .identity;
+    let package = |source_revision, version| {
+        WorldSdfRuntimePayloadPackage::from_exact_formation(arena_exact_formation(
+            source,
+            ARENA_FIELD_PRODUCT_ID,
+            source_revision,
+            ChunkRevision(version),
+            ChunkGeneration(version),
+        ))
+    };
+
+    assert_eq!(w1_enqueue(&mut app, package(2, 1)).unwrap(), 1);
+    app = app.run_for_fixed_steps(1).unwrap();
+    let current = app.world().resource::<SdfChunkStoreResource>().unwrap()
+        .chunks.get(&arena_chunk_id()).unwrap().clone();
+    let catalog_before = app.world()
+        .resource::<WorldRuntimeSdfProductCatalogResource>().unwrap()
+        .product(product_id).unwrap().clone();
+
+    assert!(matches!(
+        w1_enqueue(&mut app, package(1, 2)),
+        Err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected(
+            WorldSdfExactFormationError::InvalidProductOrRevision
+        ))
+    ));
+    assert!(app.world().resource::<WorldCompletedBuildQueueResource>().unwrap()
+        .outputs.is_empty());
+    assert_eq!(
+        app.world().resource::<SdfChunkStoreResource>().unwrap()
+            .chunks.get(&arena_chunk_id()),
+        Some(&current)
+    );
+    assert_eq!(
+        app.world().resource::<WorldRuntimeSdfProductCatalogResource>().unwrap()
+            .product(product_id),
+        Some(&catalog_before),
+        "rejected source-revision rollback must not replace catalog truth"
+    );
+    assert!(app.world().resource::<WorldChunkRuntimeMapResource>().unwrap()
+        .by_chunk_id.get(&arena_chunk_id()).unwrap()
+        .pending_build_generation.is_none());
+
+    assert_eq!(
+        w1_enqueue(&mut app, package(2, 2)).unwrap(),
+        1,
+        "unchanged source and revision may rebuild at a newer chunk generation"
+    );
+    app = app.run_for_fixed_steps(1).unwrap();
+    assert_eq!(
+        app.world().resource::<WorldRuntimeSdfProductCatalogResource>().unwrap()
+            .product(product_id).unwrap().lineage.source_revision,
+        2
+    );
+    assert_eq!(
+        app.world().resource::<SdfChunkStoreResource>().unwrap()
+            .chunks.get(&arena_chunk_id()).unwrap().chunk_generation,
+        ChunkGeneration(2)
+    );
+}
