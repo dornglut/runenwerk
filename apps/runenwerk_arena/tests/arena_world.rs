@@ -679,48 +679,85 @@ fn exact_source_is_not_enqueue_ready_and_limits_world_scope_to_formed_bytes() {
         WorldSdfExactQueryBounds, WorldSdfExactReadError,
         qualify_current_world_sdf_exact_source_read,
     };
-    let bounds = WorldSdfExactQueryBounds::try_new(
-        [0.75, 0.75, 0.75], [1.0, 1.0, 1.0],
-    ).unwrap();
+    let bounds = WorldSdfExactQueryBounds::try_new([0.75, 0.75, 0.75], [1.0, 1.0, 1.0]).unwrap();
     let query = |app: &App, b: WorldSdfExactQueryBounds| {
         let w = app.world();
-        let products = w.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap();
-        let descriptor = products.products().values()
-            .find(|d| d.product_id == ARENA_FIELD_PRODUCT_ID).unwrap();
+        let products = w
+            .resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap();
+        let descriptor = products
+            .products()
+            .values()
+            .find(|d| d.product_id == ARENA_FIELD_PRODUCT_ID)
+            .unwrap();
         qualify_current_world_sdf_exact_source_read(
-            descriptor.product_core().identity, b,
+            descriptor.product_core().identity,
+            b,
             w.resource::<PartitionConfigResource>().unwrap(),
             products,
             w.resource::<WorldChunkRuntimeMapResource>().unwrap(),
             w.resource::<SdfChunkStoreResource>().unwrap(),
-        ).map(|read| read.sample_exact_distance_meters([0.75, 0.75, 0.75]).unwrap())
+        )
+        .map(|read| {
+            read.sample_exact_distance_meters([0.75, 0.75, 0.75])
+                .unwrap()
+        })
     };
-    assert!(query(&started_app(), bounds).is_err(), "catalog enqueue is not CPU readiness");
+    assert!(
+        query(&started_app(), bounds).is_err(),
+        "catalog enqueue is not CPU readiness"
+    );
     let mut app = integrated_app();
     assert_eq!(query(&app, bounds).unwrap(), 0.25);
-    let original_partition = app.world()
-        .resource::<PartitionConfigResource>().unwrap().clone();
-    *app.world_mut().resource_mut::<PartitionConfigResource>().unwrap() =
-        PartitionConfigResource(runen_spatial::GridPartitionConfig::try_new(
-            2.0, [8, 8, 8],
-        ).unwrap());
-    assert!(matches!(query(&app, bounds), Err(WorldSdfExactReadError::PartitionMismatch)));
-    *app.world_mut().resource_mut::<PartitionConfigResource>().unwrap() =
-        original_partition;
-    let cross_chunk = WorldSdfExactQueryBounds::try_new(
-        [3.99, 1.0, 1.0], [4.01, 1.0, 1.0],
-    ).unwrap();
-    assert!(matches!(query(&app, cross_chunk), Err(WorldSdfExactReadError::IncompleteCoverage)));
-    let high = WorldSdfExactQueryBounds::try_new(
-        [1.0, 4.0, 1.0], [1.0, 4.5, 1.0],
-    ).unwrap();
-    assert!(matches!(query(&app, high), Err(WorldSdfExactReadError::IncompleteCoverage)));
+    let original_partition = app
+        .world()
+        .resource::<PartitionConfigResource>()
+        .unwrap()
+        .clone();
+    *app.world_mut()
+        .resource_mut::<PartitionConfigResource>()
+        .unwrap() = PartitionConfigResource(
+        runen_spatial::GridPartitionConfig::try_new(2.0, [8, 8, 8]).unwrap(),
+    );
+    assert!(matches!(
+        query(&app, bounds),
+        Err(WorldSdfExactReadError::PartitionMismatch)
+    ));
+    *app.world_mut()
+        .resource_mut::<PartitionConfigResource>()
+        .unwrap() = original_partition;
+    let cross_chunk =
+        WorldSdfExactQueryBounds::try_new([3.99, 1.0, 1.0], [4.01, 1.0, 1.0]).unwrap();
+    assert!(matches!(
+        query(&app, cross_chunk),
+        Err(WorldSdfExactReadError::IncompleteCoverage)
+    ));
+    let high = WorldSdfExactQueryBounds::try_new([1.0, 4.0, 1.0], [1.0, 4.5, 1.0]).unwrap();
+    assert!(matches!(
+        query(&app, high),
+        Err(WorldSdfExactReadError::IncompleteCoverage)
+    ));
 
-    let payload = app.world_mut().resource_mut::<SdfChunkStoreResource>().unwrap()
-        .chunks.get_mut(&arena_chunk_id()).unwrap();
-    payload.page_table.get_mut(&world_sdf::SdfPageCoord3::default()).unwrap()
-        .bricks.get_mut(&[1, 1, 1]).unwrap().samples.distances[0] += 1;
-    assert!(matches!(query(&app, bounds), Err(WorldSdfExactReadError::InvalidFormation(_))));
+    let payload = app
+        .world_mut()
+        .resource_mut::<SdfChunkStoreResource>()
+        .unwrap()
+        .chunks
+        .get_mut(&arena_chunk_id())
+        .unwrap();
+    payload
+        .page_table
+        .get_mut(&world_sdf::SdfPageCoord3::default())
+        .unwrap()
+        .bricks
+        .get_mut(&[1, 1, 1])
+        .unwrap()
+        .samples
+        .distances[0] += 1;
+    assert!(matches!(
+        query(&app, bounds),
+        Err(WorldSdfExactReadError::InvalidFormation(_))
+    ));
 }
 
 #[test]
@@ -1049,7 +1086,10 @@ fn terminal_rejected_exact_replacement_preserves_certificate_but_requires_succes
         .is_ok()
     };
     assert!(!is_exact(&app, id));
-    assert!(!is_exact(&app, alias_id), "old alias must be revoked after terminal failure");
+    assert!(
+        !is_exact(&app, alias_id),
+        "old alias must be revoked after terminal failure"
+    );
     assert_eq!(w1_enqueue(&mut app, package).unwrap(), 1);
     app = app.run_for_fixed_steps(1).unwrap();
     assert!(
