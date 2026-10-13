@@ -800,19 +800,6 @@ pub(crate) fn build_frame_feature_contributions(
         );
     }
 
-    if contributions
-        .feature(&WIND_FIELDS_RENDER_FEATURE_ID)
-        .is_none()
-        && let Ok(resource) = world.resource::<PreparedWindFieldFeatureResource>()
-    {
-        let wind_policy = feature_policy(
-            world,
-            WIND_FIELDS_RENDER_FEATURE_ID,
-            resource.fallback_policy,
-        );
-        contributions.insert_wind_fields(resource.payload.clone(), resource.status, wind_policy);
-    }
-
     for feature_id in execution_feature_ids {
         if contributions.feature(feature_id).is_some() {
             continue;
