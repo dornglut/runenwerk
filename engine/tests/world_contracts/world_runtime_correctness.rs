@@ -1842,6 +1842,8 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
                 dirty_reasons: Default::default(),
                 pending_build_generation: Some(BuildGeneration(5)),
                 gameplay_locked: false,
+                exact_source: None,
+                exact_read_recovery_required: false,
             },
         );
     }
@@ -2035,6 +2037,8 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
                 dirty_reasons: Default::default(),
                 pending_build_generation: Some(BuildGeneration(11)),
                 gameplay_locked: false,
+                exact_source: None,
+                exact_read_recovery_required: false,
             },
         );
     }
@@ -2111,6 +2115,8 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
                 dirty_reasons: Default::default(),
                 pending_build_generation: Some(BuildGeneration(3)),
                 gameplay_locked: false,
+                exact_source: None,
+                exact_read_recovery_required: false,
             },
         );
     }
