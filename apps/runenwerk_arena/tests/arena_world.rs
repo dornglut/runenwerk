@@ -672,3 +672,82 @@ fn maintained_arena_projects_through_world_residency_into_generic_render_field_i
         }
     }
 }
+
+#[test]
+fn exact_source_is_not_enqueue_ready_and_limits_world_scope_to_formed_bytes() {
+    use engine::plugins::world::queries::{
+        WorldSdfExactQueryBounds, WorldSdfExactReadError,
+        qualify_current_world_sdf_exact_source_read,
+    };
+    let bounds = WorldSdfExactQueryBounds::try_new(
+        [0.75, 0.75, 0.75], [1.0, 1.0, 1.0],
+    ).unwrap();
+    let query = |app: &App, b: WorldSdfExactQueryBounds| {
+        let w = app.world();
+        let products = w.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap();
+        let descriptor = products.products().values()
+            .find(|d| d.product_id == ARENA_FIELD_PRODUCT_ID).unwrap();
+        qualify_current_world_sdf_exact_source_read(
+            descriptor.product_core().identity, b,
+            w.resource::<PartitionConfigResource>().unwrap(),
+            products,
+            w.resource::<WorldChunkRuntimeMapResource>().unwrap(),
+            w.resource::<SdfChunkStoreResource>().unwrap(),
+        ).map(|read| read.sample_exact_distance_meters([0.75, 0.75, 0.75]).unwrap())
+    };
+    assert!(query(&started_app(), bounds).is_err(), "catalog enqueue is not CPU readiness");
+    let mut app = integrated_app();
+    assert_eq!(query(&app, bounds).unwrap(), 0.25);
+    let high = WorldSdfExactQueryBounds::try_new(
+        [1.0, 4.0, 1.0], [1.0, 4.5, 1.0],
+    ).unwrap();
+    assert!(matches!(query(&app, high), Err(WorldSdfExactReadError::IncompleteCoverage)));
+
+    let payload = app.world_mut().resource_mut::<SdfChunkStoreResource>().unwrap()
+        .chunks.get_mut(&arena_chunk_id()).unwrap();
+    payload.page_table.get_mut(&world_sdf::SdfPageCoord3::default()).unwrap()
+        .bricks.get_mut(&[1, 1, 1]).unwrap().samples.distances[0] += 1;
+    assert!(matches!(query(&app, bounds), Err(WorldSdfExactReadError::InvalidFormation(_))));
+}
+
+#[test]
+fn verified_exact_formation_checks_all_occupancy_samples_metadata_and_summary() {
+    use world_sdf::{
+        RegionSdfSummary, WorldSdfExactFormationError,
+        verify_world_sdf_open_top_exact_formation,
+    };
+    let source = arena_geometry_source();
+    let payload = build_arena_chunk_payload();
+    let descriptor = arena_field_product_descriptor(&payload);
+    let metric = arena_metric_payload_ref(&payload);
+    let bricks = payload.page_table.values().flat_map(|p| p.bricks.values());
+    let all = bricks.collect::<Vec<_>>();
+    let summary = RegionSdfSummary {
+        min_distance: all.iter().map(|b| b.metadata.min_distance).min().unwrap(),
+        max_distance: all.iter().map(|b| b.metadata.max_distance).max().unwrap(),
+        occupied_chunk_count: u32::from(all.iter().any(|b| b.metadata.occupancy_mask != 0)),
+        surface_chunk_count: u32::from(all.iter().any(|b| b.metadata.surface_band_present)),
+    };
+    let verify = |src, p: &world_sdf::SdfChunkPayload, s| {
+        verify_world_sdf_open_top_exact_formation(
+            src, &arena_partition_config(), &descriptor, metric, p, s,
+        )
+    };
+    assert!(verify(source, &payload, summary).is_ok());
+    let alternate = WorldSdfOpenTopRectInteriorSource::try_new(
+        [0.75, 3.5], 0.5, [0.5, 3.5],
+    ).unwrap();
+    assert!(verify(alternate, &payload, summary).is_err());
+
+    let mut changed = payload.clone();
+    changed.page_table.get_mut(&world_sdf::SdfPageCoord3::default()).unwrap()
+        .bricks.get_mut(&[0, 0, 0]).unwrap().metadata.occupancy_mask ^= 1;
+    assert!(matches!(verify(source, &changed, summary),
+        Err(WorldSdfExactFormationError::InvalidSampleOrMetadata { .. })));
+    changed = payload.clone();
+    changed.page_table.get_mut(&world_sdf::SdfPageCoord3::default()).unwrap()
+        .bricks.get_mut(&[0, 0, 0]).unwrap().samples.distances[0] += 1;
+    assert!(verify(source, &changed, summary).is_err());
+    assert!(verify(source, &payload, RegionSdfSummary::default()).is_err());
+    assert!(verify(source, &payload, summary).is_ok());
+}

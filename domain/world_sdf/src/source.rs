@@ -65,6 +65,23 @@ impl WorldSdfOpenTopRectInteriorSource {
         })
     }
 
+    /// Exact five-face Euclidean distance (positive free space), not World readiness.
+    pub fn signed_distance_meters(self, p: [f64; 3]) -> f64 {
+        let [xmin, xmax] = self.x_bounds_meters;
+        let [zmin, zmax] = self.z_bounds_meters;
+        let violation = |v: f64, lo: f64, hi: f64| {
+            if v < lo { lo - v } else if v > hi { v - hi } else { 0.0 }
+        };
+        let dx = violation(p[0], xmin, xmax);
+        let dy = (self.floor_y_meters - p[1]).max(0.0);
+        let dz = violation(p[2], zmin, zmax);
+        let outside = dx.hypot(dy).hypot(dz);
+        if outside > 0.0 { return -outside; }
+        (p[0] - xmin).min(xmax - p[0])
+            .min(p[1] - self.floor_y_meters)
+            .min(p[2] - zmin).min(zmax - p[2])
+    }
+
     pub const fn schema_revision(self) -> u16 {
         self.schema_revision
     }

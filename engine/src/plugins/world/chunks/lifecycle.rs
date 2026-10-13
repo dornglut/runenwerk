@@ -1,6 +1,8 @@
 use super::DirtyChunkMapResource;
 use crate::runtime::{ResMut, WorldMut};
 use runen_spatial::ChunkId;
+use product::ProductIdentity;
+use world_sdf::{FieldProductDescriptor, WorldSdfVerifiedExactSource};
 use std::collections::BTreeMap;
 use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReasonSet};
 
@@ -14,6 +16,14 @@ pub enum ChunkLifecycleState {
     Resident,
 }
 
+/// Certificate is attached to the existing authoritative runtime record,
+/// never to enqueue-time catalog residency.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorldSdfCommittedExactSource {
+    pub evidence: WorldSdfVerifiedExactSource,
+    pub eligible_products: BTreeMap<ProductIdentity, FieldProductDescriptor>,
+}
+
 #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
 pub struct WorldChunkRuntimeRecord {
     pub chunk_id: ChunkId,
@@ -24,6 +34,7 @@ pub struct WorldChunkRuntimeRecord {
     pub dirty_reasons: DirtyReasonSet,
     pub pending_build_generation: Option<BuildGeneration>,
     pub gameplay_locked: bool,
+    pub exact_source: Option<WorldSdfCommittedExactSource>,
 }
 
 impl WorldChunkRuntimeRecord {
@@ -37,6 +48,7 @@ impl WorldChunkRuntimeRecord {
             dirty_reasons: DirtyReasonSet::default(),
             pending_build_generation: None,
             gameplay_locked: false,
+            exact_source: None,
         }
     }
 }
