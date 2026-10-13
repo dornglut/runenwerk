@@ -257,7 +257,7 @@ fn normalized_repeat_metadata_cannot_create_a_pressed_edge() {
 }
 
 #[test]
-fn device_scoped_key_state_keeps_product_press_edge_aggregate() {
+fn device_scoped_key_transitions_have_independent_pressed_edges() {
     let mut input = InputState::new();
     let mut actions = ActionState::new();
     let source = InputSourceId::new(90);
@@ -272,7 +272,7 @@ fn device_scoped_key_state_keeps_product_press_edge_aggregate() {
     clear_frame(&mut input, &mut actions);
     input.handle_normalized_keyboard(context_b, &normalized_key(DigitalState::Pressed));
     actions.project(&input);
-    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
     assert!(actions.action_down(action::WORLD_MOVE_UP));
 
     input.handle_normalized_keyboard(context_a, &normalized_key(DigitalState::Released));
@@ -282,6 +282,93 @@ fn device_scoped_key_state_keeps_product_press_edge_aggregate() {
     input.handle_normalized_keyboard(context_b, &normalized_key(DigitalState::Released));
     actions.project(&input);
     assert!(!actions.action_down(action::WORLD_MOVE_UP));
+}
+
+
+#[test]
+fn source_scoped_modifiers_do_not_combine_across_native_windows() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let first = InputContext::new(InputSourceId::new(901), Some(InputDeviceId::new(1)));
+    let second = InputContext::new(InputSourceId::new(902), Some(InputDeviceId::new(2)));
+
+    let shift = KeyboardInput {
+        physical_key: physical_key(KeyCode::ShiftLeft),
+        ..normalized_key(DigitalState::Pressed)
+    };
+    let enter = KeyboardInput {
+        physical_key: physical_key(KeyCode::Enter),
+        ..normalized_key(DigitalState::Pressed)
+    };
+    input.handle_normalized_keyboard(first, &shift);
+    input.handle_normalized_keyboard(second, &enter);
+    actions.project(&input);
+    assert!(actions.action_pressed(action::UI_SUBMIT));
+    assert!(!actions.action_pressed(action::UI_INSERT_NEWLINE));
+    assert!(actions.action_down(action::UI_SUBMIT));
+    assert!(!actions.action_down(action::UI_INSERT_NEWLINE));
+
+    // Binding mutations and FrameEnd recompute may not mix two source chords.
+    actions.reset_default_bindings(&input);
+    assert!(actions.action_down(action::UI_SUBMIT));
+    assert!(!actions.action_down(action::UI_INSERT_NEWLINE));
+    clear_frame(&mut input, &mut actions);
+    assert!(actions.action_down(action::UI_SUBMIT));
+}
+
+#[test]
+fn same_frame_source_local_down_up_down_preserves_both_physical_edges() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let first = InputContext::new(InputSourceId::new(903), Some(InputDeviceId::new(1)));
+    let second = InputContext::new(InputSourceId::new(904), Some(InputDeviceId::new(2)));
+    let down = normalized_key(DigitalState::Pressed);
+    let up = normalized_key(DigitalState::Released);
+
+    input.handle_normalized_keyboard(first, &down);
+    input.handle_normalized_keyboard(first, &up);
+    input.handle_normalized_keyboard(first, &down);
+    input.handle_normalized_keyboard(second, &down);
+
+    let samples = input.keyboard_press_samples();
+    assert_eq!(samples.len(), 3);
+    assert_eq!(samples[0].context, first);
+    assert_eq!(samples[1].context, first);
+    assert_eq!(samples[2].context, second);
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+
+    input.handle_continuity_loss(first, ContinuityLoss::Source);
+    actions.project(&input);
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+    input.handle_normalized_keyboard(second, &up);
+    actions.project(&input);
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+}
+
+#[test]
+fn key_release_cannot_inherit_modifier_from_another_source() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let first = InputContext::new(InputSourceId::new(905), None);
+    let second = InputContext::new(InputSourceId::new(906), None);
+    let shift = KeyboardInput {
+        physical_key: physical_key(KeyCode::ShiftLeft),
+        ..normalized_key(DigitalState::Pressed)
+    };
+    let enter = KeyboardInput {
+        physical_key: physical_key(KeyCode::Enter),
+        ..normalized_key(DigitalState::Pressed)
+    };
+    input.handle_normalized_keyboard(first, &shift);
+    input.handle_normalized_keyboard(second, &enter);
+    actions.project(&input);
+    assert!(actions.action_down(action::UI_SUBMIT));
+    input.handle_continuity_loss(second, ContinuityLoss::Source);
+    actions.project(&input);
+    assert!(!actions.action_down(action::UI_SUBMIT));
+    assert!(!actions.action_down(action::UI_INSERT_NEWLINE));
 }
 
 #[test]

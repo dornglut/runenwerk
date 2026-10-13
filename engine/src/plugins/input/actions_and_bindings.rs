@@ -444,6 +444,9 @@ impl ActionState {
         self.recompute_action_down_states(input);
         let presses = input.keyboard_press_samples();
         for press in presses.iter().skip(self.processed_keyboard_presses) {
+            // The physical source remains associated with the press. Native
+            // UI/game permission is not enabled by this preparatory correction.
+            let _source_context = press.context;
             for action in self
                 .bindings
                 .matching_actions(&press.physical_key, press.modifiers)
@@ -481,13 +484,19 @@ impl ActionState {
     }
 
     fn recompute_action_down_states(&mut self, input: &InputState) {
-        let modifiers = input.modifiers_snapshot();
         let mut actions_down = HashSet::new();
         for action in self.bindings.action_ids() {
-            if self
-                .bindings
-                .action_down(action, |key| input.physical_key_down(key), modifiers)
-            {
+            // One eligible chord must be physically held within one exact
+            // source/device context. Keys from different windows or devices
+            // must not synthesize a combined held chord.
+            if input.keyboard_held_contexts().any(|context| {
+                let modifiers = input.modifiers_snapshot_in(context);
+                self.bindings.action_down(
+                    action,
+                    |key| input.physical_key_down_in(context, key),
+                    modifiers,
+                )
+            }) {
                 actions_down.insert(action.clone());
             }
         }

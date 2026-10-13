@@ -109,14 +109,25 @@ pub struct TouchInputSample {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct KeyboardPressSample {
+    // The exact physical source which originated this Down transition.
+    pub(super) context: InputContext,
     pub(super) physical_key: PhysicalKeyIdentity,
     pub(super) modifiers: ModifiersSnapshot,
+}
+
+/// A derived index of held keyboard contributors, never a replacement for
+/// RunenInput's authoritative source/device-scoped physical state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct KeyboardHeldContributor {
+    context: InputContext,
+    physical_key: PhysicalKeyIdentity,
 }
 
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct InputState {
     neutral: NeutralInputState,
     keyboard_press_samples: Vec<KeyboardPressSample>,
+    keyboard_held_contributors: Vec<KeyboardHeldContributor>,
     pub typed_text: String,
     pub overlay_consumed: bool,
     pub mouse_delta: (f32, f32),
@@ -142,6 +153,7 @@ impl Default for InputState {
         Self {
             neutral: NeutralInputState::default(),
             keyboard_press_samples: Vec::new(),
+            keyboard_held_contributors: Vec::new(),
             typed_text: String::new(),
             overlay_consumed: false,
             mouse_delta: (0.0, 0.0),
@@ -248,6 +260,9 @@ impl InputState {
         ))
         .expect("input continuity loss should always be valid");
 
+        self.keyboard_held_contributors.retain(|contributor| {
+            !continuity_loss_contains_context(context, loss, contributor.context)
+        });
         if self.primary_touch.is_some_and(|(touch_context, _)| {
             continuity_loss_contains_context(context, loss, touch_context)
         }) {
@@ -260,23 +275,38 @@ impl InputState {
         context: InputContext,
         input: &KeyboardInput,
     ) {
-        let was_down_anywhere = self.neutral.key_down_anywhere(&input.physical_key);
+        let was_down_in_source = self.neutral.key_down_in(context, &input.physical_key);
         self.admit_group(&InputObservationGroup::single(
             context,
             InputObservation::Keyboard(input.clone()),
         ))
         .expect("digital keyboard observation should always be valid");
-        let is_down_anywhere = self.neutral.key_down_anywhere(&input.physical_key);
+        let is_down_in_source = self.neutral.key_down_in(context, &input.physical_key);
 
+        if was_down_in_source != is_down_in_source {
+            if is_down_in_source {
+                // This is only an index for ActionState iteration. Physical held
+                // truth is always queried from the admitted neutral reducer.
+                self.keyboard_held_contributors.push(KeyboardHeldContributor {
+                    context,
+                    physical_key: input.physical_key.clone(),
+                });
+            } else {
+                self.keyboard_held_contributors.retain(|contributor| {
+                    contributor.context != context || contributor.physical_key != input.physical_key
+                });
+            }
+        }
         if input.origin == ObservationOrigin::SourceReport
             && input.state == DigitalState::Pressed
             && !input.repeat
-            && !was_down_anywhere
-            && is_down_anywhere
+            && !was_down_in_source
+            && is_down_in_source
         {
             self.keyboard_press_samples.push(KeyboardPressSample {
+                context,
                 physical_key: input.physical_key.clone(),
-                modifiers: self.modifiers_snapshot(),
+                modifiers: self.modifiers_snapshot_in(context),
             });
         }
     }
@@ -669,24 +699,15 @@ impl InputState {
         self.key_down(KeyCode::ShiftLeft) || self.key_down(KeyCode::ShiftRight)
     }
 
-    fn ctrl_down(&self) -> bool {
-        self.key_down(KeyCode::ControlLeft) || self.key_down(KeyCode::ControlRight)
-    }
-
-    fn alt_down(&self) -> bool {
-        self.key_down(KeyCode::AltLeft) || self.key_down(KeyCode::AltRight)
-    }
-
-    fn super_down(&self) -> bool {
-        self.key_down(KeyCode::SuperLeft) || self.key_down(KeyCode::SuperRight)
-    }
-
-    pub(super) fn modifiers_snapshot(&self) -> ModifiersSnapshot {
+    pub(super) fn modifiers_snapshot_in(&self, context: InputContext) -> ModifiersSnapshot {
+        let down = |key| self
+            .neutral
+            .key_down_in(context, &physical_identity_for_key_code(key));
         ModifiersSnapshot {
-            shift: self.shift_down(),
-            ctrl: self.ctrl_down(),
-            alt: self.alt_down(),
-            super_key: self.super_down(),
+            shift: down(KeyCode::ShiftLeft) || down(KeyCode::ShiftRight),
+            ctrl: down(KeyCode::ControlLeft) || down(KeyCode::ControlRight),
+            alt: down(KeyCode::AltLeft) || down(KeyCode::AltRight),
+            super_key: down(KeyCode::SuperLeft) || down(KeyCode::SuperRight),
         }
     }
 
@@ -695,8 +716,23 @@ impl InputState {
             .key_down_anywhere(&physical_identity_for_key_code(key))
     }
 
+    #[cfg(test)]
     pub(super) fn physical_key_down(&self, key: &PhysicalKeyIdentity) -> bool {
         self.neutral.key_down_anywhere(key)
+    }
+
+    pub(super) fn physical_key_down_in(
+        &self,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+    ) -> bool {
+        self.neutral.key_down_in(context, key)
+    }
+
+    pub(super) fn keyboard_held_contexts(&self) -> impl Iterator<Item = InputContext> + '_ {
+        self.keyboard_held_contributors
+            .iter()
+            .map(|contributor| contributor.context)
     }
 
     pub(super) fn keyboard_press_samples(&self) -> &[KeyboardPressSample] {
