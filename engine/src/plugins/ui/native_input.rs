@@ -197,7 +197,7 @@ impl UiNativeInputRecipientsResource {
 #[cfg(test)]
 mod tests {
     use runenui_core::{LogicalLength, NoHostProtocol, StyleEnvironment, UiApp, View, text};
-    use runenui_runtime::{LogicalSize, SurfaceBuildContext};
+    use runenui_runtime::{LogicalSize, RasterScale, SurfaceBuildContext};
 
     use super::*;
     use crate::plugins::render::RenderFrameProducerId;
@@ -505,8 +505,18 @@ mod tests {
         // Establish a second genuine framework publication and structural
         // completion witness for the new mapping before retiring the native
         // source. This verifies that retirement invalidates a *live* display.
+        // The 800x600 physical target at 2x raster scale must publish the
+        // corresponding 400x300 logical surface, not reuse the old 1x input.
+        let changed_context = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(
+                LogicalLength::from(400.0_f32),
+                LogicalLength::from(300.0_f32),
+            ),
+        )
+        .with_raster_scale(RasterScale::new(2.0).expect("valid native raster scale"));
         let next = slots
-            .publish_surface_for_slot(slot, &context)
+            .publish_surface_for_slot(slot, &changed_context)
             .expect("new RunenUI publication");
         let next_id = presentations
             .stage(
