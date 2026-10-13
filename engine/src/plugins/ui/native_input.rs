@@ -558,7 +558,10 @@ mod tests {
         // A real native callback changes the live host record before the
         // next RenderPrepare refreshes the association mapping. The lookup
         // itself must reject either changed dimension or DPI immediately.
-        windows.record_mut(first).expect("created window").scale_factor = 2.0;
+        windows
+            .record_mut(first)
+            .expect("created window")
+            .scale_factor = 2.0;
         assert!(matches!(
             recipients.displayed_pointer_input(
                 first,
@@ -569,7 +572,10 @@ mod tests {
             ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
-        windows.record_mut(first).expect("created window").scale_factor = 1.0;
+        windows
+            .record_mut(first)
+            .expect("created window")
+            .scale_factor = 1.0;
         windows.record_mut(first).expect("created window").size_px = (800, 600);
         assert!(matches!(
             recipients.displayed_pointer_input(
@@ -581,7 +587,10 @@ mod tests {
             ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
-        windows.record_mut(first).expect("created window").scale_factor = 2.0;
+        windows
+            .record_mut(first)
+            .expect("created window")
+            .scale_factor = 2.0;
         assert!(render_surfaces.update_surface_extent_for_native_window(first, (800, 600)));
 
         let changed = UiRuntimeNativeMapping::new(first, render_surface, (800, 600), 2.0)
