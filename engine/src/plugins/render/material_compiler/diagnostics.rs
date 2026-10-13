@@ -59,7 +59,10 @@ impl fmt::Display for MaterialShaderCompileError {
                 "unsupported material IR contract version {found}; expected {expected}"
             ),
             Self::UnsupportedOutputTarget { target } => {
-                write!(formatter, "material renderer does not realize output target {target:?}")
+                write!(
+                    formatter,
+                    "material renderer does not realize output target {target:?}"
+                )
             }
             Self::UnsupportedAuthoredOutputInput {
                 target,

@@ -902,7 +902,6 @@ fn changed_material_recipe_allocates_new_ledger_entry() {
     let _ = std::fs::remove_dir_all(root);
 }
 
-
 #[test]
 fn unsupported_material_output_preserves_prior_valid_artifact() {
     let root = unique_temp_dir("material_capability_preserve");
@@ -988,7 +987,10 @@ fn unsupported_material_output_preserves_prior_valid_artifact() {
     }));
     let publication = outcome.publication.expect("last-good preservation");
     assert_eq!(publication.artifact.artifact_id, asset_artifact_id(9));
-    assert_eq!(publication.artifact.validity, asset::ArtifactValidity::FailedPreserved);
+    assert_eq!(
+        publication.artifact.validity,
+        asset::ArtifactValidity::FailedPreserved
+    );
     let _ = std::fs::remove_dir_all(root);
 }
 

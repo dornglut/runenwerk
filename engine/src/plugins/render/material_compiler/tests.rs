@@ -4,8 +4,8 @@ use graph::{
     PortDefinition, PortDirection, PortId, PortTypeId,
 };
 use material_graph::{
-    MaterialGraphDocument, MaterialGraphDocumentId, MaterialIr, MaterialNodeCatalog,
-    MaterialIrInputSource, MaterialNodeOp, MaterialOutputTarget, MaterialValueType,
+    MaterialGraphDocument, MaterialGraphDocumentId, MaterialIr, MaterialIrInputSource,
+    MaterialNodeCatalog, MaterialNodeOp, MaterialOutputTarget, MaterialValueType,
     lower_material_graph,
 };
 use resource_ref::ResourceRef;
@@ -683,7 +683,6 @@ fn compiler_rejects_missing_output_node() {
     assert_eq!(error, MaterialShaderCompileError::MissingOutputNode);
 }
 
-
 fn output_ir(target: MaterialOutputTarget) -> MaterialIr {
     let mut ir = ir();
     ir.output_target = target;
@@ -769,7 +768,10 @@ fn compile_ir(ir: &MaterialIr) -> Result<CompiledMaterialShader, MaterialShaderC
 
 #[test]
 fn renderer_capabilities_admit_default_output_inputs_for_both_shader_targets() {
-    for target in [MaterialOutputTarget::PbrPreview, MaterialOutputTarget::RenderMaterial] {
+    for target in [
+        MaterialOutputTarget::PbrPreview,
+        MaterialOutputTarget::RenderMaterial,
+    ] {
         let ir = output_ir(target);
         let output = ir
             .nodes
