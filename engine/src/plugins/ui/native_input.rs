@@ -432,7 +432,8 @@ mod tests {
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
         assert_eq!(
-            recipients.displayed_pointer_input(second, &windows, &mut slots, &presentations)
+            recipients
+                .displayed_pointer_input(second, &windows, &mut slots, &presentations)
                 .unwrap_err(),
             NativeInputRecipientError::MissingRecipient
         );
@@ -440,12 +441,8 @@ mod tests {
         let render_surface = RenderSurfaceId::primary();
         let producer = RenderFrameProducerId::try_from_raw(71).expect("valid producer");
         let style = StyleEnvironment::default();
-        let binding = UiRuntimePresentationBinding::new(
-            slot,
-            producer,
-            render_surface,
-            style.clone(),
-        );
+        let binding =
+            UiRuntimePresentationBinding::new(slot, producer, render_surface, style.clone());
         let mapping = UiRuntimeNativeMapping::new(first, render_surface, (640, 480), 1.0)
             .expect("valid host mapping");
         presentations.bind(binding.clone()).expect("exact binding");
@@ -453,7 +450,10 @@ mod tests {
 
         let context = SurfaceBuildContext::tight(
             &style,
-            LogicalSize::new(LogicalLength::from(640.0_f32), LogicalLength::from(480.0_f32)),
+            LogicalSize::new(
+                LogicalLength::from(640.0_f32),
+                LogicalLength::from(480.0_f32),
+            ),
         );
         let publication = slots
             .publish_surface_for_slot(slot, &context)
@@ -461,7 +461,7 @@ mod tests {
         let expected = publication.input_context().clone();
         let publication_id = presentations
             .stage(
-                binding,
+                binding.clone(),
                 mapping,
                 slots.ingress_epoch(slot).expect("mounted epoch"),
                 publication,
@@ -477,22 +477,65 @@ mod tests {
             recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
-        assert!(presentations
-            .promote_completed_publication(publication_id)
-            .is_some());
+        assert!(
+            presentations
+                .promote_completed_publication(publication_id)
+                .is_some()
+        );
         let displayed = recipients
             .displayed_pointer_input(first, &windows, &mut slots, &presentations)
             .expect("live mounted recipient")
             .expect("only completed display is available");
         assert_eq!(displayed.input_context, expected);
         assert_eq!(displayed.mapping.native_window_id(), first);
-        assert!(presentations
-            .displayed_for_native_recipient(slot, second)
-            .is_none());
+        assert!(
+            presentations
+                .displayed_for_native_recipient(slot, second)
+                .is_none()
+        );
 
         let changed = UiRuntimeNativeMapping::new(first, render_surface, (800, 600), 2.0)
             .expect("valid changed host mapping");
         assert!(presentations.update_mapping(slot, changed));
+        assert!(matches!(
+            recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
+            Err(NativeInputRecipientError::NoCompletedPresentation)
+        ));
+
+        // Establish a second genuine framework publication and structural
+        // completion witness for the new mapping before retiring the native
+        // source. This verifies that retirement invalidates a *live* display.
+        let next = slots
+            .publish_surface_for_slot(slot, &context)
+            .expect("new RunenUI publication");
+        let next_id = presentations
+            .stage(
+                binding,
+                changed,
+                slots.ingress_epoch(slot).expect("mounted epoch"),
+                next,
+            )
+            .expect("stage new native mapping");
+        assert!(presentations.associate_accepted_submission(next_id));
+        assert!(presentations.promote_completed_publication(next_id).is_some());
+        assert!(recipients
+            .displayed_pointer_input(first, &windows, &mut slots, &presentations)
+            .expect("valid recipient")
+            .is_some());
+
+        assert!(recipients.retire_window(first, &mut presentations));
+        assert!(presentations
+            .displayed_for_native_recipient(slot, first)
+            .is_none());
+        assert_eq!(
+            recipients.bind(
+                first,
+                NativeInputRecipient::RunenUiSlot(slot),
+                &windows,
+                &mut slots,
+            ),
+            Ok(true)
+        );
         assert!(matches!(
             recipients.displayed_pointer_input(first, &windows, &mut slots, &presentations),
             Err(NativeInputRecipientError::NoCompletedPresentation)
