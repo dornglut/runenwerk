@@ -346,20 +346,17 @@ pub fn enqueue_ratified_world_sdf_payload_package(
     // Source changes on replacement require explicit lineage revision progress;
     // matching formed bytes alone must not silently change the committed f64
     // source under an unchanged source revision.
-    if let Some(candidate) = qualified.as_ref() {
-        if let Some(previous) = chunks
+    if let Some(candidate) = qualified.as_ref()
+        && let Some(previous) = chunks
             .by_chunk_id
             .get(&payload.chunk_id)
             .and_then(|record| record.exact_source.as_ref())
-        {
-            if candidate.source() != previous.evidence.source()
-                && candidate.source_revision() <= previous.evidence.source_revision()
-            {
-                return Err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected(
-                    WorldSdfExactFormationError::InvalidProductOrRevision,
-                ));
-            }
-        }
+        && candidate.source() != previous.evidence.source()
+        && candidate.source_revision() <= previous.evidence.source_revision()
+    {
+        return Err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected(
+            WorldSdfExactFormationError::InvalidProductOrRevision,
+        ));
     }
 
     // A pending retry is distinct from replaying an already integrated chunk.
