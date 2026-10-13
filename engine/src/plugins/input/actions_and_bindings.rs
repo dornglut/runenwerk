@@ -637,7 +637,9 @@ impl ActionState {
             && !self.blocked_held_key(context, key)
             && input
                 .keyboard_down_generation_in(context, key)
-                .is_none_or(|generation| self.keyboard_generation_eligible(context, key, generation))
+                .is_none_or(|generation| {
+                    self.keyboard_generation_eligible(context, key, generation)
+                })
     }
 
     /// Modifiers are physical keys in the SAME source/device context, subject
