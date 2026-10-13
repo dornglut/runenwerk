@@ -205,15 +205,19 @@ impl InputState {
     }
 
     fn observe_keyboard_contributor(&mut self, context: InputContext, input: &KeyboardInput) {
-        let held_index = self.keyboard_held_contributors.iter().position(|contributor| {
-            contributor.context == context && contributor.physical_key == input.physical_key
-        });
+        let held_index = self
+            .keyboard_held_contributors
+            .iter()
+            .position(|contributor| {
+                contributor.context == context && contributor.physical_key == input.physical_key
+            });
         match (input.state, held_index) {
             (DigitalState::Pressed, None) => {
-                self.keyboard_held_contributors.push(KeyboardHeldContributor {
-                    context,
-                    physical_key: input.physical_key.clone(),
-                });
+                self.keyboard_held_contributors
+                    .push(KeyboardHeldContributor {
+                        context,
+                        physical_key: input.physical_key.clone(),
+                    });
                 if input.origin == ObservationOrigin::SourceReport && !input.repeat {
                     self.keyboard_press_samples.push(KeyboardPressSample {
                         context,
@@ -726,9 +730,10 @@ impl InputState {
     }
 
     pub(super) fn modifiers_snapshot_in(&self, context: InputContext) -> ModifiersSnapshot {
-        let down = |key| self
-            .neutral
-            .key_down_in(context, &physical_identity_for_key_code(key));
+        let down = |key| {
+            self.neutral
+                .key_down_in(context, &physical_identity_for_key_code(key))
+        };
         ModifiersSnapshot {
             shift: down(KeyCode::ShiftLeft) || down(KeyCode::ShiftRight),
             ctrl: down(KeyCode::ControlLeft) || down(KeyCode::ControlRight),

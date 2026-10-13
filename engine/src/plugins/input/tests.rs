@@ -370,7 +370,6 @@ fn key_release_cannot_inherit_modifier_from_another_source() {
     assert!(!actions.action_down(action::UI_INSERT_NEWLINE));
 }
 
-
 #[test]
 fn group_keyboard_projection_observes_prefix_modifiers_atomically() {
     let mut input = InputState::new();
