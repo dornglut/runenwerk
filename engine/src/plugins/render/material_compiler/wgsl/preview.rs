@@ -5,8 +5,8 @@ use material_graph::MaterialIr;
 use super::super::bindings::material_resource_declarations;
 use super::super::identity::{fixture_id, output_target_label};
 use super::super::{MATERIAL_WGSL_COMPILER_CONTRACT_VERSION, MaterialPreviewFixture};
-use super::lighting::DIRECT_LIGHT_WGSL;
 use super::WgslMaterialProgram;
+use super::lighting::DIRECT_LIGHT_WGSL;
 
 pub(crate) fn material_program_wgsl(
     ir: &MaterialIr,

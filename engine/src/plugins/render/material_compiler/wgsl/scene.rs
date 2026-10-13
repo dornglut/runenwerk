@@ -6,8 +6,8 @@ use super::super::CompiledMaterialResourceBinding;
 use super::super::MATERIAL_WGSL_COMPILER_CONTRACT_VERSION;
 use super::super::bindings::material_resource_declarations;
 use super::super::identity::output_target_label;
-use super::lighting::DIRECT_LIGHT_WGSL;
 use super::WgslMaterialProgram;
+use super::lighting::DIRECT_LIGHT_WGSL;
 
 pub(crate) struct SceneMaterialTableProgramSlot<'a> {
     pub(crate) slot_index: u32,

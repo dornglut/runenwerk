@@ -952,7 +952,11 @@ fn renderer_capabilities_reject_mixed_authored_semantics_without_publishing_wgsl
 #[test]
 fn scene_material_table_rejects_ignored_output_inputs_in_any_slot() {
     let valid = ir();
-    let invalid = authored_output_ir(MaterialOutputTarget::RenderMaterial, "normal_strength", "0.8");
+    let invalid = authored_output_ir(
+        MaterialOutputTarget::RenderMaterial,
+        "normal_strength",
+        "0.8",
+    );
     assert_eq!(
         compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
             slots: vec![
@@ -998,13 +1002,20 @@ fn renderer_realizes_connected_roughness_and_metallic_in_scene_and_preview() {
         let compiled = compile_ir(&ir).expect("connected scene parameter supported");
         assert!(compiled.wgsl.contains("rw_direct_material_light("));
         assert!(compiled.scene_wgsl.contains("shade_model_mesh_region("));
-        assert!(compiled.scene_wgsl.contains("let lit = rw_direct_material_light("));
+        assert!(
+            compiled
+                .scene_wgsl
+                .contains("let lit = rw_direct_material_light(")
+        );
     }
 }
 
 #[test]
 fn material_direct_light_endpoints_are_naga_valid_with_finite_denominator_guards() {
-    for target in [MaterialOutputTarget::PbrPreview, MaterialOutputTarget::RenderMaterial] {
+    for target in [
+        MaterialOutputTarget::PbrPreview,
+        MaterialOutputTarget::RenderMaterial,
+    ] {
         for parameter in ["roughness", "metallic"] {
             for value in ["0.0", "1.0"] {
                 let ir = authored_output_ir(target, parameter, value);
@@ -1021,31 +1032,61 @@ fn material_direct_light_endpoints_are_naga_valid_with_finite_denominator_guards
 
 #[test]
 fn scene_table_identity_and_effective_cache_track_only_connection_change() {
-    let mut baseline = lowered_connected_output_ir(MaterialOutputTarget::RenderMaterial, "roughness");
-    let mut second = baseline.nodes.iter().find(|n| n.node_id == NodeId::new(10)).unwrap().clone();
+    let mut baseline =
+        lowered_connected_output_ir(MaterialOutputTarget::RenderMaterial, "roughness");
+    let mut second = baseline
+        .nodes
+        .iter()
+        .find(|n| n.node_id == NodeId::new(10))
+        .unwrap()
+        .clone();
     second.node_id = NodeId::new(20);
     baseline.nodes.insert(1, second);
     let mut changed = baseline.clone();
-    let output = changed.nodes.iter_mut().find(|n| n.op == MaterialNodeOp::PbrOutput).unwrap();
-    output.inputs.iter_mut().find(|n| n.name == "roughness").unwrap().source =
-        MaterialIrInputSource::Connected { node_id: NodeId::new(20), output_name: "value".to_string() };
-    let compile = |ir: &MaterialIr| compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
-        slots: vec![SceneMaterialTableSlot {
-            slot_index: 0, material_instance_id: "material.asset.same".to_string(), ir,
-        }],
-    }).expect("valid table");
+    let output = changed
+        .nodes
+        .iter_mut()
+        .find(|n| n.op == MaterialNodeOp::PbrOutput)
+        .unwrap();
+    output
+        .inputs
+        .iter_mut()
+        .find(|n| n.name == "roughness")
+        .unwrap()
+        .source = MaterialIrInputSource::Connected {
+        node_id: NodeId::new(20),
+        output_name: "value".to_string(),
+    };
+    let compile = |ir: &MaterialIr| {
+        compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+            slots: vec![SceneMaterialTableSlot {
+                slot_index: 0,
+                material_instance_id: "material.asset.same".to_string(),
+                ir,
+            }],
+        })
+        .expect("valid table")
+    };
     let original = compile(&baseline);
     let replacement = compile(&changed);
     let stable = compile(&baseline);
     assert_ne!(original.wgsl, replacement.wgsl);
     assert_ne!(original.identity, replacement.identity);
     assert_eq!(original.identity, stable.identity);
-    assert_eq!(original.resource_layout_identity, replacement.resource_layout_identity);
-    let effective_cache_key = |shader: &CompiledSceneMaterialTableShader| format!(
-        "material-scene-table-shader-v1:table={}:resources={}:compiler_resources={}:shader={}",
-        "same-table", "same-resources", shader.resource_layout_identity, shader.identity,
+    assert_eq!(
+        original.resource_layout_identity,
+        replacement.resource_layout_identity
     );
-    assert_ne!(effective_cache_key(&original), effective_cache_key(&replacement));
+    let effective_cache_key = |shader: &CompiledSceneMaterialTableShader| {
+        format!(
+            "material-scene-table-shader-v1:table={}:resources={}:compiler_resources={}:shader={}",
+            "same-table", "same-resources", shader.resource_layout_identity, shader.identity,
+        )
+    };
+    assert_ne!(
+        effective_cache_key(&original),
+        effective_cache_key(&replacement)
+    );
     assert_eq!(effective_cache_key(&original), effective_cache_key(&stable));
 }
 

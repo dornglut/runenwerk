@@ -156,7 +156,10 @@ pub(super) fn material_scene_table_shader_identity(
                         encoder.field("input_source", "constant");
                         encoder.field("input_literal", &literal.canonical_component());
                     }
-                    MaterialIrInputSource::NodeValue { key, canonical_value } => {
+                    MaterialIrInputSource::NodeValue {
+                        key,
+                        canonical_value,
+                    } => {
                         encoder.field("input_source", "node_value");
                         encoder.field("input_value_key", key);
                         encoder.field("input_value", canonical_value);
