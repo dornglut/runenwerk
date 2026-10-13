@@ -37,6 +37,7 @@ impl std::error::Error for WorldSdfExactFormationError {}
 #[derive(Debug, Clone, PartialEq)]
 pub struct WorldSdfVerifiedExactSource {
     source: WorldSdfOpenTopRectInteriorSource,
+    formation_revision: u16,
     partition: GridPartitionConfig,
     metric_ref: WorldSdfMetricPayloadRef,
     source_revision: u64,
@@ -45,6 +46,7 @@ pub struct WorldSdfVerifiedExactSource {
 }
 impl WorldSdfVerifiedExactSource {
     pub fn source(&self) -> WorldSdfOpenTopRectInteriorSource { self.source }
+    pub fn formation_revision(&self) -> u16 { self.formation_revision }
     pub fn partition(&self) -> &GridPartitionConfig { &self.partition }
     pub fn metric_ref(&self) -> WorldSdfMetricPayloadRef { self.metric_ref }
     pub fn source_revision(&self) -> u64 { self.source_revision }
@@ -193,7 +195,8 @@ pub fn verify_world_sdf_open_top_exact_formation(
         return Err(E::InvalidRegionSummary);
     }
     Ok(WorldSdfVerifiedExactSource {
-        source, partition: partition.clone(), metric_ref,
+        source, formation_revision: WORLD_SDF_OPEN_TOP_EXACT_FORMATION_REVISION,
+        partition: partition.clone(), metric_ref,
         source_revision: descriptor.lineage.source_revision,
         chunk_generation: payload.chunk_generation, region_summary,
     })

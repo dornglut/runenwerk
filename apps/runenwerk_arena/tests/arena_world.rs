@@ -698,6 +698,19 @@ fn exact_source_is_not_enqueue_ready_and_limits_world_scope_to_formed_bytes() {
     assert!(query(&started_app(), bounds).is_err(), "catalog enqueue is not CPU readiness");
     let mut app = integrated_app();
     assert_eq!(query(&app, bounds).unwrap(), 0.25);
+    let original_partition = app.world()
+        .resource::<PartitionConfigResource>().unwrap().clone();
+    *app.world_mut().resource_mut::<PartitionConfigResource>().unwrap() =
+        PartitionConfigResource(runen_spatial::GridPartitionConfig::try_new(
+            2.0, [8, 8, 8],
+        ).unwrap());
+    assert!(matches!(query(&app, bounds), Err(WorldSdfExactReadError::PartitionMismatch)));
+    *app.world_mut().resource_mut::<PartitionConfigResource>().unwrap() =
+        original_partition;
+    let cross_chunk = WorldSdfExactQueryBounds::try_new(
+        [3.99, 1.0, 1.0], [4.01, 1.0, 1.0],
+    ).unwrap();
+    assert!(matches!(query(&app, cross_chunk), Err(WorldSdfExactReadError::IncompleteCoverage)));
     let high = WorldSdfExactQueryBounds::try_new(
         [1.0, 4.0, 1.0], [1.0, 4.5, 1.0],
     ).unwrap();
@@ -750,4 +763,151 @@ fn verified_exact_formation_checks_all_occupancy_samples_metadata_and_summary() 
     assert!(verify(source, &changed, summary).is_err());
     assert!(verify(source, &payload, RegionSdfSummary::default()).is_err());
     assert!(verify(source, &payload, summary).is_ok());
+}
+
+fn w1_region_summary(payload: &world_sdf::SdfChunkPayload) -> world_sdf::RegionSdfSummary {
+    let bricks = payload.page_table.values()
+        .flat_map(|page| page.bricks.values()).collect::<Vec<_>>();
+    world_sdf::RegionSdfSummary {
+        min_distance: bricks.iter().map(|b| b.metadata.min_distance).min().unwrap(),
+        max_distance: bricks.iter().map(|b| b.metadata.max_distance).max().unwrap(),
+        occupied_chunk_count: u32::from(bricks.iter().any(|b| b.metadata.occupancy_mask != 0)),
+        surface_chunk_count: u32::from(bricks.iter().any(|b| b.metadata.surface_band_present)),
+    }
+}
+
+fn w1_enqueue(
+    app: &mut App,
+    package: engine::plugins::world::build::WorldSdfRuntimePayloadPackage,
+) -> Result<usize, engine::plugins::world::build::WorldSdfRuntimePayloadPackageError> {
+    use engine::plugins::world::build::enqueue_ratified_world_sdf_payload_package;
+    let mut queue = app.world_mut().remove_resource::<WorldCompletedBuildQueueResource>().unwrap();
+    let mut products = app.world_mut()
+        .remove_resource::<WorldRuntimeSdfProductCatalogResource>().unwrap();
+    let mut metric = app.world_mut()
+        .remove_resource::<WorldRuntimeSdfMetricCapabilityCatalogResource>().unwrap();
+    let result = {
+        let store = app.world().resource::<SdfChunkStoreResource>().unwrap().clone();
+        let runtime = app.world_mut().resource_mut::<WorldChunkRuntimeMapResource>().unwrap();
+        enqueue_ratified_world_sdf_payload_package(
+            &mut queue, runtime, &store, &mut products, &mut metric, package,
+        )
+    };
+    app.world_mut().insert_resource(queue);
+    app.world_mut().insert_resource(products);
+    app.world_mut().insert_resource(metric);
+    result
+}
+
+#[test]
+fn exact_pending_alias_requires_independent_source_proof_and_generic_overwrite_retires_it() {
+    use engine::plugins::world::build::WorldSdfRuntimePayloadPackage;
+    use engine::plugins::world::queries::{
+        WorldSdfExactQueryBounds, qualify_current_world_sdf_exact_source_read,
+    };
+    use world_ops::{ChunkGeneration, ChunkRevision};
+    let mut app = started_app();
+    let payload = build_arena_chunk_payload();
+    let mut alias = arena_field_product_descriptor(&payload);
+    alias.product_id = world_sdf::FieldProductId(198);
+    let alias_id = alias.product_core().identity;
+    let primary = arena_field_product_descriptor(&payload).product_core().identity;
+    let summary = w1_region_summary(&payload);
+    let package = |descriptor, source| WorldSdfRuntimePayloadPackage::new(
+        descriptor, vec![payload.clone()], summary,
+    ).with_metric_capability(arena_metric_payload_ref(&payload))
+        .with_exact_source(source, arena_partition_config());
+    let divergent = WorldSdfOpenTopRectInteriorSource::try_new(
+        [0.75, 3.5], 0.5, [0.5, 3.5],
+    ).unwrap();
+    assert!(w1_enqueue(&mut app, package(alias.clone(), divergent)).is_err());
+    assert_eq!(app.world().resource::<WorldCompletedBuildQueueResource>().unwrap()
+        .outputs.len(), 1, "rejected alias did not alter the pending completion");
+    assert_eq!(w1_enqueue(&mut app, package(alias, arena_geometry_source())).unwrap(), 0);
+    app = app.run_for_fixed_steps(1).unwrap();
+    let bounds = WorldSdfExactQueryBounds::try_new([0.75, 0.75, 0.75], [0.75, 0.75, 0.75]).unwrap();
+    let is_exact = |app: &App, id| {
+        let w = app.world();
+        qualify_current_world_sdf_exact_source_read(
+            id, bounds,
+            w.resource::<PartitionConfigResource>().unwrap(),
+            w.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap(),
+            w.resource::<WorldChunkRuntimeMapResource>().unwrap(),
+            w.resource::<SdfChunkStoreResource>().unwrap(),
+        ).is_ok()
+    };
+    assert!(is_exact(&app, primary));
+    assert!(is_exact(&app, alias_id));
+
+    let mut next = payload.clone();
+    next.chunk_revision = ChunkRevision(1);
+    next.chunk_generation = ChunkGeneration(1);
+    let mut next_desc = arena_field_product_descriptor(&next);
+    next_desc.lineage.source_revision = 2;
+    assert_eq!(w1_enqueue(&mut app, WorldSdfRuntimePayloadPackage::new(
+        next_desc, vec![next.clone()], w1_region_summary(&next),
+    ).with_metric_capability(arena_metric_payload_ref(&next))).unwrap(), 1);
+    assert!(!is_exact(&app, primary), "pending replacement is never current");
+    app = app.run_for_fixed_steps(1).unwrap();
+    assert!(!is_exact(&app, primary), "non-exact replacement retired the old source");
+    assert!(!is_exact(&app, alias_id));
+    assert_eq!(app.world().resource::<SdfChunkStoreResource>().unwrap()
+        .chunks.get(&arena_chunk_id()), Some(&next));
+}
+
+#[test]
+fn terminal_rejected_exact_replacement_preserves_certificate_but_requires_successful_retry() {
+    use engine::plugins::world::build::WorldSdfRuntimePayloadPackage;
+    use engine::plugins::world::chunks::lifecycle::ChunkLifecycleState;
+    use engine::plugins::world::queries::{
+        WorldSdfExactQueryBounds, qualify_current_world_sdf_exact_source_read,
+    };
+    use world_ops::{ChunkGeneration, ChunkRevision};
+    let mut app = integrated_app();
+    let prior = app.world().resource::<SdfChunkStoreResource>().unwrap()
+        .chunks.get(&arena_chunk_id()).unwrap().clone();
+    let mut next = prior.clone();
+    next.chunk_revision = ChunkRevision(1);
+    next.chunk_generation = ChunkGeneration(1);
+    let mut descriptor = arena_field_product_descriptor(&next);
+    descriptor.lineage.source_revision = 2;
+    let id = descriptor.product_core().identity;
+    let package = WorldSdfRuntimePayloadPackage::new(
+        descriptor, vec![next.clone()], w1_region_summary(&next),
+    ).with_metric_capability(arena_metric_payload_ref(&next))
+        .with_exact_source(arena_geometry_source(), arena_partition_config());
+    assert_eq!(w1_enqueue(&mut app, package.clone()).unwrap(), 1);
+    {
+        let queue = app.world_mut().resource_mut::<WorldCompletedBuildQueueResource>().unwrap();
+        let output = queue.outputs.front_mut().unwrap();
+        output.chunk_payload.page_table
+            .get_mut(&world_sdf::SdfPageCoord3::default()).unwrap()
+            .bricks.get_mut(&[0, 0, 0]).unwrap().samples.distances[0] += 1;
+    }
+    app = app.run_for_fixed_steps(1).unwrap();
+    let w = app.world();
+    assert_eq!(w.resource::<SdfChunkStoreResource>().unwrap()
+        .chunks.get(&arena_chunk_id()), Some(&prior));
+    let record = w.resource::<WorldChunkRuntimeMapResource>().unwrap()
+        .by_chunk_id.get(&arena_chunk_id()).unwrap();
+    assert!(record.exact_source.is_some(), "committed prior source preserved");
+    assert!(record.pending_build_generation.is_none());
+    assert!(matches!(record.lifecycle, ChunkLifecycleState::Ready));
+
+    // New enqueue-time descriptor is not accepted as the old committed source.
+    let bounds = WorldSdfExactQueryBounds::try_new([0.75; 3], [0.75; 3]).unwrap();
+    let is_exact = |app: &App| {
+        let w = app.world();
+        qualify_current_world_sdf_exact_source_read(
+            id, bounds,
+            w.resource::<PartitionConfigResource>().unwrap(),
+            w.resource::<WorldRuntimeSdfProductCatalogResource>().unwrap(),
+            w.resource::<WorldChunkRuntimeMapResource>().unwrap(),
+            w.resource::<SdfChunkStoreResource>().unwrap(),
+        ).is_ok()
+    };
+    assert!(!is_exact(&app));
+    assert_eq!(w1_enqueue(&mut app, package).unwrap(), 1);
+    app = app.run_for_fixed_steps(1).unwrap();
+    assert!(is_exact(&app), "valid newer generation restores exact readiness");
 }

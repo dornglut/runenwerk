@@ -83,8 +83,10 @@ pub fn qualify_current_world_sdf_exact_source_read<'a>(
     let descriptor = products.product(product_id).ok_or(E::MissingProduct)?;
     if descriptor.kind != FieldProductKind::WorldSdfChunkPages
         || descriptor.freshness != FieldProductFreshness::Current
-        || !matches!(descriptor.consumer_class,
-            FieldProductConsumerClass::RuntimeRead | FieldProductConsumerClass::CollisionQuery)
+        || !matches!(
+            descriptor.consumer_class,
+            FieldProductConsumerClass::RuntimeRead | FieldProductConsumerClass::CollisionQuery
+        )
         || descriptor.product_core().identity != product_id
         || descriptor.payload_refs.len() != 1
     {
@@ -97,18 +99,30 @@ pub fn qualify_current_world_sdf_exact_source_read<'a>(
     {
         return Err(E::ProductSourceMismatch);
     }
-    let record = chunks.by_chunk_id.get(&reference.chunk_id)
+    let record = chunks
+        .by_chunk_id
+        .get(&reference.chunk_id)
         .ok_or(E::MissingRuntimeRecord)?;
-    let committed = record.exact_source.as_ref().ok_or(E::UnsupportedExactSource)?;
+    let committed = record
+        .exact_source
+        .as_ref()
+        .ok_or(E::UnsupportedExactSource)?;
     if committed.eligible_products.get(&product_id) != Some(descriptor) {
         return Err(E::ProductSourceMismatch);
     }
-    if record.pending_build_generation.is_some() || !record.dirty_reasons.is_empty()
-        || !matches!(record.lifecycle, ChunkLifecycleState::Ready | ChunkLifecycleState::Resident)
+    if record.pending_build_generation.is_some()
+        || !record.dirty_reasons.is_empty()
+        || !matches!(
+            record.lifecycle,
+            ChunkLifecycleState::Ready | ChunkLifecycleState::Resident
+        )
     {
         return Err(E::RuntimeNotReady);
     }
-    let payload = store.chunks.get(&reference.chunk_id).ok_or(E::MissingCpuPayload)?;
+    let payload = store
+        .chunks
+        .get(&reference.chunk_id)
+        .ok_or(E::MissingCpuPayload)?;
     if WorldSdfPayloadRef::from(payload) != reference
         || record.chunk_id != payload.chunk_id
         || record.chunk_revision != payload.chunk_revision
@@ -121,21 +135,25 @@ pub fn qualify_current_world_sdf_exact_source_read<'a>(
         return Err(E::PartitionMismatch);
     }
     let region_id = partition.region_id_from_chunk_id(reference.chunk_id);
-    let summary = *store.region_summaries.get(&region_id).ok_or(E::InvalidFormation(
-        WorldSdfExactFormationError::InvalidRegionSummary,
-    ))?;
-    committed.evidence.revalidate(descriptor, payload, summary, partition)
+    let summary = *store
+        .region_summaries
+        .get(&region_id)
+        .ok_or(E::InvalidFormation(
+            WorldSdfExactFormationError::InvalidRegionSummary,
+        ))?;
+    committed
+        .evidence
+        .revalidate(descriptor, payload, summary, partition)
         .map_err(E::InvalidFormation)?;
 
-    let origin = partition.chunk_origin_world_position(
-        reference.chunk_id.world_id, reference.chunk_id.coord,
-    ).map_err(|_| E::PartitionMismatch)?.meters();
+    let origin = partition
+        .chunk_origin_world_position(reference.chunk_id.world_id, reference.chunk_id.coord)
+        .map_err(|_| E::PartitionMismatch)?
+        .meters();
     let edge = partition.chunk_edge_meters();
     if !(0..3).all(|i| {
         let upper = origin[i] + edge;
-        upper.is_finite()
-            && required_bounds.min[i] >= origin[i]
-            && required_bounds.max[i] < upper
+        upper.is_finite() && required_bounds.min[i] >= origin[i] && required_bounds.max[i] < upper
     }) {
         return Err(E::IncompleteCoverage);
     }

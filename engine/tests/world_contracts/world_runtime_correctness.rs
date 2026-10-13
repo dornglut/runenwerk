@@ -2619,28 +2619,50 @@ fn failed_external_replacement_preserves_cpu_clears_pending_and_accepts_retry() 
     enqueue_runtime_sdf_package(
         &mut app,
         WorldSdfRuntimePayloadPackage::new(
-            first_desc, vec![first.clone()], RegionSdfSummary::default(),
+            first_desc,
+            vec![first.clone()],
+            RegionSdfSummary::default(),
         ),
-    ).expect("first generation enqueues");
+    )
+    .expect("first generation enqueues");
     app = app.run_for_fixed_steps(1).expect("first commits");
 
     let next = sdf_chunk_payload(id, ChunkRevision(2), ChunkGeneration(2), 702);
     let next_desc = runtime_sdf_descriptor(7290, &next);
     let package = WorldSdfRuntimePayloadPackage::new(
-        next_desc.clone(), vec![next.clone()], RegionSdfSummary::default(),
+        next_desc.clone(),
+        vec![next.clone()],
+        RegionSdfSummary::default(),
     );
-    assert_eq!(enqueue_runtime_sdf_package(&mut app, package.clone()).unwrap(), 1);
-    let queued = app.world_mut()
-        .resource_mut::<WorldCompletedBuildQueueResource>().unwrap();
+    assert_eq!(
+        enqueue_runtime_sdf_package(&mut app, package.clone()).unwrap(),
+        1
+    );
+    let queued = app
+        .world_mut()
+        .resource_mut::<WorldCompletedBuildQueueResource>()
+        .unwrap();
     let output = queued.outputs.front_mut().unwrap();
     // Simulate a terminally malformed completed output after enqueue metadata was published.
     output.chunk_payload.chunk_revision = ChunkRevision(300);
-    app = app.run_for_fixed_steps(1).expect("malformed completion drops");
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("malformed completion drops");
 
     let w = app.world();
-    assert_eq!(w.resource::<SdfChunkStoreResource>().unwrap().chunks.get(&id), Some(&first));
-    let record = w.resource::<WorldChunkRuntimeMapResource>().unwrap()
-        .by_chunk_id.get(&id).unwrap();
+    assert_eq!(
+        w.resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&id),
+        Some(&first)
+    );
+    let record = w
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&id)
+        .unwrap();
     assert_eq!(record.pending_build_generation, None);
     assert_eq!(record.chunk_generation, ChunkGeneration(1));
     assert!(matches!(record.lifecycle, ChunkLifecycleState::Ready));
