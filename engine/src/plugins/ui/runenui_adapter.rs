@@ -7,7 +7,8 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 #[cfg(test)]
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
-    AppRuntime, HostRequestToken, InputObservationError, InputPumpBatch, InputShutdownBatch,
+    AppRuntime, HostRequestToken, InputObservationError, InputOwnershipSnapshot, InputPumpBatch,
+    InputShutdownBatch,
     PumpBudget, SurfaceBuildContext, SurfacePublication,
 };
 use ui_artifacts::UiRuntimeArtifact;
@@ -372,6 +373,13 @@ impl UiRuntimeSlotKind {
         match self {
             Self::Counter(runtime) => runtime.pump(budget),
             Self::Typed(runtime) => runtime.pump(budget),
+        }
+    }
+
+    fn input_ownership(&mut self) -> Result<InputOwnershipSnapshot, InputObservationError> {
+        match self {
+            Self::Counter(runtime) => runtime.input_ownership(),
+            Self::Typed(runtime) => runtime.input_ownership(),
         }
     }
 
@@ -850,6 +858,21 @@ impl UiRuntimeSlotsResource {
             .complete_host_request(token, response)
             .map_err(|_| UiRuntimeSlotOperationFailure::HostResponseRejected)?;
         slot.accepted_ingress(next)
+    }
+
+    /// One synchronous M13 observation at the owning mounted slot. Pending
+    /// framework work is never interpreted as valid gameplay permission.
+    pub fn input_ownership(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<InputOwnershipSnapshot, UiRuntimeSlotOperationFailure> {
+        let slot = self.slot_mut(slot_id)?;
+        if slot.requires_settlement {
+            return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
+        }
+        slot.runtime
+            .input_ownership()
+            .map_err(UiRuntimeSlotOperationFailure::InputObservation)
     }
 
     #[must_use]

@@ -5,7 +5,8 @@ use std::any::Any;
 
 use runenui_core::UiApp;
 use runenui_runtime::{
-    AppRuntime, InputObservationError, InputPumpBatch, InputShutdownBatch, PumpBudget,
+    AppRuntime, InputObservationError, InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch,
+    PumpBudget,
     SurfaceBuildContext, SurfacePublication,
 };
 
@@ -50,6 +51,7 @@ impl<A: UiApp> UiAppObservation<'_, A> {
 /// actions, state and host responses never cross this interface.
 pub(super) trait TypedRuntimeOps {
     fn pump(&mut self, budget: PumpBudget) -> Result<InputPumpBatch, InputObservationError>;
+    fn input_ownership(&mut self) -> Result<InputOwnershipSnapshot, InputObservationError>;
     fn set_native_wake_transport(&self, transport: crate::runtime::NativeWakeTransport);
     fn pending_redraw(&mut self) -> bool;
     fn publish_surface(
@@ -72,6 +74,10 @@ impl<A: UiApp + 'static> TypedRuntimeOps for TypedRuntime<A> {
 
     fn pump(&mut self, budget: PumpBudget) -> Result<InputPumpBatch, InputObservationError> {
         self.runtime.pump(budget)
+    }
+
+    fn input_ownership(&mut self) -> Result<InputOwnershipSnapshot, InputObservationError> {
+        self.runtime.input_ownership()
     }
 
     fn pending_redraw(&mut self) -> bool {

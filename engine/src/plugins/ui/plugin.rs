@@ -3,7 +3,8 @@ use crate::plugin::Plugin;
 use crate::runtime::{RenderPrepare, RenderSubmit, SystemConfigExt, SystemMobilityExt};
 
 use super::{
-    UiPluginStateResource, UiRuntimeDiagnosticsResource, UiRuntimePresentationAssociationsResource,
+    UiNativeInputRecipientsResource, UiPluginStateResource, UiRuntimeDiagnosticsResource,
+    UiRuntimePresentationAssociationsResource,
     UiRuntimeReportResource, UiRuntimeSet, UiRuntimeSlotsResource,
     apply_runenui_terminal_presentations_system, publish_runenui_bound_surfaces_system,
 };
@@ -17,6 +18,7 @@ impl Plugin for UiPlugin {
         app.init_resource::<UiRuntimeDiagnosticsResource>();
         app.init_resource::<UiRuntimeReportResource>();
         app.init_resource::<UiRuntimeSlotsResource>();
+        app.init_resource::<UiNativeInputRecipientsResource>();
         app.init_resource::<UiRuntimePresentationAssociationsResource>();
         app.add_systems(
             RenderPrepare,
