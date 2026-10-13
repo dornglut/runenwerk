@@ -1,5 +1,5 @@
 use super::state::{InputState, ModifiersSnapshot};
-use runen_input::PhysicalKeyIdentity;
+use runen_input::{InputContext, PhysicalKeyIdentity};
 use std::collections::{HashMap, HashSet};
 
 // Owner: Engine Input Plugin - Runenwerk Product Action Bindings and Projection
@@ -311,12 +311,46 @@ pub enum InputBindingChangeResult {
     Noop,
 }
 
+/// Engine-owned lifetime denial; removing UI focus never grants this
+/// physical Down back to gameplay.
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct RevokedKeyboardLifetime {
+    context: InputContext,
+    key: PhysicalKeyIdentity,
+    generation: u64,
+}
+
+/// The exact press contributor accepted under the bindings that existed when
+/// it was projected. Later binding edits cannot resurrect discarded evidence.
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct PressedActionContributor {
+    action: String,
+    context: InputContext,
+    key: PhysicalKeyIdentity,
+    generation: u64,
+}
+
+/// A revoked held physical key remains blocked through synthetic cancellation,
+/// repeat, focus restoration and binding mutation until a genuine source Up.
+#[derive(Debug, Clone, Eq, PartialEq)]
+struct BlockedHeldKey {
+    context: InputContext,
+    key: PhysicalKeyIdentity,
+    /// Index into this frame's genuine Up observations at denial time.
+    releases_seen: usize,
+}
+
 #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
 pub struct ActionState {
     bindings: InputBindings,
     actions_down: HashSet<String>,
     actions_pressed: HashSet<String>,
     processed_keyboard_presses: usize,
+    pressed_contributors: Vec<PressedActionContributor>,
+    /// Terminal denial for each source-local Down, including held keys and
+    /// any same-frame press that may already have reached action projection.
+    revoked_keyboard_lifetimes: Vec<RevokedKeyboardLifetime>,
+    blocked_held_keys: Vec<BlockedHeldKey>,
 }
 
 impl Default for ActionState {
@@ -326,6 +360,9 @@ impl Default for ActionState {
             actions_down: HashSet::new(),
             actions_pressed: HashSet::new(),
             processed_keyboard_presses: 0,
+            pressed_contributors: Vec::new(),
+            revoked_keyboard_lifetimes: Vec::new(),
+            blocked_held_keys: Vec::new(),
         }
     }
 }
@@ -343,6 +380,7 @@ impl ActionState {
         self.project(input);
         self.bindings = bindings;
         self.actions_pressed.clear();
+        self.pressed_contributors.clear();
         self.recompute_action_down_states(input);
     }
 
@@ -440,26 +478,133 @@ impl ActionState {
         self.actions_pressed.contains(action)
     }
 
-    pub fn project(&mut self, input: &InputState) {
+    /// Permanently revoke an exact source/device/key Down lifetime. This is
+    /// immediate even if PreUpdate already projected its pressed/held action.
+    /// A UI ownership revision cannot restore the same generation.
+    ///
+    /// The native owner MUST supply the correlated real physical generation,
+    /// not a keyboard key guessed from RunenUI's current focus.
+    pub fn revoke_keyboard_lifetime(
+        &mut self,
+        input: &InputState,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+        generation: u64,
+    ) {
+        if !self.revoked_keyboard_lifetimes.iter().any(|revoked| {
+            revoked.context == context
+                && revoked.key == *key
+                && revoked.generation == generation
+        }) {
+            self.revoked_keyboard_lifetimes.push(RevokedKeyboardLifetime {
+                context,
+                key: key.clone(),
+                generation,
+            });
+        }
+        // If the physical key is still held, deny the whole lifetime even
+        // through synthetic cancellation; only an authentic Up can retire it.
+        if input.physical_key_down_in(context, key)
+            && !self
+                .blocked_held_keys
+                .iter()
+                .any(|blocked| blocked.context == context && blocked.key == *key)
+        {
+            self.blocked_held_keys.push(BlockedHeldKey {
+                context,
+                key: key.clone(),
+                releases_seen: input.keyboard_real_release_samples().len(),
+            });
+        }
+        // Retract only the previously accepted contributions from this
+        // generation; do not replay historic presses under later bindings.
+        self.pressed_contributors.retain(|pressed| {
+            pressed.context != context
+                || pressed.key != *key
+                || pressed.generation != generation
+        });
+        self.actions_pressed = self
+            .pressed_contributors
+            .iter()
+            .map(|pressed| pressed.action.clone())
+            .collect();
         self.recompute_action_down_states(input);
+    }
+
+    fn keyboard_generation_eligible(
+        &self,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+        generation: u64,
+    ) -> bool {
+        !self.revoked_keyboard_lifetimes.iter().any(|revoked| {
+            revoked.context == context
+                && revoked.key == *key
+                && revoked.generation == generation
+        })
+    }
+
+    fn blocked_held_key(&self, context: InputContext, key: &PhysicalKeyIdentity) -> bool {
+        self.blocked_held_keys
+            .iter()
+            .any(|blocked| blocked.context == context && blocked.key == *key)
+    }
+
+    fn retire_genuinely_released_denials(&mut self, input: &InputState) {
+        let releases = input.keyboard_real_release_samples();
+        self.blocked_held_keys.retain(|blocked| {
+            !releases.iter().skip(blocked.releases_seen).any(|release| {
+                release.context == blocked.context && release.physical_key == blocked.key
+            })
+        });
+    }
+
+    fn project_presses(&mut self, input: &InputState, start: usize, end: usize) {
         let presses = input.keyboard_press_samples();
-        for press in presses.iter().skip(self.processed_keyboard_presses) {
-            // The physical source remains associated with the press. Native
-            // UI/game permission is not enabled by this preparatory correction.
-            let _source_context = press.context;
+        for press in presses.iter().take(end).skip(start) {
+            if self.blocked_held_key(press.context, &press.physical_key)
+                || !self.keyboard_generation_eligible(
+                    press.context,
+                    &press.physical_key,
+                    press.generation,
+                )
+            {
+                continue;
+            }
             for action in self
                 .bindings
                 .matching_actions(&press.physical_key, press.modifiers)
             {
-                self.actions_pressed.insert(action);
+                self.actions_pressed.insert(action.clone());
+                self.pressed_contributors.push(PressedActionContributor {
+                    action,
+                    context: press.context,
+                    key: press.physical_key.clone(),
+                    generation: press.generation,
+                });
             }
         }
-        self.processed_keyboard_presses = presses.len();
+    }
+
+    pub fn project(&mut self, input: &InputState) {
+        self.retire_genuinely_released_denials(input);
+        self.recompute_action_down_states(input);
+        let end = input.keyboard_press_samples().len();
+        self.project_presses(input, self.processed_keyboard_presses, end);
+        self.processed_keyboard_presses = end;
     }
 
     pub(crate) fn clear_frame(&mut self, input: &InputState) {
+        self.retire_genuinely_released_denials(input);
         self.actions_pressed.clear();
+        self.pressed_contributors.clear();
         self.processed_keyboard_presses = 0;
+        // Press evidence is frame-local. Denied held lifetimes instead persist
+        // until authentic Up, including after synthetic cancellation.
+        self.revoked_keyboard_lifetimes.clear();
+        for blocked in &mut self.blocked_held_keys {
+            blocked.releases_seen = 0;
+        }
         self.recompute_action_down_states(input);
     }
 
@@ -493,7 +638,15 @@ impl ActionState {
                 let modifiers = input.modifiers_snapshot_in(context);
                 self.bindings.action_down(
                     action,
-                    |key| input.physical_key_down_in(context, key),
+                    |key| {
+                        input.physical_key_down_in(context, key)
+                            && !self.blocked_held_key(context, key)
+                            && input
+                                .keyboard_down_generation_in(context, key)
+                                .is_none_or(|generation| {
+                                    self.keyboard_generation_eligible(context, key, generation)
+                                })
+                    },
                     modifiers,
                 )
             }) {

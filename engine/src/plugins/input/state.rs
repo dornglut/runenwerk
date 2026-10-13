@@ -112,7 +112,17 @@ pub(super) struct KeyboardPressSample {
     // The exact physical source which originated this Down transition.
     pub(super) context: InputContext,
     pub(super) physical_key: PhysicalKeyIdentity,
+    /// Non-repeating identity of this exact physical Down generation.
+    pub(super) generation: u64,
     pub(super) modifiers: ModifiersSnapshot,
+}
+
+/// An authentic physical Up report, recorded for ActionState's same-source
+/// denial retirement. Reconciliation/continuity-loss are never release proof.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct KeyboardRealReleaseSample {
+    pub(super) context: InputContext,
+    pub(super) physical_key: PhysicalKeyIdentity,
 }
 
 /// A derived index of held keyboard contributors, never a replacement for
@@ -121,13 +131,17 @@ pub(super) struct KeyboardPressSample {
 struct KeyboardHeldContributor {
     context: InputContext,
     physical_key: PhysicalKeyIdentity,
+    generation: Option<u64>,
 }
 
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct InputState {
     neutral: NeutralInputState,
     keyboard_press_samples: Vec<KeyboardPressSample>,
+    keyboard_real_release_samples: Vec<KeyboardRealReleaseSample>,
     keyboard_held_contributors: Vec<KeyboardHeldContributor>,
+    /// Exhaustion disables new game press identities instead of wrapping.
+    next_keyboard_generation: Option<u64>,
     pub typed_text: String,
     pub overlay_consumed: bool,
     pub mouse_delta: (f32, f32),
@@ -153,7 +167,9 @@ impl Default for InputState {
         Self {
             neutral: NeutralInputState::default(),
             keyboard_press_samples: Vec::new(),
+            keyboard_real_release_samples: Vec::new(),
             keyboard_held_contributors: Vec::new(),
+            next_keyboard_generation: Some(1),
             typed_text: String::new(),
             overlay_consumed: false,
             mouse_delta: (0.0, 0.0),
@@ -213,21 +229,49 @@ impl InputState {
             });
         match (input.state, held_index) {
             (DigitalState::Pressed, None) => {
+                // Synthetic/repeated restoration may update neutral physical
+                // truth but MUST NOT mint a fresh gameplay press generation.
+                let genuine = input.origin == ObservationOrigin::SourceReport && !input.repeat;
+                let generation = if genuine {
+                    let issued = self.next_keyboard_generation;
+                    self.next_keyboard_generation = issued.and_then(|current| current.checked_add(1));
+                    issued
+                } else {
+                    None
+                };
                 self.keyboard_held_contributors
                     .push(KeyboardHeldContributor {
                         context,
                         physical_key: input.physical_key.clone(),
+                        generation,
                     });
-                if input.origin == ObservationOrigin::SourceReport && !input.repeat {
+                if let Some(generation) = generation {
                     self.keyboard_press_samples.push(KeyboardPressSample {
                         context,
                         physical_key: input.physical_key.clone(),
+                        generation,
                         modifiers: self.source_modifiers_from_held_index(context),
                     });
                 }
             }
             (DigitalState::Released, Some(index)) => {
                 self.keyboard_held_contributors.remove(index);
+                if input.origin == ObservationOrigin::SourceReport {
+                    self.keyboard_real_release_samples.push(KeyboardRealReleaseSample {
+                        context,
+                        physical_key: input.physical_key.clone(),
+                    });
+                }
+            }
+            (DigitalState::Released, None)
+                if input.origin == ObservationOrigin::SourceReport =>
+            {
+                // A genuine Up may follow an OS synthetic cancellation. That
+                // is the first authentic release proof for a revoked lifetime.
+                self.keyboard_real_release_samples.push(KeyboardRealReleaseSample {
+                    context,
+                    physical_key: input.physical_key.clone(),
+                });
             }
             _ => {}
         }
@@ -273,6 +317,7 @@ impl InputState {
 
     pub(crate) fn frame_projection_is_quiescent(&self) -> bool {
         self.keyboard_press_samples.is_empty()
+            && self.keyboard_real_release_samples.is_empty()
             && self.typed_text.is_empty()
             && !self.overlay_consumed
             && self.mouse_delta == (0.0, 0.0)
@@ -646,6 +691,7 @@ impl InputState {
 
     pub fn clear_frame(&mut self) {
         self.keyboard_press_samples.clear();
+        self.keyboard_real_release_samples.clear();
         self.typed_text.clear();
         self.overlay_consumed = false;
         self.mouse_delta = (0.0, 0.0);
@@ -768,6 +814,23 @@ impl InputState {
 
     pub(super) fn keyboard_press_samples(&self) -> &[KeyboardPressSample] {
         &self.keyboard_press_samples
+    }
+
+    pub(super) fn keyboard_real_release_samples(&self) -> &[KeyboardRealReleaseSample] {
+        &self.keyboard_real_release_samples
+    }
+
+    /// Return the exact physical Down generation, never an inferred key press
+    /// from RunenUI focus, another device or a synthetic reconciliation event.
+    pub fn keyboard_down_generation_in(
+        &self,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+    ) -> Option<u64> {
+        self.keyboard_held_contributors
+            .iter()
+            .find(|held| held.context == context && &held.physical_key == key)
+            .and_then(|held| held.generation)
     }
 
     fn button_down(&self, button: PointerButton) -> bool {

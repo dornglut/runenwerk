@@ -829,3 +829,153 @@ fn automation_absolute_pointer_uses_same_cursor_projection_as_native_path() {
         ]
     );
 }
+
+#[test]
+fn native_ui_exclusive_down_revocation_immediately_removes_pressed_and_held() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(311), Some(InputDeviceId::new(7)));
+    let key = physical_key(KeyCode::KeyW);
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+    let generation = input
+        .keyboard_down_generation_in(context, &key)
+        .expect("genuine down has a unique generation");
+
+    actions.revoke_keyboard_lifetime(&input, context, &key, generation);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+
+    // UI focus leaving, repeated projection and every normal frame boundary
+    // cannot restore an already exclusive/denied physical Down.
+    actions.project(&input);
+    clear_frame(&mut input, &mut actions);
+    actions.project(&input);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+
+    let duplicate = KeyboardInput {
+        repeat: true,
+        ..normalized_key(DigitalState::Pressed)
+    };
+    input.handle_normalized_keyboard(context, &duplicate);
+    actions.project(&input);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+
+    // Genuine release, followed by a fresh real Down, alone creates another
+    // gameplay-eligible physical lifetime.
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Released));
+    actions.project(&input);
+    clear_frame(&mut input, &mut actions);
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    let next = input
+        .keyboard_down_generation_in(context, &key)
+        .expect("fresh real down");
+    assert_ne!(generation, next);
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+}
+
+#[test]
+fn revoked_down_does_not_reappear_through_binding_changes_or_other_devices() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let first = InputContext::new(InputSourceId::new(312), Some(InputDeviceId::new(1)));
+    let second = InputContext::new(InputSourceId::new(313), Some(InputDeviceId::new(2)));
+    let key = physical_key(KeyCode::KeyW);
+    input.handle_normalized_keyboard(first, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    let generation = input.keyboard_down_generation_in(first, &key).unwrap();
+    actions.revoke_keyboard_lifetime(&input, first, &key, generation);
+
+    actions.unmap_key(&input, action::WORLD_MOVE_UP, &key);
+    actions.map_key(&input, action::WORLD_MOVE_UP, key.clone());
+    actions.reset_default_bindings(&input);
+    actions.apply_binding_change(
+        &input,
+        InputBindingChange::MapKey {
+            action: "native.test".to_string(),
+            key: key.clone(),
+        },
+    );
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down("native.test"));
+
+    // A different window/device owns a distinct Down generation and remains
+    // capable of contributing without releasing the first device's denial.
+    clear_frame(&mut input, &mut actions);
+    input.handle_normalized_keyboard(second, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+    input.handle_normalized_keyboard(second, &normalized_key(DigitalState::Released));
+    actions.project(&input);
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+}
+
+#[test]
+fn genuine_release_required_after_synthetic_cancellation_of_revoked_down() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(314), Some(InputDeviceId::new(9)));
+    let key = physical_key(KeyCode::KeyW);
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    let generation = input.keyboard_down_generation_in(context, &key).unwrap();
+    actions.revoke_keyboard_lifetime(&input, context, &key, generation);
+    let synthetic_up = KeyboardInput {
+        origin: ObservationOrigin::BackendSyntheticReconciliation,
+        ..normalized_key(DigitalState::Released)
+    };
+    input.handle_normalized_keyboard(context, &synthetic_up);
+    clear_frame(&mut input, &mut actions);
+    let synthetic_down = KeyboardInput {
+        origin: ObservationOrigin::BackendSyntheticReconciliation,
+        ..normalized_key(DigitalState::Pressed)
+    };
+    input.handle_normalized_keyboard(context, &synthetic_down);
+    actions.project(&input);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+
+    // A real Up, rather than an OS reconciliation edge, unlocks a later Down.
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Released));
+    actions.project(&input);
+    clear_frame(&mut input, &mut actions);
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+}
+
+#[test]
+fn revocation_preserves_other_source_pressed_contributors_without_rebinding_replay() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let one = InputContext::new(InputSourceId::new(315), Some(InputDeviceId::new(1)));
+    let two = InputContext::new(InputSourceId::new(316), Some(InputDeviceId::new(2)));
+    let key = physical_key(KeyCode::KeyW);
+
+    input.handle_normalized_keyboard(one, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    let denied = input.keyboard_down_generation_in(one, &key).unwrap();
+    input.handle_normalized_keyboard(two, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    actions.revoke_keyboard_lifetime(&input, one, &key, denied);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+
+    // Once the second source is denied, no pressed or held contributors
+    // remain; binding edits must never reinterpret old presses as new.
+    let second_generation = input.keyboard_down_generation_in(two, &key).unwrap();
+    actions.revoke_keyboard_lifetime(&input, two, &key, second_generation);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+    actions.map_key(&input, "new.mapping", key);
+    assert!(!actions.action_pressed("new.mapping"));
+    assert!(!actions.action_down("new.mapping"));
+}
