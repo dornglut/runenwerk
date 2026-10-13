@@ -353,13 +353,21 @@ pub fn enqueue_ratified_world_sdf_payload_package(
             && existing.region_summary == package.region_summary
         {
             if qualified.is_some() {
-                let pending = completed.outputs.iter_mut().find(|output| {
-                    output.chunk_id == payload.chunk_id
-                        && output.target_build_generation == generation
-                        && matches!(output.staleness, WorldBuildStaleness::Current)
-                }).expect("matched pending exact output");
-                pending.exact_source.as_mut().expect("qualified exact alias")
-                    .eligible_products.insert(product_id, package.descriptor.clone());
+                let pending = completed
+                    .outputs
+                    .iter_mut()
+                    .find(|output| {
+                        output.chunk_id == payload.chunk_id
+                            && output.target_build_generation == generation
+                            && matches!(output.staleness, WorldBuildStaleness::Current)
+                    })
+                    .expect("matched pending exact output");
+                pending
+                    .exact_source
+                    .as_mut()
+                    .expect("qualified exact alias")
+                    .eligible_products
+                    .insert(product_id, package.descriptor.clone());
             }
             // A different product identity may legitimately reference the exact same
             // pending bytes; publish its metadata without queueing another build.
@@ -436,19 +444,29 @@ pub fn integrate_completed_build_outputs_system(
     let mut dropped = 0_u64;
 
     while let Some(output) = completed.outputs.pop_front() {
-        let pending_matches = chunks.by_chunk_id.get(&output.chunk_id)
+        let pending_matches = chunks
+            .by_chunk_id
+            .get(&output.chunk_id)
             .is_some_and(|record| {
                 record.pending_build_generation == Some(output.target_build_generation)
             });
-        let previous_is_older = sdf_store.chunks.get(&output.chunk_id)
+        let previous_is_older = sdf_store
+            .chunks
+            .get(&output.chunk_id)
             .is_none_or(|previous| previous.chunk_generation.0 < output.target_build_generation.0);
         let source_is_valid = output.exact_source.as_ref().is_none_or(|committed| {
             committed.evidence.partition() == &**partition
                 && !committed.eligible_products.is_empty()
                 && committed.eligible_products.values().all(|descriptor| {
-                    committed.evidence.revalidate(
-                        descriptor, &output.chunk_payload, output.region_summary, &partition,
-                    ).is_ok()
+                    committed
+                        .evidence
+                        .revalidate(
+                            descriptor,
+                            &output.chunk_payload,
+                            output.region_summary,
+                            &partition,
+                        )
+                        .is_ok()
                 })
         });
         if !matches!(output.staleness, WorldBuildStaleness::Current)

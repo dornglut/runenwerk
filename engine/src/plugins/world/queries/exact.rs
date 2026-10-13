@@ -2,6 +2,7 @@ use super::super::adapters::resources::{PartitionConfigResource, SdfChunkStoreRe
 use super::super::build::integration::WorldRuntimeSdfProductCatalogResource;
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use product::ProductIdentity;
+use super::super::chunks::lifecycle::WorldChunkRuntimeRecord;
 use runen_spatial::GridPartitionConfig;
 use world_ops::BuildGeneration;
 use world_sdf::{
@@ -21,8 +22,12 @@ impl WorldSdfExactQueryBounds {
         }
         Ok(Self { min, max })
     }
-    pub fn min(self) -> [f64; 3] { self.min }
-    pub fn max(self) -> [f64; 3] { self.max }
+    pub fn min(self) -> [f64; 3] {
+        self.min
+    }
+    pub fn max(self) -> [f64; 3] {
+        self.max
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -54,15 +59,22 @@ pub struct WorldSdfCurrentExactSourceRead<'a> {
     bounds: WorldSdfExactQueryBounds,
     _cpu: &'a SdfChunkPayload,
     _partition: &'a GridPartitionConfig,
+    _record: &'a WorldChunkRuntimeRecord,
+    _descriptor: &'a world_sdf::FieldProductDescriptor,
 }
 impl WorldSdfCurrentExactSourceRead<'_> {
-    pub const fn bounds(&self) -> WorldSdfExactQueryBounds { self.bounds }
+    pub const fn bounds(&self) -> WorldSdfExactQueryBounds {
+        self.bounds
+    }
     pub fn sample_exact_distance_meters(
-        &self, position: [f64; 3],
+        &self,
+        position: [f64; 3],
     ) -> Result<f64, WorldSdfExactReadError> {
-        if !(0..3).all(|i| position[i].is_finite()
-            && position[i] >= self.bounds.min[i] && position[i] <= self.bounds.max[i])
-        {
+        if !(0..3).all(|i| {
+            position[i].is_finite()
+                && position[i] >= self.bounds.min[i]
+                && position[i] <= self.bounds.max[i]
+        }) {
             return Err(WorldSdfExactReadError::IncompleteCoverage);
         }
         Ok(self.source.signed_distance_meters(position))
@@ -162,5 +174,7 @@ pub fn qualify_current_world_sdf_exact_source_read<'a>(
         bounds: required_bounds,
         _cpu: payload,
         _partition: partition,
+        _record: record,
+        _descriptor: descriptor,
     })
 }

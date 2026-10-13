@@ -4,7 +4,9 @@ use super::super::adapters::resources::{
 };
 use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
 use super::super::debug::metrics::WorldDebugMetricsResource;
-use super::integration::{WorldCompletedBuildOrigin, WorldCompletedBuildOutput, WorldCompletedBuildQueueResource};
+use super::integration::{
+    WorldCompletedBuildOrigin, WorldCompletedBuildOutput, WorldCompletedBuildQueueResource,
+};
 use crate::runtime::{Res, ResMut};
 use runen_spatial::{ChunkId, GridPartitionConfig, SpatialMathError};
 use std::collections::BTreeMap;

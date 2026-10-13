@@ -1,10 +1,10 @@
 use super::DirtyChunkMapResource;
 use crate::runtime::{ResMut, WorldMut};
-use runen_spatial::ChunkId;
 use product::ProductIdentity;
-use world_sdf::{FieldProductDescriptor, WorldSdfVerifiedExactSource};
+use runen_spatial::ChunkId;
 use std::collections::BTreeMap;
 use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReasonSet};
+use world_sdf::{FieldProductDescriptor, WorldSdfVerifiedExactSource};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, runen_ecs::Component, runen_ecs::Resource)]
 pub enum ChunkLifecycleState {
