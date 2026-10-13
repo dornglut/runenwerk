@@ -284,7 +284,6 @@ fn device_scoped_key_transitions_have_independent_pressed_edges() {
     assert!(!actions.action_down(action::WORLD_MOVE_UP));
 }
 
-
 #[test]
 fn source_scoped_modifiers_do_not_combine_across_native_windows() {
     let mut input = InputState::new();
@@ -368,6 +367,47 @@ fn key_release_cannot_inherit_modifier_from_another_source() {
     input.handle_continuity_loss(second, ContinuityLoss::Source);
     actions.project(&input);
     assert!(!actions.action_down(action::UI_SUBMIT));
+    assert!(!actions.action_down(action::UI_INSERT_NEWLINE));
+}
+
+
+#[test]
+fn group_keyboard_projection_observes_prefix_modifiers_atomically() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(907), Some(InputDeviceId::new(3)));
+    let shift = KeyboardInput {
+        physical_key: physical_key(KeyCode::ShiftLeft),
+        ..normalized_key(DigitalState::Pressed)
+    };
+    let enter = KeyboardInput {
+        physical_key: physical_key(KeyCode::Enter),
+        ..normalized_key(DigitalState::Pressed)
+    };
+    let shift_up = KeyboardInput {
+        state: DigitalState::Released,
+        ..shift.clone()
+    };
+    input
+        .admit_device_observation_group(InputObservationGroup::new(
+            context,
+            vec![
+                InputObservation::Keyboard(shift),
+                InputObservation::Keyboard(enter),
+                InputObservation::Keyboard(shift_up),
+            ],
+        ))
+        .expect("admit one valid chronological source group");
+
+    let samples = input.keyboard_press_samples();
+    assert_eq!(samples.len(), 2);
+    assert_eq!(samples[0].context, context);
+    assert_eq!(samples[1].context, context);
+    actions.project(&input);
+    assert!(actions.action_pressed(action::UI_INSERT_NEWLINE));
+    assert!(!actions.action_pressed(action::UI_SUBMIT));
+    // The admitted reducer has released Shift at the group end.
+    assert!(actions.action_down(action::UI_SUBMIT));
     assert!(!actions.action_down(action::UI_INSERT_NEWLINE));
 }
 

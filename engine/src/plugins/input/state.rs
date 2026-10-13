@@ -182,11 +182,69 @@ impl InputState {
     }
 
     fn admit_group(&mut self, group: &InputObservationGroup) -> Result<(), InputError> {
+        // The neutral reducer remains the sole physical-state authority. Its
+        // atomic validation/admission must succeed before any product projection.
         self.neutral.admit(group)?;
+        for observation in &group.observations {
+            match observation {
+                InputObservation::Keyboard(input) => {
+                    self.observe_keyboard_contributor(group.context, input);
+                }
+                InputObservation::ContinuityLoss(loss) => {
+                    self.keyboard_held_contributors.retain(|contributor| {
+                        !continuity_loss_contains_context(group.context, *loss, contributor.context)
+                    });
+                }
+                _ => {}
+            }
+        }
         if self.admitted_input_capture_active {
             self.captured_admitted_groups.push(group.clone());
         }
         Ok(())
+    }
+
+    fn observe_keyboard_contributor(&mut self, context: InputContext, input: &KeyboardInput) {
+        let held_index = self.keyboard_held_contributors.iter().position(|contributor| {
+            contributor.context == context && contributor.physical_key == input.physical_key
+        });
+        match (input.state, held_index) {
+            (DigitalState::Pressed, None) => {
+                self.keyboard_held_contributors.push(KeyboardHeldContributor {
+                    context,
+                    physical_key: input.physical_key.clone(),
+                });
+                if input.origin == ObservationOrigin::SourceReport && !input.repeat {
+                    self.keyboard_press_samples.push(KeyboardPressSample {
+                        context,
+                        physical_key: input.physical_key.clone(),
+                        modifiers: self.source_modifiers_from_held_index(context),
+                    });
+                }
+            }
+            (DigitalState::Released, Some(index)) => {
+                self.keyboard_held_contributors.remove(index);
+            }
+            _ => {}
+        }
+    }
+
+    fn source_modifiers_from_held_index(&self, context: InputContext) -> ModifiersSnapshot {
+        // The admission group may have several chronological keyboard edges.
+        // The neutral reducer has already committed the whole group, so use
+        // the derived prefix index for exact press-time modifier snapshots.
+        let down = |key| {
+            let key = physical_identity_for_key_code(key);
+            self.keyboard_held_contributors.iter().any(|contributor| {
+                contributor.context == context && contributor.physical_key == key
+            })
+        };
+        ModifiersSnapshot {
+            shift: down(KeyCode::ShiftLeft) || down(KeyCode::ShiftRight),
+            ctrl: down(KeyCode::ControlLeft) || down(KeyCode::ControlRight),
+            alt: down(KeyCode::AltLeft) || down(KeyCode::AltRight),
+            super_key: down(KeyCode::SuperLeft) || down(KeyCode::SuperRight),
+        }
     }
 
     pub fn start_admitted_input_capture(&mut self) {
@@ -260,9 +318,6 @@ impl InputState {
         ))
         .expect("input continuity loss should always be valid");
 
-        self.keyboard_held_contributors.retain(|contributor| {
-            !continuity_loss_contains_context(context, loss, contributor.context)
-        });
         if self.primary_touch.is_some_and(|(touch_context, _)| {
             continuity_loss_contains_context(context, loss, touch_context)
         }) {
@@ -275,40 +330,11 @@ impl InputState {
         context: InputContext,
         input: &KeyboardInput,
     ) {
-        let was_down_in_source = self.neutral.key_down_in(context, &input.physical_key);
         self.admit_group(&InputObservationGroup::single(
             context,
             InputObservation::Keyboard(input.clone()),
         ))
         .expect("digital keyboard observation should always be valid");
-        let is_down_in_source = self.neutral.key_down_in(context, &input.physical_key);
-
-        if was_down_in_source != is_down_in_source {
-            if is_down_in_source {
-                // This is only an index for ActionState iteration. Physical held
-                // truth is always queried from the admitted neutral reducer.
-                self.keyboard_held_contributors.push(KeyboardHeldContributor {
-                    context,
-                    physical_key: input.physical_key.clone(),
-                });
-            } else {
-                self.keyboard_held_contributors.retain(|contributor| {
-                    contributor.context != context || contributor.physical_key != input.physical_key
-                });
-            }
-        }
-        if input.origin == ObservationOrigin::SourceReport
-            && input.state == DigitalState::Pressed
-            && !input.repeat
-            && !was_down_in_source
-            && is_down_in_source
-        {
-            self.keyboard_press_samples.push(KeyboardPressSample {
-                context,
-                physical_key: input.physical_key.clone(),
-                modifiers: self.modifiers_snapshot_in(context),
-            });
-        }
     }
 
     pub(crate) fn handle_text_input(&mut self, text: &str) {
