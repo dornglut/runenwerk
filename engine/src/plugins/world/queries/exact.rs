@@ -125,7 +125,10 @@ pub fn qualify_current_world_sdf_exact_source_read<'a>(
     if committed.eligible_products.get(&product_id) != Some(descriptor) {
         return Err(E::ProductSourceMismatch);
     }
-    if dirty.by_chunk.get(&reference.chunk_id).is_some_and(|reasons| !reasons.is_empty())
+    if dirty
+        .by_chunk
+        .get(&reference.chunk_id)
+        .is_some_and(|reasons| !reasons.is_empty())
         || record.exact_read_recovery_required
         || record.pending_build_generation.is_some()
         || !record.dirty_reasons.is_empty()
