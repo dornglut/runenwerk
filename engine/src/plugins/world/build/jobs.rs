@@ -130,11 +130,17 @@ pub fn dispatch_world_build_jobs_system(
         );
 
         let region_summary = summarize_region_from_payload(&payload);
-        completed.outputs.push_back(WorldCompletedBuildOutput::generic(
-            item.chunk_id, target_chunk_revision, target_build_generation,
-            WorldBuildStaleness::Current, payload, region_summary,
-            WorldCompletedBuildOrigin::OperationWindow,
-        ));
+        completed
+            .outputs
+            .push_back(WorldCompletedBuildOutput::generic(
+                item.chunk_id,
+                target_chunk_revision,
+                target_build_generation,
+                WorldBuildStaleness::Current,
+                payload,
+                region_summary,
+                WorldCompletedBuildOrigin::OperationWindow,
+            ));
         runtime.completed_jobs = runtime.completed_jobs.saturating_add(1);
     }
 }

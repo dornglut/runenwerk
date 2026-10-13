@@ -1781,16 +1781,17 @@ fn world_revision_advances_only_for_integrated_outputs() {
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
-        completed.outputs.push_back(WorldCompletedBuildOutput::generic(
-            chunk_id, ChunkRevision(99), BuildGeneration(8),
-            WorldBuildStaleness::Current, sdf_chunk_payload(
+        completed
+            .outputs
+            .push_back(WorldCompletedBuildOutput::generic(
                 chunk_id,
                 ChunkRevision(99),
-                ChunkGeneration::default(),
-                0,
-            ),
-            RegionSdfSummary::default(), engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
-        ));
+                BuildGeneration(8),
+                WorldBuildStaleness::Current,
+                sdf_chunk_payload(chunk_id, ChunkRevision(99), ChunkGeneration::default(), 0),
+                RegionSdfSummary::default(),
+                engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
+            ));
     }
 
     app = app
@@ -1847,11 +1848,17 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
-        completed.outputs.push_back(WorldCompletedBuildOutput::generic(
-            chunk_id, ChunkRevision(5), BuildGeneration(5),
-            WorldBuildStaleness::Current, sdf_chunk_payload(chunk_id, ChunkRevision(5), ChunkGeneration(5), 0),
-            RegionSdfSummary::default(), engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
-        ));
+        completed
+            .outputs
+            .push_back(WorldCompletedBuildOutput::generic(
+                chunk_id,
+                ChunkRevision(5),
+                BuildGeneration(5),
+                WorldBuildStaleness::Current,
+                sdf_chunk_payload(chunk_id, ChunkRevision(5), ChunkGeneration(5), 0),
+                RegionSdfSummary::default(),
+                engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
+            ));
     }
 
     let app = app
@@ -2023,11 +2030,17 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
-        completed.outputs.push_back(WorldCompletedBuildOutput::generic(
-            chunk_id, ChunkRevision(11), BuildGeneration(11),
-            WorldBuildStaleness::Current, sdf_chunk_payload(chunk_id, ChunkRevision(10), ChunkGeneration(11), 0),
-            RegionSdfSummary::default(), engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
-        ));
+        completed
+            .outputs
+            .push_back(WorldCompletedBuildOutput::generic(
+                chunk_id,
+                ChunkRevision(11),
+                BuildGeneration(11),
+                WorldBuildStaleness::Current,
+                sdf_chunk_payload(chunk_id, ChunkRevision(10), ChunkGeneration(11), 0),
+                RegionSdfSummary::default(),
+                engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
+            ));
     }
 
     let app = app
@@ -2099,16 +2112,17 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
-        completed.outputs.push_back(WorldCompletedBuildOutput::generic(
-            chunk_id, ChunkRevision(3), BuildGeneration(3),
-            WorldBuildStaleness::Current, sdf_chunk_payload(
-                wrong_chunk_id,
+        completed
+            .outputs
+            .push_back(WorldCompletedBuildOutput::generic(
+                chunk_id,
                 ChunkRevision(3),
-                ChunkGeneration(3),
-                0,
-            ),
-            RegionSdfSummary::default(), engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
-        ));
+                BuildGeneration(3),
+                WorldBuildStaleness::Current,
+                sdf_chunk_payload(wrong_chunk_id, ChunkRevision(3), ChunkGeneration(3), 0),
+                RegionSdfSummary::default(),
+                engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
+            ));
     }
 
     let app = app
@@ -2703,9 +2717,13 @@ fn failed_generic_completion_recovers_dirty_retry_authority() {
         .unwrap()
         .outputs
         .push_back(WorldCompletedBuildOutput::generic(
-            id, ChunkRevision(2), BuildGeneration(2),
-            WorldBuildStaleness::Current, sdf_chunk_payload(id, ChunkRevision(999), ChunkGeneration(2), 801),
-            RegionSdfSummary::default(), engine::plugins::world::build::WorldCompletedBuildOrigin::OperationWindow,
+            id,
+            ChunkRevision(2),
+            BuildGeneration(2),
+            WorldBuildStaleness::Current,
+            sdf_chunk_payload(id, ChunkRevision(999), ChunkGeneration(2), 801),
+            RegionSdfSummary::default(),
+            engine::plugins::world::build::WorldCompletedBuildOrigin::OperationWindow,
         ));
     app = app
         .run_for_fixed_steps(1)

@@ -10,10 +10,10 @@ use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use world_ops::{ChunkGeneration, ChunkRevision};
 use world_sdf::{
     FieldProductConsumerClass, FieldProductDescriptor, FieldProductId, FieldProductKind,
-    FieldProductLineage, FieldProductScope, SDF_METRIC_BRICK_EDGE_SAMPLES,
-    SDF_PAGE_EDGE_BRICKS, SdfChunkPayload, SdfPageCoord3, WorldSdfMetricEncoding,
-    WorldSdfMetricPayloadRef, WorldSdfOpenTopExactFormation, WorldSdfOpenTopRectInteriorSource,
-    WorldSdfPayloadRef, form_world_sdf_open_top_exact_source,
+    FieldProductLineage, FieldProductScope, SDF_METRIC_BRICK_EDGE_SAMPLES, SDF_PAGE_EDGE_BRICKS,
+    SdfChunkPayload, SdfPageCoord3, WorldSdfMetricEncoding, WorldSdfMetricPayloadRef,
+    WorldSdfOpenTopExactFormation, WorldSdfOpenTopRectInteriorSource, WorldSdfPayloadRef,
+    form_world_sdf_open_top_exact_source,
 };
 
 pub const ARENA_WORLD_ID: WorldId = WorldId::new(0);
@@ -70,8 +70,11 @@ fn install_arena_world(
     *partition = PartitionConfigResource(arena_partition_config());
 
     let formation = arena_exact_formation(
-        arena_geometry_source(), ARENA_FIELD_PRODUCT_ID, 1,
-        ChunkRevision::default(), ChunkGeneration::default(),
+        arena_geometry_source(),
+        ARENA_FIELD_PRODUCT_ID,
+        1,
+        ChunkRevision::default(),
+        ChunkGeneration::default(),
     );
     let enqueued = enqueue_ratified_world_sdf_payload_package(
         &mut completed,
@@ -154,10 +157,16 @@ pub fn arena_exact_formation(
     chunk_generation: ChunkGeneration,
 ) -> WorldSdfOpenTopExactFormation {
     form_world_sdf_open_top_exact_source(
-        source, arena_partition_config(), arena_chunk_id(), chunk_revision,
-        chunk_generation, 1, product_id,
+        source,
+        arena_partition_config(),
+        arena_chunk_id(),
+        chunk_revision,
+        chunk_generation,
+        1,
+        product_id,
         FieldProductLineage::new(source_revision, "runenwerk_arena.runtime_sdf"),
-    ).expect("Arena exact source must have representable formed metric samples")
+    )
+    .expect("Arena exact source must have representable formed metric samples")
 }
 
 pub fn build_arena_chunk_payload() -> SdfChunkPayload {
@@ -170,9 +179,13 @@ pub fn build_arena_chunk_payload_from_source(
     source: WorldSdfOpenTopRectInteriorSource,
 ) -> SdfChunkPayload {
     arena_exact_formation(
-        source, ARENA_FIELD_PRODUCT_ID, 1,
-        ChunkRevision::default(), ChunkGeneration::default(),
-    ).into_payload()
+        source,
+        ARENA_FIELD_PRODUCT_ID,
+        1,
+        ChunkRevision::default(),
+        ChunkGeneration::default(),
+    )
+    .into_payload()
 }
 
 #[cfg(test)]
@@ -193,10 +206,13 @@ mod tests {
     fn arena_occupancy_encodes_floor_and_boundary_walls() {
         let payload = build_arena_chunk_payload();
         let page = payload.page_table.get(&ARENA_PAGE_COORD).unwrap();
-        for cell in [[0,2,2], [3,2,2], [2,2,0], [2,2,3], [2,0,2]] {
+        for cell in [[0, 2, 2], [3, 2, 2], [2, 2, 0], [2, 2, 3], [2, 0, 2]] {
             assert_ne!(page.bricks.get(&cell).unwrap().metadata.occupancy_mask, 0);
         }
-        assert_eq!(page.bricks.get(&[2,2,2]).unwrap().metadata.occupancy_mask, 0);
+        assert_eq!(
+            page.bricks.get(&[2, 2, 2]).unwrap().metadata.occupancy_mask,
+            0
+        );
     }
 
     #[test]
