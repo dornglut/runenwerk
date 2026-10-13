@@ -142,6 +142,32 @@ pub(super) fn material_scene_table_shader_identity(
         for node in &slot.ir.nodes {
             encoder.field("node_id", &node.node_id.raw().to_string());
             encoder.field("node_op", node.op.label());
+            encoder.number("input_count", node.inputs.len() as u64);
+            for input in &node.inputs {
+                encoder.field("input_name", &input.name);
+                encoder.field("input_type", input.value_type.label());
+                match &input.source {
+                    MaterialIrInputSource::Connected { node_id, output_name } => {
+                        encoder.field("input_source", "connected");
+                        encoder.field("input_source_node", &node_id.raw().to_string());
+                        encoder.field("input_source_output", output_name);
+                    }
+                    MaterialIrInputSource::Constant(literal) => {
+                        encoder.field("input_source", "constant");
+                        encoder.field("input_literal", &literal.canonical_component());
+                    }
+                    MaterialIrInputSource::NodeValue { key, canonical_value } => {
+                        encoder.field("input_source", "node_value");
+                        encoder.field("input_value_key", key);
+                        encoder.field("input_value", canonical_value);
+                    }
+                }
+            }
+            encoder.number("output_count", node.outputs.len() as u64);
+            for output in &node.outputs {
+                encoder.field("output_name", &output.name);
+                encoder.field("output_type", output.value_type.label());
+            }
             for value in &node.values {
                 encoder.field("value_key", &value.key);
                 encoder.field("value_value", &value.canonical_value);

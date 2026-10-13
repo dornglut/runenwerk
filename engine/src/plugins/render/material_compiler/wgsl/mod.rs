@@ -1,5 +1,6 @@
 //! WGSL program generation for material preview and scene entrypoints.
 
+mod lighting;
 mod literals;
 mod preview;
 mod program;

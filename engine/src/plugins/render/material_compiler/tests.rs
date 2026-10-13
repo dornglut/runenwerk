@@ -807,6 +807,8 @@ fn renderer_capabilities_admit_only_realized_explicit_pbr_values() {
             "base_color",
             "0.2 0.4 0.6 1.0",
         ),
+        (MaterialOutputTarget::RenderMaterial, "roughness", "0.25"),
+        (MaterialOutputTarget::RenderMaterial, "metallic", "0.7"),
         (
             MaterialOutputTarget::RenderMaterial,
             "emissive",
@@ -839,8 +841,6 @@ fn renderer_capabilities_reject_ignored_explicit_pbr_values() {
     for (target, input) in [
         (MaterialOutputTarget::PbrPreview, "normal_strength"),
         (MaterialOutputTarget::PbrPreview, "material_channel"),
-        (MaterialOutputTarget::RenderMaterial, "roughness"),
-        (MaterialOutputTarget::RenderMaterial, "metallic"),
         (MaterialOutputTarget::RenderMaterial, "normal_strength"),
         (MaterialOutputTarget::RenderMaterial, "material_channel"),
     ] {
@@ -878,8 +878,6 @@ fn renderer_capabilities_reject_ignored_connections_but_keep_supported_connectio
     for (target, input) in [
         (MaterialOutputTarget::PbrPreview, "normal_strength"),
         (MaterialOutputTarget::PbrPreview, "material_channel"),
-        (MaterialOutputTarget::RenderMaterial, "roughness"),
-        (MaterialOutputTarget::RenderMaterial, "metallic"),
         (MaterialOutputTarget::RenderMaterial, "normal_strength"),
         (MaterialOutputTarget::RenderMaterial, "material_channel"),
     ] {
@@ -935,10 +933,10 @@ fn renderer_capabilities_reject_mixed_authored_semantics_without_publishing_wgsl
     output
         .inputs
         .iter_mut()
-        .find(|input| input.name == "roughness")
+        .find(|input| input.name == "normal_strength")
         .unwrap()
         .source = MaterialIrInputSource::NodeValue {
-        key: "roughness".to_string(),
+        key: "normal_strength".to_string(),
         canonical_value: GraphValue::Text("0.4".to_string()).canonical_component(),
     };
     assert_eq!(
@@ -946,7 +944,7 @@ fn renderer_capabilities_reject_mixed_authored_semantics_without_publishing_wgsl
         MaterialShaderCompileError::UnsupportedAuthoredOutputInput {
             target: MaterialOutputTarget::RenderMaterial,
             node_id: 1,
-            input: "roughness".to_string(),
+            input: "normal_strength".to_string(),
         }
     );
 }
@@ -954,7 +952,7 @@ fn renderer_capabilities_reject_mixed_authored_semantics_without_publishing_wgsl
 #[test]
 fn scene_material_table_rejects_ignored_output_inputs_in_any_slot() {
     let valid = ir();
-    let invalid = authored_output_ir(MaterialOutputTarget::RenderMaterial, "metallic", "0.8");
+    let invalid = authored_output_ir(MaterialOutputTarget::RenderMaterial, "normal_strength", "0.8");
     assert_eq!(
         compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
             slots: vec![
@@ -974,7 +972,7 @@ fn scene_material_table_rejects_ignored_output_inputs_in_any_slot() {
         MaterialShaderCompileError::UnsupportedAuthoredOutputInput {
             target: MaterialOutputTarget::RenderMaterial,
             node_id: 1,
-            input: "metallic".to_string(),
+            input: "normal_strength".to_string(),
         }
     );
 }
@@ -991,4 +989,70 @@ fn unsupported_output_admission_does_not_suppress_structural_validation() {
             ..
         } if input == "roughness"
     ));
+}
+
+#[test]
+fn renderer_realizes_connected_roughness_and_metallic_in_scene_and_preview() {
+    for input in ["roughness", "metallic"] {
+        let ir = lowered_connected_output_ir(MaterialOutputTarget::RenderMaterial, input);
+        let compiled = compile_ir(&ir).expect("connected scene parameter supported");
+        assert!(compiled.wgsl.contains("rw_direct_material_light("));
+        assert!(compiled.scene_wgsl.contains("shade_model_mesh_region("));
+        assert!(compiled.scene_wgsl.contains("let lit = rw_direct_material_light("));
+    }
+}
+
+#[test]
+fn material_direct_light_endpoints_are_naga_valid_with_finite_denominator_guards() {
+    for target in [MaterialOutputTarget::PbrPreview, MaterialOutputTarget::RenderMaterial] {
+        for parameter in ["roughness", "metallic"] {
+            for value in ["0.0", "1.0"] {
+                let ir = authored_output_ir(target, parameter, value);
+                let compiled = compile_ir(&ir).expect("endpoint WGSL must validate");
+                for source in [&compiled.wgsl, &compiled.scene_wgsl] {
+                    assert!(source.contains("rw_safe_direction("));
+                    assert!(source.contains("max(4.0 * nl * nv, 0.0001)"));
+                    assert!(source.contains("max(roughness * roughness, 0.045 * 0.045)"));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn scene_table_identity_and_effective_cache_track_only_connection_change() {
+    let mut baseline = lowered_connected_output_ir(MaterialOutputTarget::RenderMaterial, "roughness");
+    let mut second = baseline.nodes.iter().find(|n| n.node_id == NodeId::new(10)).unwrap().clone();
+    second.node_id = NodeId::new(20);
+    baseline.nodes.insert(1, second);
+    let mut changed = baseline.clone();
+    let output = changed.nodes.iter_mut().find(|n| n.op == MaterialNodeOp::PbrOutput).unwrap();
+    output.inputs.iter_mut().find(|n| n.name == "roughness").unwrap().source =
+        MaterialIrInputSource::Connected { node_id: NodeId::new(20), output_name: "value".to_string() };
+    let compile = |ir: &MaterialIr| compile_scene_material_table_shader(SceneMaterialTableCompileRequest {
+        slots: vec![SceneMaterialTableSlot {
+            slot_index: 0, material_instance_id: "material.asset.same".to_string(), ir,
+        }],
+    }).expect("valid table");
+    let original = compile(&baseline);
+    let replacement = compile(&changed);
+    let stable = compile(&baseline);
+    assert_ne!(original.wgsl, replacement.wgsl);
+    assert_ne!(original.identity, replacement.identity);
+    assert_eq!(original.identity, stable.identity);
+    assert_eq!(original.resource_layout_identity, replacement.resource_layout_identity);
+    let effective_cache_key = |shader: &CompiledSceneMaterialTableShader| format!(
+        "material-scene-table-shader-v1:table={}:resources={}:compiler_resources={}:shader={}",
+        "same-table", "same-resources", shader.resource_layout_identity, shader.identity,
+    );
+    assert_ne!(effective_cache_key(&original), effective_cache_key(&replacement));
+    assert_eq!(effective_cache_key(&original), effective_cache_key(&stable));
+}
+
+#[test]
+fn shader_semantic_version_invalidates_old_compiler_byte_contract() {
+    assert_eq!(MATERIAL_WGSL_COMPILER_CONTRACT_VERSION, 3);
+    let shader = compile_ir(&output_ir(MaterialOutputTarget::RenderMaterial)).unwrap();
+    assert!(shader.wgsl.contains("material compiler v3"));
+    assert!(shader.scene_wgsl.contains("material compiler v3"));
 }

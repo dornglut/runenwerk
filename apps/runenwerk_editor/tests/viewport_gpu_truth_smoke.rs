@@ -1842,3 +1842,197 @@ fn create_smoke_event_loop() -> EventLoop<()> {
         EventLoop::new().expect("event loop should initialize")
     }
 }
+
+#[derive(Debug)]
+struct Wr1282LightPixels {
+    left: [u8; 4],
+    right_control: [u8; 4],
+    preview: [u8; 4],
+}
+
+/// Not part of ordinary cargo validate. Must be explicitly executed on a
+/// windowed GPU runner; a successful non-GPU CI run is not pixel proof.
+#[test]
+#[ignore = "requires explicit windowed GPU execution with RUNENWERK_ENABLE_GPU_SMOKE=1"]
+fn wr1282_source_backed_roughness_metallic_gpu_pixels() {
+    assert!(gpu_smoke_enabled(), "set RUNENWERK_ENABLE_GPU_SMOKE=1; do not silently skip pixel proof");
+    if cfg!(target_os = "macos") {
+        assert!(macos_main_thread_smoke_enabled() && running_on_macos_main_thread(),
+            "macOS GPU proof must run on main thread with explicit opt-in");
+    }
+    let window = create_hidden_window();
+    let base = render_wr1282_light_variant(&window, "base", "0.45", "0.0");
+    let rough = render_wr1282_light_variant(&window, "rough", "0.90", "0.0");
+    let metal = render_wr1282_light_variant(&window, "metal", "0.45", "0.90");
+    let delta = |a: [u8; 4], b: [u8; 4]| -> i32 {
+        a[..3].iter().zip(&b[..3]).map(|(a, b)| (*a as i32 - *b as i32).abs()).sum()
+    };
+    for (label, changed) in [("roughness", rough), ("metallic", metal)] {
+        let scene_delta = delta(base.left, changed.left);
+        let preview_delta = delta(base.preview, changed.preview);
+        let unchanged_slot_delta = delta(base.right_control, changed.right_control);
+        eprintln!("WR-1282 {label} GPU pixel deltas scene={scene_delta} preview={preview_delta} unchanged_control={unchanged_slot_delta}; base={base:?} changed={changed:?}");
+        assert!(scene_delta >= 4, "{label} must visibly change left SDF scene pixel");
+        assert!(preview_delta >= 4, "{label} must visibly change material preview pixel");
+        assert!(unchanged_slot_delta <= 2, "unmodified source-backed slot must be pixel-stable");
+    }
+}
+
+fn wr1282_material_preview(product_id: u64, label: &str, roughness: &str, metallic: &str) -> EditorMaterialPreviewProduct {
+    let color = PortTypeId::new(1);
+    let scalar = PortTypeId::new(2);
+    let document = MaterialGraphDocument::new(
+        MaterialGraphDocumentId::new(product_id),
+        format!("WR-1282 {label} source material"),
+        GraphDefinition::new(
+            GraphId::new(1),
+            format!("wr1282_{label}"),
+            CyclePolicy::RejectDirectedCycles,
+            [
+                NodeDefinition::new(
+                    NodeId::new(10), "pbr.base_color",
+                    [PortDefinition::new(PortId::new(1), "color", PortDirection::Output, color)],
+                ).with_values([GraphMetadataEntry::new("color", GraphValue::Text("0.85 0.3 0.14 1.0".to_string()))]),
+                NodeDefinition::new(
+                    NodeId::new(11), "pbr.roughness",
+                    [PortDefinition::new(PortId::new(2), "value", PortDirection::Output, scalar)],
+                ).with_values([GraphMetadataEntry::new("value", GraphValue::decimal(roughness))]),
+                NodeDefinition::new(
+                    NodeId::new(12), "pbr.metallic",
+                    [PortDefinition::new(PortId::new(3), "value", PortDirection::Output, scalar)],
+                ).with_values([GraphMetadataEntry::new("value", GraphValue::decimal(metallic))]),
+                NodeDefinition::new(
+                    NodeId::new(13), "pbr.output",
+                    [
+                        PortDefinition::new(PortId::new(4), "base_color", PortDirection::Input, color),
+                        PortDefinition::new(PortId::new(5), "roughness", PortDirection::Input, scalar),
+                        PortDefinition::new(PortId::new(6), "metallic", PortDirection::Input, scalar),
+                    ],
+                ),
+            ],
+            [
+                graph::EdgeDefinition::new(graph::EdgeId::new(1), PortId::new(1), PortId::new(4)),
+                graph::EdgeDefinition::new(graph::EdgeId::new(2), PortId::new(2), PortId::new(5)),
+                graph::EdgeDefinition::new(graph::EdgeId::new(3), PortId::new(3), PortId::new(6)),
+            ],
+        ),
+        MaterialOutputTarget::RenderMaterial,
+    );
+    let source_path = write_gpu_truth_material_source(
+        format!("wr1282-{label}.material.ron").as_str(),
+        &MaterialGraphSourceFileV2::from_document(&document),
+    );
+    let source_text = std::fs::read_to_string(&source_path).expect("source file");
+    let source: MaterialGraphSourceFileV2 = ron::de::from_str(&source_text).expect("source decode");
+    let document = source.into_document().expect("source document");
+    let lowering = lower_material_graph(&document, &MaterialNodeCatalog::first_slice());
+    assert!(!lowering.report.has_blocking_issues(), "ratified source: {:?}", lowering.report.issues());
+    let product = lowering.product.expect("formed material");
+    let compiled = compile_material_shader(MaterialShaderCompileRequest {
+        ir: product.executable_ir.as_ref().expect("IR"),
+        fixture: MaterialPreviewFixture::Sphere,
+    }).expect("compiled material");
+    let preview_path = write_gpu_truth_shader(
+        format!("wr1282-preview-{label}.wgsl").as_str(), &compiled.wgsl,
+    );
+    let scene_path = write_gpu_truth_shader(
+        format!("wr1282-scene-{label}.wgsl").as_str(), &compiled.scene_wgsl,
+    );
+    EditorMaterialPreviewProduct::new(
+        asset_id(product_id + 100), asset_source_id(product_id + 200),
+        asset_artifact_id(product_id + 300),
+        ArtifactCacheKey::new(product.cache_key.as_str()),
+        product, MaterialRendererParameterProfile::RenderMaterial,
+        asset_artifact_id(product_id + 400),
+        ArtifactCacheKey::new(format!("material-shader:{}", compiled.identity)),
+        preview_path, compiled.identity,
+        asset_artifact_id(product_id + 500),
+        ArtifactCacheKey::new(format!("material-scene-shader:{}", compiled.scene_identity)),
+        scene_path, compiled.scene_identity, [],
+    ).with_compiler_resource_bindings(compiled.resource_bindings)
+}
+
+fn render_wr1282_light_variant(window: &Arc<Window>, label: &str, roughness: &str, metallic: &str) -> Wr1282LightPixels {
+    let gfx = Gfx::new(Arc::clone(window)).expect("windowed GPU device");
+    let mut app = runenwerk_editor::runtime::build_headless_app().expect("editor app");
+    app.world_mut().insert_resource(gfx);
+    let mut app = app.run_for_frames(1).expect("initial frame");
+    let size = window.inner_size();
+    let size_px = (size.width.max(1), size.height.max(1));
+    let factor = window.scale_factor();
+    app.world_mut().insert_resource(PrimaryPresentationMetricsResource::new(size_px, factor));
+    app.world_mut().insert_resource(WindowStateRegistryResource::default());
+    app.world_mut().resource_mut::<WindowStateRegistryResource>().unwrap()
+        .register_primary_window(window.title(), size_px, factor, window.has_focus());
+    app.world_mut().resource_mut::<RenderSurfaceRegistryResource>().unwrap()
+        .confirm_surface_attachment(RenderSurfaceId::primary(), NativeWindowId::primary(), size_px)
+        .expect("surface attachment");
+
+    let left = wr1282_material_preview(200_100, label, roughness, metallic);
+    let right = wr1282_material_preview(200_101, "control", "0.45", "0.0");
+    {
+        let host = app.world_mut().resource_mut::<EditorHostResource>().expect("host");
+        register_mvp_component_types(host.app.runtime_mut());
+        apply_scene_file_to_runtime(
+            host.app.runtime_mut(), &wr028_two_sdf_primitive_scene_file(&left, &right),
+        ).expect("source-backed 2-slot SDF scene");
+        host.app.material_lab_runtime_mut().set_active_preview(right);
+        host.app.material_lab_runtime_mut().set_active_preview(left.clone());
+    }
+    let mut app = app.run_for_frames(8).expect("scene material frames");
+    {
+        let selections = app.world_mut().resource_mut::<ViewportPresentationStateResource>().unwrap();
+        let mut state = selections.state_for(MAIN_VIEWPORT_ID).cloned()
+            .unwrap_or_else(|| ViewportPresentationState::new(MAIN_VIEWPORT_ID, left.viewport_product_id));
+        state.select_primary_product(left.viewport_product_id);
+        selections.upsert_state(state);
+    }
+    let mut app = app.run_for_frames(5).expect("preview product warmup");
+    let provenance = app.world().resource::<RenderPassProvenanceState>().expect("provenance");
+    let scene = provenance.records.iter().find(|record| scene_product_record_targets_scene_color(record))
+        .expect("SDF scene render provenance").clone();
+    let preview = provenance.records.iter()
+        .find(|record| record.shader_id == EDITOR_MATERIAL_PREVIEW_SHADER_ID)
+        .expect("material preview provenance").clone();
+    let scene_target = scene.render_targets.first().expect("scene target").clone();
+    let preview_target = preview.render_targets.first().expect("preview target").clone();
+    app.update_render_debug_config(|config| {
+        config.clear();
+        config.capture_selectors = vec![
+            RenderCaptureSelector {
+                flow_id: Some(scene.flow_id.clone()), pass_id: Some(scene.pass_id.clone()),
+                stage: CaptureStage::After, resource_id: scene_target.clone(),
+                texture_class: CaptureTextureClass::ColorTarget,
+            },
+            RenderCaptureSelector {
+                flow_id: Some(preview.flow_id.clone()), pass_id: Some(preview.pass_id.clone()),
+                stage: CaptureStage::After, resource_id: preview_target.clone(),
+                texture_class: CaptureTextureClass::ColorTarget,
+            },
+        ];
+    });
+    app.update_render_debug_control(|control| {
+        control.provenance_enabled = true;
+        control.capture_enabled = true;
+        control.readback_enabled = true;
+        control.artifact_export_enabled = false;
+    });
+    let app = app.run_for_frames(3).expect("GPU capture frames");
+    let captures = app.world().resource::<RenderCapturedTextureState>().expect("captures");
+    let scene_capture = captures.find(
+        scene.flow_id.as_str(), scene.pass_id.as_str(), CaptureStage::After, scene_target.as_str(),
+    ).expect("scene readback");
+    let preview_capture = captures.find(
+        preview.flow_id.as_str(), preview.pass_id.as_str(), CaptureStage::After, preview_target.as_str(),
+    ).expect("preview readback");
+    assert_eq!(scene_capture.terminal.code, RenderCaptureTerminalCode::Completed);
+    assert_eq!(preview_capture.terminal.code, RenderCaptureTerminalCode::Completed);
+    let left = dominant_pixel_in_region(scene_capture, 0, scene_capture.width / 2, |rgba| {
+        rgba[0] as i32 - rgba[2] as i32
+    }).expect("left SDF pixel").1;
+    let right = dominant_pixel_in_region(scene_capture, scene_capture.width / 2, scene_capture.width, |rgba| {
+        rgba[0] as i32 - rgba[2] as i32
+    }).expect("right SDF control pixel").1;
+    let preview = preview_capture.sample_center_rgba8().expect("preview center");
+    Wr1282LightPixels { left, right_control: right, preview }
+}
