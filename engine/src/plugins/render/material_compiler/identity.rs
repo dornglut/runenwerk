@@ -147,7 +147,10 @@ pub(super) fn material_scene_table_shader_identity(
                 encoder.field("input_name", &input.name);
                 encoder.field("input_type", input.value_type.label());
                 match &input.source {
-                    MaterialIrInputSource::Connected { node_id, output_name } => {
+                    MaterialIrInputSource::Connected {
+                        node_id,
+                        output_name,
+                    } => {
                         encoder.field("input_source", "connected");
                         encoder.field("input_source_node", &node_id.raw().to_string());
                         encoder.field("input_source_output", output_name);

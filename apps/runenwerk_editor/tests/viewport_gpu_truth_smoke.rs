@@ -1981,32 +1981,57 @@ fn render_wr1282_light_variant(window: &Arc<Window>, label: &str, roughness: &st
     }
     let mut app = app.run_for_frames(8).expect("scene material frames");
     {
-        let selections = app.world_mut().resource_mut::<ViewportPresentationStateResource>().unwrap();
-        let mut state = selections.state_for(MAIN_VIEWPORT_ID).cloned()
-            .unwrap_or_else(|| ViewportPresentationState::new(MAIN_VIEWPORT_ID, left.viewport_product_id));
+        let selections = app
+            .world_mut()
+            .resource_mut::<ViewportPresentationStateResource>()
+            .unwrap();
+        let mut state = selections
+            .state_for(MAIN_VIEWPORT_ID)
+            .cloned()
+            .unwrap_or_else(|| {
+                ViewportPresentationState::new(MAIN_VIEWPORT_ID, left.viewport_product_id)
+            });
         state.select_primary_product(left.viewport_product_id);
         selections.upsert_state(state);
     }
     let mut app = app.run_for_frames(5).expect("preview product warmup");
-    let provenance = app.world().resource::<RenderPassProvenanceState>().expect("provenance");
-    let scene = provenance.records.iter().find(|record| scene_product_record_targets_scene_color(record))
-        .expect("SDF scene render provenance").clone();
-    let preview = provenance.records.iter()
+    let provenance = app
+        .world()
+        .resource::<RenderPassProvenanceState>()
+        .expect("provenance");
+    let scene = provenance
+        .records
+        .iter()
+        .find(|record| scene_product_record_targets_scene_color(record))
+        .expect("SDF scene render provenance")
+        .clone();
+    let preview = provenance
+        .records
+        .iter()
         .find(|record| record.shader_id == EDITOR_MATERIAL_PREVIEW_SHADER_ID)
-        .expect("material preview provenance").clone();
+        .expect("material preview provenance")
+        .clone();
     let scene_target = scene.render_targets.first().expect("scene target").clone();
-    let preview_target = preview.render_targets.first().expect("preview target").clone();
+    let preview_target = preview
+        .render_targets
+        .first()
+        .expect("preview target")
+        .clone();
     app.update_render_debug_config(|config| {
         config.clear();
         config.capture_selectors = vec![
             RenderCaptureSelector {
-                flow_id: Some(scene.flow_id.clone()), pass_id: Some(scene.pass_id.clone()),
-                stage: CaptureStage::After, resource_id: scene_target.clone(),
+                flow_id: Some(scene.flow_id.clone()),
+                pass_id: Some(scene.pass_id.clone()),
+                stage: CaptureStage::After,
+                resource_id: scene_target.clone(),
                 texture_class: CaptureTextureClass::ColorTarget,
             },
             RenderCaptureSelector {
-                flow_id: Some(preview.flow_id.clone()), pass_id: Some(preview.pass_id.clone()),
-                stage: CaptureStage::After, resource_id: preview_target.clone(),
+                flow_id: Some(preview.flow_id.clone()),
+                pass_id: Some(preview.pass_id.clone()),
+                stage: CaptureStage::After,
+                resource_id: preview_target.clone(),
                 texture_class: CaptureTextureClass::ColorTarget,
             },
         ];
@@ -2018,21 +2043,53 @@ fn render_wr1282_light_variant(window: &Arc<Window>, label: &str, roughness: &st
         control.artifact_export_enabled = false;
     });
     let app = app.run_for_frames(3).expect("GPU capture frames");
-    let captures = app.world().resource::<RenderCapturedTextureState>().expect("captures");
-    let scene_capture = captures.find(
-        scene.flow_id.as_str(), scene.pass_id.as_str(), CaptureStage::After, scene_target.as_str(),
-    ).expect("scene readback");
-    let preview_capture = captures.find(
-        preview.flow_id.as_str(), preview.pass_id.as_str(), CaptureStage::After, preview_target.as_str(),
-    ).expect("preview readback");
-    assert_eq!(scene_capture.terminal.code, RenderCaptureTerminalCode::Completed);
-    assert_eq!(preview_capture.terminal.code, RenderCaptureTerminalCode::Completed);
+    let captures = app
+        .world()
+        .resource::<RenderCapturedTextureState>()
+        .expect("captures");
+    let scene_capture = captures
+        .find(
+            scene.flow_id.as_str(),
+            scene.pass_id.as_str(),
+            CaptureStage::After,
+            scene_target.as_str(),
+        )
+        .expect("scene readback");
+    let preview_capture = captures
+        .find(
+            preview.flow_id.as_str(),
+            preview.pass_id.as_str(),
+            CaptureStage::After,
+            preview_target.as_str(),
+        )
+        .expect("preview readback");
+    assert_eq!(
+        scene_capture.terminal.code,
+        RenderCaptureTerminalCode::Completed
+    );
+    assert_eq!(
+        preview_capture.terminal.code,
+        RenderCaptureTerminalCode::Completed
+    );
     let left = dominant_pixel_in_region(scene_capture, 0, scene_capture.width / 2, |rgba| {
         rgba[0] as i32 - rgba[2] as i32
-    }).expect("left SDF pixel").1;
-    let right = dominant_pixel_in_region(scene_capture, scene_capture.width / 2, scene_capture.width, |rgba| {
-        rgba[0] as i32 - rgba[2] as i32
-    }).expect("right SDF control pixel").1;
-    let preview = preview_capture.sample_center_rgba8().expect("preview center");
-    Wr1282LightPixels { left, right_control: right, preview }
+    })
+    .expect("left SDF pixel")
+    .1;
+    let right = dominant_pixel_in_region(
+        scene_capture,
+        scene_capture.width / 2,
+        scene_capture.width,
+        |rgba| rgba[0] as i32 - rgba[2] as i32,
+    )
+    .expect("right SDF control pixel")
+    .1;
+    let preview = preview_capture
+        .sample_center_rgba8()
+        .expect("preview center");
+    Wr1282LightPixels {
+        left,
+        right_control: right,
+        preview,
+    }
 }
