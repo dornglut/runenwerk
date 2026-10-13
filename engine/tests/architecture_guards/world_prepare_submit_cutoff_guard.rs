@@ -42,6 +42,37 @@ fn retired_cave_render_projection_does_not_return() {
 }
 
 #[test]
+fn retired_procedural_world_render_projection_does_not_return() {
+    // These are predecessor implementation names, not reserved procedural
+    // world concepts or restrictions on future consumed render contracts.
+    for path in [
+        "src/plugins/render/features/mod.rs",
+        "src/plugins/render/frame/contributions.rs",
+        "src/plugins/render/inspect/prepared_frame.rs",
+        "src/plugins/render/plugin.rs",
+        "src/plugins/render/renderer/prepare.rs",
+        "src/plugins/render/runtime/frame_prepare.rs",
+        "src/plugins/world/prepare/contributions.rs",
+    ] {
+        let source = read(path);
+        for retired in [
+            "PROCEDURAL_WORLD_RENDER_FEATURE_LABEL",
+            "PROCEDURAL_WORLD_RENDER_FEATURE_ID",
+            "PreparedProceduralWorldFeatureResource",
+            "PreparedProceduralWorldFeatureContribution",
+            "PreparedProceduralOverlayContribution",
+            "PreparedFeaturePayload::ProceduralWorld",
+            "insert_procedural_world",
+        ] {
+            assert!(
+                !source.contains(retired),
+                "retired ProceduralWorld render projection must not return (found '{retired}' in {path})"
+            );
+        }
+    }
+}
+
+#[test]
 fn render_submit_consumes_prepared_world_resources_only() {
     let prepare_source = read("src/plugins/render/runtime/frame_prepare.rs");
     let submit_source = read("src/plugins/render/runtime/frame_submit.rs");
