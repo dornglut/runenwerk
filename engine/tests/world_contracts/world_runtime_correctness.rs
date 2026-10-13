@@ -2087,8 +2087,7 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
         .get(&chunk_id)
         .expect("runtime record should remain present");
     assert_eq!(
-        record.pending_build_generation,
-        None,
+        record.pending_build_generation, None,
         "terminally rejected integration must release the failed pending generation"
     );
     assert!(
