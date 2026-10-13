@@ -4,8 +4,8 @@ use super::composition::{
 use super::features::{
     EditorPickingResultResource, PreparedDeformationFeatureResource, PreparedDetailFeatureResource,
     PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
-    PreparedParticleVfxFeatureResource, PreparedUiFrameResource, PreparedWindFieldFeatureResource,
-    PreparedWorldFeatureResource, RenderFeatureRegistryResource,
+    PreparedParticleVfxFeatureResource, PreparedUiFrameResource, PreparedWorldFeatureResource,
+    RenderFeatureRegistryResource,
     RunenUiPaintSubmissionRegistryResource, SurfaceFrameSubmissionRegistryResource,
     UiFontAtlasResource, ViewportSurfaceBindingRegistryResource,
     prepare_ui_feature_resource_system, register_particle_vfx_feature_collector,
@@ -82,7 +82,6 @@ impl Plugin for RenderPlugin {
         app.init_resource::<PreparedParticleVfxFeatureResource>();
         app.init_resource::<PreparedWorldVisualFeatureResource>();
         app.init_resource::<PreparedDeformationFeatureResource>();
-        app.init_resource::<PreparedWindFieldFeatureResource>();
         app.init_resource::<RenderFeatureContributionCollectorRegistryResource>();
         register_particle_vfx_feature_collector(
             app.world_mut()

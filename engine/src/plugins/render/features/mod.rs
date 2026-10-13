@@ -19,7 +19,6 @@ pub const MATERIAL_RENDER_FEATURE_LABEL: &str = "material";
 pub const PARTICLE_VFX_RENDER_FEATURE_LABEL: &str = "particle.vfx";
 pub const WORLD_VISUAL_RENDER_FEATURE_LABEL: &str = "world.visual";
 pub const DEFORMATION_RENDER_FEATURE_LABEL: &str = "deformation";
-pub const WIND_FIELDS_RENDER_FEATURE_LABEL: &str = "wind.fields";
 pub const EDITOR_PICKING_RENDER_FEATURE_LABEL: &str = "editor.picking";
 
 pub const EDITOR_PICKING_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(2);
@@ -28,7 +27,6 @@ pub const WORLD_DRAW_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(4);
 pub const DETAIL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(7);
 pub const MATERIAL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(8);
 pub const DEFORMATION_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(9);
-pub const WIND_FIELDS_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(10);
 pub const PARTICLE_VFX_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(11);
 pub const WORLD_VISUAL_RENDER_FEATURE_ID: RenderFeatureId = render_feature_id(12);
 
@@ -104,23 +102,6 @@ impl Default for PreparedDetailFeatureResource {
             status: FeatureContributionStatus::Missing,
             fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
             payload: PreparedDetailFeatureContribution::default(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
-pub struct PreparedWindFieldFeatureResource {
-    pub status: FeatureContributionStatus,
-    pub fallback_policy: FeatureFallbackPolicy,
-    pub payload: PreparedWindFieldFeatureContribution,
-}
-
-impl Default for PreparedWindFieldFeatureResource {
-    fn default() -> Self {
-        Self {
-            status: FeatureContributionStatus::Missing,
-            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
-            payload: PreparedWindFieldFeatureContribution::default(),
         }
     }
 }
@@ -303,15 +284,6 @@ impl RenderFeatureRegistryResource {
             .with_order_hint(30)
             .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
         );
-        self.upsert_descriptor(
-            RenderFeatureDescriptor::new(
-                WIND_FIELDS_RENDER_FEATURE_ID,
-                WIND_FIELDS_RENDER_FEATURE_LABEL,
-            )
-            .depends_on(DEFORMATION_RENDER_FEATURE_ID)
-            .with_order_hint(40)
-            .with_fallback_policy(FeatureFallbackPolicy::SkipFeaturePasses),
-        );
     }
 
     pub fn sync_order(&mut self) {
@@ -452,10 +424,48 @@ mod tests {
                 "particle.vfx".to_string(),
                 "world.visual".to_string(),
                 "deformation".to_string(),
-                "wind.fields".to_string(),
             ]
         );
         assert!(registry.issues().is_empty());
+        assert_eq!(DEFORMATION_RENDER_FEATURE_ID, render_feature_id(9));
+        assert_eq!(PARTICLE_VFX_RENDER_FEATURE_ID, render_feature_id(11));
+        assert_eq!(WORLD_VISUAL_RENDER_FEATURE_ID, render_feature_id(12));
+        let retired_id = render_feature_id(10);
+        assert!(
+            registry.descriptor(&retired_id).is_none(),
+            "retired feature ID 10 must remain vacant"
+        );
+        assert!(
+            registry
+                .descriptors()
+                .values()
+                .all(|descriptor| !descriptor.depends_on.contains(&retired_id)),
+            "no retained descriptor may depend on retired feature ID 10"
+        );
+        assert_eq!(
+            registry
+                .descriptor(&DEFORMATION_RENDER_FEATURE_ID)
+                .expect("deformation descriptor must remain registered")
+                .depends_on
+                .as_slice(),
+            &[MATERIAL_RENDER_FEATURE_ID]
+        );
+    }
+
+    #[test]
+    fn missing_feature_dependency_is_reported_without_reserving_retired_id() {
+        let mut registry = RenderFeatureRegistryResource::default();
+        registry.upsert_descriptor(
+            RenderFeatureDescriptor::new(render_feature_id(1002), "missing.test")
+                .depends_on(render_feature_id(10)),
+        );
+        registry.sync_order();
+        assert!(
+            registry
+                .issues()
+                .iter()
+                .any(|issue| issue.contains("depends on missing feature"))
+        );
     }
 
     #[test]

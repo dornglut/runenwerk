@@ -1180,14 +1180,6 @@ fn hash_prepared_feature_contribution(
                 cell.instance_count.hash(&mut hasher);
             }
         }
-        crate::plugins::render::PreparedFeaturePayload::WindFields(value) => {
-            "wind_fields".hash(&mut hasher);
-            value.fields.len().hash(&mut hasher);
-            for field in &value.fields {
-                field.field_id.hash(&mut hasher);
-                field.strength.to_bits().hash(&mut hasher);
-            }
-        }
         crate::plugins::render::PreparedFeaturePayload::Material(value) => {
             "material".hash(&mut hasher);
             match value.binding_table.backend {
