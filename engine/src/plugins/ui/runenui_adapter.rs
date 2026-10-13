@@ -1,5 +1,6 @@
 use runenui_core::{
-    Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, KeyboardEvent,
+    Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, InputDeviceId,
+    KeyboardEvent,
     SemanticCommand, UiApp, View, button, column, text,
 };
 #[cfg(test)]
@@ -140,6 +141,7 @@ pub enum UiRuntimeNativeKeyboardEvidenceFailure {
     MissingReceipt,
     DuplicateReceipt,
     WrongFamily,
+    WrongDevice,
     InvalidRevision,
 }
 
@@ -151,6 +153,7 @@ pub enum UiRuntimeNativeKeyboardEvidenceFailure {
 /// committed nonexclusive conflict does not itself authorize a game action.
 pub fn native_keyboard_finality(
     scope: &InputArbitrationScope,
+    expected_device: Option<InputDeviceId>,
     submission: KeyboardSubmission,
     batch: &InputPumpBatch,
     status: &Result<(), UiRuntimeSlotOperationFailure>,
@@ -191,6 +194,9 @@ pub fn native_keyboard_finality(
     }
     if settlement.family() != UiInputFamily::Keyboard {
         return Err(Failure::WrongFamily);
+    }
+    if settlement.device_id() != expected_device {
+        return Err(Failure::WrongDevice);
     }
     if settlement.ownership_revision() > batch.final_ownership().revision() {
         return Err(Failure::InvalidRevision);
@@ -1981,8 +1987,21 @@ mod tests {
         assert_eq!(settled.scope(), batch.final_ownership().scope());
         assert!(matches!(settled.finality(), UiInputFinality::Committed(_)));
         assert_eq!(
-            native_keyboard_finality(settled.scope(), receipt, &batch, &status),
+            native_keyboard_finality(settled.scope(), None, receipt, &batch, &status),
             Ok(settled.finality().clone())
+        );
+
+        let another_device = InputDeviceId::new(17).expect("valid distinct native device");
+        assert_eq!(
+            native_keyboard_finality(
+                settled.scope(),
+                Some(another_device),
+                receipt,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongDevice),
+            "an unrelated device cannot borrow this exact M13 receipt"
         );
 
         let missing_scope_slot = slots
@@ -1997,7 +2016,7 @@ mod tests {
             .input_ownership(missing_scope_slot)
             .expect("foreign scope is observable");
         assert_eq!(
-            native_keyboard_finality(foreign_scope.scope(), receipt, &batch, &status),
+            native_keyboard_finality(foreign_scope.scope(), None, receipt, &batch, &status),
             Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongScope)
         );
 
@@ -2005,7 +2024,7 @@ mod tests {
             .submit_native_keyboard(slot, keyboard())
             .expect("second distinct native keyboard submission");
         assert_eq!(
-            native_keyboard_finality(settled.scope(), next, &batch, &status),
+            native_keyboard_finality(settled.scope(), None, next, &batch, &status),
             Err(UiRuntimeNativeKeyboardEvidenceFailure::NotProcessed)
         );
 
@@ -2016,7 +2035,7 @@ mod tests {
             .pump_native_input_records(slot)
             .expect("later empty canonical pump");
         let lost_observation =
-            native_keyboard_finality(settled.scope(), next, &later, &later_status);
+            native_keyboard_finality(settled.scope(), None, next, &later, &later_status);
         assert!(lost_observation.is_err());
     }
 
