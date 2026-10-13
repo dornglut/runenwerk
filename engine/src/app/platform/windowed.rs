@@ -37,6 +37,39 @@ impl AppNativeHostExt for App {
 }
 
 impl App {
+    pub(crate) fn prepare_native_ui_host(&mut self) -> Result<()> {
+        use crate::plugins::ui::UiRuntimeSlotsResource;
+        if !self.world.has_resource::<UiRuntimeSlotsResource>() {
+            return Ok(());
+        }
+        let clock = self.native_ui_clock();
+        self.world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .configure_host_clock(clock)
+            .map_err(|error| {
+                anyhow::anyhow!("native UI registration rejected: {}", error.message())
+            })
+    }
+
+    /// Host selection, not resource presence, determines native UI clock binding.
+    pub(crate) fn native_ui_clock(
+        &mut self,
+    ) -> Option<crate::runtime::native_host_wake::NativeHostClock> {
+        if matches!(self.host_selection, AppHostSelection::Headless) {
+            return None;
+        }
+        use crate::runtime::native_host_wake::NativeHostClock;
+        if !self.world.has_resource::<NativeHostClock>() {
+            self.world.insert_resource(NativeHostClock::new());
+        }
+        Some(
+            self.world
+                .resource::<NativeHostClock>()
+                .expect("selected native App owns its just-installed clock")
+                .clone(),
+        )
+    }
+
     pub(crate) fn prepare_windowed_frame_pacing(&mut self) {
         let policy = self
             .world
@@ -58,6 +91,9 @@ impl App {
     pub(crate) fn run_windowed(mut self) -> Result<()> {
         self.admit_composition()?;
         self.prepare_lifecycle_for_execution()?;
+        // Direct resource mounting is a real public ingress too. Never silently
+        // run already-settled ManualClock slots through a native host.
+        self.prepare_native_ui_host()?;
         winit_runner::run(self.into_windowed_state())
     }
 }

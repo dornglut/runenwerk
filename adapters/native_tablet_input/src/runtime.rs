@@ -2,7 +2,7 @@
 
 use anyhow::Result;
 use engine::prelude::{App, Plugin};
-use engine::runtime::{NativeWindowHook, NativeWindowHookRegistryResource};
+use engine::runtime::{NativeHostEvent, NativeWindowHook, NativeWindowHookRegistryResource};
 use runen_ecs::World;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::EventLoopBuilder;
@@ -45,7 +45,7 @@ impl NativeWindowHook for NativeTabletRuntimeHook {
         "native_tablet_input"
     }
 
-    fn configure_event_loop(&mut self, builder: &mut EventLoopBuilder<()>) {
+    fn configure_event_loop(&mut self, builder: &mut EventLoopBuilder<NativeHostEvent>) {
         self.windows_pointer.configure_event_loop(builder);
         self.windows_wintab.configure_event_loop(builder);
         self.macos_nsevent.configure_event_loop(builder);
@@ -166,5 +166,102 @@ mod tests {
             .resource::<NativeWindowHookRegistryResource>()
             .expect("hook registry should exist");
         assert!(registry.hook_count() >= 1);
+    }
+
+    /// Process-isolated by the explicit native test command; ordinary canonical
+    /// tests do not require a display. This installs the real platform hooks.
+    #[test]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    fn native_typed_event_loop_installs_tablet_hooks_and_detaches() {
+        if std::env::var_os("RUNENWERK_NATIVE_TABLET_HOST_SMOKE").is_none() {
+            return;
+        }
+        use engine::app::AppNativeHostExt;
+        use engine::runtime::{
+            FramePacingPolicyResource, NativeHostEvent, NativeWindowId, WindowStateRegistryResource,
+        };
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        struct NativeProbe {
+            attached: Arc<AtomicBool>,
+            detached: Arc<AtomicBool>,
+            frame: Arc<AtomicBool>,
+        }
+        impl NativeWindowHook for NativeProbe {
+            fn name(&self) -> &'static str {
+                "native_tablet_host_smoke"
+            }
+            fn configure_event_loop(&mut self, builder: &mut EventLoopBuilder<NativeHostEvent>) {
+                #[cfg(target_os = "windows")]
+                {
+                    use winit::platform::windows::EventLoopBuilderExtWindows;
+                    builder.with_any_thread(true);
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    use winit::platform::x11::EventLoopBuilderExtX11;
+                    builder.with_any_thread(true);
+                }
+            }
+            fn attach(&mut self, window: &Window, world: &mut World) -> Result<()> {
+                window.set_visible(false);
+                let runtime = world.resource::<NativeTabletRuntimeResource>()?;
+                println!(
+                    "native tablet attachment health: {:?}",
+                    runtime.backend_health
+                );
+                anyhow::ensure!(
+                    !runtime.backend_health.is_empty(),
+                    "tablet backend did not report attachment"
+                );
+                #[cfg(target_os = "windows")]
+                anyhow::ensure!(
+                    runtime.backend_health.iter().any(|health| health.backend
+                        == crate::model::NativeTabletBackendKind::WindowsPointer),
+                    "typed Windows Pointer attachment did not execute"
+                );
+                self.attached.store(true, Ordering::Release);
+                Ok(())
+            }
+            fn frame(&mut self, _: &Window, world: &mut World) -> Result<()> {
+                world.resource::<NativeTabletFrameResource>()?;
+                self.frame.store(true, Ordering::Release);
+                world
+                    .resource_mut::<WindowStateRegistryResource>()?
+                    .record_mut(NativeWindowId::primary())
+                    .unwrap()
+                    .request_close();
+                Ok(())
+            }
+            fn detach(&mut self, _: &mut World) -> Result<()> {
+                self.detached.store(true, Ordering::Release);
+                Ok(())
+            }
+        }
+
+        let attached = Arc::new(AtomicBool::new(false));
+        let detached = Arc::new(AtomicBool::new(false));
+        let frame = Arc::new(AtomicBool::new(false));
+        let mut app = App::new();
+        app.add_plugins((
+            engine::plugins::InputFinalizePlugin,
+            NativeTabletRuntimePlugin,
+        ));
+        app.with_frame_pacing(FramePacingPolicyResource::on_demand());
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()
+            .unwrap()
+            .register_hook(NativeProbe {
+                attached: attached.clone(),
+                detached: detached.clone(),
+                frame: frame.clone(),
+            });
+        app.run().unwrap();
+        assert!(attached.load(Ordering::Acquire));
+        assert!(frame.load(Ordering::Acquire));
+        assert!(detached.load(Ordering::Acquire));
     }
 }

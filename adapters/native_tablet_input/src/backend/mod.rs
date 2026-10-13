@@ -3,6 +3,7 @@
 use crate::model::{
     NativeTabletBackendKind, NativeTabletDeviceControlResource, NativeTabletRuntimeResource,
 };
+use engine::runtime::NativeHostEvent;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::EventLoopBuilder;
 use winit::window::Window;
@@ -18,7 +19,7 @@ pub use windows_wintab::*;
 pub trait NativeTabletBackendAdapter {
     fn kind(&self) -> NativeTabletBackendKind;
 
-    fn configure_event_loop(&mut self, _builder: &mut EventLoopBuilder<()>) {}
+    fn configure_event_loop(&mut self, _builder: &mut EventLoopBuilder<NativeHostEvent>) {}
 
     fn attach(
         &mut self,

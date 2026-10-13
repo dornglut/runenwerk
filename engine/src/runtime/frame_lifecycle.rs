@@ -68,6 +68,11 @@ pub(crate) fn run_frame(world: &mut World, scheduler: &mut Runtime) -> Result<()
     scheduler.run_schedule::<RenderPrepare>(world)?;
     scheduler.run_schedule::<RenderSubmit>(world)?;
     scheduler.run_schedule::<FrameEnd>(world)?;
+    if let Ok(journal) =
+        world.resource_mut::<crate::runtime::platform::PlatformWindowEventQueueResource>()
+    {
+        journal.retire_frame();
+    }
     Ok(())
 }
 
@@ -149,6 +154,36 @@ mod tests {
 
         let err = run_frame(&mut world, &mut runtime).expect_err("frame should fail");
         assert!(format!("{err:#}").contains("frame end failure"));
+    }
+
+    #[test]
+    fn host_journal_survives_update_and_frame_end_readers_then_retires_without_input_or_editor() {
+        use crate::runtime::platform::{
+            PlatformEvent, PlatformWindowEvent, PlatformWindowEventQueueResource,
+        };
+        fn assert_retained(journal: Res<PlatformWindowEventQueueResource>) {
+            assert_eq!(journal.events().len(), 1);
+        }
+        let mut world = test_world();
+        let mut journal = PlatformWindowEventQueueResource::default();
+        journal
+            .publish(PlatformWindowEvent::new(
+                crate::runtime::NativeWindowId::primary(),
+                PlatformEvent::RedrawRequested,
+            ))
+            .unwrap();
+        world.insert_resource(journal);
+        let mut runtime = Runtime::new();
+        runtime.add_systems(Update, assert_retained).unwrap();
+        runtime.add_systems(FrameEnd, assert_retained).unwrap();
+        run_frame(&mut world, &mut runtime).unwrap();
+        assert!(
+            world
+                .resource::<PlatformWindowEventQueueResource>()
+                .unwrap()
+                .events()
+                .is_empty()
+        );
     }
 
     #[test]

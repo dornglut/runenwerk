@@ -54,6 +54,17 @@ impl UiAppMounting<'_> {
     {
         self.app.init_resource::<UiRuntimeDiagnosticsResource>();
         self.app.init_resource::<UiRuntimeSlotsResource>();
+        let clock = self.app.native_ui_clock();
+        let slots = self
+            .app
+            .world_mut()
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("UiRuntimeSlotsResource initialized before typed app mounting");
+        if let Err(failure) = slots.configure_host_clock(clock) {
+            let report = UiRuntimeSlotMountReport::rejected(screen_id, failure);
+            record_slot_mount_diagnostic(self.app, &report);
+            return report;
+        }
         let report = self
             .app
             .world_mut()
@@ -111,11 +122,17 @@ where
     let snapshot = registry.snapshot();
 
     app.init_resource::<UiRuntimeSlotsResource>();
+    let clock = app.native_ui_clock();
     let report = {
         let slots = app
             .world_mut()
             .resource_mut::<UiRuntimeSlotsResource>()
             .expect("UiRuntimeSlotsResource was initialized before typed UI mounting");
+        if let Err(failure) = slots.configure_host_clock(clock) {
+            let report = UiRuntimeSlotMountReport::rejected(screen_id, failure);
+            record_slot_mount_diagnostic(app, &report);
+            return report;
+        }
         match fonts {
             Some(fonts) => slots.mount_with_fonts(source, &snapshot, fonts),
             None => slots.mount(source, &snapshot),

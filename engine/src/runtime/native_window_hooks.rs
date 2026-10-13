@@ -1,5 +1,6 @@
 //! Native window hook extension points for platform adapters.
 
+use crate::runtime::NativeHostEvent;
 use anyhow::Result;
 use runen_ecs::World;
 use winit::event::{DeviceEvent, WindowEvent};
@@ -25,7 +26,7 @@ pub enum NativeWindowHookStage {
 pub trait NativeWindowHook: 'static {
     fn name(&self) -> &'static str;
 
-    fn configure_event_loop(&mut self, _builder: &mut EventLoopBuilder<()>) {}
+    fn configure_event_loop(&mut self, _builder: &mut EventLoopBuilder<NativeHostEvent>) {}
 
     fn attach(&mut self, _window: &Window, _world: &mut World) -> Result<()> {
         Ok(())
@@ -78,7 +79,7 @@ impl NativeWindowHookRegistryResource {
         self.diagnostics.clear();
     }
 
-    pub fn configure_event_loop(&mut self, builder: &mut EventLoopBuilder<()>) {
+    pub fn configure_event_loop(&mut self, builder: &mut EventLoopBuilder<NativeHostEvent>) {
         for hook in &mut self.hooks {
             hook.configure_event_loop(builder);
         }

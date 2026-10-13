@@ -44,16 +44,92 @@ impl WinitInputAdapter {
         &mut self,
         native_window_id: NativeWindowId,
         backend_device_id: DeviceId,
-    ) -> InputContext {
-        let device = self.intern_window_device(backend_device_id);
-        let source = self.source_for_window(native_window_id);
-        InputContext::new(source, Some(device))
+    ) -> Result<InputContext, NativeInputIdentityFailure> {
+        let known_device = self.window_devices.get(&backend_device_id).copied();
+        let known_source = self.window_sources.get(&native_window_id).copied();
+        let next_device = if known_device.is_none() {
+            Some(
+                self.next_device_id
+                    .checked_add(1)
+                    .ok_or(NativeInputIdentityFailure::DeviceExhausted)?,
+            )
+        } else {
+            None
+        };
+        let next_source = if known_source.is_none() {
+            Some(
+                self.next_source_id
+                    .checked_add(1)
+                    .ok_or(NativeInputIdentityFailure::SourceExhausted)?,
+            )
+        } else {
+            None
+        };
+        // Reserve every required map before committing either identity.
+        if next_device.is_some() {
+            self.window_devices
+                .try_reserve(1)
+                .map_err(|_| NativeInputIdentityFailure::AllocationFailed)?;
+        }
+        if next_source.is_some() {
+            self.window_sources
+                .try_reserve(1)
+                .map_err(|_| NativeInputIdentityFailure::AllocationFailed)?;
+        }
+        let device = match next_device {
+            Some(next) => {
+                self.next_device_id = next;
+                let device = InputDeviceId::new(next);
+                self.window_devices.insert(backend_device_id, device);
+                device
+            }
+            None => known_device.expect("existing device was checked before reservation"),
+        };
+        let source = match next_source {
+            Some(next) => {
+                self.next_source_id = next;
+                let source = InputSourceId::new(next);
+                self.window_sources.insert(native_window_id, source);
+                source
+            }
+            None => known_source.expect("existing source was checked before reservation"),
+        };
+        Ok(InputContext::new(source, Some(device)))
     }
 
-    pub(crate) fn raw_device_context(&mut self, backend_device_id: DeviceId) -> InputContext {
-        let device = self.intern_raw_device(backend_device_id);
-        let source = self.source_for_raw_device(device);
-        InputContext::new(source, Some(device))
+    pub(crate) fn raw_device_context(
+        &mut self,
+        backend_device_id: DeviceId,
+    ) -> Result<InputContext, NativeInputIdentityFailure> {
+        if let Some(device) = self.raw_devices.get(&backend_device_id).copied() {
+            let source = self
+                .raw_sources
+                .get(&device)
+                .copied()
+                .ok_or(NativeInputIdentityFailure::MissingRawSource)?;
+            return Ok(InputContext::new(source, Some(device)));
+        }
+        let next_device = self
+            .next_device_id
+            .checked_add(1)
+            .ok_or(NativeInputIdentityFailure::DeviceExhausted)?;
+        let next_source = self
+            .next_source_id
+            .checked_add(1)
+            .ok_or(NativeInputIdentityFailure::SourceExhausted)?;
+        self.raw_devices
+            .try_reserve(1)
+            .map_err(|_| NativeInputIdentityFailure::AllocationFailed)?;
+        self.raw_sources
+            .try_reserve(1)
+            .map_err(|_| NativeInputIdentityFailure::AllocationFailed)?;
+        let device = InputDeviceId::new(next_device);
+        let source = InputSourceId::new(next_source);
+        self.next_device_id = next_device;
+        self.next_source_id = next_source;
+        self.raw_devices.insert(backend_device_id, device);
+        self.raw_sources.insert(device, source);
+        Ok(InputContext::new(source, Some(device)))
     }
 
     pub(crate) fn window_source_context(
@@ -78,66 +154,31 @@ impl WinitInputAdapter {
     pub(crate) fn retire_raw_device(
         &mut self,
         backend_device_id: DeviceId,
-    ) -> Option<InputContext> {
-        let device = self.raw_devices.remove(&backend_device_id)?;
+    ) -> Result<Option<InputContext>, NativeInputIdentityFailure> {
+        let Some(device) = self.raw_devices.get(&backend_device_id).copied() else {
+            return Ok(None);
+        };
         let source = self
             .raw_sources
-            .remove(&device)
-            .expect("interned raw input device must own a normalized source");
-        Some(InputContext::new(source, Some(device)))
+            .get(&device)
+            .copied()
+            .ok_or(NativeInputIdentityFailure::MissingRawSource)?;
+        self.raw_devices.remove(&backend_device_id);
+        self.raw_sources.remove(&device);
+        Ok(Some(InputContext::new(source, Some(device))))
     }
+}
 
-    fn intern_window_device(&mut self, backend_device_id: DeviceId) -> InputDeviceId {
-        if let Some(device) = self.window_devices.get(&backend_device_id).copied() {
-            return device;
-        }
-        let device = self.allocate_device();
-        self.window_devices.insert(backend_device_id, device);
-        device
-    }
-
-    fn intern_raw_device(&mut self, backend_device_id: DeviceId) -> InputDeviceId {
-        if let Some(device) = self.raw_devices.get(&backend_device_id).copied() {
-            return device;
-        }
-        let device = self.allocate_device();
-        self.raw_devices.insert(backend_device_id, device);
-        device
-    }
-
-    fn allocate_device(&mut self) -> InputDeviceId {
-        self.next_device_id = self
-            .next_device_id
-            .checked_add(1)
-            .expect("winit input device identity exhausted");
-        InputDeviceId::new(self.next_device_id)
-    }
-
-    fn source_for_window(&mut self, native_window_id: NativeWindowId) -> InputSourceId {
-        if let Some(source) = self.window_sources.get(&native_window_id).copied() {
-            return source;
-        }
-        let source = self.allocate_source();
-        self.window_sources.insert(native_window_id, source);
-        source
-    }
-
-    fn source_for_raw_device(&mut self, device: InputDeviceId) -> InputSourceId {
-        if let Some(source) = self.raw_sources.get(&device).copied() {
-            return source;
-        }
-        let source = self.allocate_source();
-        self.raw_sources.insert(device, source);
-        source
-    }
-
-    fn allocate_source(&mut self) -> InputSourceId {
-        self.next_source_id = self
-            .next_source_id
-            .checked_add(1)
-            .expect("winit input source identity exhausted");
-        InputSourceId::new(self.next_source_id)
-    }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum NativeInputIdentityFailure {
+    #[error("winit input device identity exhausted")]
+    DeviceExhausted,
+    #[error("winit input source identity exhausted")]
+    SourceExhausted,
+    #[error("winit input identity storage could not be reserved")]
+    AllocationFailed,
+    #[error("winit raw device is missing its source identity")]
+    MissingRawSource,
 }
 
 pub(crate) fn keyboard_input(event: &winit::event::KeyEvent, is_synthetic: bool) -> KeyboardInput {
@@ -341,36 +382,68 @@ mod tests {
         let secondary = NativeWindowId::try_from_raw(2).expect("secondary window id");
         let backend_device = DeviceId::dummy();
 
-        let primary_context = adapter.window_context(primary, backend_device);
-        let secondary_context = adapter.window_context(secondary, backend_device);
+        let primary_context = adapter.window_context(primary, backend_device).unwrap();
+        let secondary_context = adapter.window_context(secondary, backend_device).unwrap();
 
         assert_ne!(primary_context.source, secondary_context.source);
         assert_eq!(primary_context.device, secondary_context.device);
         assert_eq!(
             primary_context,
-            adapter.window_context(primary, backend_device)
+            adapter.window_context(primary, backend_device).unwrap()
         );
     }
 
     #[test]
-    fn distinct_raw_devices_receive_distinct_stable_sources() {
-        let mut adapter = WinitInputAdapter::default();
-        let device_a = InputDeviceId::new(1);
-        let device_b = InputDeviceId::new(2);
-
-        let source_a = adapter.source_for_raw_device(device_a);
-        let source_b = adapter.source_for_raw_device(device_b);
-
-        assert_ne!(source_a, source_b);
-        assert_eq!(source_a, adapter.source_for_raw_device(device_a));
+    fn exhaustion_rejects_the_whole_context_without_alias_or_partial_map_commit() {
+        let backend = DeviceId::dummy();
+        let mut adapter = WinitInputAdapter {
+            next_source_id: u64::MAX,
+            ..Default::default()
+        };
+        assert_eq!(
+            adapter.window_context(NativeWindowId::primary(), backend),
+            Err(NativeInputIdentityFailure::SourceExhausted)
+        );
+        assert!(adapter.window_devices.is_empty());
+        assert!(adapter.window_sources.is_empty());
+        assert_eq!(adapter.next_device_id, 0);
+        assert_eq!(
+            adapter.raw_device_context(backend),
+            Err(NativeInputIdentityFailure::SourceExhausted)
+        );
+        assert!(adapter.raw_devices.is_empty());
+        assert!(adapter.raw_sources.is_empty());
+        adapter.next_source_id = FIRST_WINIT_SOURCE_ID;
+        adapter.next_device_id = u64::MAX;
+        assert_eq!(
+            adapter.window_context(NativeWindowId::primary(), backend),
+            Err(NativeInputIdentityFailure::DeviceExhausted)
+        );
+        assert_eq!(adapter.next_source_id, FIRST_WINIT_SOURCE_ID);
     }
 
+    #[test]
+    fn known_context_remains_resolvable_after_allocator_exhaustion() {
+        let mut adapter = WinitInputAdapter::default();
+        let backend = DeviceId::dummy();
+        let context = adapter
+            .window_context(NativeWindowId::primary(), backend)
+            .unwrap();
+        adapter.next_device_id = u64::MAX;
+        adapter.next_source_id = u64::MAX;
+        assert_eq!(
+            adapter.window_context(NativeWindowId::primary(), backend),
+            Ok(context)
+        );
+    }
     #[test]
     fn raw_and_window_device_namespaces_remain_distinct() {
         let mut adapter = WinitInputAdapter::default();
         let backend_device = DeviceId::dummy();
-        let window = adapter.window_context(NativeWindowId::primary(), backend_device);
-        let raw = adapter.raw_device_context(backend_device);
+        let window = adapter
+            .window_context(NativeWindowId::primary(), backend_device)
+            .unwrap();
+        let raw = adapter.raw_device_context(backend_device).unwrap();
 
         assert_ne!(window.source, raw.source);
         assert_ne!(window.device, raw.device);
@@ -384,7 +457,9 @@ mod tests {
 
         assert_eq!(adapter.window_source_context(native_window), None);
 
-        let initial = adapter.window_context(native_window, backend_device);
+        let initial = adapter
+            .window_context(native_window, backend_device)
+            .unwrap();
         assert_eq!(
             adapter.window_source_context(native_window),
             Some(InputContext::new(initial.source, None))
@@ -395,7 +470,9 @@ mod tests {
         );
         assert_eq!(adapter.window_source_context(native_window), None);
 
-        let replacement = adapter.window_context(native_window, backend_device);
+        let replacement = adapter
+            .window_context(native_window, backend_device)
+            .unwrap();
         assert_ne!(replacement.source, initial.source);
         assert_eq!(replacement.device, initial.device);
     }
@@ -404,16 +481,23 @@ mod tests {
     fn raw_device_retirement_refreshes_raw_identity_without_touching_window_identity() {
         let mut adapter = WinitInputAdapter::default();
         let backend_device = DeviceId::dummy();
-        let window = adapter.window_context(NativeWindowId::primary(), backend_device);
-        let raw = adapter.raw_device_context(backend_device);
+        let window = adapter
+            .window_context(NativeWindowId::primary(), backend_device)
+            .unwrap();
+        let raw = adapter.raw_device_context(backend_device).unwrap();
 
-        assert_eq!(adapter.retire_raw_device(backend_device), Some(raw));
+        assert_eq!(
+            adapter.retire_raw_device(backend_device).unwrap(),
+            Some(raw)
+        );
 
-        let replacement = adapter.raw_device_context(backend_device);
+        let replacement = adapter.raw_device_context(backend_device).unwrap();
         assert_ne!(replacement.source, raw.source);
         assert_ne!(replacement.device, raw.device);
         assert_eq!(
-            adapter.window_context(NativeWindowId::primary(), backend_device),
+            adapter
+                .window_context(NativeWindowId::primary(), backend_device)
+                .unwrap(),
             window
         );
     }

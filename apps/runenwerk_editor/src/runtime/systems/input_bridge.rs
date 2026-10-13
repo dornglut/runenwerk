@@ -72,7 +72,7 @@ pub fn dispatch_editor_input_system(
     viewport_instances: Res<ViewportInstanceRegistryResource>,
     tool_surface_bindings: Res<ToolSurfaceRuntimeBindingRegistryResource>,
     mut viewport_render_commands: ResMut<ViewportRenderStateCommandQueueResource>,
-) {
+) -> anyhow::Result<()> {
     sync_active_editor_shortcut_bindings(&input, &mut actions, &host, &mut bridge);
 
     let primary_window_id = NativeWindowId::primary();
@@ -105,7 +105,7 @@ pub fn dispatch_editor_input_system(
         }
     }
     for event in retained_events {
-        platform_events.publish(event);
+        platform_events.publish(event)?;
     }
 
     if !primary_window_is_focused(&windows, primary_window_id) {
@@ -118,7 +118,7 @@ pub fn dispatch_editor_input_system(
             &mut picking_results,
             &tool_surface_bindings,
         );
-        return;
+        return Ok(());
     }
 
     let bounds = presentation_bounds(&presentation);
@@ -223,6 +223,7 @@ pub fn dispatch_editor_input_system(
     let cursor_intent =
         RunenwerkEditorShellController::cursor_intent_for_pointer(&host.shell_state, position);
     set_primary_cursor_intent(&mut windows, primary_window_id, cursor_intent);
+    Ok(())
 }
 
 fn primary_window_is_focused(

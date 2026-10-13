@@ -112,7 +112,7 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
         // A bounded pause is not a failed action and not terminal quiescence.
         let settlement = world
             .resource_mut::<UiRuntimeSlotsResource>()?
-            .settle_slot(slot);
+            .settle_for_publication(slot);
         match settlement {
             Ok(()) => {}
             Err(super::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {
