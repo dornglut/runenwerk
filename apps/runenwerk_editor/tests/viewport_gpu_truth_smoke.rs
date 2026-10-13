@@ -4,7 +4,8 @@ use asset::{
 };
 use editor_core::DocumentKind;
 use editor_persistence::{
-    ProjectFileV3, SceneEntityRecordV2, SceneFileV2, SceneMaterialAssignmentsRecord,
+    ModelMeshMaterialSlotAssignmentRecord, ProjectFileV3, SceneEntityRecordV2, SceneFileV2,
+    SceneMaterialAssignmentsRecord, SceneModelMeshSourceRecord,
     SceneMaterialSlotRecord, SceneMaterialSourceRefRecord, ScenePrimitiveKind,
     ScenePrimitiveRecord, SceneTransformRecord, SdfPrimitiveMaterialSlotAssignmentRecord,
 };
@@ -1848,6 +1849,7 @@ struct Wr1282LightPixels {
     left: [u8; 4],
     right_control: [u8; 4],
     preview: [u8; 4],
+    model_region: Option<[u8; 4]>,
 }
 
 /// Not part of ordinary cargo validate. Must be explicitly executed on a
@@ -1861,9 +1863,9 @@ fn wr1282_source_backed_roughness_metallic_gpu_pixels() {
             "macOS GPU proof must run on main thread with explicit opt-in");
     }
     let window = create_hidden_window();
-    let base = render_wr1282_light_variant(&window, "base", "0.45", "0.0");
-    let rough = render_wr1282_light_variant(&window, "rough", "0.90", "0.0");
-    let metal = render_wr1282_light_variant(&window, "metal", "0.45", "0.90");
+    let base = render_wr1282_light_variant(&window, "base", "0.45", "0.0", false);
+    let rough = render_wr1282_light_variant(&window, "rough", "0.90", "0.0", false);
+    let metal = render_wr1282_light_variant(&window, "metal", "0.45", "0.90", false);
     let delta = |a: [u8; 4], b: [u8; 4]| -> i32 {
         a[..3].iter().zip(&b[..3]).map(|(a, b)| (*a as i32 - *b as i32).abs()).sum()
     };
@@ -1875,6 +1877,21 @@ fn wr1282_source_backed_roughness_metallic_gpu_pixels() {
         assert!(scene_delta >= 4, "{label} must visibly change left SDF scene pixel");
         assert!(preview_delta >= 4, "{label} must visibly change material preview pixel");
         assert!(unchanged_slot_delta <= 2, "unmodified source-backed slot must be pixel-stable");
+    }
+
+    // The source-owned model-material region uses a screen-space proxy in
+    // the current scene product, not a general polygonal model renderer.
+    // Its own generated WGSL shading path must nonetheless use authored
+    // roughness and metallic on the same output slot.
+    let base_mesh = render_wr1282_light_variant(&window, "base_mesh", "0.45", "0.0", true);
+    let rough_mesh = render_wr1282_light_variant(&window, "rough_mesh", "0.90", "0.0", true);
+    let metal_mesh = render_wr1282_light_variant(&window, "metal_mesh", "0.45", "0.90", true);
+    for (label, changed) in [("roughness", rough_mesh), ("metallic", metal_mesh)] {
+        let before = base_mesh.model_region.expect("baseline model material region");
+        let after = changed.model_region.expect("changed model material region");
+        let measured = delta(before, after);
+        eprintln!("WR-1282 {label} source-backed model region pixel delta={measured}: {before:?} -> {after:?}");
+        assert!(measured >= 4, "{label} must change the model-region proxy pixels");
     }
 }
 
@@ -1970,6 +1987,7 @@ fn render_wr1282_light_variant(
     label: &str,
     roughness: &str,
     metallic: &str,
+    with_model_region: bool,
 ) -> Wr1282LightPixels {
     let gfx = Gfx::new(Arc::clone(window)).expect("windowed GPU device");
     let mut app = runenwerk_editor::runtime::build_headless_app().expect("editor app");
@@ -2004,11 +2022,20 @@ fn render_wr1282_light_variant(
             .resource_mut::<EditorHostResource>()
             .expect("host");
         register_mvp_component_types(host.app.runtime_mut());
-        apply_scene_file_to_runtime(
-            host.app.runtime_mut(),
-            &wr028_two_sdf_primitive_scene_file(&left, &right),
-        )
-        .expect("source-backed 2-slot SDF scene");
+        let mut scene = wr028_two_sdf_primitive_scene_file(&left, &right);
+        if with_model_region {
+            scene.material_assignments.model_mesh_assignments.push(
+                ModelMeshMaterialSlotAssignmentRecord::new(
+                    SceneModelMeshSourceRecord::new(88_001, 88_002)
+                        .with_source_revision("wr1282.source_model"),
+                    "source_material_slot:0",
+                    1,
+                ),
+            );
+            scene.material_assignments.sort_stable();
+        }
+        apply_scene_file_to_runtime(host.app.runtime_mut(), &scene)
+            .expect("source-backed 2-slot SDF and optional model-material scene");
         host.app
             .material_lab_runtime_mut()
             .set_active_preview(right);
@@ -2124,9 +2151,17 @@ fn render_wr1282_light_variant(
     let preview = preview_capture
         .sample_center_rgba8()
         .expect("preview center");
+    let model_region = with_model_region.then(|| {
+        let pixel = RenderPixelCoordinate {
+            x: scene_capture.width / 2,
+            y: scene_capture.height * 56 / 100,
+        };
+        scene_capture.sample_pixel_rgba8(pixel).expect("model proxy pixel")
+    });
     Wr1282LightPixels {
         left,
         right_control: right,
         preview,
+        model_region,
     }
 }
