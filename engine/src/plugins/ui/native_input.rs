@@ -1000,6 +1000,9 @@ mod tests {
             Some(other_device),
             "even rejected device identity is preserved"
         );
+        let ownership = slots
+            .input_ownership(slot)
+            .expect("fresh M13 scope must precede pointer ingress");
         let (checked_display, submission) = recipients
             .submit_displayed_native_pointer(
                 first,
@@ -1012,7 +1015,6 @@ mod tests {
             )
             .expect("only exact completed-native-display evidence can admit pointer input");
         assert_eq!(checked_display.input_context, expected);
-        let ownership = slots.input_ownership(slot).expect("M13 scope is Running");
         let (batch, status) = slots
             .pump_native_input_records(slot)
             .expect("one actual pinned ordered M13 pointer result");
