@@ -278,22 +278,23 @@ impl WinitRunner {
             }
             return Ok(NativeInputRecipient::LegacyNativeConsumer);
         };
-        let selected = if let Some(recipients) = world
-            .resource::<UiNativeInputRecipientsResource>()
-        {
-            let windows = world
-                .resource::<WindowStateRegistryResource>()
-                .context("missing native window registry")?;
-            recipients
-                .resolve(window, windows, &mut slots)
-                .map_err(anyhow::Error::from)
-        } else if slots.is_empty() {
-            Ok(NativeInputRecipient::LegacyNativeConsumer)
-        } else {
-            Err(anyhow!(
-                "mounted UI runtime has no explicit native input recipient registry"
-            ))
-        };
+        // Closure scope guarantees slot restoration on *every* selection
+        // failure, including missing window authority and stale M13 scope.
+        let selected = (|| -> Result<NativeInputRecipient> {
+            if world.has_resource::<UiNativeInputRecipientsResource>() {
+                let recipients = world.resource::<UiNativeInputRecipientsResource>()?;
+                let windows = world
+                    .resource::<WindowStateRegistryResource>()
+                    .context("missing native window registry")?;
+                Ok(recipients.resolve(window, windows, &mut slots)?)
+            } else if slots.is_empty() {
+                Ok(NativeInputRecipient::LegacyNativeConsumer)
+            } else {
+                Err(anyhow!(
+                    "mounted UI runtime has no explicit native input recipient registry"
+                ))
+            }
+        })();
         world.insert_resource(slots);
         selected
     }
@@ -1581,6 +1582,104 @@ mod tests {
             .unwrap();
         assert_ne!(replacement.source, context.source);
         assert_eq!(replacement.device, context.device);
+    }
+
+    #[test]
+    fn native_callback_selects_exact_recipient_without_implicit_game_fallback() {
+        use crate::plugins::ui::{
+            NativeInputRecipient, UiRuntimeFontConfiguration, UiRuntimeSlotsResource,
+            UiTypedScreenId,
+        };
+
+        struct NativeInputApp;
+        impl runenui_core::UiApp for NativeInputApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::text("native input routing fixture")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        let secondary = NativeWindowId::try_from_raw(2).expect("secondary identity");
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("native window authority")
+            .register_created_window(secondary, "secondary", (800, 600), 1.0, false);
+
+        assert_eq!(
+            runner.native_input_recipient(secondary).expect("game-only baseline"),
+            NativeInputRecipient::LegacyNativeConsumer,
+        );
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<NativeInputApp>(
+                UiTypedScreenId::new("native.input.exact"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("real framework slot");
+        runner.state.world.insert_resource(slots);
+        assert!(
+            runner.native_input_recipient(secondary).is_err(),
+            "a mounted UI slot without explicit native binding cannot fall back to gameplay"
+        );
+        assert!(
+            runner.state.world.has_resource::<UiRuntimeSlotsResource>(),
+            "failed recipient selection must restore the exact live slot owner"
+        );
+
+        let mut slots = runner
+            .state
+            .world
+            .remove_resource::<UiRuntimeSlotsResource>()
+            .expect("same slot owner is available");
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                secondary,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .expect("created native window"),
+                &mut slots,
+            )
+            .expect("exact active M13 recipient binding");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+        runner
+            .state
+            .world
+            .insert_resource(UiRuntimePresentationAssociationsResource::default());
+        assert_eq!(
+            runner.native_input_recipient(secondary).expect("selected UI recipient"),
+            NativeInputRecipient::RunenUiSlot(slot),
+        );
+        assert!(
+            runner.retire_native_input_recipient(secondary).expect("source retirement")
+        );
+        assert!(
+            runner.native_input_recipient(secondary).is_err(),
+            "retired UI scope cannot resurrect implicit game eligibility"
+        );
+        assert!(
+            runner.state.world.has_resource::<UiRuntimeSlotsResource>(),
+            "retirement rejection cannot discard the native UI runtime"
+        );
     }
 
     #[test]
