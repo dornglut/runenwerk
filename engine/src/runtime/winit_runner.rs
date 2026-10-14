@@ -94,12 +94,10 @@ struct NativeUiMouseTranslator {
     clippy::cast_possible_truncation,
     reason = "native f64 cursor positions are finite and checked against the f32 range before conversion"
 )]
-fn displayed_native_mouse_point(
-    displayed: &UiRuntimeDisplayedPresentation,
+fn native_logical_mouse_point(
     position: PhysicalPosition<f64>,
-    modifiers: KeyModifiers,
-) -> Result<TranslatedPointerPoint> {
-    let scale = displayed.mapping.native_scale_factor();
+    scale: f64,
+) -> Result<LogicalPoint> {
     anyhow::ensure!(scale.is_finite() && scale > 0.0, "invalid native scale");
     let x = position.x / scale;
     let y = position.y / scale;
@@ -112,9 +110,17 @@ fn displayed_native_mouse_point(
             && y <= f64::from(f32::MAX),
         "native cursor cannot be represented as a RunenUI logical point"
     );
+    LogicalPoint::new(x as f32, y as f32)
+        .context("checked native logical pointer position rejected")
+}
+
+fn displayed_native_mouse_point(
+    displayed: &UiRuntimeDisplayedPresentation,
+    position: PhysicalPosition<f64>,
+    modifiers: KeyModifiers,
+) -> Result<TranslatedPointerPoint> {
     Ok(TranslatedPointerPoint {
-        position: LogicalPoint::new(x as f32, y as f32)
-            .context("checked native logical pointer position rejected")?,
+        position: native_logical_mouse_point(position, displayed.mapping.native_scale_factor())?,
         input_context: displayed.input_context.clone(),
         modifiers,
     })
@@ -701,7 +707,7 @@ impl WinitRunner {
             )?.context("no completed-Present UI pointer input context")?;
             let point = displayed_native_mouse_point(&displayed, position, modifiers)?;
             let mice = &mut self.native_ui_mice;
-            if mice.get(&window).is_some_and(|old| old.scope != *before.scope()) {
+            if mice.get(&window).is_some_and(|old| &old.scope != before.scope()) {
                 mice.remove(&window);
             }
             let lifetime = mice.entry(window).or_insert_with(|| NativeUiMouseTranslator {
@@ -1794,6 +1800,24 @@ mod tests {
 
     fn log_tick(tick: Res<SimulationTick>, mut log: ResMut<FixedTickLog>) {
         log.0.push(tick.0);
+    }
+
+    #[test]
+    fn native_mouse_coordinate_normalization_requires_displayed_scale_and_finite_range() {
+        let physical = PhysicalPosition::new(240.0, 120.0);
+        let logical = native_logical_mouse_point(physical, 2.0)
+            .expect("native HiDPI mapping is representable");
+        assert_eq!(logical.x(), 120.0);
+        assert_eq!(logical.y(), 60.0);
+        assert!(native_logical_mouse_point(physical, 0.0).is_err());
+        assert!(native_logical_mouse_point(physical, -1.0).is_err());
+        assert!(native_logical_mouse_point(physical, f64::INFINITY).is_err());
+        assert!(
+            native_logical_mouse_point(PhysicalPosition::new(f64::NAN, 0.0), 1.0).is_err()
+        );
+        assert!(
+            native_logical_mouse_point(PhysicalPosition::new(f64::MAX, 0.0), 1.0).is_err()
+        );
     }
 
     #[test]
