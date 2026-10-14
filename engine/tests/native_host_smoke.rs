@@ -10,7 +10,8 @@ use engine::plugins::render::{
     Gfx, RenderFlow, RenderFrameProducerId, SurfaceFrameSubmissionOrder,
 };
 use engine::plugins::ui::{
-    AppUiExt, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
+    AppUiExt, UiNativeInputRecipientsResource, UiRuntimeFontConfiguration,
+    UiRuntimeNativeMapping,
     UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
     UiRuntimeSlotsResource, UiScreen, UiTypedActionDescriptor, UiTypedScreenId, UiTypedSource,
 };
@@ -839,6 +840,13 @@ impl NativeWindowHook for NativeRenderHostSmokeHook {
         self.frame_seen.store(true, Ordering::SeqCst);
         self.frames_seen += 1;
         if let Some(slot) = self.counter_slot {
+            anyhow::ensure!(
+                world
+                    .resource::<UiNativeInputRecipientsResource>()?
+                    .binding_epoch_for_window(NativeWindowId::primary())
+                    .is_some(),
+                "author-declared UI input target was not realized before native frame"
+            );
             let mapping = world
                 .resource::<WindowStateRegistryResource>()?
                 .record(NativeWindowId::primary())
@@ -1020,6 +1028,7 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
             .mount_with_fonts(NativeCounterScreen, &native_counter_fonts())
             .slot_id()
             .ok_or_else(|| anyhow::anyhow!("native U5 Counter failed to mount"))?;
+        app.ui().bind_native_primary_input(slot)?;
         app.world_mut()
             .resource_mut::<UiRuntimePresentationAssociationsResource>()?
             .bind(
