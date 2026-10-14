@@ -155,8 +155,7 @@ fn native_ui_logical_wheel_delta(
         "native wheel delta out of finite RunenUI logical range"
     );
     Ok(Some(
-        LogicalDelta::new(x as f32, y as f32)
-            .context("checked native wheel delta rejected")?,
+        LogicalDelta::new(x as f32, y as f32).context("checked native wheel delta rejected")?,
     ))
 }
 
@@ -1062,10 +1061,9 @@ impl WinitRunner {
                 .last_native_position()
                 .context("native wheel has no original cursor point")?;
             let point = displayed_native_mouse_point(&displayed, position, modifiers)?;
-            let Some(logical_delta) = native_ui_logical_wheel_delta(
-                delta,
-                displayed.mapping.native_scale_factor(),
-            )? else {
+            let Some(logical_delta) =
+                native_ui_logical_wheel_delta(delta, displayed.mapping.native_scale_factor())?
+            else {
                 return Ok(());
             };
             let event = lifetime
@@ -1937,7 +1935,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 let context = self
                     .input_adapter
                     .window_context(native_window_id, device_id)?;
-                let original_delta = delta.clone();
+                let original_delta = delta;
                 let input = scroll_input(delta, phase);
                 self.apply_semantic_native_input(
                     native_window_id,
@@ -2159,12 +2157,9 @@ mod tests {
 
     #[test]
     fn native_wheel_respects_displayed_scale_explicit_line_policy_and_inert_zero() {
-        let lines = native_ui_logical_wheel_delta(
-            &MouseScrollDelta::LineDelta(1.5, -2.0),
-            3.0,
-        )
-        .expect("finite line wheel")
-        .expect("nonzero displacement");
+        let lines = native_ui_logical_wheel_delta(&MouseScrollDelta::LineDelta(1.5, -2.0), 3.0)
+            .expect("finite line wheel")
+            .expect("nonzero displacement");
         assert_eq!(lines.x(), 90.0);
         assert_eq!(lines.y(), -120.0);
         let pixels = native_ui_logical_wheel_delta(
@@ -2176,12 +2171,9 @@ mod tests {
         assert_eq!(pixels.x(), 60.0);
         assert_eq!(pixels.y(), -20.0);
         assert!(
-            native_ui_logical_wheel_delta(
-                &MouseScrollDelta::LineDelta(0.0, -0.0),
-                0.0,
-            )
-            .expect("phase-only zero is inert without scale")
-            .is_none()
+            native_ui_logical_wheel_delta(&MouseScrollDelta::LineDelta(0.0, -0.0), 0.0,)
+                .expect("phase-only zero is inert without scale")
+                .is_none()
         );
         assert!(
             native_ui_logical_wheel_delta(
