@@ -2481,6 +2481,68 @@ mod tests {
             !runner.native_ui_modifiers.contains_key(&secondary),
             "new recipient epoch cannot inherit prior physical modifier state"
         );
+        // Nominal window/slot/source/epoch identity is not sufficient: a
+        // reappearing hardware device has a distinct checked generation.
+        runner
+            .native_ui_modifiers
+            .insert(secondary, KeyModifiers::SHIFT);
+        let replacement_device = UiInputDeviceId::new(8).expect("checked replacement device");
+        runner.native_ui_keyboard_translator(
+            secondary,
+            slot,
+            source_b,
+            replacement_device,
+            new_epoch,
+        );
+        assert!(
+            !runner.native_ui_modifiers.contains_key(&secondary),
+            "replaced hardware may not inherit modifiers from old device lifetime"
+        );
+        assert_eq!(
+            runner
+                .native_ui_keyboards
+                .get(&secondary)
+                .map(|state| state.device),
+            Some(replacement_device)
+        );
+
+        // Backend device removal retracts that framework lifetime BEFORE
+        // its neutral physical device generation is reallocated, without
+        // destroying the native window's logical source.
+        let backend = winit::event::DeviceId::dummy();
+        let original = runner
+            .input_adapter
+            .window_context(secondary, backend)
+            .expect("one checked backend device");
+        runner.native_ui_keyboard_translator(
+            secondary,
+            slot,
+            original.source,
+            WinitRunner::native_ui_device(original).expect("checked UI device"),
+            new_epoch,
+        );
+        runner
+            .native_ui_modifiers
+            .insert(secondary, KeyModifiers::SHIFT);
+        assert!(
+            runner
+                .apply_raw_device_removal(backend)
+                .expect("original native backend device loss")
+        );
+        assert!(
+            !runner.native_ui_keyboards.contains_key(&secondary),
+            "removed device must cancel its M13 keyboard translator"
+        );
+        assert!(
+            !runner.native_ui_modifiers.contains_key(&secondary),
+            "removed device cannot leave pressed modifier evidence"
+        );
+        let successor = runner
+            .input_adapter
+            .window_context(secondary, backend)
+            .expect("device can reappear with another checked generation");
+        assert_eq!(successor.source, original.source);
+        assert_ne!(successor.device, original.device);
         assert!(
             runner.state.world.has_resource::<UiRuntimeSlotsResource>(),
             "retirement rejection cannot discard the native UI runtime"
