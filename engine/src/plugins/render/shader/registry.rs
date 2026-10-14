@@ -366,7 +366,9 @@ impl ShaderRegistryResource {
                     asset.id.clone(),
                     asset.path.clone(),
                     asset.modified,
-                    asset.revision,
+                    // Failure events describe an observable prior source, not
+                    // the retained generation counter of an unloaded replacement.
+                    self.revision_for_handle(handle),
                 )
             }) else {
                 continue;

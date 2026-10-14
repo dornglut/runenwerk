@@ -122,6 +122,7 @@ mod tests {
         );
 
         // A failed edit of the current path preserves the last valid source.
+        registry.drain_messages();
         fs::write(&second_path, "").unwrap();
         registry.request_reload();
         registry.poll_updates();
@@ -130,12 +131,45 @@ mod tests {
             registry.loaded_source("stable.preview"),
             Some("fn second_source() {}\n")
         );
+        assert_eq!(
+            registry
+                .read_messages()
+                .iter()
+                .find(|event| event.kind == ShaderRegistryEventKind::SkippedEmpty)
+                .unwrap()
+                .revision,
+            second_revision
+        );
 
         // A replacement path has no valid source until its own load succeeds.
+        registry.drain_messages();
         registry.register_shader_with_id("stable.preview", missing_path.to_string_lossy());
         registry.poll_updates();
         assert_eq!(registry.revision_for_handle(handle), 0);
         assert!(!registry.is_loaded("stable.preview"));
+        assert_eq!(
+            registry
+                .read_messages()
+                .iter()
+                .find(|event| event.kind == ShaderRegistryEventKind::Failed)
+                .unwrap()
+                .revision,
+            0
+        );
+        registry.drain_messages();
+        fs::write(&missing_path, "").unwrap();
+        registry.request_reload();
+        registry.poll_updates();
+        assert_eq!(
+            registry
+                .read_messages()
+                .iter()
+                .find(|event| event.kind == ShaderRegistryEventKind::SkippedEmpty)
+                .unwrap()
+                .revision,
+            0
+        );
+        assert_eq!(registry.revision_for_handle(handle), 0);
         fs::write(&missing_path, "fn third_source() {}\n").unwrap();
         registry.request_reload();
         registry.poll_updates();
