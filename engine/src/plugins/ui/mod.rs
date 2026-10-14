@@ -40,9 +40,10 @@ pub use resources::*;
 pub use runenui_adapter::{
     UiRuntimeFontConfiguration, UiRuntimeHostRequestDisposition,
     UiRuntimeNativeKeyboardAdmissionError, UiRuntimeNativeKeyboardEvidenceFailure,
+    UiRuntimeNativePointerAdmissionError, UiRuntimeNativePointerEvidenceFailure,
     UiRuntimePendingEventRequest, UiRuntimeSlotId, UiRuntimeSlotMountFailure,
     UiRuntimeSlotMountReport, UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
-    native_keyboard_finality, native_no_focused_keyboard_claim_witness,
+    native_keyboard_finality, native_no_focused_keyboard_claim_witness, native_pointer_finality,
 };
 pub use schedule::*;
 pub use screen::*;

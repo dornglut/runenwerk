@@ -1,6 +1,7 @@
 use runenui_core::{
     Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, InputDeviceId,
-    KeyboardEvent, SemanticCommand, UiApp, View, button, column, text,
+    KeyboardEvent, PointerEvent, PointerId, SemanticCommand, SurfaceId, UiApp, View, button,
+    column, text,
 };
 #[cfg(test)]
 use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment};
@@ -9,7 +10,8 @@ use runenui_runtime::LogicalSize;
 use runenui_runtime::{
     AppRuntime, HostRequestToken, InputArbitrationRecord, InputArbitrationScope,
     InputObservationError, InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch,
-    KeyboardSubmission, PumpBudget, SubmitKeyboardError, SubmitKeyboardErrorKind,
+    KeyboardSubmission, PointerSubmission, PumpBudget, SubmitKeyboardError,
+    SubmitKeyboardErrorKind, SubmitPointerError,
     SurfaceBuildContext, SurfacePublication, UiInputFamily, UiInputFinality,
 };
 use ui_artifacts::UiRuntimeArtifact;
@@ -198,6 +200,95 @@ pub fn native_keyboard_finality(
     }
     if settlement.device_id() != Some(expected_device) {
         return Err(Failure::WrongDevice);
+    }
+    if settlement.ownership_revision() > batch.final_ownership().revision() {
+        return Err(Failure::InvalidRevision);
+    }
+    Ok(settlement.finality().clone())
+}
+
+/// A native pointer rejection retains the exact unaccepted event.
+#[derive(Debug)]
+pub enum UiRuntimeNativePointerAdmissionError {
+    Slot {
+        failure: UiRuntimeSlotOperationFailure,
+        event: PointerEvent,
+    },
+    Framework(SubmitPointerError),
+}
+
+/// Host-side verification of the one exact RunenUI M13 pointer settlement;
+/// never a game-permission grant without original host/source/lifetime proof.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UiRuntimeNativePointerEvidenceFailure {
+    Unsettled,
+    WrongScope,
+    NotProcessed,
+    MissingReceipt,
+    DuplicateReceipt,
+    WrongFamily,
+    WrongDevice,
+    WrongPointer,
+    WrongSurface,
+    InvalidRevision,
+}
+
+/// Check original native stream identity against the exact framework receipt,
+/// not a coalesced UI-consumed flag or a generic quiescent pump.
+pub fn native_pointer_finality(
+    scope: &InputArbitrationScope,
+    expected_device: InputDeviceId,
+    expected_pointer: PointerId,
+    expected_surface: &SurfaceId,
+    submission: PointerSubmission,
+    batch: &InputPumpBatch,
+    status: &Result<(), UiRuntimeSlotOperationFailure>,
+) -> Result<UiInputFinality, UiRuntimeNativePointerEvidenceFailure> {
+    use UiRuntimeNativePointerEvidenceFailure as Failure;
+    if status.is_err()
+        || batch.pause_reason().is_some()
+        || !batch.report().is_quiescent()
+        || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
+    {
+        return Err(Failure::Unsettled);
+    }
+    if batch.final_ownership().scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if !batch
+        .processed_through()
+        .is_some_and(|through| through >= submission.sequence())
+    {
+        return Err(Failure::NotProcessed);
+    }
+    let mut found = None;
+    for record in batch.ordered_records() {
+        let InputArbitrationRecord::InputSettled(settlement) = record else {
+            continue;
+        };
+        if settlement.sequence() != submission.sequence() {
+            continue;
+        }
+        if found.is_some() {
+            return Err(Failure::DuplicateReceipt);
+        }
+        found = Some(settlement);
+    }
+    let settlement = found.ok_or(Failure::MissingReceipt)?;
+    if settlement.scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if settlement.family() != UiInputFamily::Pointer {
+        return Err(Failure::WrongFamily);
+    }
+    if settlement.device_id() != Some(expected_device) {
+        return Err(Failure::WrongDevice);
+    }
+    if settlement.pointer_id() != Some(expected_pointer) {
+        return Err(Failure::WrongPointer);
+    }
+    if settlement.surface_id() != Some(expected_surface) {
+        return Err(Failure::WrongSurface);
     }
     if settlement.ownership_revision() > batch.final_ownership().revision() {
         return Err(Failure::InvalidRevision);
@@ -511,6 +602,16 @@ impl UiRuntimeSlotKind {
         match self {
             Self::Counter(runtime) => runtime.submit_keyboard(event),
             Self::Typed(runtime) => runtime.submit_keyboard(event),
+        }
+    }
+
+    fn submit_pointer(
+        &mut self,
+        event: PointerEvent,
+    ) -> Result<PointerSubmission, SubmitPointerError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_pointer(event),
+            Self::Typed(runtime) => runtime.submit_pointer(event),
         }
     }
 
@@ -1069,6 +1170,35 @@ impl UiRuntimeSlotsResource {
             .runtime
             .submit_keyboard(event)
             .map_err(UiRuntimeNativeKeyboardAdmissionError::Framework)?;
+        slot.ingress_epoch = next;
+        slot.requires_settlement = true;
+        Ok(receipt)
+    }
+
+    /// Admit exactly one native pointer observation to the pinned runtime.
+    /// Callers supply the original completed-Present input context; admission
+    /// alone never authorizes gameplay or claims a displayed surface.
+    pub fn submit_native_pointer(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        event: PointerEvent,
+    ) -> Result<PointerSubmission, UiRuntimeNativePointerAdmissionError> {
+        let slot = match self.slot_mut(slot_id) {
+            Ok(slot) => slot,
+            Err(failure) => {
+                return Err(UiRuntimeNativePointerAdmissionError::Slot { failure, event });
+            }
+        };
+        let next = match slot.next_ingress_epoch() {
+            Ok(next) => next,
+            Err(failure) => {
+                return Err(UiRuntimeNativePointerAdmissionError::Slot { failure, event });
+            }
+        };
+        let receipt = slot
+            .runtime
+            .submit_pointer(event)
+            .map_err(UiRuntimeNativePointerAdmissionError::Framework)?;
         slot.ingress_epoch = next;
         slot.requires_settlement = true;
         Ok(receipt)
@@ -3507,6 +3637,13 @@ mod tests {
                 event: KeyboardEvent,
             ) -> Result<KeyboardSubmission, SubmitKeyboardError> {
                 self.runtime.submit_keyboard(event)
+            }
+
+            fn submit_pointer(
+                &mut self,
+                event: PointerEvent,
+            ) -> Result<PointerSubmission, SubmitPointerError> {
+                self.runtime.submit_pointer(event)
             }
 
             fn pending_redraw(&mut self) -> bool {

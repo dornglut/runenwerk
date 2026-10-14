@@ -3,10 +3,11 @@
 
 use std::any::Any;
 
-use runenui_core::{KeyboardEvent, UiApp};
+use runenui_core::{KeyboardEvent, PointerEvent, UiApp};
 use runenui_runtime::{
     AppRuntime, InputObservationError, InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch,
-    KeyboardSubmission, PumpBudget, SubmitKeyboardError, SurfaceBuildContext, SurfacePublication,
+    KeyboardSubmission, PointerSubmission, PumpBudget, SubmitKeyboardError, SubmitPointerError,
+    SurfaceBuildContext, SurfacePublication,
 };
 
 /// Typed application observations without access to host clock or wake wiring.
@@ -55,6 +56,10 @@ pub(super) trait TypedRuntimeOps {
         &mut self,
         event: KeyboardEvent,
     ) -> Result<KeyboardSubmission, SubmitKeyboardError>;
+    fn submit_pointer(
+        &mut self,
+        event: PointerEvent,
+    ) -> Result<PointerSubmission, SubmitPointerError>;
     fn set_native_wake_transport(&self, transport: crate::runtime::NativeWakeTransport);
     fn pending_redraw(&mut self) -> bool;
     fn publish_surface(
@@ -88,6 +93,13 @@ impl<A: UiApp + 'static> TypedRuntimeOps for TypedRuntime<A> {
         event: KeyboardEvent,
     ) -> Result<KeyboardSubmission, SubmitKeyboardError> {
         self.runtime.submit_keyboard(event)
+    }
+
+    fn submit_pointer(
+        &mut self,
+        event: PointerEvent,
+    ) -> Result<PointerSubmission, SubmitPointerError> {
+        self.runtime.submit_pointer(event)
     }
 
     fn pending_redraw(&mut self) -> bool {
