@@ -660,6 +660,81 @@ impl WinitRunner {
         }
     }
 
+    /// Only original neutral-admitted cursor movement and a current terminal
+    /// displayed pointer context may advance the pinned RunenUI pointer stream.
+    fn route_ui_cursor_moved(
+        &mut self,
+        window: NativeWindowId,
+        slot: UiRuntimeSlotId,
+        binding_epoch: u64,
+        context: InputContext,
+        position: PhysicalPosition<f64>,
+    ) -> Result<()> {
+        let device = Self::native_ui_device(context)?;
+        if self.native_ui_mice.get(&window).is_some_and(|old| {
+            old.recipient != slot || old.binding_epoch != binding_epoch
+                || old.source != context.source || old.device != device
+        }) {
+            self.cancel_native_ui_mouse(window);
+        }
+        let modifiers = self.native_ui_modifiers.get(&window).copied()
+            .unwrap_or(KeyModifiers::NONE);
+        let world = &mut self.state.world;
+        let mut slots = world.remove_resource::<UiRuntimeSlotsResource>()
+            .context("selected UI pointer has no slot authority")?;
+        let operation = (|| -> Result<()> {
+            let before = slots.input_ownership(slot)?;
+            let recipients = world.resource::<UiNativeInputRecipientsResource>()?;
+            let windows = world.resource::<WindowStateRegistryResource>()?;
+            let presentations = world.resource::<UiRuntimePresentationAssociationsResource>()?;
+            let surfaces = world.resource::<RenderSurfaceRegistryResource>()?;
+            let displayed = recipients.displayed_pointer_input(
+                window, windows, &mut slots, presentations, surfaces,
+            )?.context("no completed-Present UI pointer input context")?;
+            let point = displayed_native_mouse_point(&displayed, position, modifiers)?;
+            let mice = &mut self.native_ui_mice;
+            if mice.get(&window).is_some_and(|old| old.scope != *before.scope()) {
+                mice.remove(&window);
+            }
+            let lifetime = mice.entry(window).or_insert_with(|| NativeUiMouseTranslator {
+                recipient: slot,
+                source: context.source,
+                device,
+                binding_epoch,
+                scope: before.scope().clone(),
+                mouse: MouseInputState::default(),
+            });
+            lifetime.mouse.note_cursor_position(position);
+            let event = lifetime.mouse.cursor_moved(device, point)?;
+            let pointer = event.pointer_id();
+            let (_, submission) = recipients.submit_displayed_native_pointer(
+                NativePointerOrigin::new(window, device),
+                windows, &mut slots, presentations, surfaces, event,
+            )?;
+            let (batch, status) = slots.pump_native_input_records(slot)?;
+            let finality = native_pointer_finality(
+                before.scope(), device, pointer, displayed.input_context.surface_id(),
+                submission, &batch, &status,
+            );
+            anyhow::ensure!(
+                finality.is_ok(),
+                "native UI cursor lacked exact M13 pointer settlement: {finality:?}"
+            );
+            Ok(())
+        })();
+        world.insert_resource(slots);
+        if let Err(error) = operation {
+            self.cancel_native_ui_mouse(window);
+            tracing::trace!(
+                target: "engine.runtime.input",
+                ?window,
+                ?error,
+                "native UI cursor withheld without gameplay grant"
+            );
+        }
+        Ok(())
+    }
+
     /// Preserve one original recipient for native pointer, wheel and touch
     /// callbacks too. Until pinned M13 pointer delivery is integrated, UI-owned
     /// input stays neutral physical evidence; it is NEVER dispatched to Editor
