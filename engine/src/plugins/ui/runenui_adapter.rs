@@ -1,6 +1,7 @@
 use runenui_core::{
     Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, InputDeviceId,
-    KeyboardEvent, PointerEvent, PointerId, SemanticCommand, SurfaceId, UiApp, View, button,
+    CommittedTextEvent, KeyboardEvent, PointerEvent, PointerId, SemanticCommand, SurfaceId,
+    UiApp, View, button,
     column, text,
 };
 #[cfg(test)]
@@ -11,7 +12,8 @@ use runenui_runtime::{
     AppRuntime, HostRequestToken, InputArbitrationRecord, InputArbitrationScope,
     InputObservationError, InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch,
     KeyboardSubmission, PointerSubmission, PumpBudget, SubmitKeyboardError,
-    SubmitKeyboardErrorKind, SubmitPointerError, SurfaceBuildContext, SurfacePublication,
+    SubmitKeyboardErrorKind, SubmitPointerError, SubmitTextError, SurfaceBuildContext,
+    SurfacePublication, TextSubmission,
     UiInputFamily, UiInputFinality,
 };
 use ui_artifacts::UiRuntimeArtifact;
@@ -199,6 +201,80 @@ pub fn native_keyboard_finality(
         return Err(Failure::WrongFamily);
     }
     if settlement.device_id() != Some(expected_device) {
+        return Err(Failure::WrongDevice);
+    }
+    if settlement.ownership_revision() > batch.final_ownership().revision() {
+        return Err(Failure::InvalidRevision);
+    }
+    Ok(settlement.finality().clone())
+}
+
+/// Native text rejection keeps the exact original committed payload.
+#[derive(Debug)]
+pub enum UiRuntimeNativeTextAdmissionError {
+    Slot {
+        failure: UiRuntimeSlotOperationFailure,
+        event: CommittedTextEvent,
+    },
+    Framework(SubmitTextError),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UiRuntimeNativeTextEvidenceFailure {
+    Unsettled,
+    WrongScope,
+    NotProcessed,
+    MissingReceipt,
+    DuplicateReceipt,
+    WrongFamily,
+    WrongDevice,
+    InvalidRevision,
+}
+
+/// Correlates the one M13 source-owned text receipt by scope, FIFO sequence
+/// and original device identity. This is not a UI-consumed flag.
+pub(crate) fn native_text_finality(
+    scope: &InputArbitrationScope,
+    expected_device: Option<InputDeviceId>,
+    submission: TextSubmission,
+    batch: &InputPumpBatch,
+    status: &Result<(), UiRuntimeSlotOperationFailure>,
+) -> Result<UiInputFinality, UiRuntimeNativeTextEvidenceFailure> {
+    use UiRuntimeNativeTextEvidenceFailure as Failure;
+    if status.is_err()
+        || batch.pause_reason().is_some()
+        || !batch.report().is_quiescent()
+        || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
+    {
+        return Err(Failure::Unsettled);
+    }
+    if batch.final_ownership().scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if !batch.processed_through().is_some_and(|through| through >= submission.sequence()) {
+        return Err(Failure::NotProcessed);
+    }
+    let mut found = None;
+    for record in batch.ordered_records() {
+        let InputArbitrationRecord::InputSettled(settlement) = record else {
+            continue;
+        };
+        if settlement.sequence() != submission.sequence() {
+            continue;
+        }
+        if found.is_some() {
+            return Err(Failure::DuplicateReceipt);
+        }
+        found = Some(settlement);
+    }
+    let settlement = found.ok_or(Failure::MissingReceipt)?;
+    if settlement.scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if settlement.family() != UiInputFamily::CommittedText {
+        return Err(Failure::WrongFamily);
+    }
+    if settlement.device_id() != expected_device {
         return Err(Failure::WrongDevice);
     }
     if settlement.ownership_revision() > batch.final_ownership().revision() {
@@ -612,6 +688,16 @@ impl UiRuntimeSlotKind {
         match self {
             Self::Counter(runtime) => runtime.submit_pointer(event),
             Self::Typed(runtime) => runtime.submit_pointer(event),
+        }
+    }
+
+    fn submit_text(
+        &mut self,
+        event: CommittedTextEvent,
+    ) -> Result<TextSubmission, SubmitTextError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_text(event),
+            Self::Typed(runtime) => runtime.submit_text(event),
         }
     }
 
@@ -1205,6 +1291,34 @@ impl UiRuntimeSlotsResource {
             .runtime
             .submit_pointer(event)
             .map_err(UiRuntimeNativePointerAdmissionError::Framework)?;
+        slot.ingress_epoch = next;
+        slot.requires_settlement = true;
+        Ok(receipt)
+    }
+
+    /// Original native committed text uses the same pinned M13 input FIFO and
+    /// ingress generation as keyboard and pointer; it is never gameplay input.
+    pub(crate) fn submit_native_text(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        event: CommittedTextEvent,
+    ) -> Result<TextSubmission, UiRuntimeNativeTextAdmissionError> {
+        let slot = match self.slot_mut(slot_id) {
+            Ok(slot) => slot,
+            Err(failure) => {
+                return Err(UiRuntimeNativeTextAdmissionError::Slot { failure, event });
+            }
+        };
+        let next = match slot.next_ingress_epoch() {
+            Ok(next) => next,
+            Err(failure) => {
+                return Err(UiRuntimeNativeTextAdmissionError::Slot { failure, event });
+            }
+        };
+        let receipt = slot
+            .runtime
+            .submit_text(event)
+            .map_err(UiRuntimeNativeTextAdmissionError::Framework)?;
         slot.ingress_epoch = next;
         slot.requires_settlement = true;
         Ok(receipt)
@@ -3821,6 +3935,13 @@ mod tests {
                 event: PointerEvent,
             ) -> Result<PointerSubmission, SubmitPointerError> {
                 self.runtime.submit_pointer(event)
+            }
+
+            fn submit_text(
+                &mut self,
+                event: CommittedTextEvent,
+            ) -> Result<TextSubmission, SubmitTextError> {
+                self.runtime.submit_text(event)
             }
 
             fn pending_redraw(&mut self) -> bool {
