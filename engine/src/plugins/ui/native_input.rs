@@ -263,6 +263,9 @@ impl UiNativeInputRecipientsResource {
             presentations.invalidate_mapping(slot);
         }
         *binding = WindowRecipientBinding::Retired;
+        if window == NativeWindowId::primary() {
+            self.requested_primary = None;
+        }
         true
     }
 
@@ -288,6 +291,9 @@ impl UiNativeInputRecipientsResource {
             }
         }
         presentations.invalidate_mapping(slot);
+        if self.requested_primary == Some(NativeInputRecipient::RunenUiSlot(slot)) {
+            self.requested_primary = None;
+        }
         retired
     }
 
@@ -308,9 +314,17 @@ impl UiNativeInputRecipientsResource {
             }
             Some(WindowRecipientBinding::Retired) => {
                 self.bindings.remove(&window);
+                if window == NativeWindowId::primary() {
+                    self.requested_primary = None;
+                }
                 Ok(true)
             }
-            None => Ok(false),
+            None => {
+                if window == NativeWindowId::primary() {
+                    self.requested_primary = None;
+                }
+                Ok(false)
+            },
         }
     }
 
@@ -427,6 +441,53 @@ mod tests {
             recipients.resolve(primary, &windows, &mut slots),
             Ok(NativeInputRecipient::RunenUiSlot(slot))
         );
+    }
+
+    #[test]
+    fn retired_primary_input_cannot_resurrect_stale_application_selection() {
+        let (windows, primary, _) = windows();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = mount(&mut slots, 72);
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        let mut presentations = UiRuntimePresentationAssociationsResource::default();
+        recipients
+            .request_primary(NativeInputRecipient::RunenUiSlot(slot))
+            .expect("initial explicit input authoring");
+        assert_eq!(recipients.realize_requested_primary(&windows, &mut slots), Ok(true));
+        assert!(recipients.retire_window(primary, &mut presentations));
+        assert_eq!(recipients.requested_primary, None);
+        assert_eq!(
+            recipients.realize_requested_primary(&windows, &mut slots),
+            Ok(false),
+            "retired input may not silently rebind from an old authoring request"
+        );
+        assert_eq!(
+            recipients.resolve(primary, &windows, &mut slots),
+            Err(NativeInputRecipientError::MissingRecipient)
+        );
+        recipients
+            .request_primary(NativeInputRecipient::LegacyNativeConsumer)
+            .expect("new explicit native target after retirement");
+        assert_eq!(recipients.realize_requested_primary(&windows, &mut slots), Ok(true));
+        assert_eq!(
+            recipients.resolve(primary, &windows, &mut slots),
+            Ok(NativeInputRecipient::LegacyNativeConsumer)
+        );
+    }
+
+    #[test]
+    fn retiring_an_unrealized_slot_clears_its_pending_primary_request() {
+        let (windows, _, _) = windows();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = mount(&mut slots, 73);
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        let mut presentations = UiRuntimePresentationAssociationsResource::default();
+        recipients
+            .request_primary(NativeInputRecipient::RunenUiSlot(slot))
+            .expect("pre-window explicit authoring");
+        assert_eq!(recipients.retire_slot(slot, &mut presentations), 0);
+        assert_eq!(recipients.requested_primary, None);
+        assert_eq!(recipients.realize_requested_primary(&windows, &mut slots), Ok(false));
     }
 
     #[test]
