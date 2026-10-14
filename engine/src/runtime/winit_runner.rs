@@ -2694,7 +2694,7 @@ mod tests {
     }
 
     #[test]
-    fn raw_device_removal_retires_only_raw_identity() {
+    fn original_device_removal_retires_window_and_raw_devices_without_destroying_window_source() {
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
         runner.state.world.insert_resource(InputState::new());
         let backend_device = winit::event::DeviceId::dummy();
@@ -2718,12 +2718,21 @@ mod tests {
             .unwrap();
         assert_ne!(replacement.source, raw.source);
         assert_ne!(replacement.device, raw.device);
+        let replacement_window = runner
+            .input_adapter
+            .window_context(NativeWindowId::primary(), backend_device)
+            .expect("a new window-device lifetime on observed hardware reappearance");
         assert_eq!(
-            runner
-                .input_adapter
-                .window_context(NativeWindowId::primary(), backend_device)
-                .unwrap(),
-            window
+            replacement_window.source, window.source,
+            "device loss is not destruction of the native window's input source"
+        );
+        assert_ne!(
+            replacement_window.device, window.device,
+            "removed hardware must not reuse the old window-event device identity"
+        );
+        assert_ne!(
+            replacement_window.device, replacement.device,
+            "raw-device observations use a separate identity from window events"
         );
     }
 
