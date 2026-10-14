@@ -43,9 +43,10 @@ use runenwerk_editor::material_lab::{
 };
 use runenwerk_editor::persistence::apply_scene_file_to_runtime;
 use runenwerk_editor::runtime::app::EDITOR_MATERIAL_PREVIEW_SHADER_ID;
-use runenwerk_editor::runtime::resources::EditorHostResource;
+use runenwerk_editor::runtime::resources::{EditorHostResource, EditorViewportSceneProductUniform};
 use runenwerk_editor::runtime::viewport::{
     MAIN_VIEWPORT_ID, SCENE_COLOR_PRODUCT_ID, ViewportPresentationStateResource,
+    ViewportProductTargetRegistryResource, ViewportRenderStateResource,
 };
 use runenwerk_editor::shell::{
     EditorSurfaceProviderRegistry, RunenwerkEditorShellState, SurfaceProviderBuildContext,
@@ -1846,10 +1847,9 @@ fn create_smoke_event_loop() -> EventLoop<()> {
 
 #[derive(Debug)]
 struct Wr1282LightPixels {
-    left: [u8; 4],
-    right_control: [u8; 4],
-    preview: [u8; 4],
-    model_region: Option<[u8; 4]>,
+    scene: engine::plugins::render::inspect::RenderCapturedTexture,
+    preview: engine::plugins::render::inspect::RenderCapturedTexture,
+    uniform: EditorViewportSceneProductUniform,
 }
 
 /// Not part of ordinary cargo validate. Must be explicitly executed on a
@@ -1868,62 +1868,291 @@ fn wr1282_source_backed_roughness_metallic_gpu_pixels() {
         );
     }
     let window = create_hidden_window();
-    let base = render_wr1282_light_variant(&window, "base", "0.45", "0.0", false);
-    let rough = render_wr1282_light_variant(&window, "rough", "0.90", "0.0", false);
-    let metal = render_wr1282_light_variant(&window, "metal", "0.45", "0.90", false);
-    let delta = |a: [u8; 4], b: [u8; 4]| -> i32 {
-        a[..3]
-            .iter()
-            .zip(&b[..3])
-            .map(|(a, b)| (*a as i32 - *b as i32).abs())
-            .sum()
+    let fixtures = tempfile::tempdir().expect("isolated material source fixtures");
+    let render = |label: &str, roughness: &str, metallic: &str, model_slot: Option<u64>| {
+        render_wr1282_light_variant(
+            &window,
+            fixtures.path(),
+            label,
+            roughness,
+            metallic,
+            model_slot,
+            None,
+        )
     };
-    for (label, changed) in [("roughness", rough), ("metallic", metal)] {
-        let scene_delta = delta(base.left, changed.left);
-        let preview_delta = delta(base.preview, changed.preview);
-        let unchanged_slot_delta = delta(base.right_control, changed.right_control);
+    let base = render("base", "0.45", "0.0", None);
+    // Project fixture sphere centers using the actual camera/geometry packet.
+    // Select once, before looking at any material color, and reuse exact pixels.
+    let left_pixel = wr1282_sphere_center_pixel(&base.uniform, 0);
+    let right_pixel = wr1282_sphere_center_pixel(&base.uniform, 1);
+    let preview_pixel = RenderPixelCoordinate {
+        x: base.preview.width / 2,
+        y: base.preview.height / 2,
+    };
+    let proxy_pixel = RenderPixelCoordinate {
+        x: base.scene.width / 2,
+        y: base.scene.height * 56 / 100,
+    };
+    assert_eq!(wr1282_sphere_hit(&base.uniform, left_pixel), Some(0));
+    assert_eq!(wr1282_sphere_hit(&base.uniform, right_pixel), Some(1));
+    // The negative proxy control must see background, not another object.
+    assert_eq!(wr1282_sphere_hit(&base.uniform, proxy_pixel), None);
+    let base_proxy = render("base_proxy", "0.45", "0.0", Some(1));
+    base.assert_same_scene_geometry(&base_proxy);
+    assert!(
+        wr1282_rgb_delta(
+            base.sample_scene(proxy_pixel),
+            base_proxy.sample_scene(proxy_pixel)
+        ) >= 4,
+        "adding a source model region must contribute at its verified screen coordinate"
+    );
+    eprintln!(
+        "WR-1282 fixed samples left={left_pixel:?} right={right_pixel:?} preview={preview_pixel:?} proxy={proxy_pixel:?}; absent_proxy={:?} present_proxy={:?}",
+        base.sample_scene(proxy_pixel),
+        base_proxy.sample_scene(proxy_pixel)
+    );
+
+    for (label, roughness, metallic) in [("roughness", "0.90", "0.0"), ("metallic", "0.45", "0.90")]
+    {
+        let changed = render(label, roughness, metallic, None);
+        base.assert_same_geometry(&changed);
+        let scene_delta = wr1282_rgb_delta(
+            base.sample_scene(left_pixel),
+            changed.sample_scene(left_pixel),
+        );
+        let preview_delta = wr1282_rgb_delta(
+            base.sample_preview(preview_pixel),
+            changed.sample_preview(preview_pixel),
+        );
+        let control_delta = wr1282_rgb_delta(
+            base.sample_scene(right_pixel),
+            changed.sample_scene(right_pixel),
+        );
+        assert_eq!(wr1282_sphere_hit(&changed.uniform, left_pixel), Some(0));
+        assert_eq!(wr1282_sphere_hit(&changed.uniform, right_pixel), Some(1));
         eprintln!(
-            "WR-1282 {label} GPU pixel deltas scene={scene_delta} preview={preview_delta} unchanged_control={unchanged_slot_delta}; base={base:?} changed={changed:?}"
+            "WR-1282 {label}: scene {:?}->{:?} delta={scene_delta}; preview {:?}->{:?} delta={preview_delta}; unchanged_slot {:?}->{:?} delta={control_delta}",
+            base.sample_scene(left_pixel),
+            changed.sample_scene(left_pixel),
+            base.sample_preview(preview_pixel),
+            changed.sample_preview(preview_pixel),
+            base.sample_scene(right_pixel),
+            changed.sample_scene(right_pixel)
         );
         assert!(
             scene_delta >= 4,
-            "{label} must visibly change left SDF scene pixel"
+            "{label} must visibly change the geometry-verified slot-0 SDF pixel"
         );
         assert!(
             preview_delta >= 4,
-            "{label} must visibly change material preview pixel"
+            "{label} must visibly change the same material preview pixel"
         );
         assert!(
-            unchanged_slot_delta <= 2,
+            control_delta <= 2,
             "unmodified source-backed slot must be pixel-stable"
+        );
+        assert_eq!(
+            changed.sample_scene(proxy_pixel),
+            base.sample_scene(proxy_pixel),
+            "without the proxy this coordinate must remain background"
+        );
+
+        // Same source region and rectangle, but bind it to the unchanged slot.
+        // This rejects accidental active-preview/global-slot shading and proves
+        // the selected material table entry contributes inside the proxy branch.
+        let changed_proxy = render(&format!("{label}_proxy"), roughness, metallic, Some(1));
+        let control_proxy = render(
+            &format!("{label}_control_proxy"),
+            roughness,
+            metallic,
+            Some(2),
+        );
+        base_proxy.assert_same_geometry(&changed_proxy);
+        changed_proxy.assert_same_geometry(&control_proxy);
+        let proxy_delta = wr1282_rgb_delta(
+            base_proxy.sample_scene(proxy_pixel),
+            changed_proxy.sample_scene(proxy_pixel),
+        );
+        let rebound_delta = wr1282_rgb_delta(
+            base_proxy.sample_scene(proxy_pixel),
+            control_proxy.sample_scene(proxy_pixel),
+        );
+        eprintln!(
+            "WR-1282 {label} model-material proxy: slot0 {:?}->{:?} delta={proxy_delta}; rebound unchanged slot1={:?} delta={rebound_delta}",
+            base_proxy.sample_scene(proxy_pixel),
+            changed_proxy.sample_scene(proxy_pixel),
+            control_proxy.sample_scene(proxy_pixel)
+        );
+        assert!(
+            proxy_delta >= 4,
+            "{label} must change the model-material proxy branch"
+        );
+        assert!(
+            rebound_delta <= 2,
+            "rebinding to the unchanged slot must remove the parameter delta"
+        );
+    }
+    let probe = render_wr1282_light_variant(
+        &window,
+        fixtures.path(),
+        "finite_probe",
+        "0.45",
+        "0.0",
+        None,
+        Some(wr1282_install_finite_probe),
+    );
+    for case in 0..24 {
+        let pixel = RenderPixelCoordinate {
+            x: case,
+            y: probe.preview.height / 2,
+        };
+        let rgba = probe.sample_preview(pixel);
+        assert_eq!(
+            rgba,
+            [0, 255, 0, 255],
+            "GPU finite-result probe case {case}"
+        );
+    }
+    assert_eq!(
+        probe.sample_preview(RenderPixelCoordinate {
+            x: 24,
+            y: probe.preview.height / 2
+        }),
+        [255, 0, 0, 255],
+        "injected NaN must fail the GPU finite-result detector"
+    );
+    eprintln!(
+        "WR-1282 float-result probe: 24 endpoint/direction cases passed; roughness/metallic endpoints 0 and 1; aligned, grazing, zero normal/view/light, opposing view+light, tiny vectors; RGB IEEE exponent check before RGBA8 conversion; injected-NaN negative control passed"
+    );
+}
+
+impl Wr1282LightPixels {
+    fn sample_scene(&self, pixel: RenderPixelCoordinate) -> [u8; 4] {
+        let rgba = self
+            .scene
+            .sample_pixel_rgba8(pixel)
+            .expect("fixed scene pixel");
+        assert_eq!(rgba[3], 255, "opaque source fixture");
+        rgba
+    }
+
+    fn sample_preview(&self, pixel: RenderPixelCoordinate) -> [u8; 4] {
+        let rgba = self
+            .preview
+            .sample_pixel_rgba8(pixel)
+            .expect("fixed preview pixel");
+        assert_eq!(rgba[3], 255, "opaque source fixture");
+        rgba
+    }
+
+    fn assert_same_scene_geometry(&self, other: &Self) {
+        assert_eq!(
+            (self.scene.width, self.scene.height),
+            (other.scene.width, other.scene.height)
+        );
+        assert_eq!(
+            (self.preview.width, self.preview.height),
+            (other.preview.width, other.preview.height)
+        );
+        assert_eq!(self.uniform.surface, other.uniform.surface);
+        assert_eq!(self.uniform.camera_position, other.uniform.camera_position);
+        assert_eq!(self.uniform.camera_forward, other.uniform.camera_forward);
+        assert_eq!(self.uniform.camera_right, other.uniform.camera_right);
+        assert_eq!(self.uniform.camera_up, other.uniform.camera_up);
+        assert_eq!(self.uniform.primitive_flags, other.uniform.primitive_flags);
+        assert_eq!(
+            self.uniform.primitive_slot_transforms,
+            other.uniform.primitive_slot_transforms
+        );
+        assert_eq!(
+            self.uniform.primitive_slot_params_a,
+            other.uniform.primitive_slot_params_a
+        );
+        assert_eq!(
+            self.uniform.primitive_slot_flags,
+            other.uniform.primitive_slot_flags
         );
     }
 
-    // The source-owned model-material region uses a screen-space proxy in
-    // the current scene product, not a general polygonal model renderer.
-    // Its own generated WGSL shading path must nonetheless use authored
-    // roughness and metallic on the same output slot.
-    let base_mesh = render_wr1282_light_variant(&window, "base_mesh", "0.45", "0.0", true);
-    let rough_mesh = render_wr1282_light_variant(&window, "rough_mesh", "0.90", "0.0", true);
-    let metal_mesh = render_wr1282_light_variant(&window, "metal_mesh", "0.45", "0.90", true);
-    for (label, changed) in [("roughness", rough_mesh), ("metallic", metal_mesh)] {
-        let before = base_mesh
-            .model_region
-            .expect("baseline model material region");
-        let after = changed.model_region.expect("changed model material region");
-        let measured = delta(before, after);
-        eprintln!(
-            "WR-1282 {label} source-backed model region pixel delta={measured}: {before:?} -> {after:?}"
+    fn assert_same_geometry(&self, other: &Self) {
+        self.assert_same_scene_geometry(other);
+        assert_eq!(
+            self.uniform.model_mesh_flags,
+            other.uniform.model_mesh_flags
         );
-        assert!(
-            measured >= 4,
-            "{label} must change the model-region proxy pixels"
+        assert_eq!(
+            self.uniform.model_mesh_region_rects,
+            other.uniform.model_mesh_region_rects
         );
     }
 }
 
+fn wr1282_rgb_delta(a: [u8; 4], b: [u8; 4]) -> i32 {
+    a[..3]
+        .iter()
+        .zip(&b[..3])
+        .map(|(a, b)| (*a as i32 - *b as i32).abs())
+        .sum()
+}
+
+fn wr1282_vec3(value: [f32; 4]) -> glam::Vec3 {
+    glam::Vec3::new(value[0], value[1], value[2])
+}
+
+fn wr1282_sphere_center_pixel(
+    u: &EditorViewportSceneProductUniform,
+    index: usize,
+) -> RenderPixelCoordinate {
+    let relative = wr1282_vec3(u.primitive_slot_transforms[index]) - wr1282_vec3(u.camera_position);
+    let depth = relative.dot(wr1282_vec3(u.camera_forward));
+    assert!(depth > 0.0);
+    let tan_half_fov = (u.camera_position[3] * 0.5).tan();
+    let aspect = u.surface[0] / u.surface[1];
+    let ndc_x = relative.dot(wr1282_vec3(u.camera_right)) / (depth * aspect * tan_half_fov);
+    let ndc_y = relative.dot(wr1282_vec3(u.camera_up)) / (depth * tan_half_fov);
+    RenderPixelCoordinate {
+        x: ((ndc_x + 1.0) * 0.5 * u.surface[0]).floor() as u32,
+        y: ((1.0 - ndc_y) * 0.5 * u.surface[1]).floor() as u32,
+    }
+}
+
+// Independent analytic sphere intersection, not a copy of the shader's
+// raymarch. Pixel centers and camera basis match the submitted uniform.
+fn wr1282_sphere_hit(
+    u: &EditorViewportSceneProductUniform,
+    pixel: RenderPixelCoordinate,
+) -> Option<u32> {
+    assert!(pixel.x < u.surface[0] as u32 && pixel.y < u.surface[1] as u32);
+    let ndc = glam::Vec2::new(
+        (pixel.x as f32 + 0.5) / u.surface[0] * 2.0 - 1.0,
+        1.0 - (pixel.y as f32 + 0.5) / u.surface[1] * 2.0,
+    );
+    let tan_half_fov = (u.camera_position[3] * 0.5).tan();
+    let ray = (wr1282_vec3(u.camera_forward)
+        + wr1282_vec3(u.camera_right) * ndc.x * u.surface[0] / u.surface[1] * tan_half_fov
+        + wr1282_vec3(u.camera_up) * ndc.y * tan_half_fov)
+        .normalize();
+    let mut nearest = None;
+    for index in 0..u.primitive_flags[1] as usize {
+        assert_eq!(u.primitive_slot_flags[index][0], 1, "sphere fixture");
+        let offset =
+            wr1282_vec3(u.camera_position) - wr1282_vec3(u.primitive_slot_transforms[index]);
+        let b = offset.dot(ray);
+        let radius = u.primitive_slot_params_a[index][3];
+        let discriminant = b * b - (offset.length_squared() - radius * radius);
+        if discriminant > 0.0 {
+            let distance = -b - discriminant.sqrt();
+            if distance > 0.0 && nearest.is_none_or(|(best, _)| distance < best) {
+                nearest = Some((distance, u.primitive_slot_flags[index][3]));
+            }
+        }
+    }
+    nearest.map(|(_, slot)| slot)
+}
+
 fn wr1282_material_preview(
     product_id: u64,
+    directory: &Path,
     label: &str,
     roughness: &str,
     metallic: &str,
@@ -1932,10 +2161,10 @@ fn wr1282_material_preview(
     let scalar = PortTypeId::new(2);
     let document = MaterialGraphDocument::new(
         MaterialGraphDocumentId::new(product_id),
-        format!("WR-1282 {label} source material"),
+        "WR-1282 source material",
         GraphDefinition::new(
             GraphId::new(1),
-            format!("wr1282_{label}"),
+            "wr1282_source_material",
             CyclePolicy::RejectDirectedCycles,
             [
                 NodeDefinition::new(
@@ -2013,10 +2242,13 @@ fn wr1282_material_preview(
         ),
         MaterialOutputTarget::RenderMaterial,
     );
-    let source_path = write_gpu_truth_material_source(
-        format!("wr1282-{label}.material.ron").as_str(),
+    let source_path = directory.join(format!("wr1282-{label}-{product_id}.material.ron"));
+    let source_payload = ron::ser::to_string_pretty(
         &MaterialGraphSourceFileV2::from_document(&document),
-    );
+        ron::ser::PrettyConfig::new(),
+    )
+    .expect("serialize authored source");
+    std::fs::write(&source_path, source_payload).expect("write authored source");
     let source_text = std::fs::read_to_string(&source_path).expect("source file");
     let source: MaterialGraphSourceFileV2 = ron::de::from_str(&source_text).expect("source decode");
     let document = source.into_document().expect("source document");
@@ -2032,14 +2264,10 @@ fn wr1282_material_preview(
         fixture: MaterialPreviewFixture::Sphere,
     })
     .expect("compiled material");
-    let preview_path = write_gpu_truth_shader(
-        format!("wr1282-preview-{label}.wgsl").as_str(),
-        &compiled.wgsl,
-    );
-    let scene_path = write_gpu_truth_shader(
-        format!("wr1282-scene-{label}.wgsl").as_str(),
-        &compiled.scene_wgsl,
-    );
+    let preview_path = directory.join(format!("wr1282-preview-{label}-{product_id}.wgsl"));
+    let scene_path = directory.join(format!("wr1282-scene-{label}-{product_id}.wgsl"));
+    std::fs::write(&preview_path, &compiled.wgsl).expect("write preview shader");
+    std::fs::write(&scene_path, &compiled.scene_wgsl).expect("write scene shader");
     EditorMaterialPreviewProduct::new(
         asset_id(product_id + 100),
         asset_source_id(product_id + 200),
@@ -2049,27 +2277,125 @@ fn wr1282_material_preview(
         MaterialRendererParameterProfile::RenderMaterial,
         asset_artifact_id(product_id + 400),
         ArtifactCacheKey::new(format!("material-shader:{}", compiled.identity)),
-        preview_path,
+        preview_path.to_string_lossy().into_owned(),
         compiled.identity,
         asset_artifact_id(product_id + 500),
         ArtifactCacheKey::new(format!("material-scene-shader:{}", compiled.scene_identity)),
-        scene_path,
+        scene_path.to_string_lossy().into_owned(),
         compiled.scene_identity,
         [],
     )
     .with_compiler_resource_bindings(compiled.resource_bindings)
 }
 
+// Conformance-only entrypoint retaining the compiler-emitted shared helper.
+// Each pixel selects one endpoint/direction case; check float exponent bits
+// before color-target quantization. This is not an authored product capability.
+fn wr1282_install_finite_probe(preview: &mut EditorMaterialPreviewProduct) {
+    let source = std::fs::read_to_string(&preview.shader_path).expect("generated shader");
+    let (prefix, _) = source
+        .split_once("@fragment\nfn fs_main")
+        .expect("preview entrypoint");
+    let probe = format!(
+        "{prefix}{}",
+        r#"
+@fragment
+fn fs_main(in: VsOut) -> @location(0) vec4<f32> {
+    let probe_index = u32(in.clip_position.x) % 25u;
+    var material = evaluate_material(fixture_context(in.uv));
+    material.roughness = f32((probe_index / 6u) / 2u);
+    material.metallic = f32((probe_index / 6u) % 2u);
+    var n = vec3<f32>(0.0, 0.0, 1.0);
+    var v = n;
+    var l = n;
+    switch probe_index % 6u {
+        case 1u: { v = vec3<f32>(1.0, 0.0, 0.000001); l = v; }
+        case 2u: { n = vec3<f32>(0.0); }
+        case 3u: { v = vec3<f32>(0.0); l = v; }
+        case 4u: { l = -v; }
+        case 5u: { n = vec3<f32>(0.000000001); v = n; l = n; }
+        default: {}
+    }
+    var color = rw_direct_material_light(material, n, v, l);
+    if probe_index == 24u { color = vec3<f32>(bitcast<f32>(0x7fc00000u)); }
+    let exponents = bitcast<vec3<u32>>(color) & vec3<u32>(0x7f800000u);
+    let finite = all(exponents < vec3<u32>(0x7f800000u));
+    return select(vec4<f32>(1.0, 0.0, 0.0, 1.0), vec4<f32>(0.0, 1.0, 0.0, 1.0), finite);
+}
+"#
+    );
+    let module = naga::front::wgsl::parse_str(&probe).expect("probe parses");
+    naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::empty(),
+    )
+    .validate(&module)
+    .expect("probe validates");
+    std::fs::write(&preview.shader_path, &probe).expect("write isolated probe");
+    preview.shader_identity = format!(
+        "wr1282-finite-probe:{}",
+        blake3::hash(probe.as_bytes()).to_hex()
+    );
+    preview.shader_cache_key = ArtifactCacheKey::new(&preview.shader_identity);
+}
+
 fn render_wr1282_light_variant(
     window: &Arc<Window>,
+    directory: &Path,
     label: &str,
     roughness: &str,
     metallic: &str,
-    with_model_region: bool,
+    model_slot: Option<u64>,
+    preview_probe: Option<fn(&mut EditorMaterialPreviewProduct)>,
 ) -> Wr1282LightPixels {
     let gfx = Gfx::new(Arc::clone(window)).expect("windowed GPU device");
+    let adapter = gfx.adapter_facts();
+    eprintln!(
+        "WR-1282 {label} backend={:?} adapter={:?} driver={:?} driver_info={:?}; window={:?}; scale={}",
+        adapter.backend(),
+        adapter.diagnostic_name(),
+        adapter.driver(),
+        adapter.driver_info(),
+        window.inner_size(),
+        window.scale_factor()
+    );
     let mut app = runenwerk_editor::runtime::build_headless_app().expect("editor app");
+    app.update_render_debug_control(|control| {
+        control.provenance_enabled = true;
+    });
     app.world_mut().insert_resource(gfx);
+    let mut left = wr1282_material_preview(200_100, directory, label, roughness, metallic);
+    if let Some(install_probe) = preview_probe {
+        install_probe(&mut left);
+    }
+    let right = wr1282_material_preview(200_101, directory, "control", "0.45", "0.0");
+    {
+        let host = app
+            .world_mut()
+            .resource_mut::<EditorHostResource>()
+            .expect("host");
+        register_mvp_component_types(host.app.runtime_mut());
+        let mut scene = wr028_two_sdf_primitive_scene_file(&left, &right);
+        if let Some(slot_id) = model_slot {
+            scene.material_assignments.model_mesh_assignments.push(
+                ModelMeshMaterialSlotAssignmentRecord::new(
+                    SceneModelMeshSourceRecord::new(88_001, 88_002)
+                        .with_source_revision("wr1282.source_model"),
+                    "source_material_slot:0",
+                    slot_id,
+                ),
+            );
+            scene.material_assignments.sort_stable();
+        }
+        apply_scene_file_to_runtime(host.app.runtime_mut(), &scene)
+            .expect("source-backed 2-slot SDF and optional model-material scene");
+        host.app
+            .material_lab_runtime_mut()
+            .set_active_preview(right);
+        host.app
+            .material_lab_runtime_mut()
+            .set_active_preview(left.clone());
+    }
     let mut app = app.run_for_frames(1).expect("initial frame");
     let size = window.inner_size();
     let size_px = (size.width.max(1), size.height.max(1));
@@ -2092,51 +2418,9 @@ fn render_wr1282_light_variant(
         )
         .expect("surface attachment");
 
-    let left = wr1282_material_preview(200_100, label, roughness, metallic);
-    let right = wr1282_material_preview(200_101, "control", "0.45", "0.0");
-    {
-        let host = app
-            .world_mut()
-            .resource_mut::<EditorHostResource>()
-            .expect("host");
-        register_mvp_component_types(host.app.runtime_mut());
-        let mut scene = wr028_two_sdf_primitive_scene_file(&left, &right);
-        if with_model_region {
-            scene.material_assignments.model_mesh_assignments.push(
-                ModelMeshMaterialSlotAssignmentRecord::new(
-                    SceneModelMeshSourceRecord::new(88_001, 88_002)
-                        .with_source_revision("wr1282.source_model"),
-                    "source_material_slot:0",
-                    1,
-                ),
-            );
-            scene.material_assignments.sort_stable();
-        }
-        apply_scene_file_to_runtime(host.app.runtime_mut(), &scene)
-            .expect("source-backed 2-slot SDF and optional model-material scene");
-        host.app
-            .material_lab_runtime_mut()
-            .set_active_preview(right);
-        host.app
-            .material_lab_runtime_mut()
-            .set_active_preview(left.clone());
-    }
-    let mut app = app.run_for_frames(8).expect("scene material frames");
-    {
-        let selections = app
-            .world_mut()
-            .resource_mut::<ViewportPresentationStateResource>()
-            .unwrap();
-        let mut state = selections
-            .state_for(MAIN_VIEWPORT_ID)
-            .cloned()
-            .unwrap_or_else(|| {
-                ViewportPresentationState::new(MAIN_VIEWPORT_ID, left.viewport_product_id)
-            });
-        state.select_primary_product(left.viewport_product_id);
-        selections.upsert_state(state);
-    }
-    let mut app = app.run_for_frames(5).expect("preview product warmup");
+    let mut app = app
+        .run_for_frames(13)
+        .expect("scene and preview product warmup");
     let provenance = app
         .world()
         .resource::<RenderPassProvenanceState>()
@@ -2153,6 +2437,49 @@ fn render_wr1282_light_variant(
         .find(|record| record.shader_id == EDITOR_MATERIAL_PREVIEW_SHADER_ID)
         .expect("material preview provenance")
         .clone();
+    assert!(
+        !scene.fallback_used && !preview.fallback_used,
+        "exact generated shaders must contribute"
+    );
+    let bundle = app
+        .world()
+        .resource::<EditorHostResource>()
+        .expect("host")
+        .app
+        .material_lab_runtime()
+        .scene_material_table_shader_bundle()
+        .expect("source-backed scene table bundle");
+    assert_eq!(scene.shader_id, bundle.shader_path);
+    assert_eq!(
+        scene.material_binding.scene_shader_identity.as_deref(),
+        Some(bundle.shader_identity.as_str())
+    );
+    assert_eq!(
+        scene.material_binding.material_table_identity.as_deref(),
+        Some(bundle.material_table_identity.as_str())
+    );
+    assert!(
+        scene.material_binding.consumes_material_resources
+            && scene.material_binding.prepared_material_available
+    );
+    assert_eq!(scene.material_binding.material_binding_slot_count, 2);
+    let selected = &scene
+        .material_binding
+        .model_mesh_material_selections_available_to_pass;
+    assert_eq!(selected.len(), usize::from(model_slot.is_some()));
+    if let Some(slot_id) = model_slot {
+        assert_eq!(selected[0].source_asset_id, 88_001);
+        assert_eq!(selected[0].source_id, 88_002);
+        assert_eq!(
+            selected[0].source_revision.as_deref(),
+            Some("wr1282.source_model")
+        );
+        assert_eq!(selected[0].region_key, "source_material_slot:0");
+        assert_eq!(selected[0].requested_material_slot_id, slot_id);
+        assert_eq!(selected[0].resolved_material_slot_id, slot_id);
+        assert_eq!(selected[0].material_table_index, (slot_id - 1) as u32);
+        assert!(!selected[0].used_default_fallback);
+    }
     let scene_target = scene.render_targets.first().expect("scene target").clone();
     let preview_target = preview
         .render_targets
@@ -2213,35 +2540,112 @@ fn render_wr1282_light_variant(
         preview_capture.terminal.code,
         RenderCaptureTerminalCode::Completed
     );
-    let left = dominant_pixel_in_region(scene_capture, 0, scene_capture.width / 2, |rgba| {
-        rgba[0] as i32 - rgba[2] as i32
-    })
-    .expect("left SDF pixel")
-    .1;
-    let right = dominant_pixel_in_region(
-        scene_capture,
-        scene_capture.width / 2,
-        scene_capture.width,
-        |rgba| rgba[0] as i32 - rgba[2] as i32,
-    )
-    .expect("right SDF control pixel")
-    .1;
-    let preview = preview_capture
-        .sample_center_rgba8()
-        .expect("preview center");
-    let model_region = with_model_region.then(|| {
+    let targets = app
+        .world()
+        .resource::<ViewportProductTargetRegistryResource>()
+        .expect("product targets");
+    let states = app
+        .world()
+        .resource::<ViewportRenderStateResource>()
+        .expect("viewport states");
+    let matching = states
+        .entries()
+        .filter(|entry| {
+            targets
+                .record_for_product(
+                    entry.viewport_id,
+                    editor_viewport::ViewportSurfacePresentationSlot::Primary,
+                    SCENE_COLOR_PRODUCT_ID,
+                )
+                .is_some_and(|target| scene_target.contains(&target.dynamic_key().to_string()))
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        matching.len(),
+        1,
+        "capture must correspond to one real viewport; target={scene_target}; states={:?}",
+        states.viewport_ids().collect::<Vec<_>>()
+    );
+    let state = &matching[0].render_state;
+    let uniform = state.compose_scene_product_uniform((scene_capture.width, scene_capture.height));
+    assert_eq!(uniform.primitive_flags[1], 2);
+    assert_eq!(uniform.primitive_slot_flags[0][3], 0);
+    assert_eq!(uniform.primitive_slot_flags[1][3], 1);
+    let selections = state.model_mesh_material_selection_packet.selections();
+    assert!(
+        !state
+            .model_mesh_material_selection_packet
+            .has_blocking_diagnostics()
+    );
+    assert_eq!(selections.len(), usize::from(model_slot.is_some()));
+    assert_eq!(uniform.model_mesh_flags[0], selections.len() as u32);
+    if let Some(slot_id) = model_slot {
+        let selection = &selections[0];
+        assert_eq!(
+            selection
+                .material_region
+                .model_mesh_source_id
+                .asset_id
+                .raw(),
+            88_001
+        );
+        assert_eq!(
+            selection
+                .material_region
+                .model_mesh_source_id
+                .source_id
+                .raw(),
+            88_002
+        );
+        assert_eq!(
+            selection
+                .material_region
+                .model_mesh_source_id
+                .source_revision
+                .as_deref(),
+            Some("wr1282.source_model")
+        );
+        assert_eq!(
+            selection.material_region.material_region_id.key(),
+            "source_material_slot:0"
+        );
+        assert_eq!(selection.requested_slot_id.raw(), slot_id);
+        assert_eq!(selection.resolved_slot_id.raw(), slot_id);
+        assert!(!selection.used_default_fallback);
+        assert_eq!(selection.material_table_index, (slot_id - 1) as u32);
+        assert_eq!(
+            uniform.model_mesh_region_flags[0],
+            [(slot_id - 1) as u32, 1, 0, 0]
+        );
+        let rect = uniform.model_mesh_region_rects[0];
         let pixel = RenderPixelCoordinate {
             x: scene_capture.width / 2,
             y: scene_capture.height * 56 / 100,
         };
-        scene_capture
-            .sample_pixel_rgba8(pixel)
-            .expect("model proxy pixel")
-    });
+        let local = [
+            ((pixel.x as f32 + 0.5) / uniform.surface[0] - rect[0]) / rect[2],
+            ((pixel.y as f32 + 0.5) / uniform.surface[1] - rect[1]) / rect[3],
+        ];
+        assert!(
+            local.iter().all(|component| component.abs() < 0.1),
+            "sample strictly inside actual proxy rectangle"
+        );
+        eprintln!("WR-1282 {label} selection={selection:?}; rect={rect:?}; local={local:?}");
+    }
+    eprintln!(
+        "WR-1282 {label} scene_pass={} shader={} scene_size={}x{} preview_size={}x{} camera={:?} sphere_centers={:?}",
+        scene.pass_id,
+        short_identity_hash(&scene.shader_id),
+        scene_capture.width,
+        scene_capture.height,
+        preview_capture.width,
+        preview_capture.height,
+        uniform.camera_position,
+        &uniform.primitive_slot_transforms[..2]
+    );
     Wr1282LightPixels {
-        left,
-        right_control: right,
-        preview,
-        model_region,
+        scene: scene_capture.clone(),
+        preview: preview_capture.clone(),
+        uniform,
     }
 }
