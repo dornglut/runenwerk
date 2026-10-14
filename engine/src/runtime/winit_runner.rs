@@ -1,10 +1,10 @@
 use crate::app::WindowedAppState;
-use crate::plugins::{ActionState, InputState};
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     UiNativeInputRecipientsResource, UiRuntimePresentationAssociationsResource,
     UiRuntimeSlotsResource,
 };
+use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
 use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use crate::runtime::frame_pacing::{
@@ -334,12 +334,21 @@ impl WinitRunner {
             | PlatformEvent::CursorMoved { .. }
             | PlatformEvent::MouseInput { .. }
             | PlatformEvent::Touch { .. } => {
-                let input = self
-                    .state
-                    .world
-                    .resource_mut::<InputState>()
-                    .context("missing InputState resource")?;
-                apply_platform_input_event(input, event);
+                {
+                    let input = self
+                        .state
+                        .world
+                        .resource_mut::<InputState>()
+                        .context("missing InputState resource")?;
+                    apply_platform_input_event(input, event);
+                }
+                if matches!(event, PlatformEvent::InputContinuityLost { .. }) {
+                    // Focus loss/source invalidation can arrive after the ECS
+                    // Input set projected actions. Retract those invalidated
+                    // presses and held keys in this SAME native callback, not
+                    // at some later PreUpdate or newly invented input queue.
+                    self.project_actions_after_native_continuity()?;
+                }
             }
             PlatformEvent::Resumed
             | PlatformEvent::CloseRequested
@@ -375,6 +384,20 @@ impl WinitRunner {
             }
         }
         Ok(())
+    }
+
+    fn project_actions_after_native_continuity(&mut self) -> Result<()> {
+        let world = &mut self.state.world;
+        let Some(mut actions) = world.remove_resource::<ActionState>() else {
+            // Non-game UI/Editor consumers may not install ActionState.
+            return Ok(());
+        };
+        let projection = world
+            .resource::<InputState>()
+            .context("missing normalized InputState for continuity projection")
+            .map(|input| actions.project(input));
+        world.insert_resource(actions);
+        projection
     }
 
     fn apply_raw_mouse_motion(&mut self, context: InputContext, dx: f32, dy: f32) -> Result<()> {
@@ -1453,6 +1476,66 @@ mod tests {
     }
 
     #[test]
+    fn native_focus_loss_retracts_game_actions_in_the_same_event_turn() {
+        use crate::plugins::{ActionState, action};
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        let source = runner
+            .input_adapter
+            .window_context(NativeWindowId::primary(), winit::event::DeviceId::dummy())
+            .expect("actual native window source");
+        runner
+            .apply_event(PlatformEvent::KeyboardInput {
+                context: source,
+                input: runen_input::KeyboardInput {
+                    physical_key: runen_input::PhysicalKeyIdentity::code("KeyW"),
+                    logical_key: runen_input::LogicalKey::Native(
+                        runen_input::NativeLogicalKey::Unidentified,
+                    ),
+                    location: runen_input::KeyLocation::Standard,
+                    state: runen_input::DigitalState::Pressed,
+                    repeat: false,
+                    origin: runen_input::ObservationOrigin::SourceReport,
+                },
+            })
+            .expect("source Down admitted");
+        let mut actions = runner
+            .state
+            .world
+            .remove_resource::<ActionState>()
+            .expect("ActionState");
+        let input = runner.state.world.resource::<InputState>().expect("neutral input");
+        actions.project(input);
+        assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+        assert!(actions.action_down(action::WORLD_MOVE_UP));
+        runner.state.world.insert_resource(actions);
+
+        runner
+            .apply_window_focus_event(NativeWindowId::primary(), false)
+            .expect("source continuity admitted");
+        let actions = runner
+            .state
+            .world
+            .resource::<ActionState>()
+            .expect("same retained ActionState");
+        assert!(
+            !actions.action_pressed(action::WORLD_MOVE_UP)
+                && !actions.action_down(action::WORLD_MOVE_UP),
+            "no post-PreUpdate stale gameplay action survives native focus loss"
+        );
+        assert_eq!(
+            runner
+                .input_adapter
+                .window_source_context(NativeWindowId::primary())
+                .map(|context| context.source),
+            Some(source.source),
+            "focus loss is not physical source destruction"
+        );
+    }
+
+    #[test]
     fn native_source_retirement_retracts_projected_game_action_evidence() {
         use crate::plugins::{ActionState, action};
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
@@ -1483,14 +1566,16 @@ mod tests {
             .world
             .remove_resource::<ActionState>()
             .expect("game ActionState");
-        actions.project(runner.state.world.resource::<InputState>().expect("neutral input"));
+        let input = runner.state.world.resource::<InputState>().expect("neutral input");
+        actions.project(input);
         assert!(actions.action_pressed(action::WORLD_MOVE_UP));
         assert!(actions.action_down(action::WORLD_MOVE_UP));
         runner.state.world.insert_resource(actions);
 
-        assert!(runner
+        let retired = runner
             .retire_window_input_source(NativeWindowId::primary())
-            .expect("real window source retirement"));
+            .expect("real window source retirement");
+        assert!(retired);
         let actions = runner
             .state
             .world
