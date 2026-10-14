@@ -613,12 +613,7 @@ impl WinitRunner {
         let transition = NativeKeyTransition::from_event(original, is_synthetic);
         let translated = self
             .native_ui_keyboard_translator(window, slot, context.source, device, binding_epoch)
-            .key_input(
-                device,
-                &transition,
-                modifiers,
-                composition,
-            );
+            .key_input(device, &transition, modifiers, composition);
 
         let permit = match translated {
             KeyboardInputOutcome::Submit(event) => {
