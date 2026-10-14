@@ -2671,6 +2671,41 @@ mod tests {
             .expect("device can reappear with another checked generation");
         assert_eq!(successor.source, original.source);
         assert_ne!(successor.device, original.device);
+        let scope = runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("mounted framework is retained")
+            .input_ownership(slot)
+            .expect("live UI M13 scope")
+            .scope()
+            .clone();
+        let actual_context = runner
+            .input_adapter
+            .window_context(secondary, winit::event::DeviceId::dummy())
+            .expect("fresh device generation");
+        runner.native_ui_mice.insert(
+            secondary,
+            NativeUiMouseTranslator {
+                recipient: slot,
+                source: actual_context.source,
+                backend_device: winit::event::DeviceId::dummy(),
+                device: WinitRunner::native_ui_device(actual_context)
+                    .expect("checked native UI device"),
+                binding_epoch: new_epoch,
+                scope,
+                mouse: MouseInputState::default(),
+            },
+        );
+        assert!(
+            runner
+                .retire_native_input_recipient(secondary)
+                .expect("explicit UI input recipient retirement")
+        );
+        assert!(
+            !runner.native_ui_mice.contains_key(&secondary),
+            "no previous mouse stream can survive semantic recipient retirement"
+        );
         assert!(
             runner.state.world.has_resource::<UiRuntimeSlotsResource>(),
             "retirement rejection cannot discard the native UI runtime"
