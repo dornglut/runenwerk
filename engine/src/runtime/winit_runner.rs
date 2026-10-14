@@ -208,7 +208,7 @@ impl WinitRunner {
                 ],
                 recipient,
             )?;
-            match selection {
+            return match selection {
                 Ok(_) => Ok(()),
                 Err(error)
                     if error.downcast_ref::<NativeInputRecipientError>()
