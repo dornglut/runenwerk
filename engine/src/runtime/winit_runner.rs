@@ -1046,7 +1046,9 @@ impl WinitRunner {
             }
         };
         let operation = (|| -> Result<()> {
-            let before = slots.input_ownership(slot)?;
+            let before = slots
+                .input_ownership(slot)
+                .map_err(|error| anyhow!("native wheel pre-state unavailable: {error:?}"))?;
             anyhow::ensure!(
                 before.scope() == &lifetime.scope,
                 "wheel stream crossed the original M13 scope"
@@ -1079,7 +1081,9 @@ impl WinitRunner {
                     event,
                 )
                 .map_err(|error| anyhow!("native wheel admission rejected: {error:?}"))?;
-            let (batch, status) = slots.pump_native_input_records(slot)?;
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .map_err(|error| anyhow!("native wheel M13 pump unavailable: {error:?}"))?;
             let finality = native_pointer_finality(
                 before.scope(),
                 device,
