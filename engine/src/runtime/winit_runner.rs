@@ -30,7 +30,8 @@ use crate::runtime::{NativeHostEvent, NativeWakeTransport};
 use anyhow::{Context, Result, anyhow};
 use runen_input::{ContinuityLoss, InputContext, InputSourceId, PhysicalKeyIdentity};
 use runenui_core::{
-    InputDeviceId as UiInputDeviceId, KeyModifiers, KeyboardCompositionState, LogicalPoint,
+    InputDeviceId as UiInputDeviceId, KeyModifiers, KeyboardCompositionState, LogicalDelta,
+    LogicalPoint,
 };
 use runenui_runtime::{UiInputConflict, UiInputFinality};
 use runenui_winit::keyboard_input::{
@@ -41,7 +42,7 @@ use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalPosition;
-use winit::event::{DeviceEvent, ElementState, MouseButton, WindowEvent};
+use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
@@ -109,6 +110,54 @@ fn native_logical_mouse_point(position: PhysicalPosition<f64>, scale: f64) -> Re
     );
     LogicalPoint::new(x as f32, y as f32)
         .context("checked native logical pointer position rejected")
+}
+
+/// Explicit Runenwerk native wheel policy. This is a host UX metric,
+/// not a RunenUI protocol or a platform-dependent guessed pixel ratio.
+const NATIVE_UI_LINE_SCROLL_LOGICAL_UNITS: f64 = 60.0;
+
+/// Phase-only zero-displacement wheel events are inert. For real movement,
+/// native physical-pixel wheel values use the exact displayed DPI mapping.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "native wheel deltas are finite and f32-range-checked before conversion to UI logical coordinates"
+)]
+fn native_ui_logical_wheel_delta(
+    delta: &MouseScrollDelta,
+    displayed_scale: f64,
+) -> Result<Option<LogicalDelta>> {
+    let (x, y) = match delta {
+        MouseScrollDelta::LineDelta(x, y) => (
+            f64::from(*x) * NATIVE_UI_LINE_SCROLL_LOGICAL_UNITS,
+            f64::from(*y) * NATIVE_UI_LINE_SCROLL_LOGICAL_UNITS,
+        ),
+        MouseScrollDelta::PixelDelta(delta) => {
+            if delta.x == 0.0 && delta.y == 0.0 {
+                return Ok(None);
+            }
+            anyhow::ensure!(
+                displayed_scale.is_finite() && displayed_scale > 0.0,
+                "native wheel lacks a valid terminal displayed scale"
+            );
+            (delta.x / displayed_scale, delta.y / displayed_scale)
+        }
+    };
+    if x == 0.0 && y == 0.0 {
+        return Ok(None);
+    }
+    anyhow::ensure!(
+        x.is_finite()
+            && y.is_finite()
+            && x >= f64::from(f32::MIN)
+            && x <= f64::from(f32::MAX)
+            && y >= f64::from(f32::MIN)
+            && y <= f64::from(f32::MAX),
+        "native wheel delta out of finite RunenUI logical range"
+    );
+    Ok(Some(
+        LogicalDelta::new(x as f32, y as f32)
+            .context("checked native wheel delta rejected")?,
+    ))
 }
 
 fn displayed_native_mouse_point(
@@ -1982,6 +2031,58 @@ mod tests {
         });
         app.add_systems(PreUpdate, set_frame_delta.after(CoreSet::Time));
         app.add_systems(FixedUpdate, log_tick);
+    }
+
+    #[test]
+    fn native_wheel_respects_displayed_scale_explicit_line_policy_and_inert_zero() {
+        let lines = native_ui_logical_wheel_delta(
+            &MouseScrollDelta::LineDelta(1.5, -2.0),
+            3.0,
+        )
+        .expect("finite line wheel")
+        .expect("nonzero displacement");
+        assert_eq!(lines.x(), 90.0);
+        assert_eq!(lines.y(), -120.0);
+        let pixels = native_ui_logical_wheel_delta(
+            &MouseScrollDelta::PixelDelta(PhysicalPosition::new(120.0, -40.0)),
+            2.0,
+        )
+        .expect("display-scaled native wheel")
+        .expect("nonzero displacement");
+        assert_eq!(pixels.x(), 60.0);
+        assert_eq!(pixels.y(), -20.0);
+        assert!(
+            native_ui_logical_wheel_delta(
+                &MouseScrollDelta::LineDelta(0.0, -0.0),
+                0.0,
+            )
+            .expect("phase-only zero is inert without scale")
+            .is_none()
+        );
+        assert!(
+            native_ui_logical_wheel_delta(
+                &MouseScrollDelta::PixelDelta(PhysicalPosition::new(0.0, 0.0)),
+                0.0,
+            )
+            .expect("phase-only zero physical wheel is inert without display")
+            .is_none()
+        );
+        assert!(
+            native_ui_logical_wheel_delta(
+                &MouseScrollDelta::PixelDelta(PhysicalPosition::new(5.0, 0.0)),
+                0.0,
+            )
+            .is_err(),
+            "nonzero physical pixels cannot invent a missing display scale"
+        );
+        assert!(
+            native_ui_logical_wheel_delta(
+                &MouseScrollDelta::PixelDelta(PhysicalPosition::new(f64::NAN, 0.0)),
+                2.0,
+            )
+            .is_err(),
+            "nonfinite wheel must not enter M13"
+        );
     }
 
     fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {
