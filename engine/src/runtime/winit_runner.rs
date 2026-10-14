@@ -617,6 +617,16 @@ impl WinitRunner {
         if lifetime.recipient != slot {
             return Ok(());
         }
+        // A synthetic cancellation may mutate only the original still-bound
+        // recipient lifetime. Rebind/unmount/scope changes must not receive
+        // held keys from a previous native binding.
+        if !matches!(
+            self.native_input_recipient(window),
+            Ok((NativeInputRecipient::RunenUiSlot(active), Some(epoch)))
+                if active == slot && epoch == lifetime.binding_epoch
+        ) {
+            return Ok(());
+        }
         let slots = self
             .state
             .world
