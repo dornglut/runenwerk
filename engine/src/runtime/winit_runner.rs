@@ -1903,6 +1903,54 @@ mod tests {
     }
 
     #[test]
+    fn declared_native_primary_binding_uses_created_window_and_restores_authorities() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner
+            .realize_declared_primary_input()
+            .expect("ordinary game-only host has no implicit UI binding");
+
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .request_primary(NativeInputRecipient::LegacyNativeConsumer)
+            .expect("explicit application owner declaration");
+        runner.state.world.insert_resource(recipients);
+        assert!(
+            runner.realize_declared_primary_input().is_err(),
+            "declared recipient cannot silently fabricate missing slot authority"
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .has_resource::<UiNativeInputRecipientsResource>(),
+            "failed native bootstrap must restore its exact recipient registry"
+        );
+
+        runner
+            .state
+            .world
+            .insert_resource(UiRuntimeSlotsResource::default());
+        runner
+            .realize_declared_primary_input()
+            .expect("created primary window can realize the original owner");
+        let (selected, epoch) = runner
+            .native_input_recipient(NativeWindowId::primary())
+            .expect("realized original native owner");
+        assert_eq!(selected, NativeInputRecipient::LegacyNativeConsumer);
+        let epoch = epoch.expect("explicit native recipient has a lifetime identity");
+        runner
+            .realize_declared_primary_input()
+            .expect("repeated native bootstrap is idempotent");
+        assert_eq!(
+            runner
+                .native_input_recipient(NativeWindowId::primary())
+                .expect("same original native owner")
+                .1,
+            Some(epoch),
+        );
+    }
+
+    #[test]
     fn native_callback_selects_exact_recipient_without_implicit_game_fallback() {
         use crate::plugins::ui::{
             NativeInputRecipient, UiRuntimeFontConfiguration, UiRuntimeSlotsResource,
