@@ -2765,6 +2765,30 @@ mod tests {
             !runner.native_ui_mice.contains_key(&secondary),
             "a button without original cursor stream may not synthesize a pointer lifetime"
         );
+        runner
+            .route_ui_mouse_wheel(
+                secondary,
+                slot,
+                bound_epoch,
+                winit::event::DeviceId::dummy(),
+                unknown_position_context,
+                &MouseScrollDelta::LineDelta(1.0, 0.0),
+            )
+            .expect("wheel without authenticated mouse cursor must be a nonclaim");
+        assert!(
+            !runner.native_ui_mice.contains_key(&secondary),
+            "wheel cannot synthesize an original cursor stream"
+        );
+        runner
+            .route_ui_mouse_wheel(
+                secondary,
+                slot,
+                bound_epoch,
+                winit::event::DeviceId::dummy(),
+                unknown_position_context,
+                &MouseScrollDelta::LineDelta(0.0, 0.0),
+            )
+            .expect("phase-only wheel must be inert before display checks");
         // A device-free namespace change is still a hard translator
         // lifetime boundary; no previous UI pressed keys or modifiers survive.
         let source_a = InputSourceId::new(91);
