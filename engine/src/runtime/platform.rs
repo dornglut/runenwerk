@@ -1,4 +1,5 @@
 use crate::plugins::InputState;
+use crate::plugins::ui::NativeInputRecipient;
 use crate::runtime::window::{NativeWindowId, NativeWindowRecord};
 use runen_input::{
     ContactInput, ContinuityLoss, InputContext, KeyboardInput, Point2, PointerButtonInput,
@@ -55,6 +56,8 @@ pub enum PlatformEvent {
 pub struct PlatformWindowEvent {
     pub native_window_id: NativeWindowId,
     pub event: PlatformEvent,
+    /// Frozen original host-selected semantic recipient, never a UI-consumed flag.
+    input_recipient: Option<NativeInputRecipient>,
 }
 
 #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
@@ -188,10 +191,41 @@ fn text_bytes(event: &PlatformEvent) -> usize {
 }
 
 impl PlatformWindowEvent {
+    /// Existing explicit legacy producers retain their established Editor reader.
     pub fn new(native_window_id: NativeWindowId, event: PlatformEvent) -> Self {
         Self {
             native_window_id,
             event,
+            input_recipient: Some(NativeInputRecipient::LegacyNativeConsumer),
+        }
+    }
+
+    /// Only the native input authority may attach its original recipient.
+    /// Later target retirement cannot reinterpret an earlier journal entry.
+    pub(crate) fn with_native_input_recipient(
+        mut self,
+        recipient: Option<NativeInputRecipient>,
+    ) -> Self {
+        self.input_recipient = recipient;
+        self
+    }
+
+    /// Window lifecycle is still visible to legacy readers. Semantic input
+    /// is delivered to Editor only when the original native target was legacy.
+    #[must_use]
+    pub fn authorized_for_legacy_editor(&self) -> bool {
+        if matches!(
+            &self.event,
+            PlatformEvent::KeyboardInput { .. }
+                | PlatformEvent::TextInput { .. }
+                | PlatformEvent::MouseWheel { .. }
+                | PlatformEvent::CursorMoved { .. }
+                | PlatformEvent::MouseInput { .. }
+                | PlatformEvent::Touch { .. }
+        ) {
+            self.input_recipient == Some(NativeInputRecipient::LegacyNativeConsumer)
+        } else {
+            true
         }
     }
 }
@@ -279,6 +313,33 @@ mod tests {
         InputSourceId, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
         PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
     };
+
+    #[test]
+    fn native_recipient_journal_cannot_dispatch_unassigned_input_to_editor() {
+        let id = NativeWindowId::primary();
+        let keyboard = PlatformEvent::KeyboardInput {
+            context: test_context(),
+            input: KeyboardInput {
+                physical_key: PhysicalKeyIdentity::code("KeyA"),
+                logical_key: LogicalKey::Character(String::from("a")),
+                location: KeyLocation::Standard,
+                state: DigitalState::Pressed,
+                repeat: false,
+                origin: ObservationOrigin::SourceReport,
+            },
+        };
+        let legacy = PlatformWindowEvent::new(id, keyboard.clone());
+        assert!(legacy.authorized_for_legacy_editor());
+        let unassigned = PlatformWindowEvent::new(id, keyboard)
+            .with_native_input_recipient(None);
+        assert!(!unassigned.authorized_for_legacy_editor());
+        let lifecycle = PlatformWindowEvent::new(
+            id,
+            PlatformEvent::Focused { focused: false },
+        )
+        .with_native_input_recipient(None);
+        assert!(lifecycle.authorized_for_legacy_editor());
+    }
 
     fn test_context() -> InputContext {
         InputContext::new(InputSourceId::new(90), None)

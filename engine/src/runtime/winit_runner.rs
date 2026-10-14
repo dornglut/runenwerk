@@ -1,7 +1,7 @@
 use crate::app::WindowedAppState;
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
-    NativeInputRecipient, UiNativeInputRecipientsResource,
+    NativeInputRecipient, NativeInputRecipientError, UiNativeInputRecipientsResource,
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
     native_keyboard_finality, native_no_focused_keyboard_claim_witness,
 };
@@ -379,8 +379,9 @@ impl WinitRunner {
         context: InputContext,
         original: &winit::event::KeyEvent,
         is_synthetic: bool,
-        physical_key: &PhysicalKeyIdentity,
     ) -> Result<()> {
+        // Same original event and normalized source; no alternate input owner.
+        let physical_key = keyboard_input(original, is_synthetic).physical_key;
         let device = Self::native_ui_device(context)?;
         // Revalidate the translator's actual recipient and physical-source
         // generation BEFORE reusing cached modifier or pressed-key evidence.
@@ -445,7 +446,7 @@ impl WinitRunner {
         // and translator suppression NEVER produce positive gameplay evidence.
         // Revocation happens before PreUpdate/CoreSet::Input.
         if !permit && matches!(original.state, winit::event::ElementState::Pressed) {
-            self.deny_native_keyboard_lifetime(context, physical_key)?;
+            self.deny_native_keyboard_lifetime(context, &physical_key)?;
         }
         Ok(())
     }
@@ -533,6 +534,19 @@ impl WinitRunner {
         native_window_id: NativeWindowId,
         events: [PlatformEvent; N],
     ) -> Result<()> {
+        self.apply_event_group_for_recipient(
+            native_window_id,
+            events,
+            Some(NativeInputRecipient::LegacyNativeConsumer),
+        )
+    }
+
+    fn apply_event_group_for_recipient<const N: usize>(
+        &mut self,
+        native_window_id: NativeWindowId,
+        events: [PlatformEvent; N],
+        recipient: Option<NativeInputRecipient>,
+    ) -> Result<()> {
         // Journal capacity is checked for the entire observed callback before
         // any physical state or native record receives its members.
         self.state
@@ -578,7 +592,10 @@ impl WinitRunner {
         }
         // Move owned payloads once. Admission does not require infallible String
         // clones after the explicit allocation/capacity check.
-        let journal = events.map(|event| PlatformWindowEvent::new(native_window_id, event));
+        let journal = events.map(|event| {
+            PlatformWindowEvent::new(native_window_id, event)
+                .with_native_input_recipient(recipient)
+        });
         for entry in &journal {
             self.apply_admitted_event(native_window_id, &entry.event)?;
         }
@@ -1153,11 +1170,17 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 self.apply_event_for_native_window(native_window_id, PlatformEvent::CloseRequested)
             }
             WindowEvent::Focused(focused) => {
-                if !focused
-                    && let (NativeInputRecipient::RunenUiSlot(slot), _) =
-                        self.native_input_recipient(native_window_id)?
-                {
-                    self.cancel_native_ui_keyboard(native_window_id, slot)?;
+                if !focused {
+                    match self.native_input_recipient(native_window_id) {
+                        Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
+                            self.cancel_native_ui_keyboard(native_window_id, slot)?;
+                        }
+                        Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => {}
+                        Err(error)
+                            if error.downcast_ref::<NativeInputRecipientError>()
+                                == Some(&NativeInputRecipientError::MissingRecipient) => {}
+                        Err(error) => return Err(error),
+                    }
                 }
                 self.apply_window_focus_event(native_window_id, focused)
             }
@@ -1210,9 +1233,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                         }
                     }
                     Ok((NativeInputRecipient::RunenUiSlot(slot), epoch)) => {
-                        self.apply_event_for_native_window(
+                        self.apply_event_group_for_recipient(
                             native_window_id,
-                            PlatformEvent::KeyboardInput { context, input },
+                            [PlatformEvent::KeyboardInput { context, input }],
+                            Some(NativeInputRecipient::RunenUiSlot(slot)),
                         )?;
                         self.route_ui_keyboard(
                             native_window_id,
@@ -1221,18 +1245,33 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             context,
                             &event,
                             is_synthetic,
-                            &physical_key,
                         )
                     }
                     Err(error) => {
-                        self.apply_event_for_native_window(
+                        // Preserve neutral physical truth but select NO semantic
+                        // recipient. No implicit Editor/game fallback is possible.
+                        self.apply_event_group_for_recipient(
                             native_window_id,
-                            PlatformEvent::KeyboardInput { context, input },
+                            [PlatformEvent::KeyboardInput { context, input }],
+                            None,
                         )?;
                         if matches!(event.state, winit::event::ElementState::Pressed) {
                             self.deny_native_keyboard_lifetime(context, &physical_key)?;
                         }
-                        Err(error)
+                        if error.downcast_ref::<NativeInputRecipientError>()
+                            == Some(&NativeInputRecipientError::MissingRecipient)
+                        {
+                            // A passive UI runtime may coexist with rendering
+                            // without an input target. Do not kill its window.
+                            tracing::trace!(
+                                target: "engine.runtime.input",
+                                ?native_window_id,
+                                "unassigned native UI input retained as physical truth"
+                            );
+                            Ok(())
+                        } else {
+                            Err(error)
+                        }
                     }
                 };
                 if result.is_ok() {
