@@ -330,14 +330,10 @@ mod tests {
         };
         let legacy = PlatformWindowEvent::new(id, keyboard.clone());
         assert!(legacy.authorized_for_legacy_editor());
-        let unassigned = PlatformWindowEvent::new(id, keyboard)
-            .with_native_input_recipient(None);
+        let unassigned = PlatformWindowEvent::new(id, keyboard).with_native_input_recipient(None);
         assert!(!unassigned.authorized_for_legacy_editor());
-        let lifecycle = PlatformWindowEvent::new(
-            id,
-            PlatformEvent::Focused { focused: false },
-        )
-        .with_native_input_recipient(None);
+        let lifecycle = PlatformWindowEvent::new(id, PlatformEvent::Focused { focused: false })
+            .with_native_input_recipient(None);
         assert!(lifecycle.authorized_for_legacy_editor());
     }
 

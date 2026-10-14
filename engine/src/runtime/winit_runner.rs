@@ -593,8 +593,7 @@ impl WinitRunner {
         // Move owned payloads once. Admission does not require infallible String
         // clones after the explicit allocation/capacity check.
         let journal = events.map(|event| {
-            PlatformWindowEvent::new(native_window_id, event)
-                .with_native_input_recipient(recipient)
+            PlatformWindowEvent::new(native_window_id, event).with_native_input_recipient(recipient)
         });
         for entry in &journal {
             self.apply_admitted_event(native_window_id, &entry.event)?;
