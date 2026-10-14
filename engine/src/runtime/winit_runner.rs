@@ -980,6 +980,10 @@ impl WinitRunner {
         if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>() {
             transport.close();
         }
+        let mouse_windows: Vec<_> = self.native_ui_mice.keys().copied().collect();
+        for window in mouse_windows {
+            self.cancel_native_ui_mouse(window);
+        }
         let cleanup = shutdown_native_ui(&mut self.state.world);
         self.shutdown_done = cleanup.is_ok();
         cleanup
@@ -1420,6 +1424,9 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 // UI cancellation is best-effort only for ordering: even a
                 // terminal/stale M13 target cannot intercept the operating
                 // system's original focus-loss and physical-key revocation.
+                if !focused {
+                    self.cancel_native_ui_mouse(native_window_id);
+                }
                 let cancellation = if !focused {
                     match self.native_input_recipient(native_window_id) {
                         Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
@@ -1440,14 +1447,18 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 self.apply_window_focus_event(native_window_id, focused)?;
                 cancellation
             }
-            WindowEvent::Resized(size) => self.apply_event_for_native_window(
-                native_window_id,
-                PlatformEvent::Resized {
-                    width: size.width,
-                    height: size.height,
-                },
-            ),
+            WindowEvent::Resized(size) => {
+                self.cancel_native_ui_mouse(native_window_id);
+                self.apply_event_for_native_window(
+                    native_window_id,
+                    PlatformEvent::Resized {
+                        width: size.width,
+                        height: size.height,
+                    },
+                )
+            },
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                self.cancel_native_ui_mouse(native_window_id);
                 let size = window.inner_size();
                 self.apply_event_for_native_window(
                     native_window_id,
@@ -1567,15 +1578,28 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 let context = self
                     .input_adapter
                     .window_context(native_window_id, device_id)?;
-                let position = cursor_position(position);
-                let result = self.apply_semantic_native_input(
+                let original_position = position;
+                let neutral_point = cursor_position(position);
+                self.apply_semantic_native_input(
                     native_window_id,
-                    PlatformEvent::CursorMoved { context, position },
-                );
-                if result.is_ok() {
-                    self.request_redraw_for_native_window(native_window_id);
+                    PlatformEvent::CursorMoved {
+                        context,
+                        position: neutral_point,
+                    },
+                )?;
+                if let Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch))) =
+                    self.native_input_recipient(native_window_id)
+                {
+                    self.route_ui_cursor_moved(
+                        native_window_id, slot, epoch, context, original_position,
+                    )?;
                 }
-                result
+                self.request_redraw_for_native_window(native_window_id);
+                Ok(())
+            }
+            WindowEvent::CursorLeft { .. } => {
+                self.cancel_native_ui_mouse(native_window_id);
+                Ok(())
             }
             WindowEvent::MouseInput {
                 device_id,
