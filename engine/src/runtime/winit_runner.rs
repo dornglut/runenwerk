@@ -2433,7 +2433,7 @@ mod tests {
                     TextDocumentRevision::new(0),
                 );
                 let position = TextPosition::new(document, "", 0, TextAffinity::Downstream)
-                .expect("empty text position is valid");
+                    .expect("empty text position is valid");
                 runenui_core::text_field(
                     document,
                     String::new(),
@@ -2455,7 +2455,9 @@ mod tests {
 
         let budget = PumpBudget::new(usize::MAX, usize::MAX, usize::MAX, usize::MAX);
         let mut runtime = AppRuntime::<CompositionProbe>::mount(());
-        runtime.pump(budget).expect("initial mounted reconciliation");
+        runtime
+            .pump(budget)
+            .expect("initial mounted reconciliation");
         let field = runtime
             .index()
             .nodes()
@@ -2470,7 +2472,9 @@ mod tests {
                 CommandOrigin::programmatic(),
             )
             .expect("mounted text field accepts focus");
-        runtime.pump(budget).expect("focus has canonical settlement");
+        runtime
+            .pump(budget)
+            .expect("focus has canonical settlement");
         let before = runtime.input_ownership().expect("real M13 focus snapshot");
         assert_eq!(
             native_keyboard_composition(&before),
@@ -2491,7 +2495,9 @@ mod tests {
         runtime
             .cancel_composition(composition.generation().clone())
             .expect("framework generation owner accepts cancellation");
-        runtime.pump(budget).expect("composition cancellation settled");
+        runtime
+            .pump(budget)
+            .expect("composition cancellation settled");
         let after = runtime
             .input_ownership()
             .expect("composition cancellation ownership observed");
