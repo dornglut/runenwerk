@@ -129,6 +129,7 @@ pub(super) struct KeyboardPressSample {
 pub(super) struct KeyboardModifierLifetime {
     pub(super) physical_key: PhysicalKeyIdentity,
     pub(super) generation: Option<u64>,
+    pub(super) generationless_game_eligible: bool,
 }
 
 /// An authentic physical Up report, recorded for ActionState's same-source
@@ -146,6 +147,9 @@ struct KeyboardHeldContributor {
     context: InputContext,
     physical_key: PhysicalKeyIdentity,
     generation: Option<u64>,
+    /// An identity-less synthetic held state is eligible only if admitted
+    /// before genuine physical Down generation exhaustion.
+    generationless_game_eligible: bool,
 }
 
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
@@ -264,6 +268,8 @@ impl InputState {
                         context,
                         physical_key: input.physical_key.clone(),
                         generation,
+                        generationless_game_eligible: !genuine
+                            && self.next_keyboard_generation.is_some(),
                     });
                 if let Some(generation) = generation {
                     self.keyboard_press_samples.push(KeyboardPressSample {
@@ -339,6 +345,7 @@ impl InputState {
             .map(|held| KeyboardModifierLifetime {
                 physical_key: held.physical_key.clone(),
                 generation: held.generation,
+                generationless_game_eligible: held.generationless_game_eligible,
             })
             .collect()
     }
@@ -855,6 +862,21 @@ impl InputState {
         &self.keyboard_real_release_samples
     }
 
+    /// Neutral physical state does not confer eligibility on a genuine Down
+    /// for which the Engine's non-wrapping generation space is exhausted.
+    pub(super) fn keyboard_held_contributor_game_eligible_in(
+        &self,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+    ) -> bool {
+        self.keyboard_held_contributors
+            .iter()
+            .find(|held| held.context == context && &held.physical_key == key)
+            .is_some_and(|held| {
+                held.generation.is_some() || held.generationless_game_eligible
+            })
+    }
+
     /// Return the exact physical Down generation, never an inferred key press
     /// from RunenUI focus, another device or a synthetic reconciliation event.
     pub fn keyboard_down_generation_in(
@@ -923,4 +945,64 @@ pub struct ModifiersSnapshot {
     pub(crate) ctrl: bool,
     pub(crate) alt: bool,
     pub(crate) super_key: bool,
+}
+
+#[cfg(test)]
+mod generation_exhaustion_tests {
+    use super::*;
+    use crate::plugins::{ActionState, action};
+    use winit::event::ElementState;
+    use winit::keyboard::KeyCode;
+
+    #[test]
+    fn exhausted_genuine_down_and_synthetic_restoration_cannot_create_game_held_state() {
+        let mut input = InputState::new();
+        let mut actions = ActionState::new();
+        input.next_keyboard_generation = Some(u64::MAX);
+
+        // The final issued identity remains a legitimate physical Down.
+        input.handle_keyboard_input(KeyCode::KeyW, ElementState::Pressed, None);
+        actions.project(&input);
+        assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+        assert!(actions.action_down(action::WORLD_MOVE_UP));
+        assert!(input.next_keyboard_generation.is_none());
+
+        // The neutral reducer keeps physical truth, but exhausted identity
+        // cannot be mistaken for a held or pressed game permission.
+        input.handle_keyboard_input(KeyCode::KeyA, ElementState::Pressed, None);
+        actions.project(&input);
+        assert!(input.physical_key_down(&physical_identity_for_key_code(KeyCode::KeyA)));
+        assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+        assert!(!actions.action_down(action::WORLD_MOVE_LEFT));
+        assert!(actions.action_down(action::WORLD_MOVE_UP));
+
+        input.handle_keyboard_reconciliation(KeyCode::KeyA, ElementState::Released);
+        input.handle_keyboard_reconciliation(KeyCode::KeyA, ElementState::Pressed);
+        actions.project(&input);
+        assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+        assert!(!actions.action_down(action::WORLD_MOVE_LEFT));
+
+        input.handle_keyboard_input(KeyCode::KeyA, ElementState::Released, None);
+        input.handle_keyboard_input(KeyCode::KeyA, ElementState::Pressed, None);
+        actions.project(&input);
+        assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+        assert!(!actions.action_down(action::WORLD_MOVE_LEFT));
+    }
+
+    #[test]
+    fn pre_exhaustion_synthetic_legacy_hold_remains_held_without_new_press() {
+        let mut input = InputState::new();
+        let mut actions = ActionState::new();
+        input.next_keyboard_generation = Some(u64::MAX);
+        input.handle_keyboard_reconciliation(KeyCode::KeyA, ElementState::Pressed);
+        actions.project(&input);
+        assert!(actions.action_down(action::WORLD_MOVE_LEFT));
+        assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+
+        input.handle_keyboard_input(KeyCode::KeyW, ElementState::Pressed, None);
+        actions.project(&input);
+        assert!(input.next_keyboard_generation.is_none());
+        assert!(actions.action_down(action::WORLD_MOVE_LEFT));
+        assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+    }
 }

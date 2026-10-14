@@ -582,7 +582,10 @@ impl ActionState {
             press.modifier_lifetimes.iter().any(|modifier| {
                 modifier.physical_key == key
                     && modifier.generation.map_or_else(
-                        || !self.blocked_held_key(press.context, &key),
+                        || {
+                            modifier.generationless_game_eligible
+                                && !self.blocked_held_key(press.context, &key)
+                        },
                         |generation| {
                             self.keyboard_generation_eligible(press.context, &key, generation)
                         },
@@ -777,6 +780,7 @@ impl ActionState {
         key: &PhysicalKeyIdentity,
     ) -> bool {
         input.physical_key_down_in(context, key)
+            && input.keyboard_held_contributor_game_eligible_in(context, key)
             && !self.blocked_held_key(context, key)
             && input
                 .keyboard_down_generation_in(context, key)
