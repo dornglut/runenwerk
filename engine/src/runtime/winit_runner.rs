@@ -1152,6 +1152,113 @@ impl WinitRunner {
         Ok(())
     }
 
+    /// Translate one original native touch callback through the one pinned
+    /// contact normalizer and terminal displayed M13 pointer ledger. Multiple
+    /// simultaneous devices/contacts remain distinct in TouchInputState.
+    fn route_ui_touch(
+        &mut self,
+        window: NativeWindowId,
+        slot: UiRuntimeSlotId,
+        binding_epoch: u64,
+        context: InputContext,
+        original: Touch,
+    ) -> Result<()> {
+        let device = Self::native_ui_device(context)?;
+        if self.native_ui_touches.get(&window).is_some_and(|old| {
+            old.recipient != slot
+                || old.binding_epoch != binding_epoch
+                || old.source != context.source
+        }) {
+            self.cancel_native_ui_touch(window);
+        }
+        let world = &mut self.state.world;
+        let mut slots = world
+            .remove_resource::<UiRuntimeSlotsResource>()
+            .context("selected native touch has no pinned slot authority")?;
+        let operation = (|| -> Result<()> {
+            let before = slots
+                .input_ownership(slot)
+                .map_err(|error| anyhow!("native touch pre-state unavailable: {error:?}"))?;
+            let recipients = world.resource::<UiNativeInputRecipientsResource>()?;
+            let host = UiNativePointerHostRead::from_world(world)?;
+            let displayed = host
+                .displayed_input(recipients, window, &mut slots)?
+                .context("native touch has no terminal completed-Present context")?;
+            let point = native_logical_mouse_point(
+                original.location,
+                displayed.mapping.native_scale_factor(),
+            )?;
+            let touches = &mut self.native_ui_touches;
+            if touches
+                .get(&window)
+                .is_some_and(|old| old.scope != *before.scope())
+            {
+                touches.remove(&window);
+            }
+            let lifetime = touches
+                .entry(window)
+                .or_insert_with(|| NativeUiTouchTranslator {
+                    recipient: slot,
+                    source: context.source,
+                    binding_epoch,
+                    scope: before.scope().clone(),
+                    backend_devices: HashSet::new(),
+                    touch: TouchInputState::default(),
+                });
+            lifetime.backend_devices.insert(original.device_id);
+            let event = lifetime
+                .touch
+                .transition(
+                    device,
+                    original.id,
+                    original.phase,
+                    point,
+                    displayed.input_context.clone(),
+                )
+                .map_err(|error| anyhow!("native contact translation rejected: {error:?}"))?;
+            if lifetime.touch.active_contact_count() == 0 {
+                lifetime.backend_devices.clear();
+            }
+            let pointer = event.pointer_id();
+            let (_, submission) = host
+                .submit(
+                    recipients,
+                    NativePointerOrigin::new(window, device),
+                    &mut slots,
+                    event,
+                )
+                .map_err(|error| anyhow!("native touch admission rejected: {error:?}"))?;
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .map_err(|error| anyhow!("native touch M13 pump unavailable: {error:?}"))?;
+            let finality = native_pointer_finality(
+                before.scope(),
+                device,
+                pointer,
+                displayed.input_context.surface_id(),
+                submission,
+                &batch,
+                &status,
+            );
+            anyhow::ensure!(
+                finality.is_ok(),
+                "native touch lacked exact M13 pointer settlement: {finality:?}"
+            );
+            Ok(())
+        })();
+        world.insert_resource(slots);
+        if let Err(error) = operation {
+            self.cancel_native_ui_touch(window);
+            tracing::trace!(
+                target: "engine.runtime.input",
+                ?window,
+                ?error,
+                "native touch withheld without gameplay permission"
+            );
+        }
+        Ok(())
+    }
+
     /// Preserve one original recipient for native pointer, wheel and touch
     /// callbacks too. Until pinned M13 pointer delivery is integrated, UI-owned
     /// input stays neutral physical evidence; it is NEVER dispatched to Editor
