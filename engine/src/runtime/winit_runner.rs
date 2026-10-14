@@ -66,6 +66,19 @@ fn translate_native_ui_modifiers(state: winit::keyboard::ModifiersState) -> KeyM
     result
 }
 
+/// Translate the actual M13 composition lifetime into the pinned native
+/// keyboard adapter's classification. The Engine does not own another IME
+/// generation and must not fabricate Inactive while RunenUI is composing.
+fn native_keyboard_composition(
+    ownership: &runenui_runtime::InputOwnershipSnapshot,
+) -> KeyboardCompositionState {
+    if ownership.keyboard().composition_generation().is_some() {
+        KeyboardCompositionState::Active
+    } else {
+        KeyboardCompositionState::Inactive
+    }
+}
+
 /// A pinned winit translator must NEVER cross its native window, physical
 /// source or selected M13 recipient lifetime. No UI focus or gameplay owner
 /// is replicated here; only the adapter's transient pressed-key state.
@@ -597,11 +610,7 @@ impl WinitRunner {
                 return Ok(());
             }
         };
-        let composition = if before.keyboard().composition_generation().is_some() {
-            KeyboardCompositionState::Active
-        } else {
-            KeyboardCompositionState::Inactive
-        };
+        let composition = native_keyboard_composition(&before);
         // Revalidate the translator's actual recipient and physical-source
         // generation BEFORE reusing cached modifier or pressed-key evidence.
         self.native_ui_keyboard_translator(window, slot, context.source, device, binding_epoch);
