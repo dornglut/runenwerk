@@ -1267,3 +1267,94 @@ fn late_old_modifier_receipt_cannot_invalidate_chord_with_new_generation() {
     assert!(actions.action_pressed("game.shift-w"));
     assert!(actions.action_down("game.shift-w"));
 }
+
+#[test]
+fn claimed_ui_modifier_cannot_fabricate_a_forbidden_held_game_chord() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(426), Some(InputDeviceId::new(6)));
+    let shift = physical_key(KeyCode::ShiftLeft);
+    actions.map_chord(
+        &input,
+        "game.shift-w",
+        KeyChord::code("KeyW").with_shift_required(),
+    );
+    actions.map_chord(
+        &input,
+        "game.no-shift-w",
+        KeyChord::code("KeyW").with_shift_forbidden(),
+    );
+    input.handle_normalized_keyboard(
+        context,
+        &KeyboardInput {
+            physical_key: shift.clone(),
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(actions.action_down("game.shift-w"));
+    assert!(!actions.action_down("game.no-shift-w"));
+
+    let shift_generation = input.keyboard_down_generation_in(context, &shift).unwrap();
+    actions.revoke_keyboard_lifetime(&input, context, &shift, shift_generation);
+    assert!(!actions.action_pressed("game.shift-w"));
+    assert!(!actions.action_down("game.shift-w"));
+    assert!(!actions.action_down("game.no-shift-w"));
+
+    // A new binding cannot use denied Shift as either positive or
+    // negative modifier evidence. A separate window is unaffected.
+    actions.map_chord(
+        &input,
+        "game.added-after-denial",
+        KeyChord::code("KeyW").with_shift_forbidden(),
+    );
+    assert!(!actions.action_down("game.added-after-denial"));
+    clear_frame(&mut input, &mut actions);
+    assert!(!actions.action_down("game.no-shift-w"));
+
+    let other = InputContext::new(InputSourceId::new(427), Some(InputDeviceId::new(7)));
+    input.handle_normalized_keyboard(other, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(actions.action_down("game.no-shift-w"));
+    assert!(actions.action_down("game.added-after-denial"));
+}
+
+#[test]
+fn genuine_modifier_release_allows_forbidden_held_chord_without_new_press() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(428), Some(InputDeviceId::new(8)));
+    let shift = physical_key(KeyCode::ShiftLeft);
+    actions.map_chord(
+        &input,
+        "game.no-shift-w",
+        KeyChord::code("KeyW").with_shift_forbidden(),
+    );
+    input.handle_normalized_keyboard(
+        context,
+        &KeyboardInput {
+            physical_key: shift.clone(),
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    let generation = input.keyboard_down_generation_in(context, &shift).unwrap();
+    actions.revoke_keyboard_lifetime(&input, context, &shift, generation);
+    actions.project(&input);
+    assert!(!actions.action_down("game.no-shift-w"));
+
+    input.handle_normalized_keyboard(
+        context,
+        &KeyboardInput {
+            physical_key: shift,
+            ..normalized_key(DigitalState::Released)
+        },
+    );
+    actions.project(&input);
+    assert!(actions.action_down("game.no-shift-w"));
+    assert!(
+        !actions.action_pressed("game.no-shift-w"),
+        "changing held modifier truth must not fabricate a fresh W press"
+    );
+}

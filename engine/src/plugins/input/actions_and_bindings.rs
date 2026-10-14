@@ -42,14 +42,6 @@ pub enum ModifierRule {
 }
 
 impl ModifierRule {
-    fn matches(self, is_down: bool) -> bool {
-        match self {
-            Self::Ignore => true,
-            Self::Required => is_down,
-            Self::Forbidden => !is_down,
-        }
-    }
-
     /// A denied physical modifier cannot satisfy Required, but it remains
     /// physically held and therefore cannot fabricate a Forbidden match.
     fn matches_pressed(self, physical: bool, eligible: bool) -> bool {
@@ -103,13 +95,6 @@ impl KeyChord {
     pub fn with_super_required(mut self) -> Self {
         self.super_key = ModifierRule::Required;
         self
-    }
-
-    fn matches(&self, modifiers: ModifiersSnapshot) -> bool {
-        self.shift.matches(modifiers.shift)
-            && self.ctrl.matches(modifiers.ctrl)
-            && self.alt.matches(modifiers.alt)
-            && self.super_key.matches(modifiers.super_key)
     }
 
     fn matches_pressed(&self, physical: ModifiersSnapshot, eligible: ModifiersSnapshot) -> bool {
@@ -210,14 +195,20 @@ impl InputBindings {
         matches
     }
 
-    fn action_down<F>(&self, action: &str, mut key_is_down: F, modifiers: ModifiersSnapshot) -> bool
+    fn action_down<F>(
+        &self,
+        action: &str,
+        mut key_is_down: F,
+        physical: ModifiersSnapshot,
+        eligible: ModifiersSnapshot,
+    ) -> bool
     where
         F: FnMut(&PhysicalKeyIdentity) -> bool,
     {
         self.by_action.get(action).is_some_and(|chords| {
-            chords
-                .iter()
-                .any(|chord| key_is_down(&chord.key) && chord.matches(modifiers))
+            chords.iter().any(|chord| {
+                key_is_down(&chord.key) && chord.matches_pressed(physical, eligible)
+            })
         })
     }
 
@@ -785,6 +776,28 @@ impl ActionState {
         }
     }
 
+    /// The physical snapshot is intentionally independent of gameplay
+    /// permission. A physically down UI-owned modifier is NOT equivalent to
+    /// a physically absent modifier for a Forbidden binding.
+    fn physical_held_modifiers(
+        &self,
+        input: &InputState,
+        context: InputContext,
+    ) -> ModifiersSnapshot {
+        let down = |code: KeyCode| {
+            input.physical_key_down_in(
+                context,
+                &PhysicalKeyIdentity::code(format!("{code:?}")),
+            )
+        };
+        ModifiersSnapshot {
+            shift: down(KeyCode::ShiftLeft) || down(KeyCode::ShiftRight),
+            ctrl: down(KeyCode::ControlLeft) || down(KeyCode::ControlRight),
+            alt: down(KeyCode::AltLeft) || down(KeyCode::AltRight),
+            super_key: down(KeyCode::SuperLeft) || down(KeyCode::SuperRight),
+        }
+    }
+
     fn recompute_action_down_states(&mut self, input: &InputState) {
         let mut actions_down = HashSet::new();
         for action in self.bindings.action_ids() {
@@ -795,6 +808,7 @@ impl ActionState {
                 self.bindings.action_down(
                     action,
                     |key| self.eligible_held_key(input, context, key),
+                    self.physical_held_modifiers(input, context),
                     self.eligible_held_modifiers(input, context),
                 )
             }) {
