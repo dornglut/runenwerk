@@ -311,9 +311,8 @@ mod tests {
     use crate::runtime::window::{NativeWindowId, WindowStateRegistryResource};
     use runen_input::{
         ContactId, ContactInput, ContactPhase, ContinuityLoss, CoordinateSpace, DigitalState,
-        InputContext,
-        InputSourceId, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
-        PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
+        InputContext, InputSourceId, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+        ObservationOrigin, PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
     };
 
     #[test]
