@@ -145,14 +145,16 @@ pub enum UiRuntimeNativeKeyboardEvidenceFailure {
 }
 
 /// Decode only the one framework-authored keyboard settlement identified by
-/// the accepted submission and actual mounted runtime scope. Never infer a
-/// positive result from a quiescent pump without the exact ordered receipt.
+/// the accepted submission and actual mounted runtime scope. A native receipt
+/// MUST carry the checked device identity; device-less headless settlements
+/// never satisfy an original hardware occurrence. Never infer a positive
+/// result from a quiescent pump without the exact ordered receipt.
 ///
 /// This function owns no queue, focus, or permission state. Returning an M13
 /// committed nonexclusive conflict does not itself authorize a game action.
 pub fn native_keyboard_finality(
     scope: &InputArbitrationScope,
-    expected_device: Option<InputDeviceId>,
+    expected_device: InputDeviceId,
     submission: KeyboardSubmission,
     batch: &InputPumpBatch,
     status: &Result<(), UiRuntimeSlotOperationFailure>,
@@ -194,7 +196,7 @@ pub fn native_keyboard_finality(
     if settlement.family() != UiInputFamily::Keyboard {
         return Err(Failure::WrongFamily);
     }
-    if settlement.device_id() != expected_device {
+    if settlement.device_id() != Some(expected_device) {
         return Err(Failure::WrongDevice);
     }
     if settlement.ownership_revision() > batch.final_ownership().revision() {
@@ -1872,7 +1874,8 @@ mod tests {
             )
             .slot_id()
             .expect("actual RunenUI typed runtime mounts");
-        let keyboard = || {
+        let native_device = InputDeviceId::new(7).expect("checked native device identity");
+        let keyboard = |device: Option<InputDeviceId>| {
             KeyboardEvent::new(
                 KeyboardPhase::Down,
                 PhysicalKey::Code(String::from("KeyW")),
@@ -1881,7 +1884,7 @@ mod tests {
                 false,
                 KeyLocation::Standard,
                 KeyboardCompositionState::Inactive,
-                None,
+                device,
             )
         };
 
@@ -1890,7 +1893,7 @@ mod tests {
             .input_ownership(slot)
             .expect("fresh M13 ownership before rejected input");
         let missing = slots
-            .submit_native_keyboard(UiRuntimeSlotId(u64::MAX), keyboard())
+            .submit_native_keyboard(UiRuntimeSlotId(u64::MAX), keyboard(Some(native_device)))
             .expect_err("unknown slot cannot admit native input");
         assert!(matches!(
             missing,
@@ -1900,7 +1903,7 @@ mod tests {
             } if event.physical_key() == &PhysicalKey::Code(String::from("KeyW"))
         ));
         let rejected = slots
-            .submit_native_keyboard(slot, keyboard())
+            .submit_native_keyboard(slot, keyboard(Some(native_device)))
             .expect_err("missing focus rejects before M13 sequence reservation");
         assert!(matches!(
             rejected,
@@ -1952,7 +1955,7 @@ mod tests {
             .input_ownership(slot)
             .expect("fresh canonical M13 ownership after focus");
         assert_eq!(
-            focused.keyboard().focused_node(),
+            focused.keyboard(Some(native_device)).focused_node(),
             Some(&focus_id_from_runtime),
             "the semantic focus request must establish a real keyboard target"
         );
@@ -1963,7 +1966,7 @@ mod tests {
         ));
 
         let receipt = slots
-            .submit_native_keyboard(slot, keyboard())
+            .submit_native_keyboard(slot, keyboard(Some(native_device)))
             .expect("focused keyboard event accepted");
         assert_eq!(slots.ingress_epoch(slot), Some(epoch + 1));
         let (batch, status) = slots
@@ -1986,7 +1989,7 @@ mod tests {
         assert_eq!(settled.scope(), batch.final_ownership().scope());
         assert!(matches!(settled.finality(), UiInputFinality::Committed(_)));
         assert_eq!(
-            native_keyboard_finality(settled.scope(), None, receipt, &batch, &status),
+            native_keyboard_finality(settled.scope(), native_device, receipt, &batch, &status),
             Ok(settled.finality().clone())
         );
 
@@ -1994,7 +1997,7 @@ mod tests {
         assert_eq!(
             native_keyboard_finality(
                 settled.scope(),
-                Some(another_device),
+                another_device,
                 receipt,
                 &batch,
                 &status,
@@ -2015,15 +2018,15 @@ mod tests {
             .input_ownership(missing_scope_slot)
             .expect("foreign scope is observable");
         assert_eq!(
-            native_keyboard_finality(foreign_scope.scope(), None, receipt, &batch, &status),
+            native_keyboard_finality(foreign_scope.scope(), native_device, receipt, &batch, &status),
             Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongScope)
         );
 
         let next = slots
-            .submit_native_keyboard(slot, keyboard())
+            .submit_native_keyboard(slot, keyboard(Some(native_device)))
             .expect("second distinct native keyboard submission");
         assert_eq!(
-            native_keyboard_finality(settled.scope(), None, next, &batch, &status),
+            native_keyboard_finality(settled.scope(), native_device, next, &batch, &status),
             Err(UiRuntimeNativeKeyboardEvidenceFailure::NotProcessed)
         );
 
@@ -2034,8 +2037,28 @@ mod tests {
             .pump_native_input_records(slot)
             .expect("later empty canonical pump");
         let lost_observation =
-            native_keyboard_finality(settled.scope(), None, next, &later, &later_status);
+            native_keyboard_finality(settled.scope(), native_device, next, &later, &later_status);
         assert!(lost_observation.is_err());
+
+        // RunenUI can process an observation without a hardware device,
+        // but that M13 settlement is not valid native game-permission proof.
+        let device_less = slots
+            .submit_native_keyboard(slot, keyboard(None))
+            .expect("non-native keyboard observation can be submitted");
+        let (device_less_batch, device_less_status) = slots
+            .pump_native_input_records(slot)
+            .expect("real M13 batch is observable");
+        assert_eq!(device_less_status, Ok(()));
+        assert_eq!(
+            native_keyboard_finality(
+                settled.scope(),
+                native_device,
+                device_less,
+                &device_less_batch,
+                &device_less_status,
+            ),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongDevice)
+        );
     }
 
     #[test]
