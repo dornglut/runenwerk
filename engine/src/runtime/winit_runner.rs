@@ -656,7 +656,10 @@ impl WinitRunner {
         let Some(mut lifetime) = self.native_ui_mice.remove(&window) else {
             return;
         };
-        let modifiers = self.native_ui_modifiers.get(&window).copied()
+        let modifiers = self
+            .native_ui_modifiers
+            .get(&window)
+            .copied()
             .unwrap_or(KeyModifiers::NONE);
         let Some(cancel) = lifetime.mouse.invalidate_point_authority(modifiers) else {
             return;
@@ -691,10 +694,14 @@ impl WinitRunner {
         }) {
             self.cancel_native_ui_mouse(window);
         }
-        let modifiers = self.native_ui_modifiers.get(&window).copied()
+        let modifiers = self
+            .native_ui_modifiers
+            .get(&window)
+            .copied()
             .unwrap_or(KeyModifiers::NONE);
         let world = &mut self.state.world;
-        let mut slots = world.remove_resource::<UiRuntimeSlotsResource>()
+        let mut slots = world
+            .remove_resource::<UiRuntimeSlotsResource>()
             .context("selected UI pointer has no slot authority")?;
         let operation = (|| -> Result<()> {
             let before = slots
@@ -704,36 +711,54 @@ impl WinitRunner {
             let windows = world.resource::<WindowStateRegistryResource>()?;
             let presentations = world.resource::<UiRuntimePresentationAssociationsResource>()?;
             let surfaces = world.resource::<RenderSurfaceRegistryResource>()?;
-            let displayed = recipients.displayed_pointer_input(
-                window, windows, &mut slots, presentations, surfaces,
-            )?.context("no completed-Present UI pointer input context")?;
+            let displayed = recipients
+                .displayed_pointer_input(window, windows, &mut slots, presentations, surfaces)?
+                .context("no completed-Present UI pointer input context")?;
             let point = displayed_native_mouse_point(&displayed, position, modifiers)?;
             let mice = &mut self.native_ui_mice;
-            if mice.get(&window).is_some_and(|old| &old.scope != before.scope()) {
+            if mice
+                .get(&window)
+                .is_some_and(|old| &old.scope != before.scope())
+            {
                 mice.remove(&window);
             }
-            let lifetime = mice.entry(window).or_insert_with(|| NativeUiMouseTranslator {
-                recipient: slot,
-                source: context.source,
-                device,
-                binding_epoch,
-                scope: before.scope().clone(),
-                mouse: MouseInputState::default(),
-            });
+            let lifetime = mice
+                .entry(window)
+                .or_insert_with(|| NativeUiMouseTranslator {
+                    recipient: slot,
+                    source: context.source,
+                    device,
+                    binding_epoch,
+                    scope: before.scope().clone(),
+                    mouse: MouseInputState::default(),
+                });
             lifetime.mouse.note_cursor_position(position);
-            let event = lifetime.mouse.cursor_moved(device, point)
+            let event = lifetime
+                .mouse
+                .cursor_moved(device, point)
                 .map_err(|error| anyhow!("native UI mouse translation failed: {error:?}"))?;
             let pointer = event.pointer_id();
-            let (_, submission) = recipients.submit_displayed_native_pointer(
-                NativePointerOrigin::new(window, device),
-                windows, &mut slots, presentations, surfaces, event,
-            ).map_err(|error| anyhow!("native displayed pointer admission failed: {error:?}"))?;
+            let (_, submission) = recipients
+                .submit_displayed_native_pointer(
+                    NativePointerOrigin::new(window, device),
+                    windows,
+                    &mut slots,
+                    presentations,
+                    surfaces,
+                    event,
+                )
+                .map_err(|error| anyhow!("native displayed pointer admission failed: {error:?}"))?;
             let (batch, status) = slots
                 .pump_native_input_records(slot)
                 .map_err(|error| anyhow!("native UI pointer M13 pump unavailable: {error:?}"))?;
             let finality = native_pointer_finality(
-                before.scope(), device, pointer, displayed.input_context.surface_id(),
-                submission, &batch, &status,
+                before.scope(),
+                device,
+                pointer,
+                displayed.input_context.surface_id(),
+                submission,
+                &batch,
+                &status,
             );
             anyhow::ensure!(
                 finality.is_ok(),
@@ -1475,7 +1500,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                         height: size.height,
                     },
                 )
-            },
+            }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.cancel_native_ui_mouse(native_window_id);
                 let size = window.inner_size();
@@ -1610,7 +1635,11 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     self.native_input_recipient(native_window_id)
                 {
                     self.route_ui_cursor_moved(
-                        native_window_id, slot, epoch, context, original_position,
+                        native_window_id,
+                        slot,
+                        epoch,
+                        context,
+                        original_position,
                     )?;
                 }
                 self.request_redraw_for_native_window(native_window_id);
@@ -1787,7 +1816,7 @@ mod tests {
             window_realizer: WinitWindowRealizer::default(),
             input_adapter: WinitInputAdapter::default(),
             native_ui_keyboards: HashMap::new(),
-        native_ui_mice: HashMap::new(),
+            native_ui_mice: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
@@ -1816,12 +1845,8 @@ mod tests {
         assert!(native_logical_mouse_point(physical, 0.0).is_err());
         assert!(native_logical_mouse_point(physical, -1.0).is_err());
         assert!(native_logical_mouse_point(physical, f64::INFINITY).is_err());
-        assert!(
-            native_logical_mouse_point(PhysicalPosition::new(f64::NAN, 0.0), 1.0).is_err()
-        );
-        assert!(
-            native_logical_mouse_point(PhysicalPosition::new(f64::MAX, 0.0), 1.0).is_err()
-        );
+        assert!(native_logical_mouse_point(PhysicalPosition::new(f64::NAN, 0.0), 1.0).is_err());
+        assert!(native_logical_mouse_point(PhysicalPosition::new(f64::MAX, 0.0), 1.0).is_err());
     }
 
     #[test]
@@ -1856,7 +1881,7 @@ mod tests {
             window_realizer: WinitWindowRealizer::default(),
             input_adapter: WinitInputAdapter::default(),
             native_ui_keyboards: HashMap::new(),
-        native_ui_mice: HashMap::new(),
+            native_ui_mice: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
