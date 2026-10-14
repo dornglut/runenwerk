@@ -80,6 +80,7 @@ struct NativeUiKeyboardTranslator {
 struct NativeUiMouseTranslator {
     recipient: UiRuntimeSlotId,
     source: InputSourceId,
+    backend_device: winit::event::DeviceId,
     device: UiInputDeviceId,
     binding_epoch: u64,
     scope: runenui_runtime::InputArbitrationScope,
@@ -625,25 +626,40 @@ impl WinitRunner {
     }
 
     fn apply_raw_device_removal(&mut self, device_id: winit::event::DeviceId) -> Result<bool> {
-        let Some(context) = self.input_adapter.retire_raw_device(device_id)? else {
-            return Ok(false);
-        };
+        // Winit window events and DeviceEvents have separately allocated
+        // RunenInput identities. They share only the original backend DeviceId.
+        // Cancel the live UI pointer while its original M13 scope still exists.
+        let windows: Vec<_> = self
+            .native_ui_mice
+            .iter()
+            .filter_map(|(window, lifetime)| {
+                (lifetime.backend_device == device_id).then_some(*window)
+            })
+            .collect();
+        for window in windows.iter().copied() {
+            self.cancel_native_ui_mouse(window);
+        }
+        let window_contexts = self.input_adapter.retire_window_device(device_id)?;
+        let raw_context = self.input_adapter.retire_raw_device(device_id)?;
+        if window_contexts.is_empty() && raw_context.is_none() {
+            return Ok(!windows.is_empty());
+        }
         {
             let input = self
                 .state
                 .world
                 .resource_mut::<InputState>()
                 .context("missing InputState resource")?;
-            input.handle_continuity_loss(context, ContinuityLoss::Source);
+            for context in window_contexts {
+                input.handle_continuity_loss(context, ContinuityLoss::Device);
+            }
+            if let Some(context) = raw_context {
+                input.handle_continuity_loss(context, ContinuityLoss::Source);
+            }
         }
-        let windows: Vec<_> = self
-            .native_ui_mice
-            .iter()
-            .filter_map(|(window, lifetime)| (lifetime.source == context.source).then_some(*window))
-            .collect();
-        for window in windows {
-            self.cancel_native_ui_mouse(window);
-        }
+        // Original device removal is an immediate action-lifetime boundary,
+        // not a permission change deferred to the next input system frame.
+        self.project_actions_after_native_continuity()?;
         Ok(true)
     }
 
@@ -685,6 +701,7 @@ impl WinitRunner {
         window: NativeWindowId,
         slot: UiRuntimeSlotId,
         binding_epoch: u64,
+        backend_device: winit::event::DeviceId,
         context: InputContext,
         position: PhysicalPosition<f64>,
     ) -> Result<()> {
@@ -693,6 +710,7 @@ impl WinitRunner {
             old.recipient != slot
                 || old.binding_epoch != binding_epoch
                 || old.source != context.source
+                || old.backend_device != backend_device
                 || old.device != device
         }) {
             self.cancel_native_ui_mouse(window);
@@ -730,6 +748,7 @@ impl WinitRunner {
                 .or_insert_with(|| NativeUiMouseTranslator {
                     recipient: slot,
                     source: context.source,
+                    backend_device,
                     device,
                     binding_epoch,
                     scope: before.scope().clone(),
@@ -1641,6 +1660,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                         native_window_id,
                         slot,
                         epoch,
+                        device_id,
                         context,
                         original_position,
                     )?;
