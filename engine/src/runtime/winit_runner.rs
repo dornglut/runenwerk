@@ -2409,6 +2409,109 @@ mod tests {
         );
     }
 
+    /// Exercise the same pinned typed RunenUI ownership as the native host:
+    /// a genuine composition-capable focus is required before Active may be
+    /// given to the pinned winit keyboard translator.
+    #[test]
+    fn native_keyboard_composition_tracks_real_m13_generation_and_cancellation() {
+        use runenui_core::{
+            CommandOrigin, Effects, IntoUpdateOutput, NoHostProtocol, SemanticCommand,
+            SemanticEditableMode, TextAffinity, TextDocumentId, TextDocumentRevision,
+            TextDocumentSnapshot, TextPosition, TextSelection, UiApp, UpdateOutput, View,
+        };
+        use runenui_runtime::{AppRuntime, PumpBudget};
+
+        struct CompositionProbe;
+        impl UiApp for CompositionProbe {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                let document = TextDocumentSnapshot::new(
+                    TextDocumentId::new(81),
+                    TextDocumentRevision::new(0),
+                );
+                let position = TextPosition::new(
+                    document,
+                    "",
+                    0,
+                    TextAffinity::Downstream,
+                )
+                .expect("empty text position is valid");
+                runenui_core::text_field(
+                    document,
+                    String::new(),
+                    TextSelection::collapsed(position),
+                    SemanticEditableMode::SingleLine,
+                    |_| (),
+                )
+                .expect("valid composition-capable editor")
+                .id("native.composition.probe")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                UpdateOutput::effects(Effects::none())
+            }
+        }
+
+        let budget = PumpBudget::new(
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+            usize::MAX,
+        );
+        let mut runtime = AppRuntime::<CompositionProbe>::mount(());
+        runtime.pump(budget).expect("initial mounted reconciliation");
+        let field = runtime
+            .index()
+            .nodes()
+            .first()
+            .expect("one text-capable mounted field")
+            .id()
+            .clone();
+        runtime
+            .submit_command(
+                field,
+                SemanticCommand::RequestFocus,
+                CommandOrigin::programmatic(),
+            )
+            .expect("mounted text field accepts focus");
+        runtime.pump(budget).expect("focus has canonical settlement");
+        let before = runtime.input_ownership().expect("real M13 focus snapshot");
+        assert_eq!(
+            native_keyboard_composition(&before),
+            KeyboardCompositionState::Inactive
+        );
+        let composition = runtime
+            .start_composition(None)
+            .expect("focused field accepts a genuine composition generation");
+        runtime.pump(budget).expect("composition start settled");
+        let composing = runtime
+            .input_ownership()
+            .expect("owner-authored active composition snapshot");
+        assert_eq!(
+            native_keyboard_composition(&composing),
+            KeyboardCompositionState::Active,
+            "native shortcut translation MUST NOT treat actual IME as inactive"
+        );
+        runtime
+            .cancel_composition(composition.generation().clone())
+            .expect("framework generation owner accepts cancellation");
+        runtime.pump(budget).expect("composition cancellation settled");
+        let after = runtime
+            .input_ownership()
+            .expect("composition cancellation ownership observed");
+        assert_eq!(
+            native_keyboard_composition(&after),
+            KeyboardCompositionState::Inactive,
+            "only the framework's retired generation ends composition"
+        );
+    }
+
     fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {
         let mut app = App::new();
         app.with_frame_pacing(policy);
