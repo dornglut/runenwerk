@@ -1970,6 +1970,178 @@ mod tests {
     }
 
     #[test]
+    fn native_pointer_admission_keeps_exact_device_stream_surface_and_m13_sequence() {
+        use runenui_core::{
+            LogicalPoint, NoHostProtocol, PointerDeviceKind, PointerPhase,
+        };
+        use runenui_runtime::{InputArbitrationRecord, UiInputFamily};
+
+        struct NativePointerApp;
+        impl UiApp for NativePointerApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                text("pointer settlement")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").expect("test font name")],
+            );
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<NativePointerApp>(
+                UiTypedScreenId::new("native.pointer.probe"),
+                (),
+                &fonts,
+            )
+            .slot_id()
+            .expect("one real pinned RunenUI runtime");
+        let style = StyleEnvironment::default();
+        let build = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(
+                LogicalLength::from(RUNTIME_SURFACE_WIDTH),
+                LogicalLength::from(RUNTIME_SURFACE_HEIGHT),
+            ),
+        );
+        let published = slots
+            .publish_surface_for_slot(slot, &build)
+            .expect("actual runtime publishes hit context");
+        let device = InputDeviceId::new(7).expect("checked native device");
+        let other_device = InputDeviceId::new(8).expect("other native device");
+        let pointer = PointerId::new(3).expect("nonzero pointer stream");
+        let other_pointer = PointerId::new(5).expect("different pointer stream");
+        let event = || {
+            PointerEvent::new(
+                pointer,
+                PointerDeviceKind::Mouse,
+                PointerPhase::Move,
+                LogicalPoint::new(12.0, 8.0).expect("finite"),
+                published.input_context().clone(),
+            )
+            .with_device_id(device)
+        };
+        let missing = slots
+            .submit_native_pointer(UiRuntimeSlotId(u64::MAX), event())
+            .expect_err("unmounted recipient cannot accept work");
+        assert!(matches!(
+            missing,
+            UiRuntimeNativePointerAdmissionError::Slot {
+                failure: UiRuntimeSlotOperationFailure::MissingSlot,
+                ref event,
+            } if event.pointer_id() == pointer && event.device_id() == Some(device)
+        ));
+        let before = slots.input_ownership(slot).expect("valid pre-input M13 scope");
+        let admitted = slots
+            .submit_native_pointer(slot, event())
+            .expect("real typed runtime accepts one native pointer");
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("one owner returns exact ordered M13 records");
+        assert_eq!(status, Ok(()));
+        let settlement = batch
+            .ordered_records()
+            .iter()
+            .find_map(|record| match record {
+                InputArbitrationRecord::InputSettled(value)
+                    if value.sequence() == admitted.sequence() =>
+                {
+                    Some(value)
+                }
+                _ => None,
+            })
+            .expect("one reached pointer receipt");
+        assert_eq!(settlement.family(), UiInputFamily::Pointer);
+        assert_eq!(settlement.device_id(), Some(device));
+        assert_eq!(settlement.pointer_id(), Some(pointer));
+        assert_eq!(settlement.surface_id(), Some(published.input_context().surface_id()));
+        assert_eq!(
+            native_pointer_finality(
+                before.scope(),
+                device,
+                pointer,
+                published.input_context().surface_id(),
+                admitted,
+                &batch,
+                &status,
+            ),
+            Ok(settlement.finality().clone()),
+            "exact pointer finality must come from the framework's receipt"
+        );
+        assert_eq!(
+            native_pointer_finality(
+                before.scope(),
+                other_device,
+                pointer,
+                published.input_context().surface_id(),
+                admitted,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::WrongDevice),
+        );
+        assert_eq!(
+            native_pointer_finality(
+                before.scope(),
+                device,
+                other_pointer,
+                published.input_context().surface_id(),
+                admitted,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::WrongPointer),
+        );
+        let later = slots
+            .submit_native_pointer(slot, event())
+            .expect("second independently sequenced original pointer event");
+        assert_eq!(
+            native_pointer_finality(
+                before.scope(),
+                device,
+                pointer,
+                published.input_context().surface_id(),
+                later,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::NotProcessed),
+        );
+        let foreign = slots
+            .mount_app::<NativePointerApp>(
+                UiTypedScreenId::new("native.pointer.foreign"),
+                (),
+                &fonts,
+            )
+            .slot_id()
+            .expect("distinct framework scope");
+        let foreign_ownership = slots.input_ownership(foreign).expect("foreign scope");
+        assert_eq!(
+            native_pointer_finality(
+                foreign_ownership.scope(),
+                device,
+                pointer,
+                published.input_context().surface_id(),
+                admitted,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::WrongScope),
+        );
+    }
+
+    #[test]
     fn native_keyboard_admission_preserves_exact_rejection_and_ordered_m13_settlement() {
         use runenui_core::{
             CommandOrigin, KeyLocation, KeyModifiers, KeyboardCompositionState, KeyboardPhase,
