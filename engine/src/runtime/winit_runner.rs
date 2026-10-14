@@ -5,6 +5,7 @@ use crate::plugins::ui::{
     UiNativeInputRecipientsResource, UiNativePointerHostRead, UiRuntimeDisplayedPresentation,
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
     native_keyboard_finality, native_no_focused_keyboard_claim_witness, native_pointer_finality,
+    native_text_finality,
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
@@ -30,8 +31,8 @@ use crate::runtime::{NativeHostEvent, NativeWakeTransport};
 use anyhow::{Context, Result, anyhow};
 use runen_input::{ContinuityLoss, InputContext, InputSourceId, PhysicalKeyIdentity};
 use runenui_core::{
-    InputDeviceId as UiInputDeviceId, KeyModifiers, KeyboardCompositionState, LogicalDelta,
-    LogicalPoint,
+    CommittedTextEvent, InputDeviceId as UiInputDeviceId, KeyModifiers,
+    KeyboardCompositionState, LogicalDelta, LogicalPoint,
 };
 use runenui_runtime::{UiInputConflict, UiInputFinality};
 use runenui_winit::keyboard_input::{
@@ -43,7 +44,9 @@ use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalPosition;
-use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, Touch, WindowEvent};
+use winit::event::{
+    DeviceEvent, ElementState, Ime, MouseButton, MouseScrollDelta, Touch, WindowEvent,
+};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
@@ -686,6 +689,59 @@ impl WinitRunner {
         // Revocation happens before PreUpdate/CoreSet::Input.
         if !permit && matches!(original.state, winit::event::ElementState::Pressed) {
             self.deny_native_keyboard_lifetime(context, &physical_key)?;
+        }
+        Ok(())
+    }
+
+    /// Route one original OS-committed IME text occurrence to the selected
+    /// M13 text owner. IME carries no winit device ID; do not invent one from
+    /// the last key or guess the keyboard's physical lifetime.
+    fn route_ui_ime_commit(&mut self, slot: UiRuntimeSlotId, text: String) -> Result<()> {
+        let event = CommittedTextEvent::new(text, None)
+            .context("empty original committed text must be filtered at native ingress")?;
+        let slots = self
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .context("native IME recipient has no pinned runtime slot")?;
+        let before = match slots.input_ownership(slot) {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                tracing::trace!(
+                    target: "engine.runtime.input",
+                    ?error,
+                    "native IME cannot observe original M13 text owner"
+                );
+                return Ok(());
+            }
+        };
+        let submission = match slots.submit_native_text(slot, event) {
+            Ok(receipt) => receipt,
+            Err(error) => {
+                tracing::trace!(
+                    target: "engine.runtime.input",
+                    ?error,
+                    "native IME committed text rejected by pinned M13 runtime"
+                );
+                return Ok(());
+            }
+        };
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .map_err(|error| anyhow!("native IME M13 pump unavailable: {error:?}"))?;
+        let evidence = native_text_finality(
+            before.scope(),
+            None,
+            submission,
+            &batch,
+            &status,
+        );
+        if !matches!(evidence, Ok(UiInputFinality::Committed(_))) {
+            tracing::trace!(
+                target: "engine.runtime.input",
+                ?evidence,
+                "native IME text had no committed M13 settlement"
+            );
         }
         Ok(())
     }
@@ -2147,6 +2203,44 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     self.request_redraw_for_native_window(native_window_id);
                 }
                 result
+            }
+            WindowEvent::Ime(Ime::Commit(text)) => {
+                if text.is_empty() {
+                    return Ok(());
+                }
+                let selected = self.native_input_recipient(native_window_id);
+                match selected {
+                    Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
+                        // This journal entry is original native text evidence,
+                        // never a second legacy Editor delivery.
+                        self.apply_event_group_for_recipient(
+                            native_window_id,
+                            [PlatformEvent::TextInput { text: text.clone() }],
+                            Some(NativeInputRecipient::RunenUiSlot(slot)),
+                        )?;
+                        self.route_ui_ime_commit(slot, text)
+                    }
+                    Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => {
+                        // The accepted legacy Editor path derives text from its
+                        // original keyboard observations. Do not double-commit
+                        // it through an additional IME event at this boundary.
+                        Ok(())
+                    }
+                    Err(error) => {
+                        self.apply_event_group_for_recipient(
+                            native_window_id,
+                            [PlatformEvent::TextInput { text }],
+                            None,
+                        )?;
+                        if error.downcast_ref::<NativeInputRecipientError>()
+                            == Some(&NativeInputRecipientError::MissingRecipient)
+                        {
+                            Ok(())
+                        } else {
+                            Err(error)
+                        }
+                    }
+                }
             }
             WindowEvent::ModifiersChanged(modifiers) => {
                 self.native_ui_modifiers.insert(
