@@ -212,7 +212,7 @@ pub fn native_keyboard_finality(
 pub enum UiRuntimeNativePointerAdmissionError {
     Slot {
         failure: UiRuntimeSlotOperationFailure,
-        event: PointerEvent,
+        event: Box<PointerEvent>,
     },
     Framework(SubmitPointerError),
 }
@@ -1186,13 +1186,19 @@ impl UiRuntimeSlotsResource {
         let slot = match self.slot_mut(slot_id) {
             Ok(slot) => slot,
             Err(failure) => {
-                return Err(UiRuntimeNativePointerAdmissionError::Slot { failure, event });
+                return Err(UiRuntimeNativePointerAdmissionError::Slot {
+                    failure,
+                    event: Box::new(event),
+                });
             }
         };
         let next = match slot.next_ingress_epoch() {
             Ok(next) => next,
             Err(failure) => {
-                return Err(UiRuntimeNativePointerAdmissionError::Slot { failure, event });
+                return Err(UiRuntimeNativePointerAdmissionError::Slot {
+                    failure,
+                    event: Box::new(event),
+                });
             }
         };
         let receipt = slot
