@@ -402,7 +402,7 @@ mod tests {
                 .expect("no input binding is an intentional render-only state"),
             false
         );
-        let slot = mount_slot(&mut slots);
+        let slot = mount(&mut slots, 15);
         recipients
             .request_primary(NativeInputRecipient::RunenUiSlot(slot))
             .expect("author deliberately selected the primary keyboard recipient");
