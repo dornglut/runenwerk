@@ -728,7 +728,10 @@ impl WinitRunner {
             .native_ui_touches
             .iter()
             .filter_map(|(window, lifetime)| {
-                lifetime.backend_devices.contains(&device_id).then_some(*window)
+                lifetime
+                    .backend_devices
+                    .contains(&device_id)
+                    .then_some(*window)
             })
             .collect();
         for window in touch_windows.iter().copied() {
@@ -832,7 +835,10 @@ impl WinitRunner {
             return;
         }
         for event in events {
-            if slots.submit_native_pointer(lifetime.recipient, event).is_ok() {
+            if slots
+                .submit_native_pointer(lifetime.recipient, event)
+                .is_ok()
+            {
                 let _ = slots.pump_native_input_records(lifetime.recipient);
             }
         }
@@ -2201,13 +2207,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 if let Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch))) =
                     self.native_input_recipient(native_window_id)
                 {
-                    self.route_ui_touch(
-                        native_window_id,
-                        slot,
-                        epoch,
-                        context,
-                        original_touch,
-                    )?;
+                    self.route_ui_touch(native_window_id, slot, epoch, context, original_touch)?;
                 }
                 self.request_redraw_for_native_window(native_window_id);
                 Ok(())
@@ -2394,7 +2394,7 @@ mod tests {
             input_adapter: WinitInputAdapter::default(),
             native_ui_keyboards: HashMap::new(),
             native_ui_mice: HashMap::new(),
-        native_ui_touches: HashMap::new(),
+            native_ui_touches: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
@@ -2460,7 +2460,7 @@ mod tests {
             input_adapter: WinitInputAdapter::default(),
             native_ui_keyboards: HashMap::new(),
             native_ui_mice: HashMap::new(),
-        native_ui_touches: HashMap::new(),
+            native_ui_touches: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
