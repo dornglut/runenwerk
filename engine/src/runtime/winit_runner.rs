@@ -196,7 +196,10 @@ impl WinitRunner {
                 Ok((recipient, _)) => Some(recipient),
                 Err(error)
                     if error.downcast_ref::<NativeInputRecipientError>()
-                        == Some(&NativeInputRecipientError::MissingRecipient) => None,
+                        == Some(&NativeInputRecipientError::MissingRecipient) =>
+                {
+                    None
+                }
                 Err(error) => return Err(error),
             };
             return self.apply_event_group_for_recipient(
