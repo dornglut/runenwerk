@@ -310,7 +310,8 @@ mod tests {
     use crate::plugins::{ActionState, InputState};
     use crate::runtime::window::{NativeWindowId, WindowStateRegistryResource};
     use runen_input::{
-        ContactId, ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext,
+        ContactId, ContactInput, ContactPhase, ContinuityLoss, CoordinateSpace, DigitalState,
+        InputContext,
         InputSourceId, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
         PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
     };
