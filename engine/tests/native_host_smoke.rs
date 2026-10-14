@@ -107,9 +107,14 @@ fn native_counter_fonts() -> UiRuntimeFontConfiguration {
 fn main() {
     if let Ok(mode) = std::env::var("RUNENWERK_NATIVE_UI_READINESS_SMOKE") {
         assert!(
-            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV, RENDER_UI_INPUT_HOST_ENV]
-                .iter()
-                .all(|flag| std::env::var_os(flag).is_none()),
+            [
+                NO_RENDER_ENV,
+                RENDER_HOST_ENV,
+                RENDER_UI_HOST_ENV,
+                RENDER_UI_INPUT_HOST_ENV
+            ]
+            .iter()
+            .all(|flag| std::env::var_os(flag).is_none()),
             "native Host smoke modes are mutually exclusive"
         );
         native_readiness::run(&mode).expect("native UI readiness smoke must succeed");
@@ -131,14 +136,10 @@ fn main() {
             run_native_render_ui_child_smoke()
                 .expect("native Render + UI passive and bound child smokes should succeed");
         }
-        (false, false, true, false) => {
-            native_render_host_smoke(true, false)
-                .expect("native Render + UI passive Host smoke should succeed")
-        }
-        (false, false, false, true) => {
-            native_render_host_smoke(true, true)
-                .expect("native Render + UI bound-input Host smoke should succeed")
-        }
+        (false, false, true, false) => native_render_host_smoke(true, false)
+            .expect("native Render + UI passive Host smoke should succeed"),
+        (false, false, false, true) => native_render_host_smoke(true, true)
+            .expect("native Render + UI bound-input Host smoke should succeed"),
         _ => panic!("native Host smoke modes are mutually exclusive"),
     }
 }
@@ -1145,7 +1146,11 @@ fn native_render_host_smoke(with_ui: bool, select_ui_input: bool) -> anyhow::Res
     println!(
         "native_render_host_smoke=pass ui_plugin={} input_recipient={}",
         if with_ui { "selected" } else { "absent" },
-        if select_ui_input { "explicit" } else { "unassigned" }
+        if select_ui_input {
+            "explicit"
+        } else {
+            "unassigned"
+        }
     );
     Ok(())
 }
