@@ -151,6 +151,33 @@ impl WinitInputAdapter {
             .map(|source| InputContext::new(source, None))
     }
 
+    /// Retire the *window-event* device identity on the actual backend
+    /// removal callback. Raw-device identity is deliberately a separate
+    /// namespace and cannot be used to revoke these original window inputs.
+    /// Each observed window source gets exact device-scoped continuity loss;
+    /// other hardware devices sharing its source remain unaffected.
+    pub(crate) fn retire_window_device(
+        &mut self,
+        backend_device_id: DeviceId,
+    ) -> Result<Vec<InputContext>, NativeInputIdentityFailure> {
+        let Some(device) = self.window_devices.get(&backend_device_id).copied() else {
+            return Ok(Vec::new());
+        };
+        let mut contexts = Vec::new();
+        contexts
+            .try_reserve(self.window_sources.len())
+            .map_err(|_| NativeInputIdentityFailure::AllocationFailed)?;
+        contexts.extend(
+            self.window_sources
+                .values()
+                .copied()
+                .map(|source| InputContext::new(source, Some(device))),
+        );
+        contexts.sort_unstable_by_key(|context| context.source.raw());
+        self.window_devices.remove(&backend_device_id);
+        Ok(contexts)
+    }
+
     pub(crate) fn retire_raw_device(
         &mut self,
         backend_device_id: DeviceId,
@@ -475,6 +502,37 @@ mod tests {
             .unwrap();
         assert_ne!(replacement.source, initial.source);
         assert_eq!(replacement.device, initial.device);
+    }
+
+    #[test]
+    fn window_device_removal_revokes_exact_device_across_native_window_sources() {
+        let mut adapter = WinitInputAdapter::default();
+        let backend = DeviceId::dummy();
+        let first = NativeWindowId::primary();
+        let second = NativeWindowId::try_from_raw(2).expect("second native window");
+        let a = adapter.window_context(first, backend).expect("initial native window device");
+        let b = adapter.window_context(second, backend).expect("same physical device in next window");
+        let raw = adapter.raw_device_context(backend).expect("separate raw identity");
+        assert_eq!(a.device, b.device);
+        let mut expected = vec![a, b];
+        expected.sort_unstable_by_key(|context| context.source.raw());
+        assert_eq!(
+            adapter.retire_window_device(backend).expect("checked device retirement"),
+            expected,
+        );
+        assert!(
+            adapter.retire_window_device(backend)
+                .expect("repeat retirement is idempotent")
+                .is_empty(),
+        );
+        let after = adapter.window_context(first, backend).expect("replacement device");
+        assert_eq!(after.source, a.source);
+        assert_ne!(after.device, a.device, "removed hardware gets a new generation");
+        assert_eq!(
+            adapter.raw_device_context(backend).expect("raw identity unaffected"),
+            raw,
+            "raw-device identity is owned by its own retirement method"
+        );
     }
 
     #[test]
