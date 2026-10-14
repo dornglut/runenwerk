@@ -11,8 +11,8 @@ use runenui_runtime::{
     AppRuntime, HostRequestToken, InputArbitrationRecord, InputArbitrationScope,
     InputObservationError, InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch,
     KeyboardSubmission, PointerSubmission, PumpBudget, SubmitKeyboardError,
-    SubmitKeyboardErrorKind, SubmitPointerError,
-    SurfaceBuildContext, SurfacePublication, UiInputFamily, UiInputFinality,
+    SubmitKeyboardErrorKind, SubmitPointerError, SurfaceBuildContext, SurfacePublication,
+    UiInputFamily, UiInputFinality,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -1971,9 +1971,7 @@ mod tests {
 
     #[test]
     fn native_pointer_admission_keeps_exact_device_stream_surface_and_m13_sequence() {
-        use runenui_core::{
-            LogicalPoint, NoHostProtocol, PointerDeviceKind, PointerPhase,
-        };
+        use runenui_core::{LogicalPoint, NoHostProtocol, PointerDeviceKind, PointerPhase};
         use runenui_runtime::{InputArbitrationRecord, UiInputFamily};
 
         struct NativePointerApp;
@@ -2000,11 +1998,7 @@ mod tests {
             );
         let mut slots = UiRuntimeSlotsResource::default();
         let slot = slots
-            .mount_app::<NativePointerApp>(
-                UiTypedScreenId::new("native.pointer.probe"),
-                (),
-                &fonts,
-            )
+            .mount_app::<NativePointerApp>(UiTypedScreenId::new("native.pointer.probe"), (), &fonts)
             .slot_id()
             .expect("one real pinned RunenUI runtime");
         let style = StyleEnvironment::default();
@@ -2042,7 +2036,9 @@ mod tests {
                 ref event,
             } if event.pointer_id() == pointer && event.device_id() == Some(device)
         ));
-        let before = slots.input_ownership(slot).expect("valid pre-input M13 scope");
+        let before = slots
+            .input_ownership(slot)
+            .expect("valid pre-input M13 scope");
         let admitted = slots
             .submit_native_pointer(slot, event())
             .expect("real typed runtime accepts one native pointer");
@@ -2065,7 +2061,10 @@ mod tests {
         assert_eq!(settlement.family(), UiInputFamily::Pointer);
         assert_eq!(settlement.device_id(), Some(device));
         assert_eq!(settlement.pointer_id(), Some(pointer));
-        assert_eq!(settlement.surface_id(), Some(published.input_context().surface_id()));
+        assert_eq!(
+            settlement.surface_id(),
+            Some(published.input_context().surface_id())
+        );
         assert_eq!(
             native_pointer_finality(
                 before.scope(),
