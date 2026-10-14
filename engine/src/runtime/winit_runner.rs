@@ -2173,15 +2173,25 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 let context = self
                     .input_adapter
                     .window_context(native_window_id, touch.device_id)?;
+                let original_touch = touch;
                 let input = contact_input(touch);
-                let result = self.apply_semantic_native_input(
+                self.apply_semantic_native_input(
                     native_window_id,
                     PlatformEvent::Touch { context, input },
-                );
-                if result.is_ok() {
-                    self.request_redraw_for_native_window(native_window_id);
+                )?;
+                if let Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch))) =
+                    self.native_input_recipient(native_window_id)
+                {
+                    self.route_ui_touch(
+                        native_window_id,
+                        slot,
+                        epoch,
+                        context,
+                        original_touch,
+                    )?;
                 }
-                result
+                self.request_redraw_for_native_window(native_window_id);
+                Ok(())
             }
             WindowEvent::RedrawRequested => {
                 self.acknowledge_native_redraw(native_window_id);
