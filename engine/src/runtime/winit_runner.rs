@@ -310,7 +310,9 @@ impl WinitRunner {
                 let recipient = recipients.resolve(window, windows, &mut slots)?;
                 let epoch = recipients.binding_epoch_for_window(window);
                 if matches!(recipient, NativeInputRecipient::RunenUiSlot(_)) && epoch.is_none() {
-                    return Err(anyhow!("resolved native UI recipient has no binding lifetime"));
+                    return Err(anyhow!(
+                        "resolved native UI recipient has no binding lifetime"
+                    ));
                 }
                 Ok((recipient, epoch))
             } else if slots.is_empty() {
