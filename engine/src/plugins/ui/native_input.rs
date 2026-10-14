@@ -23,6 +23,8 @@ pub enum NativeInputRecipient {
 struct Binding {
     recipient: NativeInputRecipient,
     scope: Option<InputArbitrationScope>,
+    /// Monotonic native recipient registration lifetime; no focus mirror.
+    epoch: u64,
 }
 
 /// Explicit retirement is not absence. A formerly UI-owned native window must
@@ -43,6 +45,8 @@ pub enum NativeInputRecipientError {
     MissingRecipient,
     #[error("native window already has a different semantic input recipient")]
     ConflictingRecipient,
+    #[error("native input recipient lifetime identities have been exhausted")]
+    BindingEpochExhausted,
     #[error("RunenUI runtime slot is already assigned to another native window")]
     SlotAlreadyBound,
     #[error("RunenUI mount/scope changed since native input binding")]
@@ -60,6 +64,7 @@ pub enum NativeInputRecipientError {
 #[derive(Default, runen_ecs::Resource)]
 pub struct UiNativeInputRecipientsResource {
     bindings: BTreeMap<NativeWindowId, WindowRecipientBinding>,
+    next_epoch: u64,
 }
 
 impl UiNativeInputRecipientsResource {
@@ -99,10 +104,19 @@ impl UiNativeInputRecipientsResource {
         {
             return Err(NativeInputRecipientError::SlotAlreadyBound);
         }
+        let epoch = self
+            .next_epoch
+            .checked_add(1)
+            .ok_or(NativeInputRecipientError::BindingEpochExhausted)?;
         self.bindings.insert(
             window,
-            WindowRecipientBinding::Bound(Binding { recipient, scope }),
+            WindowRecipientBinding::Bound(Binding {
+                recipient,
+                scope,
+                epoch,
+            }),
         );
+        self.next_epoch = epoch;
         Ok(true)
     }
 
@@ -131,6 +145,17 @@ impl UiNativeInputRecipientsResource {
             }
         }
         Ok(binding.recipient)
+    }
+
+    /// Read after authoritative `resolve` in the same invoker-thread callback.
+    /// Retire/rebind always allocates a new identity, even when window, slot and
+    /// physical source happen to have the same nominal identity.
+    #[must_use]
+    pub fn binding_epoch_for_window(&self, window: NativeWindowId) -> Option<u64> {
+        match self.bindings.get(&window) {
+            Some(WindowRecipientBinding::Bound(binding)) => Some(binding.epoch),
+            _ => None,
+        }
     }
 
     /// Returns only the existing terminal completed-Present snapshot for this

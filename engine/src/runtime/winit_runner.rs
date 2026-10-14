@@ -66,6 +66,7 @@ fn translate_native_ui_modifiers(state: winit::keyboard::ModifiersState) -> KeyM
 struct NativeUiKeyboardTranslator {
     recipient: UiRuntimeSlotId,
     source: InputSourceId,
+    binding_epoch: u64,
     keyboard: KeyboardInputState,
 }
 
@@ -288,25 +289,33 @@ impl WinitRunner {
     /// Resolve the original native window's one semantic input recipient before
     /// routing. Absence is legacy only when NO UI runtime is mounted; a stale
     /// or retired UI binding never becomes a game input fallback.
-    fn native_input_recipient(&mut self, window: NativeWindowId) -> Result<NativeInputRecipient> {
+    fn native_input_recipient(
+        &mut self,
+        window: NativeWindowId,
+    ) -> Result<(NativeInputRecipient, Option<u64>)> {
         let world = &mut self.state.world;
         let Some(mut slots) = world.remove_resource::<UiRuntimeSlotsResource>() else {
             if world.has_resource::<UiNativeInputRecipientsResource>() {
                 return Err(anyhow!("native recipients exist without UI slot authority"));
             }
-            return Ok(NativeInputRecipient::LegacyNativeConsumer);
+            return Ok((NativeInputRecipient::LegacyNativeConsumer, None));
         };
         // Closure scope guarantees slot restoration on *every* selection
         // failure, including missing window authority and stale M13 scope.
-        let selected = (|| -> Result<NativeInputRecipient> {
+        let selected = (|| -> Result<(NativeInputRecipient, Option<u64>)> {
             if world.has_resource::<UiNativeInputRecipientsResource>() {
                 let recipients = world.resource::<UiNativeInputRecipientsResource>()?;
                 let windows = world
                     .resource::<WindowStateRegistryResource>()
                     .context("missing native window registry")?;
-                Ok(recipients.resolve(window, windows, &mut slots)?)
+                let recipient = recipients.resolve(window, windows, &mut slots)?;
+                let epoch = recipients.binding_epoch_for_window(window);
+                if matches!(recipient, NativeInputRecipient::RunenUiSlot(_)) && epoch.is_none() {
+                    return Err(anyhow!("resolved native UI recipient has no binding lifetime"));
+                }
+                Ok((recipient, epoch))
             } else if slots.is_empty() {
-                Ok(NativeInputRecipient::LegacyNativeConsumer)
+                Ok((NativeInputRecipient::LegacyNativeConsumer, None))
             } else {
                 Err(anyhow!(
                     "mounted UI runtime has no explicit native input recipient registry"
@@ -322,9 +331,12 @@ impl WinitRunner {
         window: NativeWindowId,
         slot: UiRuntimeSlotId,
         source: InputSourceId,
+        binding_epoch: u64,
     ) -> &mut KeyboardInputState {
         let replaced = self.native_ui_keyboards.get(&window).is_some_and(|existing| {
-            existing.recipient != slot || existing.source != source
+            existing.recipient != slot
+                || existing.source != source
+                || existing.binding_epoch != binding_epoch
         });
         if replaced {
             // No key/modifier stream from the previous binding may become
@@ -338,6 +350,7 @@ impl WinitRunner {
             .or_insert_with(|| NativeUiKeyboardTranslator {
                 recipient: slot,
                 source,
+                binding_epoch,
                 keyboard: KeyboardInputState::default(),
             })
             .keyboard
@@ -357,7 +370,8 @@ impl WinitRunner {
     fn route_ui_keyboard(
         &mut self,
         window: NativeWindowId,
-        slot: crate::plugins::ui::UiRuntimeSlotId,
+        slot: UiRuntimeSlotId,
+        binding_epoch: u64,
         context: InputContext,
         original: &winit::event::KeyEvent,
         is_synthetic: bool,
@@ -366,7 +380,7 @@ impl WinitRunner {
         let device = Self::native_ui_device(context)?;
         // Revalidate the translator's actual recipient and physical-source
         // generation BEFORE reusing cached modifier or pressed-key evidence.
-        self.native_ui_keyboard_translator(window, slot, context.source);
+        self.native_ui_keyboard_translator(window, slot, context.source, binding_epoch);
         let modifiers = self
             .native_ui_modifiers
             .get(&window)
@@ -374,7 +388,7 @@ impl WinitRunner {
             .unwrap_or(KeyModifiers::NONE);
         let transition = NativeKeyTransition::from_event(original, is_synthetic);
         let translated = self
-            .native_ui_keyboard_translator(window, slot, context.source)
+            .native_ui_keyboard_translator(window, slot, context.source, binding_epoch)
             .key_input(
                 device,
                 &transition,
@@ -1136,7 +1150,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             }
             WindowEvent::Focused(focused) => {
                 if !focused
-                    && let NativeInputRecipient::RunenUiSlot(slot) =
+                    && let (NativeInputRecipient::RunenUiSlot(slot), _) =
                         self.native_input_recipient(native_window_id)?
                 {
                     self.cancel_native_ui_keyboard(native_window_id, slot)?;
@@ -1176,7 +1190,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 let input = keyboard_input(&event, is_synthetic);
                 let physical_key = input.physical_key.clone();
                 let result = match recipient {
-                    Ok(NativeInputRecipient::LegacyNativeConsumer) => {
+                    Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => {
                         match text_input(&event, is_synthetic) {
                             Some(text) => self.apply_event_group(
                                 native_window_id,
@@ -1191,7 +1205,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             ),
                         }
                     }
-                    Ok(NativeInputRecipient::RunenUiSlot(slot)) => {
+                    Ok((NativeInputRecipient::RunenUiSlot(slot), epoch)) => {
                         self.apply_event_for_native_window(
                             native_window_id,
                             PlatformEvent::KeyboardInput { context, input },
@@ -1199,6 +1213,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                         self.route_ui_keyboard(
                             native_window_id,
                             slot,
+                            epoch.context("selected native UI slot has no binding epoch")?,
                             context,
                             &event,
                             is_synthetic,
@@ -1677,7 +1692,7 @@ mod tests {
             runner
                 .native_input_recipient(secondary)
                 .expect("game-only baseline"),
-            NativeInputRecipient::LegacyNativeConsumer,
+            (NativeInputRecipient::LegacyNativeConsumer, None),
         );
 
         let mut slots = UiRuntimeSlotsResource::default();
@@ -1723,21 +1738,20 @@ mod tests {
             .state
             .world
             .insert_resource(UiRuntimePresentationAssociationsResource::default());
-        assert_eq!(
-            runner
-                .native_input_recipient(secondary)
-                .expect("selected UI recipient"),
-            NativeInputRecipient::RunenUiSlot(slot),
-        );
+        let (selected, bound_epoch) = runner
+            .native_input_recipient(secondary)
+            .expect("selected UI recipient");
+        assert_eq!(selected, NativeInputRecipient::RunenUiSlot(slot));
+        let bound_epoch = bound_epoch.expect("selected UI recipient has exact binding lifetime");
         // A device-free namespace change is still a hard translator
         // lifetime boundary; no previous UI pressed keys or modifiers survive.
         let source_a = InputSourceId::new(91);
         let source_b = InputSourceId::new(92);
-        runner.native_ui_keyboard_translator(secondary, slot, source_a);
+        runner.native_ui_keyboard_translator(secondary, slot, source_a, bound_epoch);
         runner
             .native_ui_modifiers
             .insert(secondary, KeyModifiers::SHIFT);
-        runner.native_ui_keyboard_translator(secondary, slot, source_b);
+        runner.native_ui_keyboard_translator(secondary, slot, source_b, bound_epoch);
         assert_eq!(
             runner.native_ui_keyboards.get(&secondary).map(|state| state.source),
             Some(source_b)
@@ -1754,6 +1768,47 @@ mod tests {
         assert!(
             runner.native_input_recipient(secondary).is_err(),
             "retired UI scope cannot resurrect implicit game eligibility"
+        );
+        // Retire/rebind of the SAME window/slot/source starts a new exact
+        // recipient lifetime. Its old keyboard translator must not survive.
+        let mut slots = runner
+            .state
+            .world
+            .remove_resource::<UiRuntimeSlotsResource>()
+            .expect("original UI slot remains mounted");
+        let mut recipients = runner
+            .state
+            .world
+            .remove_resource::<UiNativeInputRecipientsResource>()
+            .expect("original recipient registry");
+        recipients
+            .bind(
+                secondary,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .expect("window remains created"),
+                &mut slots,
+            )
+            .expect("explicit recipient rebind");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+        let (rebinding, new_epoch) = runner
+            .native_input_recipient(secondary)
+            .expect("same native window rebound");
+        assert_eq!(rebinding, NativeInputRecipient::RunenUiSlot(slot));
+        let new_epoch = new_epoch.expect("new exact binding lifetime");
+        assert!(new_epoch > bound_epoch, "binding generations never alias");
+        runner.native_ui_keyboard_translator(secondary, slot, source_b, bound_epoch);
+        runner
+            .native_ui_modifiers
+            .insert(secondary, KeyModifiers::SHIFT);
+        runner.native_ui_keyboard_translator(secondary, slot, source_b, new_epoch);
+        assert!(
+            !runner.native_ui_modifiers.contains_key(&secondary),
+            "new recipient epoch cannot inherit prior physical modifier state"
         );
         assert!(
             runner.state.world.has_resource::<UiRuntimeSlotsResource>(),
