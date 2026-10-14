@@ -324,7 +324,7 @@ impl UiNativeInputRecipientsResource {
                     self.requested_primary = None;
                 }
                 Ok(false)
-            },
+            }
         }
     }
 
@@ -453,7 +453,10 @@ mod tests {
         recipients
             .request_primary(NativeInputRecipient::RunenUiSlot(slot))
             .expect("initial explicit input authoring");
-        assert_eq!(recipients.realize_requested_primary(&windows, &mut slots), Ok(true));
+        assert_eq!(
+            recipients.realize_requested_primary(&windows, &mut slots),
+            Ok(true)
+        );
         assert!(recipients.retire_window(primary, &mut presentations));
         assert_eq!(recipients.requested_primary, None);
         assert_eq!(
@@ -468,7 +471,10 @@ mod tests {
         recipients
             .request_primary(NativeInputRecipient::LegacyNativeConsumer)
             .expect("new explicit native target after retirement");
-        assert_eq!(recipients.realize_requested_primary(&windows, &mut slots), Ok(true));
+        assert_eq!(
+            recipients.realize_requested_primary(&windows, &mut slots),
+            Ok(true)
+        );
         assert_eq!(
             recipients.resolve(primary, &windows, &mut slots),
             Ok(NativeInputRecipient::LegacyNativeConsumer)
@@ -487,7 +493,10 @@ mod tests {
             .expect("pre-window explicit authoring");
         assert_eq!(recipients.retire_slot(slot, &mut presentations), 0);
         assert_eq!(recipients.requested_primary, None);
-        assert_eq!(recipients.realize_requested_primary(&windows, &mut slots), Ok(false));
+        assert_eq!(
+            recipients.realize_requested_primary(&windows, &mut slots),
+            Ok(false)
+        );
     }
 
     #[test]
