@@ -744,10 +744,13 @@ impl WinitRunner {
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("UI slot authority missing during native keyboard cancellation")?;
-        for event in lifetime
-            .keyboard
-            .cancel_all(KeyModifiers::NONE, KeyboardCompositionState::Inactive)
-        {
+        let composition = slots
+            .input_ownership(slot)
+            .map(|snapshot| native_keyboard_composition(&snapshot))
+            .map_err(|reason| {
+                anyhow!("native keyboard cancellation lacked M13 pre-state: {reason:?}")
+            })?;
+        for event in lifetime.keyboard.cancel_all(KeyModifiers::NONE, composition) {
             if slots.submit_native_keyboard(slot, event).is_ok() {
                 // Cancellation does not grant gameplay, even if settlement is
                 // paused, rejected, or unavailable.
