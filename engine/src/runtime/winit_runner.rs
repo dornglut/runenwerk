@@ -697,7 +697,9 @@ impl WinitRunner {
         let mut slots = world.remove_resource::<UiRuntimeSlotsResource>()
             .context("selected UI pointer has no slot authority")?;
         let operation = (|| -> Result<()> {
-            let before = slots.input_ownership(slot)?;
+            let before = slots
+                .input_ownership(slot)
+                .map_err(|error| anyhow!("native UI pointer pre-state unavailable: {error:?}"))?;
             let recipients = world.resource::<UiNativeInputRecipientsResource>()?;
             let windows = world.resource::<WindowStateRegistryResource>()?;
             let presentations = world.resource::<UiRuntimePresentationAssociationsResource>()?;
@@ -726,7 +728,9 @@ impl WinitRunner {
                 NativePointerOrigin::new(window, device),
                 windows, &mut slots, presentations, surfaces, event,
             ).map_err(|error| anyhow!("native displayed pointer admission failed: {error:?}"))?;
-            let (batch, status) = slots.pump_native_input_records(slot)?;
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .map_err(|error| anyhow!("native UI pointer M13 pump unavailable: {error:?}"))?;
             let finality = native_pointer_finality(
                 before.scope(), device, pointer, displayed.input_context.surface_id(),
                 submission, &batch, &status,
