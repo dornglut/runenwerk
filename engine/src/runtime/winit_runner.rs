@@ -279,6 +279,9 @@ impl WinitRunner {
     }
 
     fn retire_window_input_source(&mut self, native_window_id: NativeWindowId) -> Result<bool> {
+        // Source retirement is a mandatory native pointer-stream boundary,
+        // even when an original window callback is no longer forthcoming.
+        self.cancel_native_ui_mouse(native_window_id);
         let Some(context) = self.input_adapter.window_source_context(native_window_id) else {
             return Ok(false);
         };
@@ -328,6 +331,9 @@ impl WinitRunner {
     /// BEFORE native/renderer destruction. The Engine's existing UI resources
     /// remain the sole authorities; no parallel host recipient cache exists.
     fn retire_native_input_recipient(&mut self, window: NativeWindowId) -> Result<bool> {
+        // Cancel against the previous pinned M13 scope before removing the
+        // recipient and its terminal displayed input authority.
+        self.cancel_native_ui_mouse(window);
         let world = &mut self.state.world;
         if !world.has_resource::<UiNativeInputRecipientsResource>() {
             return Ok(false);
