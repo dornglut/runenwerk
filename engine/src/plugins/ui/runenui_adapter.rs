@@ -2115,8 +2115,7 @@ mod tests {
         use runenui_core::{
             CommandOrigin, EditIntent, EditResolution, IntoUpdateOutput, NoHostProtocol,
             SemanticCommand, SemanticEditableMode, TextAffinity, TextDocumentId,
-            TextDocumentRevision, TextDocumentSnapshot, TextPosition, TextSelection,
-            UpdateOutput,
+            TextDocumentRevision, TextDocumentSnapshot, TextPosition, TextSelection, UpdateOutput,
         };
 
         #[derive(Clone)]
@@ -2162,18 +2161,16 @@ mod tests {
             ) -> impl IntoUpdateOutput<Self::Action, Self::HostProtocol> {
                 let TextAction::Edit(intent) = action;
                 let replacement = intent.replacement();
-                state
-                    .text
-                    .replace_range(replacement.start()..replacement.end(), intent.replacement_text());
+                state.text.replace_range(
+                    replacement.start()..replacement.end(),
+                    intent.replacement_text(),
+                );
                 state.revision += 1;
                 let snapshot = TextDocumentSnapshot::new(
                     TextDocumentId::new(1276),
                     TextDocumentRevision::new(state.revision),
                 );
-                UpdateOutput::edit(EditResolution::accepted(
-                    intent.request().clone(),
-                    snapshot,
-                ))
+                UpdateOutput::edit(EditResolution::accepted(intent.request().clone(), snapshot))
             }
         }
 
