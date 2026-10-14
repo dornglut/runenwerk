@@ -617,9 +617,7 @@ impl ActionState {
             ctrl: press.modifiers.ctrl
                 || uncertain(KeyCode::ControlLeft)
                 || uncertain(KeyCode::ControlRight),
-            alt: press.modifiers.alt
-                || uncertain(KeyCode::AltLeft)
-                || uncertain(KeyCode::AltRight),
+            alt: press.modifiers.alt || uncertain(KeyCode::AltLeft) || uncertain(KeyCode::AltRight),
             super_key: press.modifiers.super_key
                 || uncertain(KeyCode::SuperLeft)
                 || uncertain(KeyCode::SuperRight),
@@ -646,12 +644,10 @@ impl ActionState {
                 &press.physical_key,
                 press.generation,
             )
-            && contribution
-                .chord
-                .matches_pressed(
-                    self.possibly_present_pressed_modifiers(press),
-                    self.eligible_pressed_modifiers(press),
-                )
+            && contribution.chord.matches_pressed(
+                self.possibly_present_pressed_modifiers(press),
+                self.eligible_pressed_modifiers(press),
+            )
     }
 
     /// Retire invalidated press/held-modifier evidence immediately, including
