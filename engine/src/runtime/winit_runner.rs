@@ -217,7 +217,7 @@ impl WinitRunner {
                     Ok(())
                 }
                 Err(error) => Err(error),
-            }
+            };
         }
         self.apply_event_for_native_window(native_window_id, PlatformEvent::Focused { focused })
     }
