@@ -1,5 +1,6 @@
 use engine::plugins::ui::{
-    NativeInputRecipient, NativeInputRecipientError, UiNativeInputRecipientsResource, UiPlugin, UiRuntimeDiagnosticCode, UiRuntimeDiagnosticsResource, UiRuntimeFontConfiguration,
+    NativeInputRecipient, NativeInputRecipientError, UiNativeInputRecipientsResource, UiPlugin,
+    UiRuntimeDiagnosticCode, UiRuntimeDiagnosticsResource, UiRuntimeFontConfiguration,
     UiRuntimeSlotId, UiRuntimeSlotMountFailure, UiRuntimeSlotsResource, UiScreen, UiTypedScreenId,
     UiTypedSource,
 };
@@ -169,7 +170,11 @@ fn native_primary_input_binding_is_explicit_before_window_creation() {
         "explicit application selection is bound only against the created window"
     );
     assert_eq!(
-        recipients.resolve(engine::runtime::NativeWindowId::primary(), &windows, &mut slots),
+        recipients.resolve(
+            engine::runtime::NativeWindowId::primary(),
+            &windows,
+            &mut slots
+        ),
         Ok(NativeInputRecipient::RunenUiSlot(first_slot))
     );
     app.world_mut().insert_resource(slots);

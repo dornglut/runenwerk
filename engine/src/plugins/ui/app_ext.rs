@@ -3,10 +3,9 @@ use crate::app::App;
 use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
 
 use super::{
-    UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeFontConfiguration,
     NativeInputRecipient, NativeInputRecipientError, UiNativeInputRecipientsResource,
-    UiRuntimeSlotId, UiRuntimeSlotMountFailure, UiRuntimeSlotMountReport,
-    UiRuntimeSlotsResource, UiScreen,
+    UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeFontConfiguration, UiRuntimeSlotId,
+    UiRuntimeSlotMountFailure, UiRuntimeSlotMountReport, UiRuntimeSlotsResource, UiScreen,
 };
 
 pub trait AppUiExt {
