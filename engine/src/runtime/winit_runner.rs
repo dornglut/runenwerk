@@ -571,6 +571,37 @@ impl WinitRunner {
         // Same original event and normalized source; no alternate input owner.
         let physical_key = keyboard_input(original, is_synthetic).physical_key;
         let device = Self::native_ui_device(context)?;
+        // A keyboard transition must be translated against the SAME fresh
+        // M13 owner-authored pre-input snapshot used for its finality proof.
+        // In particular, composition-active shortcuts must not be decoded
+        // using an invented Inactive state. Observe before mutating the pinned
+        // pressed-key translator or submitting any framework work.
+        let observed = self
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .context("selected native UI runtime vanished before input observation")?
+            .input_ownership(slot);
+        let before = match observed {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                if matches!(original.state, winit::event::ElementState::Pressed) {
+                    self.deny_native_keyboard_lifetime(context, &physical_key)?;
+                }
+                tracing::trace!(
+                    target: "engine.runtime.input",
+                    ?window,
+                    ?error,
+                    "no M13 pre-input ownership: original keyboard remains neutral only"
+                );
+                return Ok(());
+            }
+        };
+        let composition = if before.keyboard().composition_generation().is_some() {
+            KeyboardCompositionState::Active
+        } else {
+            KeyboardCompositionState::Inactive
+        };
         // Revalidate the translator's actual recipient and physical-source
         // generation BEFORE reusing cached modifier or pressed-key evidence.
         self.native_ui_keyboard_translator(window, slot, context.source, device, binding_epoch);
@@ -586,7 +617,7 @@ impl WinitRunner {
                 device,
                 &transition,
                 modifiers,
-                KeyboardCompositionState::Inactive,
+                composition,
             );
 
         let permit = match translated {
@@ -596,39 +627,33 @@ impl WinitRunner {
                     .world
                     .resource_mut::<UiRuntimeSlotsResource>()
                     .context("selected UI runtime vanished from native host")?;
-                match slots.input_ownership(slot) {
-                    Ok(before) => match slots.submit_native_keyboard(slot, event) {
-                        Ok(submission) => match slots.pump_native_input_records(slot) {
-                            Ok((batch, status)) => matches!(
-                                native_keyboard_finality(
-                                    before.scope(),
-                                    device,
-                                    submission,
-                                    &batch,
-                                    &status,
-                                ),
-                                Ok(UiInputFinality::Committed(ref facts))
-                                    if matches!(
-                                        facts.conflict(),
-                                        UiInputConflict::Unclaimed
-                                            | UiInputConflict::ObservedNonexclusive
-                                    )
+                match slots.submit_native_keyboard(slot, event) {
+                    Ok(submission) => match slots.pump_native_input_records(slot) {
+                        Ok((batch, status)) => matches!(
+                            native_keyboard_finality(
+                                before.scope(),
+                                device,
+                                submission,
+                                &batch,
+                                &status,
                             ),
-                            Err(_) => false,
-                        },
-                        Err(error) => {
-                            let after = slots.input_ownership(slot);
-                            after.is_ok_and(|after| {
-                                native_no_focused_keyboard_claim_witness(
-                                    device, &before, &after, &error,
+                            Ok(UiInputFinality::Committed(ref facts))
+                                if matches!(
+                                    facts.conflict(),
+                                    UiInputConflict::Unclaimed
+                                        | UiInputConflict::ObservedNonexclusive
                                 )
-                            })
-                        }
+                        ),
+                        Err(_) => false,
                     },
-                    // No owner-authored pre-state means no input mutation and
-                    // no game grant. A later observation cannot be fabricated
-                    // from a successful framework queue submission.
-                    Err(_) => false,
+                    Err(error) => {
+                        let after = slots.input_ownership(slot);
+                        after.is_ok_and(|after| {
+                            native_no_focused_keyboard_claim_witness(
+                                device, &before, &after, &error,
+                            )
+                        })
+                    }
                 }
             }
             KeyboardInputOutcome::Suppressed(_) => false,
