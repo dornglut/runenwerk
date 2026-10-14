@@ -2,7 +2,8 @@ use crate::app::WindowedAppState;
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, UiNativeInputRecipientsResource,
-    UiRuntimePresentationAssociationsResource, UiRuntimeSlotsResource, native_keyboard_finality,
+    UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
+    native_keyboard_finality,
     native_no_focused_keyboard_claim_witness,
 };
 use crate::plugins::{ActionState, InputState};
@@ -27,7 +28,7 @@ use crate::runtime::winit_input::{
 use crate::runtime::winit_window_realizer::WinitWindowRealizer;
 use crate::runtime::{NativeHostEvent, NativeWakeTransport};
 use anyhow::{Context, Result, anyhow};
-use runen_input::{ContinuityLoss, InputContext, PhysicalKeyIdentity};
+use runen_input::{ContinuityLoss, InputContext, InputSourceId, PhysicalKeyIdentity};
 use runenui_core::{InputDeviceId as UiInputDeviceId, KeyModifiers, KeyboardCompositionState};
 use runenui_runtime::{UiInputConflict, UiInputFinality};
 use runenui_winit::keyboard_input::{
@@ -57,6 +58,15 @@ fn translate_native_ui_modifiers(state: winit::keyboard::ModifiersState) -> KeyM
         result = result.with_meta();
     }
     result
+}
+
+/// A pinned winit translator must NEVER cross its native window, physical
+/// source or selected M13 recipient lifetime. No UI focus or gameplay owner
+/// is replicated here; only the adapter's transient pressed-key state.
+struct NativeUiKeyboardTranslator {
+    recipient: UiRuntimeSlotId,
+    source: InputSourceId,
+    keyboard: KeyboardInputState,
 }
 
 pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
@@ -141,7 +151,7 @@ struct WinitRunner {
     window_realizer: WinitWindowRealizer,
     input_adapter: WinitInputAdapter,
     /// Pinned native translator state; input ownership still lives in RunenUI.
-    native_ui_keyboards: HashMap<NativeWindowId, KeyboardInputState>,
+    native_ui_keyboards: HashMap<NativeWindowId, NativeUiKeyboardTranslator>,
     native_ui_modifiers: HashMap<NativeWindowId, KeyModifiers>,
     last_primary_redraw_at: Option<Instant>,
     frame_pacing_schedule: FramePacingSchedule,
@@ -208,6 +218,8 @@ impl WinitRunner {
             .retire_window_source(native_window_id)
             .expect("known window input source must remain mapped until retirement");
         debug_assert_eq!(retired, context);
+        self.native_ui_keyboards.remove(&native_window_id);
+        self.native_ui_modifiers.remove(&native_window_id);
         if let Some(mut actions) = self.state.world.remove_resource::<ActionState>() {
             let result = self
                 .state
@@ -244,7 +256,12 @@ impl WinitRunner {
             .resource_mut::<UiRuntimePresentationAssociationsResource>()
             .map(|presentations| recipients.retire_window(window, presentations));
         world.insert_resource(recipients);
-        retired.context("native UI presentation resource disappeared")
+        let retired = retired.context("native UI presentation resource disappeared")?;
+        if retired {
+            self.native_ui_keyboards.remove(&window);
+            self.native_ui_modifiers.remove(&window);
+        }
+        Ok(retired)
     }
 
     /// Forget only after the native window record is actually destroyed.
@@ -300,6 +317,32 @@ impl WinitRunner {
         selected
     }
 
+    fn native_ui_keyboard_translator(
+        &mut self,
+        window: NativeWindowId,
+        slot: UiRuntimeSlotId,
+        source: InputSourceId,
+    ) -> &mut KeyboardInputState {
+        let replaced = self.native_ui_keyboards.get(&window).is_some_and(|existing| {
+            existing.recipient != slot || existing.source != source
+        });
+        if replaced {
+            // No key/modifier stream from the previous binding may become
+            // a pressed continuation under the replacement physical source.
+            self.native_ui_keyboards.remove(&window);
+            self.native_ui_modifiers.remove(&window);
+        }
+        &mut self
+            .native_ui_keyboards
+            .entry(window)
+            .or_insert_with(|| NativeUiKeyboardTranslator {
+                recipient: slot,
+                source,
+                keyboard: KeyboardInputState::default(),
+            })
+            .keyboard
+    }
+
     fn native_ui_device(context: InputContext) -> Result<UiInputDeviceId> {
         let device = context
             .device
@@ -321,6 +364,9 @@ impl WinitRunner {
         physical_key: &PhysicalKeyIdentity,
     ) -> Result<()> {
         let device = Self::native_ui_device(context)?;
+        // Revalidate the translator's actual recipient and physical-source
+        // generation BEFORE reusing cached modifier or pressed-key evidence.
+        self.native_ui_keyboard_translator(window, slot, context.source);
         let modifiers = self
             .native_ui_modifiers
             .get(&window)
@@ -328,9 +374,7 @@ impl WinitRunner {
             .unwrap_or(KeyModifiers::NONE);
         let transition = NativeKeyTransition::from_event(original, is_synthetic);
         let translated = self
-            .native_ui_keyboards
-            .entry(window)
-            .or_default()
+            .native_ui_keyboard_translator(window, slot, context.source)
             .key_input(
                 device,
                 &transition,
@@ -421,15 +465,21 @@ impl WinitRunner {
         slot: crate::plugins::ui::UiRuntimeSlotId,
     ) -> Result<()> {
         self.native_ui_modifiers.remove(&window);
-        let Some(mut keyboard) = self.native_ui_keyboards.remove(&window) else {
+        let Some(mut lifetime) = self.native_ui_keyboards.remove(&window) else {
             return Ok(());
         };
+        if lifetime.recipient != slot {
+            return Ok(());
+        }
         let slots = self
             .state
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("UI slot authority missing during native keyboard cancellation")?;
-        for event in keyboard.cancel_all(KeyModifiers::NONE, KeyboardCompositionState::Inactive) {
+        for event in lifetime
+            .keyboard
+            .cancel_all(KeyModifiers::NONE, KeyboardCompositionState::Inactive)
+        {
             if slots.submit_native_keyboard(slot, event).is_ok() {
                 // Cancellation does not grant gameplay, even if settlement is
                 // paused, rejected, or unavailable.
@@ -1678,6 +1728,23 @@ mod tests {
                 .native_input_recipient(secondary)
                 .expect("selected UI recipient"),
             NativeInputRecipient::RunenUiSlot(slot),
+        );
+        // A device-free namespace change is still a hard translator
+        // lifetime boundary; no previous UI pressed keys or modifiers survive.
+        let source_a = InputSourceId::new(91);
+        let source_b = InputSourceId::new(92);
+        runner.native_ui_keyboard_translator(secondary, slot, source_a);
+        runner
+            .native_ui_modifiers
+            .insert(secondary, KeyModifiers::SHIFT);
+        runner.native_ui_keyboard_translator(secondary, slot, source_b);
+        assert_eq!(
+            runner.native_ui_keyboards.get(&secondary).map(|state| state.source),
+            Some(source_b)
+        );
+        assert!(
+            !runner.native_ui_modifiers.contains_key(&secondary),
+            "a replacement input source must not reuse old modifier evidence"
         );
         assert!(
             runner
