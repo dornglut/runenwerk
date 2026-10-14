@@ -33,6 +33,7 @@ use winit::window::Window;
 const NO_RENDER_ENV: &str = "RUNENWERK_NATIVE_NO_RENDER_SMOKE";
 const RENDER_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_HOST_SMOKE";
 const RENDER_UI_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_UI_HOST_SMOKE";
+const RENDER_UI_INPUT_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_UI_INPUT_HOST_SMOKE";
 
 const COUNTER_FONT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -106,7 +107,7 @@ fn native_counter_fonts() -> UiRuntimeFontConfiguration {
 fn main() {
     if let Ok(mode) = std::env::var("RUNENWERK_NATIVE_UI_READINESS_SMOKE") {
         assert!(
-            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV]
+            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV, RENDER_UI_INPUT_HOST_ENV]
                 .iter()
                 .all(|flag| std::env::var_os(flag).is_none()),
             "native Host smoke modes are mutually exclusive"
@@ -118,18 +119,25 @@ fn main() {
         std::env::var_os(NO_RENDER_ENV).is_some(),
         std::env::var_os(RENDER_HOST_ENV).is_some(),
         std::env::var_os(RENDER_UI_HOST_ENV).is_some(),
+        std::env::var_os(RENDER_UI_INPUT_HOST_ENV).is_some(),
     ) {
-        (false, false, false) => {}
-        (true, false, false) => {
+        (false, false, false, false) => {}
+        (true, false, false, false) => {
             native_no_render_host_smoke().expect("native no-Render Host smoke should succeed")
         }
-        (false, true, false) => {
-            native_render_host_smoke(false).expect("bare native Render Host smoke should succeed");
+        (false, true, false, false) => {
+            native_render_host_smoke(false, false)
+                .expect("bare native Render Host smoke should succeed");
             run_native_render_ui_child_smoke()
-                .expect("native Render + UI Host child smoke should succeed");
+                .expect("native Render + UI passive and bound child smokes should succeed");
         }
-        (false, false, true) => {
-            native_render_host_smoke(true).expect("native Render + UI Host smoke should succeed")
+        (false, false, true, false) => {
+            native_render_host_smoke(true, false)
+                .expect("native Render + UI passive Host smoke should succeed")
+        }
+        (false, false, false, true) => {
+            native_render_host_smoke(true, true)
+                .expect("native Render + UI bound-input Host smoke should succeed")
         }
         _ => panic!("native Host smoke modes are mutually exclusive"),
     }
@@ -678,15 +686,19 @@ mod native_readiness {
 
 fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
     let executable = std::env::current_exe()?;
-    let status = Command::new(executable)
-        .env_remove(NO_RENDER_ENV)
-        .env_remove(RENDER_HOST_ENV)
-        .env(RENDER_UI_HOST_ENV, "1")
-        .status()?;
-    anyhow::ensure!(
-        status.success(),
-        "native Render + UI Host child smoke exited with {status}"
-    );
+    for variant in [RENDER_UI_HOST_ENV, RENDER_UI_INPUT_HOST_ENV] {
+        let status = Command::new(&executable)
+            .env_remove(NO_RENDER_ENV)
+            .env_remove(RENDER_HOST_ENV)
+            .env_remove(RENDER_UI_HOST_ENV)
+            .env_remove(RENDER_UI_INPUT_HOST_ENV)
+            .env(variant, "1")
+            .status()?;
+        anyhow::ensure!(
+            status.success(),
+            "native Render + UI Host child smoke {variant} exited with {status}"
+        );
+    }
     Ok(())
 }
 
@@ -793,6 +805,7 @@ struct NativeRenderHostSmokeHook {
     frames_seen: usize,
     counter_slot: Option<UiRuntimeSlotId>,
     counter_displayed: Arc<AtomicBool>,
+    expect_ui_input_binding: bool,
 }
 
 impl NativeWindowHook for NativeRenderHostSmokeHook {
@@ -839,12 +852,13 @@ impl NativeWindowHook for NativeRenderHostSmokeHook {
         self.frame_seen.store(true, Ordering::SeqCst);
         self.frames_seen += 1;
         if let Some(slot) = self.counter_slot {
+            let actual_binding = world
+                .resource::<UiNativeInputRecipientsResource>()?
+                .binding_epoch_for_window(NativeWindowId::primary())
+                .is_some();
             anyhow::ensure!(
-                world
-                    .resource::<UiNativeInputRecipientsResource>()?
-                    .binding_epoch_for_window(NativeWindowId::primary())
-                    .is_some(),
-                "author-declared UI input target was not realized before native frame"
+                actual_binding == self.expect_ui_input_binding,
+                "native UI input target must be bound only when author-declared"
             );
             let mapping = world
                 .resource::<WindowStateRegistryResource>()?
@@ -1006,7 +1020,7 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
+fn native_render_host_smoke(with_ui: bool, select_ui_input: bool) -> anyhow::Result<()> {
     let startup_ran = Arc::new(AtomicBool::new(false));
     let update_ran = Arc::new(AtomicBool::new(false));
     let frame_seen = Arc::new(AtomicBool::new(false));
@@ -1027,7 +1041,9 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
             .mount_with_fonts(NativeCounterScreen, &native_counter_fonts())
             .slot_id()
             .ok_or_else(|| anyhow::anyhow!("native U5 Counter failed to mount"))?;
-        app.ui().bind_native_primary_input(slot)?;
+        if select_ui_input {
+            app.ui().bind_native_primary_input(slot)?;
+        }
         app.world_mut()
             .resource_mut::<UiRuntimePresentationAssociationsResource>()?
             .bind(
@@ -1082,6 +1098,7 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
             frames_seen: 0,
             counter_slot,
             counter_displayed: Arc::clone(&counter_displayed),
+            expect_ui_input_binding: select_ui_input,
         });
 
     anyhow::ensure!(
@@ -1126,8 +1143,9 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
         );
     }
     println!(
-        "native_render_host_smoke=pass ui_plugin={}",
-        if with_ui { "selected" } else { "absent" }
+        "native_render_host_smoke=pass ui_plugin={} input_recipient={}",
+        if with_ui { "selected" } else { "absent" },
+        if select_ui_input { "explicit" } else { "unassigned" }
     );
     Ok(())
 }
