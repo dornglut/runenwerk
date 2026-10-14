@@ -521,6 +521,33 @@ impl WinitRunner {
         Ok(true)
     }
 
+    /// Preserve one original recipient for native pointer, wheel and touch
+    /// callbacks too. Until pinned M13 pointer delivery is integrated, UI-owned
+    /// input stays neutral physical evidence; it is NEVER dispatched to Editor
+    /// merely because no translated UI pointer settlement exists yet.
+    fn apply_semantic_native_input(
+        &mut self,
+        window: NativeWindowId,
+        event: PlatformEvent,
+    ) -> Result<()> {
+        let selection = self.native_input_recipient(window);
+        match selection {
+            Ok((recipient, _)) => {
+                self.apply_event_group_for_recipient(window, [event], Some(recipient))
+            }
+            Err(error) => {
+                self.apply_event_group_for_recipient(window, [event], None)?;
+                if error.downcast_ref::<NativeInputRecipientError>()
+                    == Some(&NativeInputRecipientError::MissingRecipient)
+                {
+                    Ok(())
+                } else {
+                    Err(error)
+                }
+            }
+        }
+    }
+
     fn apply_event_for_native_window(
         &mut self,
         native_window_id: NativeWindowId,
@@ -1294,7 +1321,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     .input_adapter
                     .window_context(native_window_id, device_id)?;
                 let input = scroll_input(delta, phase);
-                let result = self.apply_event_for_native_window(
+                let result = self.apply_semantic_native_input(
                     native_window_id,
                     PlatformEvent::MouseWheel { context, input },
                 );
@@ -1311,7 +1338,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     .input_adapter
                     .window_context(native_window_id, device_id)?;
                 let position = cursor_position(position);
-                let result = self.apply_event_for_native_window(
+                let result = self.apply_semantic_native_input(
                     native_window_id,
                     PlatformEvent::CursorMoved { context, position },
                 );
@@ -1329,7 +1356,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     .input_adapter
                     .window_context(native_window_id, device_id)?;
                 let input = pointer_button_input(state, button);
-                let result = self.apply_event_for_native_window(
+                let result = self.apply_semantic_native_input(
                     native_window_id,
                     PlatformEvent::MouseInput { context, input },
                 );
@@ -1343,7 +1370,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     .input_adapter
                     .window_context(native_window_id, touch.device_id)?;
                 let input = contact_input(touch);
-                let result = self.apply_event_for_native_window(
+                let result = self.apply_semantic_native_input(
                     native_window_id,
                     PlatformEvent::Touch { context, input },
                 );
@@ -1737,6 +1764,37 @@ mod tests {
             (NativeInputRecipient::LegacyNativeConsumer, None),
         );
 
+        // The original native journal records the actual semantic recipient
+        // for pointer callbacks before Editor drains the same authority.
+        fn cursor_observation() -> PlatformEvent {
+            PlatformEvent::CursorMoved {
+                context: InputContext::new(
+                    InputSourceId::new(91),
+                    Some(runen_input::InputDeviceId::new(5)),
+                ),
+                position: runen_input::Point2::new(
+                    24.0,
+                    12.0,
+                    runen_input::CoordinateSpace::WindowPhysicalPixels,
+                ),
+            }
+        }
+        runner.state.world.insert_resource(InputState::new());
+        runner
+            .apply_semantic_native_input(secondary, cursor_observation())
+            .expect("legacy input routed normally");
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<PlatformWindowEventQueueResource>()
+                .expect("original journal")
+                .events()
+                .last()
+                .expect("admitted legacy cursor")
+                .authorized_for_legacy_editor()
+        );
+
         let mut slots = UiRuntimeSlotsResource::default();
         let slot = slots
             .mount_app::<NativeInputApp>(
@@ -1750,6 +1808,21 @@ mod tests {
         assert!(
             runner.native_input_recipient(secondary).is_err(),
             "a mounted UI slot without explicit native binding cannot fall back to gameplay"
+        );
+        runner
+            .apply_semantic_native_input(secondary, cursor_observation())
+            .expect("passive UI leaves the native event loop running");
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<PlatformWindowEventQueueResource>()
+                .expect("original journal")
+                .events()
+                .last()
+                .expect("admitted unassigned cursor")
+                .authorized_for_legacy_editor(),
+            "unassigned pointer input is physical truth, not Editor input"
         );
         assert!(
             runner.state.world.has_resource::<UiRuntimeSlotsResource>(),
@@ -1785,6 +1858,21 @@ mod tests {
             .expect("selected UI recipient");
         assert_eq!(selected, NativeInputRecipient::RunenUiSlot(slot));
         let bound_epoch = bound_epoch.expect("selected UI recipient has exact binding lifetime");
+        runner
+            .apply_semantic_native_input(secondary, cursor_observation())
+            .expect("bound UI pointer observed without legacy dispatch");
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<PlatformWindowEventQueueResource>()
+                .expect("original journal")
+                .events()
+                .last()
+                .expect("admitted UI-targeted cursor")
+                .authorized_for_legacy_editor(),
+            "selected RunenUI input cannot be double-dispatched to Editor"
+        );
         // A device-free namespace change is still a hard translator
         // lifetime boundary; no previous UI pressed keys or modifiers survive.
         let source_a = InputSourceId::new(91);
