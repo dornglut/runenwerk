@@ -621,10 +621,9 @@ impl ActionState {
                 &press.physical_key,
                 press.generation,
             )
-            && contribution.chord.matches_pressed(
-                press.modifiers,
-                self.eligible_pressed_modifiers(press),
-            )
+            && contribution
+                .chord
+                .matches_pressed(press.modifiers, self.eligible_pressed_modifiers(press))
     }
 
     /// Retire invalidated press/held-modifier evidence immediately, including

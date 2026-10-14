@@ -317,10 +317,7 @@ impl InputState {
         }
     }
 
-    fn source_modifier_lifetimes(
-        &self,
-        context: InputContext,
-    ) -> Vec<KeyboardModifierLifetime> {
+    fn source_modifier_lifetimes(&self, context: InputContext) -> Vec<KeyboardModifierLifetime> {
         let keys = [
             KeyCode::ShiftLeft,
             KeyCode::ShiftRight,
@@ -335,9 +332,9 @@ impl InputState {
             .iter()
             .filter(|held| {
                 held.context == context
-                    && keys.iter().any(|code| {
-                        held.physical_key == physical_identity_for_key_code(*code)
-                    })
+                    && keys
+                        .iter()
+                        .any(|code| held.physical_key == physical_identity_for_key_code(*code))
             })
             .map(|held| KeyboardModifierLifetime {
                 physical_key: held.physical_key.clone(),
