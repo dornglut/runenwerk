@@ -9,7 +9,6 @@ use editor_persistence::{
     SceneModelMeshSourceRecord, ScenePrimitiveKind, ScenePrimitiveRecord, SceneTransformRecord,
     SdfPrimitiveMaterialSlotAssignmentRecord,
 };
-use editor_viewport::ViewportPresentationState;
 use engine::App;
 use engine::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use engine::plugins::render::inspect::{
@@ -45,8 +44,7 @@ use runenwerk_editor::persistence::apply_scene_file_to_runtime;
 use runenwerk_editor::runtime::app::EDITOR_MATERIAL_PREVIEW_SHADER_ID;
 use runenwerk_editor::runtime::resources::{EditorHostResource, EditorViewportSceneProductUniform};
 use runenwerk_editor::runtime::viewport::{
-    MAIN_VIEWPORT_ID, SCENE_COLOR_PRODUCT_ID, ViewportPresentationStateResource,
-    ViewportProductTargetRegistryResource, ViewportRenderStateResource,
+    SCENE_COLOR_PRODUCT_ID, ViewportProductTargetRegistryResource, ViewportRenderStateResource,
 };
 use runenwerk_editor::shell::{
     EditorSurfaceProviderRegistry, RunenwerkEditorShellState, SurfaceProviderBuildContext,
@@ -180,7 +178,9 @@ fn viewport_gpu_truth_smoke() {
     let ui_record = provenance
         .records
         .iter()
-        .find(|record| record.shader_id == "builtin:ui_composite")
+        .find(|record| {
+            record.pass_kind == engine::plugins::render::pipelines::FlowPassKind::BuiltinUiComposite
+        })
         .expect("ui pass provenance should exist before capture")
         .clone();
     let scene_target_id = viewport_record
@@ -337,7 +337,9 @@ fn viewport_gpu_truth_smoke() {
     let ui_record = provenance
         .records
         .iter()
-        .find(|record| record.shader_id == "builtin:ui_composite")
+        .find(|record| {
+            record.pass_kind == engine::plugins::render::pipelines::FlowPassKind::BuiltinUiComposite
+        })
         .expect("ui pass provenance should exist");
 
     assert!(!viewport_record.shader_id.is_empty());
@@ -1347,7 +1349,9 @@ fn ui_composite_record(app: &App) -> &RenderPassProvenanceRecord {
         .expect("pass provenance state should exist")
         .records
         .iter()
-        .find(|record| record.shader_id == "builtin:ui_composite")
+        .find(|record| {
+            record.pass_kind == engine::plugins::render::pipelines::FlowPassKind::BuiltinUiComposite
+        })
         .expect("ui composite pass provenance should exist")
 }
 
@@ -1464,7 +1468,6 @@ fn assert_material_preview_product_pixels(
     preview: EditorMaterialPreviewProduct,
     label: &str,
 ) -> App {
-    let preview_product_id = preview.viewport_product_id;
     let preview_shader_path = preview.shader_path.clone();
     let scene_shader_path = preview.scene_shader_path.clone();
     let texture_artifact_paths = preview
@@ -1492,24 +1495,9 @@ fn assert_material_preview_product_pixels(
     let mut app = app
         .run_for_frames(6)
         .expect("material gpu smoke warmup should render frames");
-    {
-        let presentations = app
-            .world_mut()
-            .resource_mut::<ViewportPresentationStateResource>()
-            .expect("viewport presentation state should exist");
-        let mut state = presentations
-            .state_for(MAIN_VIEWPORT_ID)
-            .cloned()
-            .unwrap_or_else(|| {
-                ViewportPresentationState::new(MAIN_VIEWPORT_ID, preview_product_id)
-            });
-        state.select_primary_product(preview_product_id);
-        presentations.upsert_state(state);
-    }
-
     app = app
         .run_for_frames(4)
-        .expect("selected material preview should produce provenance");
+        .expect("material preview producer should publish provenance");
     let provenance = app
         .world()
         .resource::<RenderPassProvenanceState>()
@@ -1537,6 +1525,10 @@ fn assert_material_preview_product_pixels(
         .find(|record| record.shader_id == EDITOR_MATERIAL_PREVIEW_SHADER_ID)
         .expect("material preview producer should consume the generated preview shader")
         .clone();
+    assert!(
+        !scene_record.fallback_used && !material_preview_record.fallback_used,
+        "source-backed texture programs must contribute without fallback"
+    );
     let scene_target_id = scene_record
         .render_targets
         .first()
@@ -1652,6 +1644,18 @@ fn assert_material_preview_product_pixels(
         preview_pixel[3], 255,
         "material preview output should be opaque"
     );
+    let [red, green, blue, _] = preview_pixel;
+    match label {
+        "Texture2D" => assert!(
+            green > red.saturating_add(12) && green > blue.saturating_add(12),
+            "2D preview must sample its green source texture: {preview_pixel:?}"
+        ),
+        "Texture3D" => assert!(
+            red > green.saturating_add(12) && blue > green.saturating_add(12),
+            "3D preview must sample its purple volume, independently of the scene table's 2D textures: {preview_pixel:?}"
+        ),
+        _ => panic!("unknown source-texture proof {label}"),
+    }
     assert!(
         scene_pixel[..3].iter().any(|channel| *channel > 0)
             && preview_pixel[..3].iter().any(|channel| *channel > 0),

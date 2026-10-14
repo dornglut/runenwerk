@@ -602,14 +602,7 @@ impl Renderer {
         if bindings.is_empty() {
             return Ok(None);
         }
-        bindings.sort_by_key(|binding| {
-            (
-                binding.bind_group,
-                binding.texture_binding,
-                binding.sampler_binding,
-                binding.resource_slot_index,
-            )
-        });
+        bindings.sort_by_key(|binding| binding.resource_order_key());
 
         let material_group = bindings[0].bind_group;
         if material_group != 1
@@ -1240,6 +1233,7 @@ fn hash_prepared_feature_contribution(
                 instance.parameter_payload.encode_v1().hash(&mut hasher);
                 instance.texture_bindings.len().hash(&mut hasher);
                 for binding in &instance.texture_bindings {
+                    binding.program_scope.hash(&mut hasher);
                     binding.node_id.hash(&mut hasher);
                     binding.binding_key.hash(&mut hasher);
                     binding.resource_slot_index.hash(&mut hasher);
@@ -1359,6 +1353,47 @@ mod tests {
         assert_eq!(destination.extent().height(), 1);
         assert_eq!(destination.extent().depth_or_layers(), 1);
         assert_eq!(operation.payload().as_bytes(), bytes.as_slice());
+    }
+
+    #[test]
+    fn material_contribution_hash_tracks_texture_program_ownership() {
+        use crate::plugins::render::PreparedMaterialTextureProgramScope;
+        let binding = PreparedMaterialTextureBinding::new(
+            1,
+            "texture_ref",
+            PreparedMaterialTextureBindingLocation::new(0, 1, 0, 1),
+            "artifact",
+            "texture.ktx2",
+            PreparedMaterialTextureKind::Texture2D,
+            "cache",
+        );
+        let mut contribution = PreparedFeatureContribution {
+            status: FeatureContributionStatus::Ready,
+            fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
+            payload: PreparedFeaturePayload::Material(PreparedMaterialFeatureContribution {
+                instances: vec![PreparedMaterialInstanceInput {
+                    material_instance_id: "material.product.1".into(),
+                    specialization_key_fragment: "material.first_slice".into(),
+                    parameter_payload: PreparedMaterialParameterPayloadV1::default(),
+                    texture_bindings: vec![binding],
+                }],
+                ..Default::default()
+            }),
+        };
+        let before = hash_prepared_feature_contribution(&contribution);
+        let PreparedFeaturePayload::Material(material) = &mut contribution.payload else {
+            unreachable!()
+        };
+        material.instances[0].texture_bindings[0].program_scope =
+            PreparedMaterialTextureProgramScope::SceneBundle;
+        let scene = hash_prepared_feature_contribution(&contribution);
+        assert_ne!(before, scene);
+        let PreparedFeaturePayload::Material(material) = &mut contribution.payload else {
+            unreachable!()
+        };
+        material.instances[0].texture_bindings[0].program_scope =
+            PreparedMaterialTextureProgramScope::ShaderAsset("preview".into());
+        assert_ne!(scene, hash_prepared_feature_contribution(&contribution));
     }
 
     #[test]

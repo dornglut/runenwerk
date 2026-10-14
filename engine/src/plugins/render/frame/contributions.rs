@@ -501,8 +501,31 @@ impl PreparedMaterialFeatureContribution {
         }
         let mut seen = std::collections::BTreeSet::new();
         let mut shader_declarations = std::collections::BTreeMap::new();
+        let mut has_shared_scope = false;
+        let mut has_program_scope = false;
         for instance in &self.instances {
             for binding in &instance.texture_bindings {
+                match &binding.program_scope {
+                    PreparedMaterialTextureProgramScope::AllMaterialPrograms => {
+                        has_shared_scope = true;
+                    }
+                    PreparedMaterialTextureProgramScope::SceneBundle => {
+                        has_program_scope = true;
+                    }
+                    PreparedMaterialTextureProgramScope::ShaderAsset(id) => {
+                        has_program_scope = true;
+                        if id.is_empty() || id.trim() != id || id.chars().any(char::is_control) {
+                            return Err(PreparedMaterialBindingTableError::new(
+                                "material texture shader asset scope requires a normalized non-empty id",
+                            ));
+                        }
+                    }
+                }
+                if has_shared_scope && has_program_scope {
+                    return Err(PreparedMaterialBindingTableError::new(
+                        "material texture bindings cannot mix all-program and program-specific scopes",
+                    ));
+                }
                 if binding.resource_slot_index as usize
                     >= PREPARED_MATERIAL_TEXTURE_RESOURCE_PORTABLE_SLOT_LIMIT
                 {
@@ -512,7 +535,7 @@ impl PreparedMaterialFeatureContribution {
                         PREPARED_MATERIAL_TEXTURE_RESOURCE_PORTABLE_SLOT_LIMIT
                     )));
                 }
-                if !seen.insert(binding.resource_slot_index) {
+                if !seen.insert((&binding.program_scope, binding.resource_slot_index)) {
                     return Err(PreparedMaterialBindingTableError::new(format!(
                         "duplicate material texture resource slot {}",
                         binding.resource_slot_index
@@ -532,11 +555,19 @@ impl PreparedMaterialFeatureContribution {
                 }
                 for (key, declaration) in [
                     (
-                        (binding.bind_group, binding.texture_binding),
+                        (
+                            &binding.program_scope,
+                            binding.bind_group,
+                            binding.texture_binding,
+                        ),
                         PreparedMaterialShaderDeclarationKind::Texture(binding.texture_kind),
                     ),
                     (
-                        (binding.bind_group, binding.sampler_binding),
+                        (
+                            &binding.program_scope,
+                            binding.bind_group,
+                            binding.sampler_binding,
+                        ),
                         PreparedMaterialShaderDeclarationKind::Sampler,
                     ),
                 ] {
@@ -546,12 +577,12 @@ impl PreparedMaterialFeatureContribution {
                         let message = if existing == declaration {
                             format!(
                                 "duplicate material shader binding key ({}, {}) for resource slots {} and {}",
-                                key.0, key.1, existing_resource_slot, binding.resource_slot_index
+                                key.1, key.2, existing_resource_slot, binding.resource_slot_index
                             )
                         } else {
                             format!(
                                 "conflicting material shader declarations for binding key ({}, {}) from resource slots {} and {}",
-                                key.0, key.1, existing_resource_slot, binding.resource_slot_index
+                                key.1, key.2, existing_resource_slot, binding.resource_slot_index
                             )
                         };
                         return Err(PreparedMaterialBindingTableError::new(message));
@@ -1125,8 +1156,19 @@ impl PreparedMaterialTextureBindingLocation {
     }
 }
 
+/// Shader ABI ownership of a texture's compiler-published coordinates.
+/// AllMaterialPrograms is valid only when every material consumer shares that ABI;
+/// a scene table and an independently compiled preview require explicit scopes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum PreparedMaterialTextureProgramScope {
+    AllMaterialPrograms,
+    SceneBundle,
+    ShaderAsset(String),
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PreparedMaterialTextureBinding {
+    pub program_scope: PreparedMaterialTextureProgramScope,
     pub node_id: u64,
     pub binding_key: String,
     pub resource_slot_index: u32,
@@ -1153,6 +1195,18 @@ pub struct PreparedMaterialTextureBinding {
 }
 
 impl PreparedMaterialTextureBinding {
+    pub(crate) fn resource_order_key(
+        &self,
+    ) -> (PreparedMaterialTextureProgramScope, u32, u32, u32, u32) {
+        (
+            self.program_scope.clone(),
+            self.bind_group,
+            self.texture_binding,
+            self.sampler_binding,
+            self.resource_slot_index,
+        )
+    }
+
     pub fn new(
         node_id: u64,
         binding_key: impl Into<String>,
@@ -1163,6 +1217,7 @@ impl PreparedMaterialTextureBinding {
         cache_key: impl Into<String>,
     ) -> Self {
         Self {
+            program_scope: PreparedMaterialTextureProgramScope::AllMaterialPrograms,
             node_id,
             binding_key: binding_key.into(),
             resource_slot_index: location.resource_slot_index,
@@ -1338,6 +1393,56 @@ mod tests {
             .expect_err("slot above portable limit should fail");
 
         assert!(error.to_string().contains("exceeds portable limit"));
+    }
+
+    #[test]
+    fn material_texture_program_scopes_isolate_shader_coordinates_and_reject_ambiguity() {
+        let mut scene = PreparedMaterialTextureBinding::new(
+            1,
+            "texture_ref",
+            PreparedMaterialTextureBindingLocation::new(0, 1, 0, 1),
+            "scene-artifact",
+            "scene.ktx2",
+            PreparedMaterialTextureKind::Texture2D,
+            "scene-cache",
+        );
+        scene.program_scope = PreparedMaterialTextureProgramScope::SceneBundle;
+        let mut preview = scene.clone();
+        preview.program_scope = PreparedMaterialTextureProgramScope::ShaderAsset("preview".into());
+        preview.texture_kind = PreparedMaterialTextureKind::Texture3D;
+        let mut contribution = PreparedMaterialFeatureContribution {
+            instances: vec![PreparedMaterialInstanceInput {
+                material_instance_id: "material.product.1".into(),
+                specialization_key_fragment: "material.first_slice".into(),
+                parameter_payload: PreparedMaterialParameterPayloadV1::default(),
+                texture_bindings: vec![scene, preview],
+            }],
+            ..Default::default()
+        };
+        contribution.validate_portable_limits().expect(
+            "different programs may reuse resource slots and shader coordinates with different dimensions",
+        );
+        let binding = &mut contribution.instances[0].texture_bindings[1];
+        binding.program_scope = PreparedMaterialTextureProgramScope::SceneBundle;
+        assert!(contribution.validate_portable_limits().is_err());
+        contribution.instances[0].texture_bindings[1].program_scope =
+            PreparedMaterialTextureProgramScope::AllMaterialPrograms;
+        assert!(
+            contribution
+                .validate_portable_limits()
+                .unwrap_err()
+                .to_string()
+                .contains("cannot mix")
+        );
+        contribution.instances[0].texture_bindings[1].program_scope =
+            PreparedMaterialTextureProgramScope::ShaderAsset(" preview ".into());
+        assert!(
+            contribution
+                .validate_portable_limits()
+                .unwrap_err()
+                .to_string()
+                .contains("normalized")
+        );
     }
 
     #[test]

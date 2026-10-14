@@ -7,7 +7,8 @@ use editor_viewport::ViewportSurfacePresentationSlot;
 use engine::plugins::render::RenderTargetAliasKey;
 use engine::plugins::render::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedFlowInvocationRequest,
-    PreparedMaterialFeatureResource, PreparedRenderFrameRequestResource, PreparedViewFrame,
+    PreparedMaterialFeatureResource, PreparedMaterialTextureProgramScope,
+    PreparedRenderFrameRequestResource, PreparedViewFrame,
     RenderDynamicTextureTargetRequestRegistryResource, RenderFlowId, RenderFlowRegistryResource,
     RenderProductSurfaceManifest, RenderProductSurfaceRequest, RenderProductSurfaceRequestBatch,
     ShaderRegistryResource, compile_scene_material_table_shader,
@@ -24,7 +25,8 @@ use crate::material_lab::{
     PreviewSceneProductDiagnostic, SceneMaterialSlotProduct,
     build_preview_scene_product_for_scene_material_table,
     material_preview_scene_surface_descriptor, material_preview_scene_surface_target_key,
-    prepared_material_resource_for_preview, prepared_material_resource_for_preview_scene_product,
+    prepared_material_contribution_for_preview, prepared_material_resource_for_preview,
+    prepared_material_resource_for_preview_scene_product,
     scene_material_table_shader_build_request_for_preview,
 };
 use crate::runtime::app::{EDITOR_MATERIAL_PREVIEW_FLOW_ID, EDITOR_MATERIAL_PREVIEW_SHADER_ID};
@@ -201,7 +203,10 @@ pub(crate) fn prepare_material_preview_render_resource_with_preview_scene_produc
                 scene_material_assignments,
                 slot_products,
                 scene_table_bundle,
-            ) {
+            )
+            .and_then(|resource| {
+                scope_scene_table_preview_textures(resource, preview, scene_table_bundle.is_some())
+            }) {
                 Ok(resource) => {
                     *material_feature = resource;
                 }
@@ -214,12 +219,8 @@ pub(crate) fn prepare_material_preview_render_resource_with_preview_scene_produc
                     return Some(diagnostic);
                 }
             }
-        } else if material_feature.status != FeatureContributionStatus::Ready {
-            *material_feature = PreparedMaterialFeatureResource {
-                status: FeatureContributionStatus::Missing,
-                fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
-                payload: Default::default(),
-            };
+        } else {
+            retain_material_payload_while_shaders_load(material_feature);
         }
     } else {
         *material_feature = prepared_material_resource_for_preview(None)
@@ -270,7 +271,10 @@ pub(crate) fn prepare_material_preview_render_resource_with_scene_materials(
                 scene_material_assignments,
                 slot_products,
                 scene_table_bundle,
-            ) {
+            )
+            .and_then(|resource| {
+                scope_scene_table_preview_textures(resource, preview, scene_table_bundle.is_some())
+            }) {
                 Ok(resource) => {
                     *material_feature = resource;
                 }
@@ -284,19 +288,70 @@ pub(crate) fn prepare_material_preview_render_resource_with_scene_materials(
                 }
             }
         } else {
-            if material_feature.status != FeatureContributionStatus::Ready {
-                *material_feature = PreparedMaterialFeatureResource {
-                    status: FeatureContributionStatus::Missing,
-                    fallback_policy: FeatureFallbackPolicy::SkipFeaturePasses,
-                    payload: Default::default(),
-                };
-            }
+            retain_material_payload_while_shaders_load(material_feature);
         }
     } else {
         *material_feature = prepared_material_resource_for_preview(None)
             .expect("missing material preview cannot violate portable handoff limits");
     }
     None
+}
+
+/// A scene-table program has its own compiler layout. The active preview may
+/// reference another material entirely, so retain its source-owned bindings
+/// rather than selecting or renumbering a subset of the table's resources.
+fn scope_scene_table_preview_textures(
+    mut resource: PreparedMaterialFeatureResource,
+    preview: &EditorMaterialPreviewProduct,
+    has_scene_table_program: bool,
+) -> Result<PreparedMaterialFeatureResource, asset::AssetDiagnosticRecord> {
+    if !has_scene_table_program {
+        return Ok(resource);
+    }
+    for instance in &mut resource.payload.instances {
+        for binding in &mut instance.texture_bindings {
+            binding.program_scope = PreparedMaterialTextureProgramScope::SceneBundle;
+        }
+    }
+    for mut instance in prepared_material_contribution_for_preview(preview)?.instances {
+        if instance.texture_bindings.is_empty() {
+            continue;
+        }
+        instance.material_instance_id =
+            format!("material.preview.{}", preview.product.product_id.raw());
+        for binding in &mut instance.texture_bindings {
+            binding.program_scope = PreparedMaterialTextureProgramScope::ShaderAsset(
+                EDITOR_MATERIAL_PREVIEW_SHADER_ID.to_string(),
+            );
+        }
+        resource.payload.instances.push(instance);
+    }
+    resource
+        .payload
+        .validate_portable_limits()
+        .map_err(|error| {
+            asset::AssetDiagnosticRecord::error(
+                asset::AssetDiagnosticCode::RatificationRejected,
+                format!(
+                    "program-scoped material texture handoff rejected portable limits: {error}"
+                ),
+            )
+        })?;
+    Ok(resource)
+}
+
+fn retain_material_payload_while_shaders_load(resource: &mut PreparedMaterialFeatureResource) {
+    // Render's later shader polling can load the replacement during this frame.
+    // Retain the prior payload, but never pair it with a newly loaded program.
+    resource.status = match resource.status {
+        FeatureContributionStatus::Ready | FeatureContributionStatus::Stale => {
+            FeatureContributionStatus::Stale
+        }
+        FeatureContributionStatus::Missing | FeatureContributionStatus::Disabled => {
+            FeatureContributionStatus::Missing
+        }
+    };
+    resource.fallback_policy = FeatureFallbackPolicy::SkipFeaturePasses;
 }
 
 fn preview_scene_product_shader_is_loaded(
@@ -844,14 +899,11 @@ mod tests {
     }
 
     #[test]
-    fn material_feature_preserves_prior_ready_bundle_while_new_shaders_load() {
+    fn material_feature_retains_prior_bundle_without_scheduling_it_with_new_shaders() {
         let preview = preview();
         let mut shader_registry = ShaderRegistryResource::new();
-        let mut material_feature = PreparedMaterialFeatureResource {
-            status: FeatureContributionStatus::Ready,
-            fallback_policy: engine::plugins::render::FeatureFallbackPolicy::ReuseLastGood,
-            payload: Default::default(),
-        };
+        let mut material_feature = prepared_material_resource_for_preview(Some(&preview)).unwrap();
+        let prior_bundle = material_feature.payload.scene_bundle.clone();
 
         let diagnostic = prepare_material_preview_render_resource(
             Some(&preview),
@@ -860,7 +912,19 @@ mod tests {
         );
 
         assert!(diagnostic.is_none());
-        assert_eq!(material_feature.status, FeatureContributionStatus::Ready);
+        assert_eq!(material_feature.status, FeatureContributionStatus::Stale);
+        assert_eq!(
+            material_feature.fallback_policy,
+            FeatureFallbackPolicy::SkipFeaturePasses
+        );
+        assert_eq!(material_feature.payload.scene_bundle, prior_bundle);
+        // Repeated pending frames keep the prior valid payload available.
+        prepare_material_preview_render_resource(
+            Some(&preview),
+            &mut material_feature,
+            &mut shader_registry,
+        );
+        assert_eq!(material_feature.payload.scene_bundle, prior_bundle);
     }
 
     #[test]
@@ -1024,6 +1088,67 @@ mod tests {
             scene_bundle.resource_layout_identity,
             bundle.resource_layout_identity
         );
+        let scene_textures = material_feature
+            .payload
+            .instances
+            .iter()
+            .flat_map(|instance| &instance.texture_bindings)
+            .filter(|binding| {
+                binding.program_scope == PreparedMaterialTextureProgramScope::SceneBundle
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(scene_textures.len(), 2);
+        let preview_textures = material_feature
+            .payload
+            .instances
+            .iter()
+            .flat_map(|instance| &instance.texture_bindings)
+            .filter(|binding| {
+                binding.program_scope
+                    == PreparedMaterialTextureProgramScope::ShaderAsset(
+                        EDITOR_MATERIAL_PREVIEW_SHADER_ID.into(),
+                    )
+            })
+            .collect::<Vec<_>>();
+        let expected_preview =
+            prepared_material_contribution_for_preview(&default_preview).unwrap();
+        assert_eq!(preview_textures.len(), 1);
+        let expected = &expected_preview.instances[0].texture_bindings[0];
+        assert_eq!(preview_textures[0].artifact_id, expected.artifact_id);
+        assert_eq!(
+            preview_textures[0].texture_binding,
+            expected.texture_binding
+        );
+        assert_eq!(
+            preview_textures[0].sampler_binding,
+            expected.sampler_binding
+        );
+
+        // Re-select the assigned material as a preview without changing the scene
+        // table. Its preview ABI starts at zero, while its table ABI is remapped.
+        let mut scene_resource = material_feature.clone();
+        scene_resource.payload.instances.retain(|instance| {
+            !instance
+                .material_instance_id
+                .starts_with("material.preview.")
+        });
+        let assigned_resource =
+            scope_scene_table_preview_textures(scene_resource, &assigned_preview, true).unwrap();
+        let assigned = assigned_resource.payload.instances.last().unwrap();
+        let expected_assigned =
+            prepared_material_contribution_for_preview(&assigned_preview).unwrap();
+        assert_eq!(
+            assigned.texture_bindings[0].artifact_id,
+            expected_assigned.instances[0].texture_bindings[0].artifact_id
+        );
+        assert_eq!(
+            assigned.texture_bindings[0].texture_binding,
+            expected_assigned.instances[0].texture_bindings[0].texture_binding
+        );
+        assert_eq!(
+            assigned_resource.payload.binding_table,
+            material_feature.payload.binding_table
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
@@ -1106,6 +1231,13 @@ mod tests {
             MaterialCacheKey::new(format!("material-cache-{label}")),
         );
         product.executable_ir = Some(ir);
+        let compiled = engine::plugins::render::compile_material_shader(
+            engine::plugins::render::MaterialShaderCompileRequest {
+                ir: product.executable_ir.as_ref().expect("texture IR"),
+                fixture: engine::plugins::render::MaterialPreviewFixture::Sphere,
+            },
+        )
+        .expect("texture fixture compiler interface");
         EditorMaterialPreviewProduct::new(
             asset_id,
             asset_source_id(product_id + 200),
@@ -1123,6 +1255,7 @@ mod tests {
             format!("scene-shader-identity-{label}"),
             vec![resolved_texture_resource(product_id, texture_stable_id)],
         )
+        .with_compiler_resource_bindings(compiled.resource_bindings)
     }
 
     fn texture_ir(document_id: u64, texture_stable_id: &str) -> MaterialIr {
