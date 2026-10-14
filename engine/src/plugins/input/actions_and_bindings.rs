@@ -1,5 +1,5 @@
 use super::state::{InputState, ModifiersSnapshot};
-use runen_input::{InputContext, PhysicalKeyIdentity};
+use runen_input::{InputContext, InputSourceId, PhysicalKeyIdentity};
 use std::collections::{HashMap, HashSet};
 use winit::keyboard::KeyCode;
 
@@ -329,6 +329,7 @@ struct PressedActionContributor {
     context: InputContext,
     key: PhysicalKeyIdentity,
     generation: u64,
+    sample_index: usize,
 }
 
 /// A revoked held physical key remains blocked through synthetic cancellation,
@@ -558,10 +559,53 @@ impl ActionState {
         });
     }
 
+    /// A focus-loss/continuity event may arrive after PreUpdate projected
+    /// presses. Retract only those contributions from the invalidated source
+    /// lifetime, not unrelated source presses in the same frame.
+    fn retract_continuity_invalidated_presses(&mut self, input: &InputState) {
+        let before = self.pressed_contributors.len();
+        let presses = input.keyboard_press_samples();
+        self.pressed_contributors.retain(|contributor| {
+            presses
+                .get(contributor.sample_index)
+                .is_some_and(|press| !press.retired_by_continuity)
+        });
+        if self.pressed_contributors.len() != before {
+            self.actions_pressed = self
+                .pressed_contributors
+                .iter()
+                .map(|pressed| pressed.action.clone())
+                .collect();
+        }
+    }
+
+    /// Only real native source retirement releases denied lifetime storage.
+    /// Ordinary focus loss is NOT source retirement: it must retain denial
+    /// through synthetic key restoration until the original physical Up.
+    pub(crate) fn retire_native_keyboard_source(
+        &mut self,
+        input: &InputState,
+        source: InputSourceId,
+    ) {
+        self.revoked_keyboard_lifetimes
+            .retain(|entry| entry.context.source != source);
+        self.blocked_held_keys
+            .retain(|entry| entry.context.source != source);
+        self.pressed_contributors
+            .retain(|entry| entry.context.source != source);
+        self.actions_pressed = self
+            .pressed_contributors
+            .iter()
+            .map(|entry| entry.action.clone())
+            .collect();
+        self.recompute_action_down_states(input);
+    }
+
     fn project_presses(&mut self, input: &InputState, start: usize, end: usize) {
         let presses = input.keyboard_press_samples();
-        for press in presses.iter().take(end).skip(start) {
-            if self.blocked_held_key(press.context, &press.physical_key)
+        for (sample_index, press) in presses.iter().enumerate().take(end).skip(start) {
+            if press.retired_by_continuity
+                || self.blocked_held_key(press.context, &press.physical_key)
                 || !self.keyboard_generation_eligible(
                     press.context,
                     &press.physical_key,
@@ -580,6 +624,7 @@ impl ActionState {
                     context: press.context,
                     key: press.physical_key.clone(),
                     generation: press.generation,
+                    sample_index,
                 });
             }
         }
@@ -587,6 +632,7 @@ impl ActionState {
 
     pub fn project(&mut self, input: &InputState) {
         self.retire_genuinely_released_denials(input);
+        self.retract_continuity_invalidated_presses(input);
         self.recompute_action_down_states(input);
         let end = input.keyboard_press_samples().len();
         self.project_presses(input, self.processed_keyboard_presses, end);

@@ -115,6 +115,9 @@ pub(super) struct KeyboardPressSample {
     /// Non-repeating identity of this exact physical Down generation.
     pub(super) generation: u64,
     pub(super) modifiers: ModifiersSnapshot,
+    /// Source/device continuity loss invalidates even an already-released
+    /// Down's pending frame press, without fabricating an Up.
+    pub(super) retired_by_continuity: bool,
 }
 
 /// An authentic physical Up report, recorded for ActionState's same-source
@@ -210,6 +213,11 @@ impl InputState {
                     self.keyboard_held_contributors.retain(|contributor| {
                         !continuity_loss_contains_context(group.context, *loss, contributor.context)
                     });
+                    for press in &mut self.keyboard_press_samples {
+                        if continuity_loss_contains_context(group.context, *loss, press.context) {
+                            press.retired_by_continuity = true;
+                        }
+                    }
                 }
                 _ => {}
             }
@@ -252,6 +260,7 @@ impl InputState {
                         physical_key: input.physical_key.clone(),
                         generation,
                         modifiers: self.source_modifiers_from_held_index(context),
+                        retired_by_continuity: false,
                     });
                 }
             }

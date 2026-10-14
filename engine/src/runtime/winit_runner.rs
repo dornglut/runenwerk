@@ -1,5 +1,5 @@
 use crate::app::WindowedAppState;
-use crate::plugins::InputState;
+use crate::plugins::{ActionState, InputState};
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     UiNativeInputRecipientsResource, UiRuntimePresentationAssociationsResource,
@@ -178,6 +178,16 @@ impl WinitRunner {
             .retire_window_source(native_window_id)
             .expect("known window input source must remain mapped until retirement");
         debug_assert_eq!(retired, context);
+        if let Some(mut actions) = self.state.world.remove_resource::<ActionState>() {
+            let result = self
+                .state
+                .world
+                .resource::<InputState>()
+                .context("missing neutral input after native source retirement")
+                .map(|input| actions.retire_native_keyboard_source(input, context.source));
+            self.state.world.insert_resource(actions);
+            result?;
+        }
         Ok(true)
     }
 
@@ -204,7 +214,7 @@ impl WinitRunner {
             .resource_mut::<UiRuntimePresentationAssociationsResource>()
             .map(|presentations| recipients.retire_window(window, presentations));
         world.insert_resource(recipients);
-        Ok(retired.context("native UI presentation resource disappeared")?)
+        retired.context("native UI presentation resource disappeared")
     }
 
     /// Forget only after the native window record is actually destroyed.
@@ -1439,6 +1449,60 @@ mod tests {
                 .state
                 .world
                 .has_resource::<UiRuntimePresentationAssociationsResource>()
+        );
+    }
+
+    #[test]
+    fn native_source_retirement_retracts_projected_game_action_evidence() {
+        use crate::plugins::{ActionState, action};
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        let source = runner
+            .input_adapter
+            .window_context(NativeWindowId::primary(), winit::event::DeviceId::dummy())
+            .expect("monotonic source and device identities");
+        let key_press = PlatformEvent::KeyboardInput {
+            context: source,
+            input: runen_input::KeyboardInput {
+                physical_key: runen_input::PhysicalKeyIdentity::code("KeyW"),
+                logical_key: runen_input::LogicalKey::Native(
+                    runen_input::NativeLogicalKey::Unidentified,
+                ),
+                location: runen_input::KeyLocation::Standard,
+                state: runen_input::DigitalState::Pressed,
+                repeat: false,
+                origin: runen_input::ObservationOrigin::SourceReport,
+            },
+        };
+        runner
+            .apply_event(key_press)
+            .expect("physical window Down admitted");
+        let mut actions = runner
+            .state
+            .world
+            .remove_resource::<ActionState>()
+            .expect("game ActionState");
+        actions.project(runner.state.world.resource::<InputState>().expect("neutral input"));
+        assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+        assert!(actions.action_down(action::WORLD_MOVE_UP));
+        runner.state.world.insert_resource(actions);
+
+        assert!(runner
+            .retire_window_input_source(NativeWindowId::primary())
+            .expect("real window source retirement"));
+        let actions = runner
+            .state
+            .world
+            .resource::<ActionState>()
+            .expect("retained ActionState resource");
+        assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+        assert!(!actions.action_down(action::WORLD_MOVE_UP));
+        assert_eq!(
+            runner
+                .input_adapter
+                .window_source_context(NativeWindowId::primary()),
+            None
         );
     }
 

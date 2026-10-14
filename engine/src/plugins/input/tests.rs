@@ -1031,3 +1031,82 @@ fn delayed_old_m13_denial_never_claims_new_physical_down_generation() {
     assert!(actions.action_pressed(action::WORLD_MOVE_UP));
     assert!(actions.action_down(action::WORLD_MOVE_UP));
 }
+
+#[test]
+fn source_continuity_retracts_only_affected_action_presses_even_after_projection() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let old = InputContext::new(InputSourceId::new(410), Some(InputDeviceId::new(1)));
+    let other = InputContext::new(InputSourceId::new(411), Some(InputDeviceId::new(2)));
+
+    input.handle_normalized_keyboard(old, &normalized_key(DigitalState::Pressed));
+    input.handle_normalized_keyboard(
+        other,
+        &KeyboardInput {
+            physical_key: physical_key(KeyCode::KeyA),
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_pressed(action::WORLD_MOVE_LEFT));
+
+    // A source invalidation, not an authentic Up, removes only that source's
+    // pending and already-projected action contribution.
+    input.handle_continuity_loss(old, ContinuityLoss::Source);
+    actions.project(&input);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+    assert!(actions.action_pressed(action::WORLD_MOVE_LEFT));
+    assert!(actions.action_down(action::WORLD_MOVE_LEFT));
+
+    actions.retire_native_keyboard_source(&input, old.source);
+    clear_frame(&mut input, &mut actions);
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_LEFT));
+}
+
+#[test]
+fn continuity_before_projection_does_not_replay_old_source_pressed() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let old = InputContext::new(InputSourceId::new(412), Some(InputDeviceId::new(3)));
+    input.handle_normalized_keyboard(old, &normalized_key(DigitalState::Pressed));
+    input.handle_continuity_loss(old, ContinuityLoss::Source);
+    actions.project(&input);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+}
+
+#[test]
+fn actual_native_source_retirement_frees_denial_but_focus_loss_does_not() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let old = InputContext::new(InputSourceId::new(413), Some(InputDeviceId::new(3)));
+    let key = physical_key(KeyCode::KeyW);
+    input.handle_normalized_keyboard(old, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    let generation = input.keyboard_down_generation_in(old, &key).unwrap();
+    actions.revoke_keyboard_lifetime(&input, old, &key, generation);
+    input.handle_continuity_loss(old, ContinuityLoss::Source);
+    clear_frame(&mut input, &mut actions);
+
+    // Source still exists after native focus loss. Even a synthetic press
+    // cannot resurrect a previously revoked physical lifetime.
+    input.handle_normalized_keyboard(
+        old,
+        &KeyboardInput {
+            origin: ObservationOrigin::BackendSyntheticReconciliation,
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    actions.project(&input);
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+
+    // Destruction uses monotonic never-reused source identity and reclaims
+    // denials; other sources are unaffected.
+    input.handle_continuity_loss(old, ContinuityLoss::Source);
+    actions.retire_native_keyboard_source(&input, old.source);
+    clear_frame(&mut input, &mut actions);
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+}
