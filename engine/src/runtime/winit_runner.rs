@@ -645,6 +645,31 @@ impl WinitRunner {
         }
         let window_contexts = self.input_adapter.retire_window_device(device_id)?;
         let raw_context = self.input_adapter.retire_raw_device(device_id)?;
+        // Device removal also retires the pinned keyboard translator lifetime.
+        // The native window/source can remain alive; a new hardware generation
+        // must never reuse cached pressed keys, modifiers or M13 keyboard state.
+        if let Some(retired_device) = window_contexts.first().and_then(|context| context.device) {
+            let keyboard_targets: Vec<_> = self
+                .native_ui_keyboards
+                .iter()
+                .filter_map(|(window, lifetime)| {
+                    (lifetime.device.raw() == retired_device.raw())
+                        .then_some((*window, lifetime.recipient))
+                })
+                .collect();
+            for (window, recipient) in keyboard_targets {
+                if let Err(error) = self.cancel_native_ui_keyboard(window, recipient) {
+                    // Even a stale UI slot must not stop the original neutral
+                    // device loss and ActionState retirement below.
+                    tracing::warn!(
+                        target: "engine.runtime.input",
+                        ?window,
+                        ?error,
+                        "native keyboard cancellation failed during device removal"
+                    );
+                }
+            }
+        }
         if window_contexts.is_empty() && raw_context.is_none() {
             return Ok(!windows.is_empty());
         }
