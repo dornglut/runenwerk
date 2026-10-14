@@ -70,6 +70,7 @@ fn translate_native_ui_modifiers(state: winit::keyboard::ModifiersState) -> KeyM
 struct NativeUiKeyboardTranslator {
     recipient: UiRuntimeSlotId,
     source: InputSourceId,
+    device: UiInputDeviceId,
     binding_epoch: u64,
     keyboard: KeyboardInputState,
 }
@@ -445,6 +446,7 @@ impl WinitRunner {
         window: NativeWindowId,
         slot: UiRuntimeSlotId,
         source: InputSourceId,
+        device: UiInputDeviceId,
         binding_epoch: u64,
     ) -> &mut KeyboardInputState {
         let replaced = self
@@ -453,6 +455,7 @@ impl WinitRunner {
             .is_some_and(|existing| {
                 existing.recipient != slot
                     || existing.source != source
+                    || existing.device != device
                     || existing.binding_epoch != binding_epoch
             });
         if replaced {
@@ -467,6 +470,7 @@ impl WinitRunner {
             .or_insert_with(|| NativeUiKeyboardTranslator {
                 recipient: slot,
                 source,
+                device,
                 binding_epoch,
                 keyboard: KeyboardInputState::default(),
             })
@@ -498,7 +502,7 @@ impl WinitRunner {
         let device = Self::native_ui_device(context)?;
         // Revalidate the translator's actual recipient and physical-source
         // generation BEFORE reusing cached modifier or pressed-key evidence.
-        self.native_ui_keyboard_translator(window, slot, context.source, binding_epoch);
+        self.native_ui_keyboard_translator(window, slot, context.source, device, binding_epoch);
         let modifiers = self
             .native_ui_modifiers
             .get(&window)
@@ -506,7 +510,7 @@ impl WinitRunner {
             .unwrap_or(KeyModifiers::NONE);
         let transition = NativeKeyTransition::from_event(original, is_synthetic);
         let translated = self
-            .native_ui_keyboard_translator(window, slot, context.source, binding_epoch)
+            .native_ui_keyboard_translator(window, slot, context.source, device, binding_epoch)
             .key_input(
                 device,
                 &transition,
@@ -2362,11 +2366,23 @@ mod tests {
         // lifetime boundary; no previous UI pressed keys or modifiers survive.
         let source_a = InputSourceId::new(91);
         let source_b = InputSourceId::new(92);
-        runner.native_ui_keyboard_translator(secondary, slot, source_a, bound_epoch);
+        runner.native_ui_keyboard_translator(
+            secondary,
+            slot,
+            source_a,
+            UiInputDeviceId::new(7).expect("checked test device"),
+            bound_epoch,
+        );
         runner
             .native_ui_modifiers
             .insert(secondary, KeyModifiers::SHIFT);
-        runner.native_ui_keyboard_translator(secondary, slot, source_b, bound_epoch);
+        runner.native_ui_keyboard_translator(
+            secondary,
+            slot,
+            source_b,
+            UiInputDeviceId::new(7).expect("checked test device"),
+            bound_epoch,
+        );
         assert_eq!(
             runner
                 .native_ui_keyboards
@@ -2419,11 +2435,23 @@ mod tests {
         assert_eq!(rebinding, NativeInputRecipient::RunenUiSlot(slot));
         let new_epoch = new_epoch.expect("new exact binding lifetime");
         assert!(new_epoch > bound_epoch, "binding generations never alias");
-        runner.native_ui_keyboard_translator(secondary, slot, source_b, bound_epoch);
+        runner.native_ui_keyboard_translator(
+            secondary,
+            slot,
+            source_b,
+            UiInputDeviceId::new(7).expect("checked test device"),
+            bound_epoch,
+        );
         runner
             .native_ui_modifiers
             .insert(secondary, KeyModifiers::SHIFT);
-        runner.native_ui_keyboard_translator(secondary, slot, source_b, new_epoch);
+        runner.native_ui_keyboard_translator(
+            secondary,
+            slot,
+            source_b,
+            UiInputDeviceId::new(7).expect("checked test device"),
+            new_epoch,
+        );
         assert!(
             !runner.native_ui_modifiers.contains_key(&secondary),
             "new recipient epoch cannot inherit prior physical modifier state"
