@@ -219,6 +219,7 @@ pub enum UiRuntimeNativeKeyboardAdmissionError {
 /// permission result. The native owner MUST separately prove original window,
 /// source/device, slot binding and unrevoked physical Down lifetime.
 pub fn native_no_focused_keyboard_claim_witness(
+    expected_device: InputDeviceId,
     before: &InputOwnershipSnapshot,
     after: &InputOwnershipSnapshot,
     error: &UiRuntimeNativeKeyboardAdmissionError,
@@ -227,6 +228,7 @@ pub fn native_no_focused_keyboard_claim_witness(
         return false;
     };
     if framework.kind() != SubmitKeyboardErrorKind::NoFocusedTarget
+        || framework.event().device_id() != Some(expected_device)
         || before != after
         || before.status() != runenui_runtime::RuntimeStatus::Running
     {
@@ -1912,19 +1914,39 @@ mod tests {
                     && error.event().physical_key()
                         == &PhysicalKey::Code(String::from("KeyW"))
         ));
+        // The framework may reject device-less headless keyboard input for
+        // lack of focus, but this is not an originating native-device receipt.
+        let missing_native_device = slots
+            .submit_native_keyboard(slot, keyboard(None))
+            .expect_err("missing focus rejects device-less keyboard");
         assert_eq!(slots.ingress_epoch(slot), Some(epoch));
         let after_unfocused = slots
             .input_ownership(slot)
             .expect("fresh M13 ownership after rejected input");
         assert!(native_no_focused_keyboard_claim_witness(
+            native_device,
             &before_unfocused,
             &after_unfocused,
             &rejected,
         ));
         assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
             &before_unfocused,
             &after_unfocused,
             &missing,
+        ));
+        assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
+            &before_unfocused,
+            &after_unfocused,
+            &missing_native_device,
+        ));
+        let another_device = InputDeviceId::new(17).expect("valid distinct native device");
+        assert!(!native_no_focused_keyboard_claim_witness(
+            another_device,
+            &before_unfocused,
+            &after_unfocused,
+            &rejected,
         ));
 
         let focus_id = ElementId::new("native.keyboard.focus").expect("valid authored target");
@@ -1955,11 +1977,12 @@ mod tests {
             .input_ownership(slot)
             .expect("fresh canonical M13 ownership after focus");
         assert_eq!(
-            focused.keyboard(Some(native_device)).focused_node(),
+            focused.keyboard().focused_node(),
             Some(&focus_id_from_runtime),
             "the semantic focus request must establish a real keyboard target"
         );
         assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
             &before_unfocused,
             &focused,
             &rejected,
@@ -1993,15 +2016,8 @@ mod tests {
             Ok(settled.finality().clone())
         );
 
-        let another_device = InputDeviceId::new(17).expect("valid distinct native device");
         assert_eq!(
-            native_keyboard_finality(
-                settled.scope(),
-                another_device,
-                receipt,
-                &batch,
-                &status,
-            ),
+            native_keyboard_finality(settled.scope(), another_device, receipt, &batch, &status,),
             Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongDevice),
             "an unrelated device cannot borrow this exact M13 receipt"
         );
@@ -2018,7 +2034,13 @@ mod tests {
             .input_ownership(missing_scope_slot)
             .expect("foreign scope is observable");
         assert_eq!(
-            native_keyboard_finality(foreign_scope.scope(), native_device, receipt, &batch, &status),
+            native_keyboard_finality(
+                foreign_scope.scope(),
+                native_device,
+                receipt,
+                &batch,
+                &status
+            ),
             Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongScope)
         );
 
