@@ -1110,3 +1110,126 @@ fn actual_native_source_retirement_frees_denial_but_focus_loss_does_not() {
     clear_frame(&mut input, &mut actions);
     assert!(!actions.action_down(action::WORLD_MOVE_UP));
 }
+
+#[test]
+fn ui_owned_shift_never_authorizes_a_later_shift_required_press_or_forbidden_branch() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(421), Some(InputDeviceId::new(1)));
+    let shift = physical_key(KeyCode::ShiftLeft);
+    actions.map_chord(
+        &input,
+        "game.shift-w",
+        KeyChord::code("KeyW").with_shift_required(),
+    );
+    actions.map_chord(
+        &input,
+        "game.unshifted-w",
+        KeyChord::code("KeyW").with_shift_forbidden(),
+    );
+    input.handle_normalized_keyboard(
+        context,
+        &KeyboardInput {
+            physical_key: shift.clone(),
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    let shift_generation = input.keyboard_down_generation_in(context, &shift).unwrap();
+    actions.revoke_keyboard_lifetime(&input, context, &shift, shift_generation);
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+
+    assert!(!actions.action_pressed("game.shift-w"));
+    assert!(!actions.action_pressed("game.unshifted-w"));
+    assert!(!actions.action_down("game.shift-w"));
+    assert!(!actions.action_down("game.unshifted-w"));
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+}
+
+#[test]
+fn late_ui_modifier_claim_retracts_exact_prior_chord_and_keeps_other_sources() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let one = InputContext::new(InputSourceId::new(422), Some(InputDeviceId::new(2)));
+    let two = InputContext::new(InputSourceId::new(423), Some(InputDeviceId::new(3)));
+    let shift = physical_key(KeyCode::ShiftLeft);
+    actions.map_chord(&input, "game.shift-w", KeyChord::code("KeyW").with_shift_required());
+    for context in [one, two] {
+        input.handle_normalized_keyboard(context, &KeyboardInput {
+            physical_key: shift.clone(),
+            ..normalized_key(DigitalState::Pressed)
+        });
+        input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    }
+    actions.project(&input);
+    assert!(actions.action_pressed("game.shift-w"));
+    let first_gen = input.keyboard_down_generation_in(one, &shift).unwrap();
+    actions.revoke_keyboard_lifetime(&input, one, &shift, first_gen);
+    assert!(actions.action_pressed("game.shift-w"), "second source still qualifies");
+    let second_gen = input.keyboard_down_generation_in(two, &shift).unwrap();
+    actions.revoke_keyboard_lifetime(&input, two, &shift, second_gen);
+    assert!(!actions.action_pressed("game.shift-w"), "both exact supporting modifiers denied");
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    actions.map_chord(&input, "late.mapping", KeyChord::code("KeyW").with_shift_required());
+    assert!(!actions.action_pressed("late.mapping"), "binding changes cannot replay rejected press");
+}
+
+#[test]
+fn one_of_two_shift_keys_still_qualifies_required_chord_after_other_is_claimed() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(424), Some(InputDeviceId::new(4)));
+    let left = physical_key(KeyCode::ShiftLeft);
+    let right = physical_key(KeyCode::ShiftRight);
+    actions.map_chord(&input, "game.shift-w", KeyChord::code("KeyW").with_shift_required());
+    for shift in [&left, &right] {
+        input.handle_normalized_keyboard(context, &KeyboardInput {
+            physical_key: shift.clone(),
+            ..normalized_key(DigitalState::Pressed)
+        });
+    }
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    let left_generation = input.keyboard_down_generation_in(context, &left).unwrap();
+    actions.revoke_keyboard_lifetime(&input, context, &left, left_generation);
+    assert!(actions.action_pressed("game.shift-w"), "right Shift independently qualifies");
+    let right_generation = input.keyboard_down_generation_in(context, &right).unwrap();
+    actions.revoke_keyboard_lifetime(&input, context, &right, right_generation);
+    assert!(!actions.action_pressed("game.shift-w"));
+}
+
+#[test]
+fn late_old_modifier_receipt_cannot_invalidate_chord_with_new_generation() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(425), Some(InputDeviceId::new(5)));
+    let shift = physical_key(KeyCode::ShiftLeft);
+    actions.map_chord(&input, "game.shift-w", KeyChord::code("KeyW").with_shift_required());
+    input.handle_normalized_keyboard(
+        context,
+        &KeyboardInput {
+            physical_key: shift.clone(),
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    let original = input.keyboard_down_generation_in(context, &shift).unwrap();
+    input.handle_normalized_keyboard(
+        context,
+        &KeyboardInput {
+            physical_key: shift.clone(),
+            ..normalized_key(DigitalState::Released)
+        },
+    );
+    input.handle_normalized_keyboard(
+        context,
+        &KeyboardInput {
+            physical_key: shift.clone(),
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    actions.revoke_keyboard_lifetime(&input, context, &shift, original);
+    assert!(actions.action_pressed("game.shift-w"));
+    assert!(actions.action_down("game.shift-w"));
+}

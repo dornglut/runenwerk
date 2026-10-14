@@ -115,9 +115,20 @@ pub(super) struct KeyboardPressSample {
     /// Non-repeating identity of this exact physical Down generation.
     pub(super) generation: u64,
     pub(super) modifiers: ModifiersSnapshot,
+    /// Exact source-local modifier identities visible at this Down's prefix.
+    /// The held-state index may change before delayed M13 disposition arrives.
+    pub(super) modifier_lifetimes: Vec<KeyboardModifierLifetime>,
     /// Source/device continuity loss invalidates even an already-released
     /// Down's pending frame press, without fabricating an Up.
     pub(super) retired_by_continuity: bool,
+}
+
+/// One press-time physical modifier, carrying its exact genuine Down
+/// generation when known. Synthetic restoration never mints a generation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct KeyboardModifierLifetime {
+    pub(super) physical_key: PhysicalKeyIdentity,
+    pub(super) generation: Option<u64>,
 }
 
 /// An authentic physical Up report, recorded for ActionState's same-source
@@ -260,6 +271,7 @@ impl InputState {
                         physical_key: input.physical_key.clone(),
                         generation,
                         modifiers: self.source_modifiers_from_held_index(context),
+                        modifier_lifetimes: self.source_modifier_lifetimes(context),
                         retired_by_continuity: false,
                     });
                 }
@@ -303,6 +315,35 @@ impl InputState {
             alt: down(KeyCode::AltLeft) || down(KeyCode::AltRight),
             super_key: down(KeyCode::SuperLeft) || down(KeyCode::SuperRight),
         }
+    }
+
+    fn source_modifier_lifetimes(
+        &self,
+        context: InputContext,
+    ) -> Vec<KeyboardModifierLifetime> {
+        let keys = [
+            KeyCode::ShiftLeft,
+            KeyCode::ShiftRight,
+            KeyCode::ControlLeft,
+            KeyCode::ControlRight,
+            KeyCode::AltLeft,
+            KeyCode::AltRight,
+            KeyCode::SuperLeft,
+            KeyCode::SuperRight,
+        ];
+        self.keyboard_held_contributors
+            .iter()
+            .filter(|held| {
+                held.context == context
+                    && keys.iter().any(|code| {
+                        held.physical_key == physical_identity_for_key_code(*code)
+                    })
+            })
+            .map(|held| KeyboardModifierLifetime {
+                physical_key: held.physical_key.clone(),
+                generation: held.generation,
+            })
+            .collect()
     }
 
     pub fn start_admitted_input_capture(&mut self) {

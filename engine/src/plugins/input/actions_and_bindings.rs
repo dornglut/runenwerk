@@ -1,4 +1,4 @@
-use super::state::{InputState, ModifiersSnapshot};
+use super::state::{InputState, KeyboardPressSample, ModifiersSnapshot};
 use runen_input::{InputContext, InputSourceId, PhysicalKeyIdentity};
 use std::collections::{HashMap, HashSet};
 use winit::keyboard::KeyCode;
@@ -47,6 +47,16 @@ impl ModifierRule {
             Self::Ignore => true,
             Self::Required => is_down,
             Self::Forbidden => !is_down,
+        }
+    }
+
+    /// A denied physical modifier cannot satisfy Required, but it remains
+    /// physically held and therefore cannot fabricate a Forbidden match.
+    fn matches_pressed(self, physical: bool, eligible: bool) -> bool {
+        match self {
+            Self::Ignore => true,
+            Self::Required => eligible,
+            Self::Forbidden => !physical,
         }
     }
 }
@@ -100,6 +110,17 @@ impl KeyChord {
             && self.ctrl.matches(modifiers.ctrl)
             && self.alt.matches(modifiers.alt)
             && self.super_key.matches(modifiers.super_key)
+    }
+
+    fn matches_pressed(
+        &self,
+        physical: ModifiersSnapshot,
+        eligible: ModifiersSnapshot,
+    ) -> bool {
+        self.shift.matches_pressed(physical.shift, eligible.shift)
+            && self.ctrl.matches_pressed(physical.ctrl, eligible.ctrl)
+            && self.alt.matches_pressed(physical.alt, eligible.alt)
+            && self.super_key.matches_pressed(physical.super_key, eligible.super_key)
     }
 }
 
@@ -171,21 +192,24 @@ impl InputBindings {
         self.by_action.keys().map(String::as_str)
     }
 
-    fn matching_actions(
+    fn matching_pressed_chords(
         &self,
         key: &PhysicalKeyIdentity,
-        modifiers: ModifiersSnapshot,
-    ) -> Vec<String> {
-        let mut actions = Vec::new();
+        physical: ModifiersSnapshot,
+        eligible: ModifiersSnapshot,
+    ) -> Vec<(String, KeyChord)> {
+        let mut matches = Vec::new();
         for (action, chords) in &self.by_action {
-            if chords
-                .iter()
-                .any(|chord| chord.key == *key && chord.matches(modifiers))
-            {
-                actions.push(action.clone());
+            for chord in chords {
+                if chord.key == *key && chord.matches_pressed(physical, eligible) {
+                    // Keep EACH actual accepted chord: if one modifier
+                    // lifetime is denied later, another independent chord
+                    // may still support the same action.
+                    matches.push((action.clone(), chord.clone()));
+                }
             }
         }
-        actions
+        matches
     }
 
     fn action_down<F>(&self, action: &str, mut key_is_down: F, modifiers: ModifiersSnapshot) -> bool
@@ -330,6 +354,9 @@ struct PressedActionContributor {
     key: PhysicalKeyIdentity,
     generation: u64,
     sample_index: usize,
+    /// The exact binding accepted at press time, never reinterpreted under
+    /// later mapping changes when an M13 modifier receipt settles.
+    chord: KeyChord,
 }
 
 /// A revoked held physical key remains blocked through synthetic cancellation,
@@ -520,16 +547,10 @@ impl ActionState {
                 releases_seen: input.keyboard_real_release_samples().len(),
             });
         }
-        // Retract only the previously accepted contributions from this
-        // generation; do not replay historic presses under later bindings.
-        self.pressed_contributors.retain(|pressed| {
-            pressed.context != context || pressed.key != *key || pressed.generation != generation
-        });
-        self.actions_pressed = self
-            .pressed_contributors
-            .iter()
-            .map(|pressed| pressed.action.clone())
-            .collect();
+        // The exact denied generation may also have been a modifier for
+        // other physical keys pressed later. Withdraw those chord claims too
+        // without replaying historic press evidence under current bindings.
+        self.retract_ineligible_pressed_contributors(input);
         self.recompute_action_down_states(input);
     }
 
@@ -559,24 +580,74 @@ impl ActionState {
         });
     }
 
-    /// A focus-loss/continuity event may arrive after PreUpdate projected
-    /// presses. Retract only those contributions from the invalidated source
-    /// lifetime, not unrelated source presses in the same frame.
-    fn retract_continuity_invalidated_presses(&mut self, input: &InputState) {
-        let before = self.pressed_contributors.len();
-        let presses = input.keyboard_press_samples();
-        self.pressed_contributors.retain(|contributor| {
-            presses
-                .get(contributor.sample_index)
-                .is_some_and(|press| !press.retired_by_continuity)
-        });
-        if self.pressed_contributors.len() != before {
-            self.actions_pressed = self
-                .pressed_contributors
-                .iter()
-                .map(|pressed| pressed.action.clone())
-                .collect();
+    /// Only the source-local modifiers recorded at the moment of this
+    /// physical Down may satisfy a press chord. Current global/held modifiers
+    /// cannot retroactively create a pressed action or mask a denied one.
+    fn eligible_pressed_modifiers(&self, press: &KeyboardPressSample) -> ModifiersSnapshot {
+        let down = |code: KeyCode| {
+            let key = PhysicalKeyIdentity::code(format!("{code:?}"));
+            press.modifier_lifetimes.iter().any(|modifier| {
+                modifier.physical_key == key
+                    && modifier.generation.map_or_else(
+                        || !self.blocked_held_key(press.context, &key),
+                        |generation| {
+                            self.keyboard_generation_eligible(press.context, &key, generation)
+                        },
+                    )
+            })
+        };
+        ModifiersSnapshot {
+            shift: down(KeyCode::ShiftLeft) || down(KeyCode::ShiftRight),
+            ctrl: down(KeyCode::ControlLeft) || down(KeyCode::ControlRight),
+            alt: down(KeyCode::AltLeft) || down(KeyCode::AltRight),
+            super_key: down(KeyCode::SuperLeft) || down(KeyCode::SuperRight),
         }
+    }
+
+    fn pressed_contributor_eligible(
+        &self,
+        input: &InputState,
+        contribution: &PressedActionContributor,
+    ) -> bool {
+        let Some(press) = input.keyboard_press_samples().get(contribution.sample_index) else {
+            return false;
+        };
+        !press.retired_by_continuity
+            && press.context == contribution.context
+            && press.physical_key == contribution.key
+            && press.generation == contribution.generation
+            && self.keyboard_generation_eligible(
+                press.context,
+                &press.physical_key,
+                press.generation,
+            )
+            && contribution.chord.matches_pressed(
+                press.modifiers,
+                self.eligible_pressed_modifiers(press),
+            )
+    }
+
+    /// Retire invalidated press/held-modifier evidence immediately, including
+    /// a focus-loss callback or M13 receipt arriving after PreUpdate.
+    fn retract_ineligible_pressed_contributors(&mut self, input: &InputState) {
+        // A read-only eligibility pass before mutable retention avoids a
+        // competing borrower and never reinterprets the current binding map.
+        let retain: Vec<bool> = self
+            .pressed_contributors
+            .iter()
+            .map(|contributor| self.pressed_contributor_eligible(input, contributor))
+            .collect();
+        let mut index = 0;
+        self.pressed_contributors.retain(|_| {
+            let accepted = retain[index];
+            index += 1;
+            accepted
+        });
+        self.actions_pressed = self
+            .pressed_contributors
+            .iter()
+            .map(|pressed| pressed.action.clone())
+            .collect();
     }
 
     /// Only real native source retirement releases denied lifetime storage.
@@ -614,10 +685,12 @@ impl ActionState {
             {
                 continue;
             }
-            for action in self
-                .bindings
-                .matching_actions(&press.physical_key, press.modifiers)
-            {
+            let eligible = self.eligible_pressed_modifiers(press);
+            for (action, chord) in self.bindings.matching_pressed_chords(
+                &press.physical_key,
+                press.modifiers,
+                eligible,
+            ) {
                 self.actions_pressed.insert(action.clone());
                 self.pressed_contributors.push(PressedActionContributor {
                     action,
@@ -625,6 +698,7 @@ impl ActionState {
                     key: press.physical_key.clone(),
                     generation: press.generation,
                     sample_index,
+                    chord,
                 });
             }
         }
@@ -632,7 +706,7 @@ impl ActionState {
 
     pub fn project(&mut self, input: &InputState) {
         self.retire_genuinely_released_denials(input);
-        self.retract_continuity_invalidated_presses(input);
+        self.retract_ineligible_pressed_contributors(input);
         self.recompute_action_down_states(input);
         let end = input.keyboard_press_samples().len();
         self.project_presses(input, self.processed_keyboard_presses, end);
