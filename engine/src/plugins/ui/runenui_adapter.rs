@@ -2111,6 +2111,165 @@ mod tests {
     }
 
     #[test]
+    fn native_committed_text_from_focused_typed_field_has_exact_m13_receipt() {
+        use runenui_core::{
+            CommandOrigin, EditIntent, EditResolution, IntoUpdateOutput, NoHostProtocol,
+            SemanticCommand, SemanticEditableMode, TextAffinity, TextDocumentId,
+            TextDocumentRevision, TextDocumentSnapshot, TextPosition, TextSelection,
+            UpdateOutput,
+        };
+
+        #[derive(Clone)]
+        struct TextState {
+            text: String,
+            revision: u64,
+        }
+        enum TextAction {
+            Edit(Box<EditIntent>),
+        }
+        struct NativeTextApp;
+        impl UiApp for NativeTextApp {
+            type State = TextState;
+            type Action = TextAction;
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                let snapshot = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(state.revision),
+                );
+                let position = TextPosition::new(
+                    snapshot,
+                    &state.text,
+                    state.text.len(),
+                    TextAffinity::Downstream,
+                )
+                .expect("the complete UTF-8 source ends at a scalar boundary");
+                runenui_core::text_field(
+                    snapshot,
+                    state.text.clone(),
+                    TextSelection::collapsed(position),
+                    SemanticEditableMode::SingleLine,
+                    |intent| TextAction::Edit(Box::new(intent)),
+                )
+                .expect("controlled native text source is valid")
+                .id("native.text.field")
+            }
+
+            fn update(
+                state: &mut Self::State,
+                action: Self::Action,
+            ) -> impl IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                let TextAction::Edit(intent) = action;
+                let replacement = intent.replacement();
+                state
+                    .text
+                    .replace_range(replacement.start()..replacement.end(), intent.replacement_text());
+                state.revision += 1;
+                let snapshot = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(state.revision),
+                );
+                UpdateOutput::edit(EditResolution::accepted(
+                    intent.request().clone(),
+                    snapshot,
+                ))
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<NativeTextApp>(
+                UiTypedScreenId::new("native.text.focused"),
+                TextState {
+                    text: String::new(),
+                    revision: 0,
+                },
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("real typed text widget mounted");
+        let owner = {
+            let runtime = slots
+                .slot_mut(slot)
+                .expect("mounted slot")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("typed app runtime");
+            runtime.index().nodes()[0].id().clone()
+        };
+        slots
+            .slot_mut(slot)
+            .expect("mounted slot")
+            .runtime
+            .typed_mut::<NativeTextApp>()
+            .expect("typed runtime")
+            .submit_command(
+                owner,
+                SemanticCommand::RequestFocus,
+                CommandOrigin::programmatic(),
+            )
+            .expect("real widget accepts focus request");
+        slots.settle_slot(slot).expect("focus request settles");
+        let before = slots.input_ownership(slot).expect("actual M13 owner");
+        assert!(
+            before.keyboard().focused_node().is_some(),
+            "text ingress requires actual focused RunenUI ownership"
+        );
+
+        let original = CommittedTextEvent::new("漢字é", None)
+            .expect("original native Unicode commit is nonempty");
+        let receipt = slots
+            .submit_native_text(slot, original)
+            .expect("real focused field accepts native commit");
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("canonical M13 pump produces real ordered receipts");
+        assert_eq!(status, Ok(()));
+        assert!(
+            matches!(
+                native_text_finality(before.scope(), None, receipt, &batch, &status),
+                Ok(UiInputFinality::Committed(_))
+            ),
+            "only an exact reached M13 text settlement qualifies this commit"
+        );
+        assert_eq!(
+            native_text_finality(
+                before.scope(),
+                Some(InputDeviceId::new(11).expect("checked device")),
+                receipt,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativeTextEvidenceFailure::WrongDevice),
+            "winit IME provides no keyboard device; it must not inherit one"
+        );
+        let later = slots
+            .submit_native_text(
+                slot,
+                CommittedTextEvent::new("Ω", None).expect("second Unicode commit"),
+            )
+            .expect("second independent native text sequence");
+        assert_eq!(
+            native_text_finality(before.scope(), None, later, &batch, &status),
+            Err(UiRuntimeNativeTextEvidenceFailure::NotProcessed),
+            "an earlier pump must never authorize an unprocessed later commit"
+        );
+        let edited = &slots
+            .slot_mut(slot)
+            .expect("text runtime still mounted")
+            .runtime
+            .typed_mut::<NativeTextApp>()
+            .expect("typed text owner")
+            .state()
+            .text;
+        assert_eq!(
+            edited, "漢字é",
+            "real native text reached the actual M10 editor without duplication"
+        );
+    }
+
+    #[test]
     fn native_pointer_admission_keeps_exact_device_stream_surface_and_m13_sequence() {
         use runenui_core::{LogicalPoint, NoHostProtocol, PointerDeviceKind, PointerPhase};
         use runenui_runtime::{InputArbitrationRecord, UiInputFamily};
