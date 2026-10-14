@@ -1506,7 +1506,11 @@ mod tests {
             .world
             .remove_resource::<ActionState>()
             .expect("ActionState");
-        let input = runner.state.world.resource::<InputState>().expect("neutral input");
+        let input = runner
+            .state
+            .world
+            .resource::<InputState>()
+            .expect("neutral input");
         actions.project(input);
         assert!(actions.action_pressed(action::WORLD_MOVE_UP));
         assert!(actions.action_down(action::WORLD_MOVE_UP));
@@ -1566,7 +1570,11 @@ mod tests {
             .world
             .remove_resource::<ActionState>()
             .expect("game ActionState");
-        let input = runner.state.world.resource::<InputState>().expect("neutral input");
+        let input = runner
+            .state
+            .world
+            .resource::<InputState>()
+            .expect("neutral input");
         actions.project(input);
         assert!(actions.action_pressed(action::WORLD_MOVE_UP));
         assert!(actions.action_down(action::WORLD_MOVE_UP));
