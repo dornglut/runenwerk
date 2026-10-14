@@ -1,8 +1,9 @@
 use crate::app::WindowedAppState;
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
-    NativeInputRecipient, UiNativeInputRecipientsResource, UiRuntimePresentationAssociationsResource,
-    UiRuntimeSlotsResource, native_keyboard_finality, native_no_focused_keyboard_claim_witness,
+    NativeInputRecipient, UiNativeInputRecipientsResource,
+    UiRuntimePresentationAssociationsResource, UiRuntimeSlotsResource, native_keyboard_finality,
+    native_no_focused_keyboard_claim_witness,
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
@@ -346,34 +347,29 @@ impl WinitRunner {
                     .context("selected UI runtime vanished from native host")?;
                 let before = slots.input_ownership(slot);
                 match (before, slots.submit_native_keyboard(slot, event)) {
-                    (Ok(before), Ok(submission)) => {
-                        match slots.pump_native_input_records(slot) {
-                            Ok((batch, status)) => matches!(
-                                native_keyboard_finality(
-                                    before.scope(),
-                                    device,
-                                    submission,
-                                    &batch,
-                                    &status,
-                                ),
-                                Ok(UiInputFinality::Committed(ref facts))
-                                    if matches!(
-                                        facts.conflict(),
-                                        UiInputConflict::Unclaimed
-                                            | UiInputConflict::ObservedNonexclusive
-                                    )
+                    (Ok(before), Ok(submission)) => match slots.pump_native_input_records(slot) {
+                        Ok((batch, status)) => matches!(
+                            native_keyboard_finality(
+                                before.scope(),
+                                device,
+                                submission,
+                                &batch,
+                                &status,
                             ),
-                            Err(_) => false,
-                        }
-                    }
+                            Ok(UiInputFinality::Committed(ref facts))
+                                if matches!(
+                                    facts.conflict(),
+                                    UiInputConflict::Unclaimed
+                                        | UiInputConflict::ObservedNonexclusive
+                                )
+                        ),
+                        Err(_) => false,
+                    },
                     (Ok(before), Err(error)) => {
                         let after = slots.input_ownership(slot);
                         after.is_ok_and(|after| {
                             native_no_focused_keyboard_claim_witness(
-                                device,
-                                &before,
-                                &after,
-                                &error,
+                                device, &before, &after, &error,
                             )
                         })
                     }
@@ -385,33 +381,33 @@ impl WinitRunner {
 
         // Missing or ambiguous M13 evidence, runtime failure, UI exclusivity,
         // and translator suppression NEVER produce positive gameplay evidence.
-        // Revoke the original exact physical Down generation before the
-        // PreUpdate/CoreSet::Input projection; revoked lifetimes cannot revive
-        // after a later ownership change or binding mutation.
+        // Revocation happens before PreUpdate/CoreSet::Input.
         if !permit && matches!(original.state, winit::event::ElementState::Pressed) {
-            let generation = self
-                .state
-                .world
-                .resource::<InputState>()?
-                .keyboard_down_generation_in(context, physical_key);
-            if let Some(generation) = generation
-                && let Some(mut actions) = self.state.world.remove_resource::<ActionState>()
-            {
-                let result = self
-                    .state
-                    .world
-                    .resource::<InputState>()
-                    .map(|input| {
-                        actions.revoke_keyboard_lifetime(
-                            input,
-                            context,
-                            physical_key,
-                            generation,
-                        );
-                    });
-                self.state.world.insert_resource(actions);
-                result?;
-            }
+            self.deny_native_keyboard_lifetime(context, physical_key)?;
+        }
+        Ok(())
+    }
+
+    /// Deny only the actual admitted physical Down. A failed recipient lookup
+    /// must not erase RunenInput truth or create an unverified action grant.
+    fn deny_native_keyboard_lifetime(
+        &mut self,
+        context: InputContext,
+        physical_key: &PhysicalKeyIdentity,
+    ) -> Result<()> {
+        let generation = self
+            .state
+            .world
+            .resource::<InputState>()?
+            .keyboard_down_generation_in(context, physical_key);
+        if let Some(generation) = generation
+            && let Some(mut actions) = self.state.world.remove_resource::<ActionState>()
+        {
+            let result = self.state.world.resource::<InputState>().map(|input| {
+                actions.revoke_keyboard_lifetime(input, context, physical_key, generation);
+            });
+            self.state.world.insert_resource(actions);
+            result?;
         }
         Ok(())
     }
@@ -433,10 +429,7 @@ impl WinitRunner {
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("UI slot authority missing during native keyboard cancellation")?;
-        for event in keyboard.cancel_all(
-            KeyModifiers::NONE,
-            KeyboardCompositionState::Inactive,
-        ) {
+        for event in keyboard.cancel_all(KeyModifiers::NONE, KeyboardCompositionState::Inactive) {
             if slots.submit_native_keyboard(slot, event).is_ok() {
                 // Cancellation does not grant gameplay, even if settlement is
                 // paused, rejected, or unavailable.
@@ -1123,14 +1116,17 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 event,
                 is_synthetic,
             } => {
-                let recipient = self.native_input_recipient(native_window_id)?;
+                // Even a stale/missing recipient must not suppress original
+                // physical truth. Admit it before reporting the UI route error,
+                // and fail gameplay closed for that exact lifetime.
+                let recipient = self.native_input_recipient(native_window_id);
                 let context = self
                     .input_adapter
                     .window_context(native_window_id, device_id)?;
                 let input = keyboard_input(&event, is_synthetic);
                 let physical_key = input.physical_key.clone();
                 let result = match recipient {
-                    NativeInputRecipient::LegacyNativeConsumer => {
+                    Ok(NativeInputRecipient::LegacyNativeConsumer) => {
                         match text_input(&event, is_synthetic) {
                             Some(text) => self.apply_event_group(
                                 native_window_id,
@@ -1145,7 +1141,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             ),
                         }
                     }
-                    NativeInputRecipient::RunenUiSlot(slot) => {
+                    Ok(NativeInputRecipient::RunenUiSlot(slot)) => {
                         self.apply_event_for_native_window(
                             native_window_id,
                             PlatformEvent::KeyboardInput { context, input },
@@ -1158,6 +1154,16 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             is_synthetic,
                             &physical_key,
                         )
+                    }
+                    Err(error) => {
+                        self.apply_event_for_native_window(
+                            native_window_id,
+                            PlatformEvent::KeyboardInput { context, input },
+                        )?;
+                        if matches!(event.state, winit::event::ElementState::Pressed) {
+                            self.deny_native_keyboard_lifetime(context, &physical_key)?;
+                        }
+                        Err(error)
                     }
                 };
                 if result.is_ok() {
@@ -1373,8 +1379,8 @@ mod tests {
             state: app.into_windowed_state(),
             window_realizer: WinitWindowRealizer::default(),
             input_adapter: WinitInputAdapter::default(),
-        native_ui_keyboards: HashMap::new(),
-        native_ui_modifiers: HashMap::new(),
+            native_ui_keyboards: HashMap::new(),
+            native_ui_modifiers: HashMap::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
             fatal_error: None,
@@ -1423,8 +1429,8 @@ mod tests {
             state: windowed.into_windowed_state(),
             window_realizer: WinitWindowRealizer::default(),
             input_adapter: WinitInputAdapter::default(),
-        native_ui_keyboards: HashMap::new(),
-        native_ui_modifiers: HashMap::new(),
+            native_ui_keyboards: HashMap::new(),
+            native_ui_modifiers: HashMap::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
             fatal_error: None,
@@ -1618,7 +1624,9 @@ mod tests {
             .register_created_window(secondary, "secondary", (800, 600), 1.0, false);
 
         assert_eq!(
-            runner.native_input_recipient(secondary).expect("game-only baseline"),
+            runner
+                .native_input_recipient(secondary)
+                .expect("game-only baseline"),
             NativeInputRecipient::LegacyNativeConsumer,
         );
 
@@ -1666,11 +1674,15 @@ mod tests {
             .world
             .insert_resource(UiRuntimePresentationAssociationsResource::default());
         assert_eq!(
-            runner.native_input_recipient(secondary).expect("selected UI recipient"),
+            runner
+                .native_input_recipient(secondary)
+                .expect("selected UI recipient"),
             NativeInputRecipient::RunenUiSlot(slot),
         );
         assert!(
-            runner.retire_native_input_recipient(secondary).expect("source retirement")
+            runner
+                .retire_native_input_recipient(secondary)
+                .expect("source retirement")
         );
         assert!(
             runner.native_input_recipient(secondary).is_err(),
