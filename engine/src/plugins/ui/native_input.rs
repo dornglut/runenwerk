@@ -355,8 +355,10 @@ mod tests {
     fn binding_epoch_exhaustion_rejects_without_implicit_recipient_mutation() {
         let (windows, first, _) = windows();
         let mut slots = UiRuntimeSlotsResource::default();
-        let mut recipients = UiNativeInputRecipientsResource::default();
-        recipients.next_epoch = u64::MAX;
+        let mut recipients = UiNativeInputRecipientsResource {
+            next_epoch: u64::MAX,
+            ..Default::default()
+        };
         assert_eq!(
             recipients.bind(
                 first,
