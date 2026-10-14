@@ -1,9 +1,12 @@
 use crate::app::WindowedAppState;
-use crate::plugins::render::host::native as render_native_host;
+use crate::plugins::render::host::{
+    RenderSurfaceRegistryResource, native as render_native_host,
+};
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, UiNativeInputRecipientsResource,
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
-    native_keyboard_finality, native_no_focused_keyboard_claim_witness,
+    NativePointerOrigin, UiRuntimeDisplayedPresentation, native_keyboard_finality,
+    native_no_focused_keyboard_claim_witness, native_pointer_finality,
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
@@ -28,14 +31,18 @@ use crate::runtime::winit_window_realizer::WinitWindowRealizer;
 use crate::runtime::{NativeHostEvent, NativeWakeTransport};
 use anyhow::{Context, Result, anyhow};
 use runen_input::{ContinuityLoss, InputContext, InputSourceId, PhysicalKeyIdentity};
-use runenui_core::{InputDeviceId as UiInputDeviceId, KeyModifiers, KeyboardCompositionState};
+use runenui_core::{
+    InputDeviceId as UiInputDeviceId, KeyModifiers, KeyboardCompositionState, LogicalPoint,
+};
 use runenui_runtime::{UiInputConflict, UiInputFinality};
 use runenui_winit::keyboard_input::{
     KeyboardInputOutcome, KeyboardInputState, NativeKeyTransition,
 };
+use runenui_winit::mouse_input::{MouseInputState, TranslatedPointerPoint};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use winit::application::ApplicationHandler;
+use winit::dpi::PhysicalPosition;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
@@ -69,6 +76,50 @@ struct NativeUiKeyboardTranslator {
     keyboard: KeyboardInputState,
 }
 
+/// Native mouse translation is transient. It never owns pointer gameplay
+/// permission; native window, physical source, binding epoch and M13 scope
+/// must agree before its active pointer stream may be reused.
+struct NativeUiMouseTranslator {
+    recipient: UiRuntimeSlotId,
+    source: InputSourceId,
+    device: UiInputDeviceId,
+    binding_epoch: u64,
+    scope: runenui_runtime::InputArbitrationScope,
+    mouse: MouseInputState,
+}
+
+/// Translate with the mapping proven by the terminal completed Present, not
+/// the newest UI publication or the requested framebuffer dimensions.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "native f64 cursor positions are finite and checked against the f32 range before conversion"
+)]
+fn displayed_native_mouse_point(
+    displayed: &UiRuntimeDisplayedPresentation,
+    position: PhysicalPosition<f64>,
+    modifiers: KeyModifiers,
+) -> Result<TranslatedPointerPoint> {
+    let scale = displayed.mapping.native_scale_factor();
+    anyhow::ensure!(scale.is_finite() && scale > 0.0, "invalid native scale");
+    let x = position.x / scale;
+    let y = position.y / scale;
+    anyhow::ensure!(
+        x.is_finite()
+            && y.is_finite()
+            && x >= f64::from(f32::MIN)
+            && x <= f64::from(f32::MAX)
+            && y >= f64::from(f32::MIN)
+            && y <= f64::from(f32::MAX),
+        "native cursor cannot be represented as a RunenUI logical point"
+    );
+    Ok(TranslatedPointerPoint {
+        position: LogicalPoint::new(x as f32, y as f32)
+            .context("checked native logical pointer position rejected")?,
+        input_context: displayed.input_context.clone(),
+        modifiers,
+    })
+}
+
 pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
     install_native_window_provider_resources(&mut state.world);
 
@@ -97,6 +148,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         window_realizer: WinitWindowRealizer::default(),
         input_adapter: WinitInputAdapter::default(),
         native_ui_keyboards: HashMap::new(),
+        native_ui_mice: HashMap::new(),
         native_ui_modifiers: HashMap::new(),
         last_primary_redraw_at: None,
         frame_pacing_schedule: FramePacingSchedule::default(),
@@ -152,6 +204,7 @@ struct WinitRunner {
     input_adapter: WinitInputAdapter,
     /// Pinned native translator state; input ownership still lives in RunenUI.
     native_ui_keyboards: HashMap<NativeWindowId, NativeUiKeyboardTranslator>,
+    native_ui_mice: HashMap<NativeWindowId, NativeUiMouseTranslator>,
     native_ui_modifiers: HashMap<NativeWindowId, KeyModifiers>,
     last_primary_redraw_at: Option<Instant>,
     frame_pacing_schedule: FramePacingSchedule,
@@ -1592,6 +1645,7 @@ mod tests {
             window_realizer: WinitWindowRealizer::default(),
             input_adapter: WinitInputAdapter::default(),
             native_ui_keyboards: HashMap::new(),
+        native_ui_mice: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
@@ -1642,6 +1696,7 @@ mod tests {
             window_realizer: WinitWindowRealizer::default(),
             input_adapter: WinitInputAdapter::default(),
             native_ui_keyboards: HashMap::new(),
+        native_ui_mice: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
