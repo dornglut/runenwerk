@@ -627,12 +627,20 @@ impl WinitRunner {
         let Some(context) = self.input_adapter.retire_raw_device(device_id)? else {
             return Ok(false);
         };
-        let input = self
-            .state
-            .world
-            .resource_mut::<InputState>()
-            .context("missing InputState resource")?;
-        input.handle_continuity_loss(context, ContinuityLoss::Source);
+        {
+            let input = self
+                .state
+                .world
+                .resource_mut::<InputState>()
+                .context("missing InputState resource")?;
+            input.handle_continuity_loss(context, ContinuityLoss::Source);
+        }
+        let windows: Vec<_> = self.native_ui_mice.iter().filter_map(|(window, lifetime)| {
+            (lifetime.source == context.source).then_some(*window)
+        }).collect();
+        for window in windows {
+            self.cancel_native_ui_mouse(window);
+        }
         Ok(true)
     }
 
@@ -705,12 +713,13 @@ impl WinitRunner {
                 mouse: MouseInputState::default(),
             });
             lifetime.mouse.note_cursor_position(position);
-            let event = lifetime.mouse.cursor_moved(device, point)?;
+            let event = lifetime.mouse.cursor_moved(device, point)
+                .map_err(|error| anyhow!("native UI mouse translation failed: {error:?}"))?;
             let pointer = event.pointer_id();
             let (_, submission) = recipients.submit_displayed_native_pointer(
                 NativePointerOrigin::new(window, device),
                 windows, &mut slots, presentations, surfaces, event,
-            )?;
+            ).map_err(|error| anyhow!("native displayed pointer admission failed: {error:?}"))?;
             let (batch, status) = slots.pump_native_input_records(slot)?;
             let finality = native_pointer_finality(
                 before.scope(), device, pointer, displayed.input_context.surface_id(),
