@@ -1,7 +1,10 @@
 use crate::app::WindowedAppState;
 use crate::plugins::InputState;
 use crate::plugins::render::host::native as render_native_host;
-use crate::plugins::ui::UiRuntimeSlotsResource;
+use crate::plugins::ui::{
+    UiNativeInputRecipientsResource, UiRuntimePresentationAssociationsResource,
+    UiRuntimeSlotsResource,
+};
 use crate::runtime::PrimaryPresentationMetricsResource;
 use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use crate::runtime::frame_pacing::{
@@ -176,6 +179,55 @@ impl WinitRunner {
             .expect("known window input source must remain mapped until retirement");
         debug_assert_eq!(retired, context);
         Ok(true)
+    }
+
+    /// Retire the semantic input recipient and its completed-display mapping
+    /// BEFORE native/renderer destruction. The Engine's existing UI resources
+    /// remain the sole authorities; no parallel host recipient cache exists.
+    fn retire_native_input_recipient(&mut self, window: NativeWindowId) -> Result<bool> {
+        let world = &mut self.state.world;
+        if !world.has_resource::<UiNativeInputRecipientsResource>() {
+            return Ok(false);
+        }
+        if !world.has_resource::<UiRuntimePresentationAssociationsResource>() {
+            return Err(anyhow!(
+                "native input recipients exist without the UI presentation authority"
+            ));
+        }
+        // World resource access is exclusive on the invoker thread. Move one
+        // registry temporarily rather than bypassing typed resource borrowing
+        // or cloning either authority.
+        let mut recipients = world
+            .remove_resource::<UiNativeInputRecipientsResource>()
+            .context("native input recipient resource disappeared")?;
+        let retired = world
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()
+            .map(|presentations| recipients.retire_window(window, presentations));
+        world.insert_resource(recipients);
+        Ok(retired.context("native UI presentation resource disappeared")?)
+    }
+
+    /// Forget only after the native window record is actually destroyed.
+    /// A still-bound recipient is rejected by the owning registry; retirement
+    /// and display invalidation may never be skipped just to reclaim storage.
+    fn forget_destroyed_native_input_recipient(
+        &mut self,
+        window: NativeWindowId,
+    ) -> Result<bool> {
+        let world = &mut self.state.world;
+        let Some(mut recipients) = world.remove_resource::<UiNativeInputRecipientsResource>() else {
+            return Ok(false);
+        };
+        let result = world
+            .resource::<WindowStateRegistryResource>()
+            .context("native Host window registry unavailable during recipient teardown")
+            .and_then(|windows| {
+                recipients
+                    .forget_destroyed_window(window, windows)
+                    .map_err(anyhow::Error::from)
+            });
+        world.insert_resource(recipients);
+        result
     }
 
     fn apply_raw_device_removal(&mut self, device_id: winit::event::DeviceId) -> Result<bool> {
@@ -505,11 +557,13 @@ impl WinitRunner {
 
             if record.close_requested {
                 if native_window_id == NativeWindowId::primary() {
+                    self.retire_native_input_recipient(native_window_id)?;
                     // Windows winit must not enter a blocking wait after exit.
                     event_loop.set_control_flow(ControlFlow::Poll);
                     event_loop.exit();
                     return Ok(());
                 }
+                self.retire_native_input_recipient(native_window_id)?;
                 self.retire_window_input_source(native_window_id)?;
                 render_native_host::retire_secondary(&mut self.state.world, native_window_id);
                 if let Ok(window_registry) = self
@@ -519,6 +573,7 @@ impl WinitRunner {
                 {
                     window_registry.remove_window(native_window_id);
                 }
+                self.forget_destroyed_native_input_recipient(native_window_id)?;
                 self.window_realizer.remove_window(window_id);
                 self.owned_redraws.remove(&native_window_id);
                 continue;
@@ -1252,6 +1307,129 @@ mod tests {
             .unwrap();
         assert_ne!(replacement.source, context.source);
         assert_eq!(replacement.device, context.device);
+    }
+
+    #[test]
+    fn native_window_destruction_retires_ui_recipient_before_forgetting_identity() {
+        use crate::plugins::ui::{
+            NativeInputRecipient, NativeInputRecipientError, UiRuntimeFontConfiguration,
+            UiRuntimeSlotsResource, UiTypedScreenId,
+        };
+
+        struct NativeLifetimeApp;
+        impl runenui_core::UiApp for NativeLifetimeApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::text("native recipient lifetime")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        let secondary = NativeWindowId::try_from_raw(2).expect("secondary identity");
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("native windows")
+            .register_created_window(secondary, "secondary", (800, 600), 1.0, false);
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<NativeLifetimeApp>(
+                UiTypedScreenId::new("native.recipient.teardown"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("real pinned RunenUI mount");
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                secondary,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .expect("native windows"),
+                &mut slots,
+            )
+            .expect("live native binding");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+        runner
+            .state
+            .world
+            .insert_resource(UiRuntimePresentationAssociationsResource::default());
+
+        assert_eq!(
+            runner
+                .forget_destroyed_native_input_recipient(secondary)
+                .expect_err("still-live native identity cannot be pruned")
+                .to_string(),
+            NativeInputRecipientError::InactiveWindow.to_string()
+        );
+        assert!(runner
+            .retire_native_input_recipient(secondary)
+            .expect("native retirement"));
+        assert!(!runner
+            .retire_native_input_recipient(secondary)
+            .expect("idempotent retirement"));
+
+        let mut slots = runner
+            .state
+            .world
+            .remove_resource::<UiRuntimeSlotsResource>()
+            .expect("mounted slot registry");
+        assert_eq!(
+            runner
+                .state
+                .world
+                .resource::<UiNativeInputRecipientsResource>()
+                .expect("recipient registry remains present")
+                .resolve(
+                    secondary,
+                    runner
+                        .state
+                        .world
+                        .resource::<WindowStateRegistryResource>()
+                        .expect("native window still exists"),
+                    &mut slots,
+                ),
+            Err(NativeInputRecipientError::MissingRecipient),
+            "a retired live window cannot silently revert to gameplay"
+        );
+        runner.state.world.insert_resource(slots);
+
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("native windows")
+            .remove_window(secondary);
+        assert!(runner
+            .forget_destroyed_native_input_recipient(secondary)
+            .expect("retired destroyed window can be pruned"));
+        assert!(!runner
+            .forget_destroyed_native_input_recipient(secondary)
+            .expect("pruning is idempotent"));
+        assert!(runner
+            .state
+            .world
+            .has_resource::<UiNativeInputRecipientsResource>());
+        assert!(runner
+            .state
+            .world
+            .has_resource::<UiRuntimePresentationAssociationsResource>());
     }
 
     #[test]
