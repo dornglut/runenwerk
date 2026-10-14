@@ -998,6 +998,119 @@ impl WinitRunner {
         Ok(())
     }
 
+    /// Wheel is a transition on an authentic existing mouse stream. No
+    /// cursor hit point, device identity or capture is fabricated from a
+    /// native wheel event that arrived before a matching cursor observation.
+    fn route_ui_mouse_wheel(
+        &mut self,
+        window: NativeWindowId,
+        slot: UiRuntimeSlotId,
+        binding_epoch: u64,
+        backend_device: winit::event::DeviceId,
+        context: InputContext,
+        delta: &MouseScrollDelta,
+    ) -> Result<()> {
+        let zero = match delta {
+            MouseScrollDelta::LineDelta(x, y) => *x == 0.0 && *y == 0.0,
+            MouseScrollDelta::PixelDelta(point) => point.x == 0.0 && point.y == 0.0,
+        };
+        if zero {
+            // Winit gesture-phase notifications with no movement have no
+            // RunenUI wheel event even without a displayed frame or cursor.
+            return Ok(());
+        }
+        let device = Self::native_ui_device(context)?;
+        let Some(mut lifetime) = self.native_ui_mice.remove(&window) else {
+            return Ok(());
+        };
+        if lifetime.recipient != slot
+            || lifetime.binding_epoch != binding_epoch
+            || lifetime.source != context.source
+            || lifetime.backend_device != backend_device
+            || lifetime.device != device
+        {
+            self.native_ui_mice.insert(window, lifetime);
+            self.cancel_native_ui_mouse(window);
+            return Ok(());
+        }
+        let modifiers = self
+            .native_ui_modifiers
+            .get(&window)
+            .copied()
+            .unwrap_or(KeyModifiers::NONE);
+        let world = &mut self.state.world;
+        let mut slots = match world.remove_resource::<UiRuntimeSlotsResource>() {
+            Some(slots) => slots,
+            None => {
+                self.native_ui_mice.insert(window, lifetime);
+                return Err(anyhow!("native UI wheel has no pinned slot authority"));
+            }
+        };
+        let operation = (|| -> Result<()> {
+            let before = slots.input_ownership(slot)?;
+            anyhow::ensure!(
+                before.scope() == &lifetime.scope,
+                "wheel stream crossed the original M13 scope"
+            );
+            let recipients = world.resource::<UiNativeInputRecipientsResource>()?;
+            let host = UiNativePointerHostRead::from_world(world)?;
+            let displayed = host
+                .displayed_input(recipients, window, &mut slots)?
+                .context("native wheel has no terminal completed-Present context")?;
+            let position = lifetime
+                .mouse
+                .last_native_position()
+                .context("native wheel has no original cursor point")?;
+            let point = displayed_native_mouse_point(&displayed, position, modifiers)?;
+            let Some(logical_delta) = native_ui_logical_wheel_delta(
+                delta,
+                displayed.mapping.native_scale_factor(),
+            )? else {
+                return Ok(());
+            };
+            let event = lifetime
+                .mouse
+                .wheel(device, point, logical_delta)
+                .map_err(|error| anyhow!("native wheel translator rejected input: {error:?}"))?;
+            let pointer = event.pointer_id();
+            let (_, submission) = host
+                .submit(
+                    recipients,
+                    NativePointerOrigin::new(window, device),
+                    &mut slots,
+                    event,
+                )
+                .map_err(|error| anyhow!("native wheel admission rejected: {error:?}"))?;
+            let (batch, status) = slots.pump_native_input_records(slot)?;
+            let finality = native_pointer_finality(
+                before.scope(),
+                device,
+                pointer,
+                displayed.input_context.surface_id(),
+                submission,
+                &batch,
+                &status,
+            );
+            anyhow::ensure!(
+                finality.is_ok(),
+                "native UI wheel had no exact M13 pointer settlement: {finality:?}"
+            );
+            Ok(())
+        })();
+        world.insert_resource(slots);
+        self.native_ui_mice.insert(window, lifetime);
+        if let Err(error) = operation {
+            self.cancel_native_ui_mouse(window);
+            tracing::trace!(
+                target: "engine.runtime.input",
+                ?window,
+                ?error,
+                "native wheel withheld without gameplay grant"
+            );
+        }
+        Ok(())
+    }
+
     /// Preserve one original recipient for native pointer, wheel and touch
     /// callbacks too. Until pinned M13 pointer delivery is integrated, UI-owned
     /// input stays neutral physical evidence; it is NEVER dispatched to Editor
