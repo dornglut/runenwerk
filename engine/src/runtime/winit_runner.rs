@@ -38,11 +38,12 @@ use runenui_winit::keyboard_input::{
     KeyboardInputOutcome, KeyboardInputState, NativeKeyTransition,
 };
 use runenui_winit::mouse_input::{MouseButtonOutcome, MouseInputState, TranslatedPointerPoint};
+use runenui_winit::touch_input::TouchInputState;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalPosition;
-use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, WindowEvent};
+use winit::event::{DeviceEvent, ElementState, MouseButton, MouseScrollDelta, Touch, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
@@ -87,6 +88,18 @@ struct NativeUiMouseTranslator {
     binding_epoch: u64,
     scope: runenui_runtime::InputArbitrationScope,
     mouse: MouseInputState,
+}
+
+/// Unlike mouse, native touch permits simultaneous device/contact streams on
+/// the same host window. Identity and canonical contact state stay inside the
+/// pinned winit adapter; this wrapper only scopes its lifetime to native owners.
+struct NativeUiTouchTranslator {
+    recipient: UiRuntimeSlotId,
+    source: InputSourceId,
+    binding_epoch: u64,
+    scope: runenui_runtime::InputArbitrationScope,
+    backend_devices: HashSet<winit::event::DeviceId>,
+    touch: TouchInputState,
 }
 
 /// Translate with the mapping proven by the terminal completed Present, not
@@ -200,6 +213,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         input_adapter: WinitInputAdapter::default(),
         native_ui_keyboards: HashMap::new(),
         native_ui_mice: HashMap::new(),
+        native_ui_touches: HashMap::new(),
         native_ui_modifiers: HashMap::new(),
         last_primary_redraw_at: None,
         frame_pacing_schedule: FramePacingSchedule::default(),
@@ -256,6 +270,7 @@ struct WinitRunner {
     /// Pinned native translator state; input ownership still lives in RunenUI.
     native_ui_keyboards: HashMap<NativeWindowId, NativeUiKeyboardTranslator>,
     native_ui_mice: HashMap<NativeWindowId, NativeUiMouseTranslator>,
+    native_ui_touches: HashMap<NativeWindowId, NativeUiTouchTranslator>,
     native_ui_modifiers: HashMap<NativeWindowId, KeyModifiers>,
     last_primary_redraw_at: Option<Instant>,
     frame_pacing_schedule: FramePacingSchedule,
@@ -784,6 +799,30 @@ impl WinitRunner {
             .is_ok()
         {
             let _ = slots.pump_native_input_records(lifetime.recipient);
+        }
+    }
+
+    /// Retire every pinned touch contact from its exact original M13 scope.
+    /// These are framework Cancels, never fabricated physical releases or
+    /// positive gameplay permissions. Do not transplant them to a new scope.
+    fn cancel_native_ui_touch(&mut self, window: NativeWindowId) {
+        let Some(mut lifetime) = self.native_ui_touches.remove(&window) else {
+            return;
+        };
+        let events = lifetime.touch.cancel_all();
+        let Ok(slots) = self.state.world.resource_mut::<UiRuntimeSlotsResource>() else {
+            return;
+        };
+        if !slots
+            .input_ownership(lifetime.recipient)
+            .is_ok_and(|snapshot| snapshot.scope() == &lifetime.scope)
+        {
+            return;
+        }
+        for event in events {
+            if slots.submit_native_pointer(lifetime.recipient, event).is_ok() {
+                let _ = slots.pump_native_input_records(lifetime.recipient);
+            }
         }
     }
 
@@ -2219,6 +2258,7 @@ mod tests {
             input_adapter: WinitInputAdapter::default(),
             native_ui_keyboards: HashMap::new(),
             native_ui_mice: HashMap::new(),
+        native_ui_touches: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
@@ -2284,6 +2324,7 @@ mod tests {
             input_adapter: WinitInputAdapter::default(),
             native_ui_keyboards: HashMap::new(),
             native_ui_mice: HashMap::new(),
+        native_ui_touches: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
