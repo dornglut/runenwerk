@@ -17,6 +17,31 @@ use super::{
     UiRuntimeSlotsResource,
 };
 
+/// Original native pointer window/device origin, not derived from a displayed
+/// UI surface or current redraw target.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct NativePointerOrigin {
+    window: NativeWindowId,
+    device: InputDeviceId,
+}
+
+impl NativePointerOrigin {
+    #[must_use]
+    pub const fn new(window: NativeWindowId, device: InputDeviceId) -> Self {
+        Self { window, device }
+    }
+
+    #[must_use]
+    pub const fn window(self) -> NativeWindowId {
+        self.window
+    }
+
+    #[must_use]
+    pub const fn device(self) -> InputDeviceId {
+        self.device
+    }
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum NativeInputRecipient {
     LegacyNativeConsumer,
@@ -285,8 +310,7 @@ impl UiNativeInputRecipientsResource {
     /// input context. The canonical pinned runtime still owns actual routing.
     pub fn submit_displayed_native_pointer(
         &self,
-        window: NativeWindowId,
-        expected_device: InputDeviceId,
+        origin: NativePointerOrigin,
         windows: &WindowStateRegistryResource,
         slots: &mut UiRuntimeSlotsResource,
         presentations: &UiRuntimePresentationAssociationsResource,
@@ -295,7 +319,7 @@ impl UiNativeInputRecipientsResource {
     ) -> Result<(UiRuntimeDisplayedPresentation, PointerSubmission), NativePointerIngressError>
     {
         let displayed = match self.displayed_pointer_input(
-            window,
+            origin.window(),
             windows,
             slots,
             presentations,
@@ -315,7 +339,7 @@ impl UiNativeInputRecipientsResource {
                 event,
             )));
         }
-        if event.device_id() != Some(expected_device) {
+        if event.device_id() != Some(origin.device()) {
             return Err(NativePointerIngressError::MismatchedDevice(Box::new(event)));
         }
         let submission = slots
@@ -943,8 +967,7 @@ mod tests {
         assert!(
             matches!(
                 recipients.submit_displayed_native_pointer(
-                    first,
-                    device,
+                    NativePointerOrigin::new(first, device),
                     &windows,
                     &mut slots,
                     &presentations,
@@ -988,8 +1011,7 @@ mod tests {
         assert_eq!(displayed.mapping.native_window_id(), first);
         let wrong = recipients
             .submit_displayed_native_pointer(
-                first,
-                device,
+                NativePointerOrigin::new(first, device),
                 &windows,
                 &mut slots,
                 &presentations,
@@ -1011,8 +1033,7 @@ mod tests {
             .expect("fresh M13 scope must precede pointer ingress");
         let (checked_display, submission) = recipients
             .submit_displayed_native_pointer(
-                first,
-                device,
+                NativePointerOrigin::new(first, device),
                 &windows,
                 &mut slots,
                 &presentations,
