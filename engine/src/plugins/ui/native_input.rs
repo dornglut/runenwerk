@@ -12,8 +12,9 @@ use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceReg
 use crate::runtime::{NativeWindowId, NativeWindowLifecycleState, WindowStateRegistryResource};
 
 use super::{
-    UiRuntimeDisplayedPresentation, UiRuntimePresentationAssociationsResource, UiRuntimeSlotId,
-    UiRuntimeNativePointerAdmissionError, UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
+    UiRuntimeDisplayedPresentation, UiRuntimeNativePointerAdmissionError,
+    UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotOperationFailure,
+    UiRuntimeSlotsResource,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -291,10 +292,8 @@ impl UiNativeInputRecipientsResource {
         presentations: &UiRuntimePresentationAssociationsResource,
         render_surfaces: &RenderSurfaceRegistryResource,
         event: PointerEvent,
-    ) -> Result<
-        (UiRuntimeDisplayedPresentation, PointerSubmission),
-        NativePointerIngressError,
-    > {
+    ) -> Result<(UiRuntimeDisplayedPresentation, PointerSubmission), NativePointerIngressError>
+    {
         let displayed = match self.displayed_pointer_input(
             window,
             windows,
@@ -312,7 +311,9 @@ impl UiNativeInputRecipientsResource {
             }
         };
         if event.surface_context() != &displayed.input_context {
-            return Err(NativePointerIngressError::MismatchedDisplay(Box::new(event)));
+            return Err(NativePointerIngressError::MismatchedDisplay(Box::new(
+                event,
+            )));
         }
         if event.device_id() != Some(expected_device) {
             return Err(NativePointerIngressError::MismatchedDevice(Box::new(event)));
@@ -447,8 +448,7 @@ mod tests {
     use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::ui::{
         UiRuntimeFontConfiguration, UiRuntimeNativeMapping, UiRuntimePresentationBinding,
-        native_pointer_finality,
-        UiTypedScreenId,
+        UiTypedScreenId, native_pointer_finality,
     };
 
     struct TestApp;
@@ -940,21 +940,24 @@ mod tests {
             ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
-        assert!(matches!(
-            recipients.submit_displayed_native_pointer(
-                first,
-                device,
-                &windows,
-                &mut slots,
-                &presentations,
-                &render_surfaces,
-                native_pointer(device),
+        assert!(
+            matches!(
+                recipients.submit_displayed_native_pointer(
+                    first,
+                    device,
+                    &windows,
+                    &mut slots,
+                    &presentations,
+                    &render_surfaces,
+                    native_pointer(device),
+                ),
+                Err(NativePointerIngressError::MissingDisplay {
+                    reason: NativeInputRecipientError::NoCompletedPresentation,
+                    ..
+                })
             ),
-            Err(NativePointerIngressError::MissingDisplay {
-                reason: NativeInputRecipientError::NoCompletedPresentation,
-                ..
-            })
-        ), "submitted paint is not an input context until completed Present");
+            "submitted paint is not an input context until completed Present"
+        );
         assert!(presentations.associate_accepted_submission(publication_id));
         assert!(matches!(
             recipients.displayed_pointer_input(
@@ -994,7 +997,10 @@ mod tests {
                 native_pointer(other_device),
             )
             .expect_err("a foreign original device cannot impersonate the native cursor");
-        assert!(matches!(wrong, NativePointerIngressError::MismatchedDevice(_)));
+        assert!(matches!(
+            wrong,
+            NativePointerIngressError::MismatchedDevice(_)
+        ));
         assert_eq!(
             wrong.into_event().device_id(),
             Some(other_device),
