@@ -90,6 +90,60 @@ pub enum NativeInputRecipientError {
 
 /// Exactly one explicit semantic recipient per native window. No substitute
 /// RunenUI focus, presentation, physical input or game permission authority.
+/// Borrow the true native-window, terminal UI presentation and attached
+/// Render authorities inside the Engine UI integration boundary. The Winit
+/// driver never names a renderer implementation type or owns hit authority.
+pub(crate) struct UiNativePointerHostRead<'a> {
+    windows: &'a WindowStateRegistryResource,
+    presentations: &'a UiRuntimePresentationAssociationsResource,
+    surfaces: &'a RenderSurfaceRegistryResource,
+}
+
+impl<'a> UiNativePointerHostRead<'a> {
+    pub(crate) fn from_world(world: &'a runen_ecs::World) -> anyhow::Result<Self> {
+        Ok(Self {
+            windows: world.resource::<WindowStateRegistryResource>()?,
+            presentations: world.resource::<UiRuntimePresentationAssociationsResource>()?,
+            surfaces: world.resource::<RenderSurfaceRegistryResource>()?,
+        })
+    }
+
+    pub(crate) fn displayed_input(
+        &self,
+        recipients: &UiNativeInputRecipientsResource,
+        window: NativeWindowId,
+        slots: &mut UiRuntimeSlotsResource,
+    ) -> Result<Option<UiRuntimeDisplayedPresentation>, NativeInputRecipientError> {
+        recipients.displayed_pointer_input(
+            window,
+            self.windows,
+            slots,
+            self.presentations,
+            self.surfaces,
+        )
+    }
+
+    pub(crate) fn submit(
+        &self,
+        recipients: &UiNativeInputRecipientsResource,
+        origin: NativePointerOrigin,
+        slots: &mut UiRuntimeSlotsResource,
+        event: PointerEvent,
+    ) -> Result<
+        (UiRuntimeDisplayedPresentation, PointerSubmission),
+        NativePointerIngressError,
+    > {
+        recipients.submit_displayed_native_pointer(
+            origin,
+            self.windows,
+            slots,
+            self.presentations,
+            self.surfaces,
+            event,
+        )
+    }
+}
+
 /// Original-event rejection stays explicit; no legacy gameplay fallback is
 /// manufactured from a missing terminal display or unrelated pointer device.
 #[derive(Debug)]
