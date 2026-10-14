@@ -1130,6 +1130,11 @@ mod tests {
         let next = slots
             .publish_surface_for_slot(slot, &changed_context)
             .expect("new RunenUI publication");
+        let new_context = next.input_context().clone();
+        assert_ne!(
+            new_context, expected,
+            "DPI/extent remap must create a different surface input context"
+        );
         let next_id = presentations
             .stage(
                 binding,
@@ -1155,6 +1160,26 @@ mod tests {
                 )
                 .expect("valid recipient")
                 .is_some()
+        );
+
+        let stale = recipients
+            .submit_displayed_native_pointer(
+                NativePointerOrigin::new(first, device),
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+                native_pointer(device),
+            )
+            .expect_err("old completed-Present context must not reach the next hit scene");
+        assert!(matches!(
+            stale,
+            NativePointerIngressError::MismatchedDisplay(_)
+        ));
+        assert_eq!(
+            stale.into_event().surface_context(),
+            &expected,
+            "rejection retains the exact old original displayed input context"
         );
 
         // A renderer detach is immediately authoritative even before a UI
