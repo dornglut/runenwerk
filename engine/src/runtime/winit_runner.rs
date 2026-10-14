@@ -2962,6 +2962,25 @@ mod tests {
                 &MouseScrollDelta::LineDelta(0.0, 0.0),
             )
             .expect("phase-only wheel must be inert before display checks");
+        runner
+            .route_ui_touch(
+                secondary,
+                slot,
+                bound_epoch,
+                unknown_position_context,
+                Touch {
+                    device_id: winit::event::DeviceId::dummy(),
+                    phase: winit::event::TouchPhase::Started,
+                    location: PhysicalPosition::new(18.0, 22.0),
+                    force: None,
+                    id: 42,
+                },
+            )
+            .expect("unpresented native touch must remain an explicit nonclaim");
+        assert!(
+            !runner.native_ui_touches.contains_key(&secondary),
+            "a touch cannot allocate a live input stream without terminal Present"
+        );
         // A device-free namespace change is still a hard translator
         // lifetime boundary; no previous UI pressed keys or modifiers survive.
         let source_a = InputSourceId::new(91);
