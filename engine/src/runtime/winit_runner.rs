@@ -2432,12 +2432,7 @@ mod tests {
                     TextDocumentId::new(81),
                     TextDocumentRevision::new(0),
                 );
-                let position = TextPosition::new(
-                    document,
-                    "",
-                    0,
-                    TextAffinity::Downstream,
-                )
+                let position = TextPosition::new(document, "", 0, TextAffinity::Downstream)
                 .expect("empty text position is valid");
                 runenui_core::text_field(
                     document,
@@ -2458,12 +2453,7 @@ mod tests {
             }
         }
 
-        let budget = PumpBudget::new(
-            usize::MAX,
-            usize::MAX,
-            usize::MAX,
-            usize::MAX,
-        );
+        let budget = PumpBudget::new(usize::MAX, usize::MAX, usize::MAX, usize::MAX);
         let mut runtime = AppRuntime::<CompositionProbe>::mount(());
         runtime.pump(budget).expect("initial mounted reconciliation");
         let field = runtime
