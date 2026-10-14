@@ -1178,7 +1178,7 @@ impl UiRuntimeSlotsResource {
     /// Admit exactly one native pointer observation to the pinned runtime.
     /// Callers supply the original completed-Present input context; admission
     /// alone never authorizes gameplay or claims a displayed surface.
-    pub fn submit_native_pointer(
+    pub(crate) fn submit_native_pointer(
         &mut self,
         slot_id: UiRuntimeSlotId,
         event: PointerEvent,

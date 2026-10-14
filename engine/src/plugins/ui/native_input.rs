@@ -308,7 +308,7 @@ impl UiNativeInputRecipientsResource {
     /// existing terminal completed-Present association for this exact native
     /// recipient. Merely published or GPU-submitted paint cannot supply the
     /// input context. The canonical pinned runtime still owns actual routing.
-    pub fn submit_displayed_native_pointer(
+    pub(crate) fn submit_displayed_native_pointer(
         &self,
         origin: NativePointerOrigin,
         windows: &WindowStateRegistryResource,
