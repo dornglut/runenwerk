@@ -1358,3 +1358,54 @@ fn genuine_modifier_release_allows_forbidden_held_chord_without_new_press() {
         "changing held modifier truth must not fabricate a fresh W press"
     );
 }
+
+#[test]
+fn synthetic_modifier_release_cannot_fabricate_forbidden_pressed_or_held_shortcuts() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let context = InputContext::new(InputSourceId::new(429), Some(InputDeviceId::new(9)));
+    let shift = physical_key(KeyCode::ShiftLeft);
+    actions.map_chord(
+        &input,
+        "game.no-shift-w",
+        KeyChord::code("KeyW").with_shift_forbidden(),
+    );
+    input.handle_normalized_keyboard(
+        context,
+        &KeyboardInput {
+            physical_key: shift.clone(),
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    let shift_generation = input.keyboard_down_generation_in(context, &shift).unwrap();
+    actions.revoke_keyboard_lifetime(&input, context, &shift, shift_generation);
+    input.handle_normalized_keyboard(
+        context,
+        &KeyboardInput {
+            physical_key: shift.clone(),
+            origin: ObservationOrigin::BackendSyntheticReconciliation,
+            ..normalized_key(DigitalState::Released)
+        },
+    );
+    input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(!actions.action_pressed("game.no-shift-w"));
+    assert!(!actions.action_down("game.no-shift-w"));
+
+    clear_frame(&mut input, &mut actions);
+    actions.project(&input);
+    assert!(!actions.action_pressed("game.no-shift-w"));
+    assert!(!actions.action_down("game.no-shift-w"));
+
+    // Only a genuine Up resolves the denied lifetime's uncertainty.
+    input.handle_normalized_keyboard(
+        context,
+        &KeyboardInput {
+            physical_key: shift,
+            ..normalized_key(DigitalState::Released)
+        },
+    );
+    actions.project(&input);
+    assert!(actions.action_down("game.no-shift-w"));
+    assert!(!actions.action_pressed("game.no-shift-w"));
+}

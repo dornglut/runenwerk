@@ -354,6 +354,9 @@ struct PressedActionContributor {
 struct BlockedHeldKey {
     context: InputContext,
     key: PhysicalKeyIdentity,
+    /// Exact genuine Down which the UI claimed; generation ordering is
+    /// monotonic across contexts, even if synthetic reconciliation hides it.
+    generation: u64,
     /// Index into this frame's genuine Up observations at denial time.
     releases_seen: usize,
 }
@@ -533,6 +536,7 @@ impl ActionState {
             self.blocked_held_keys.push(BlockedHeldKey {
                 context,
                 key: key.clone(),
+                generation,
                 releases_seen: input.keyboard_real_release_samples().len(),
             });
         }
@@ -593,6 +597,35 @@ impl ActionState {
         }
     }
 
+    /// Synthetic cancellation is not authentic release proof. When a
+    /// claimed modifier's genuine Down predates this press, its physical
+    /// absence in a reconciliation snapshot is unknown, not an affirmative
+    /// absence satisfying a Shift/Ctrl/Alt/Super Forbidden chord.
+    fn possibly_present_pressed_modifiers(&self, press: &KeyboardPressSample) -> ModifiersSnapshot {
+        let uncertain = |code: KeyCode| {
+            let key = PhysicalKeyIdentity::code(format!("{code:?}"));
+            self.blocked_held_keys.iter().any(|blocked| {
+                blocked.context == press.context
+                    && blocked.key == key
+                    && blocked.generation < press.generation
+            })
+        };
+        ModifiersSnapshot {
+            shift: press.modifiers.shift
+                || uncertain(KeyCode::ShiftLeft)
+                || uncertain(KeyCode::ShiftRight),
+            ctrl: press.modifiers.ctrl
+                || uncertain(KeyCode::ControlLeft)
+                || uncertain(KeyCode::ControlRight),
+            alt: press.modifiers.alt
+                || uncertain(KeyCode::AltLeft)
+                || uncertain(KeyCode::AltRight),
+            super_key: press.modifiers.super_key
+                || uncertain(KeyCode::SuperLeft)
+                || uncertain(KeyCode::SuperRight),
+        }
+    }
+
     fn pressed_contributor_eligible(
         &self,
         input: &InputState,
@@ -615,7 +648,10 @@ impl ActionState {
             )
             && contribution
                 .chord
-                .matches_pressed(press.modifiers, self.eligible_pressed_modifiers(press))
+                .matches_pressed(
+                    self.possibly_present_pressed_modifiers(press),
+                    self.eligible_pressed_modifiers(press),
+                )
     }
 
     /// Retire invalidated press/held-modifier evidence immediately, including
@@ -679,7 +715,7 @@ impl ActionState {
             let eligible = self.eligible_pressed_modifiers(press);
             for (action, chord) in self.bindings.matching_pressed_chords(
                 &press.physical_key,
-                press.modifiers,
+                self.possibly_present_pressed_modifiers(press),
                 eligible,
             ) {
                 self.actions_pressed.insert(action.clone());
@@ -785,7 +821,8 @@ impl ActionState {
         context: InputContext,
     ) -> ModifiersSnapshot {
         let down = |code: KeyCode| {
-            input.physical_key_down_in(context, &PhysicalKeyIdentity::code(format!("{code:?}")))
+            let key = PhysicalKeyIdentity::code(format!("{code:?}"));
+            input.physical_key_down_in(context, &key) || self.blocked_held_key(context, &key)
         };
         ModifiersSnapshot {
             shift: down(KeyCode::ShiftLeft) || down(KeyCode::ShiftRight),
