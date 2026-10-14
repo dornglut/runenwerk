@@ -750,7 +750,10 @@ impl WinitRunner {
             .map_err(|reason| {
                 anyhow!("native keyboard cancellation lacked M13 pre-state: {reason:?}")
             })?;
-        for event in lifetime.keyboard.cancel_all(KeyModifiers::NONE, composition) {
+        for event in lifetime
+            .keyboard
+            .cancel_all(KeyModifiers::NONE, composition)
+        {
             if slots.submit_native_keyboard(slot, event).is_ok() {
                 // Cancellation does not grant gameplay, even if settlement is
                 // paused, rejected, or unavailable.
