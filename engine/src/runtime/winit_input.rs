@@ -510,26 +510,42 @@ mod tests {
         let backend = DeviceId::dummy();
         let first = NativeWindowId::primary();
         let second = NativeWindowId::try_from_raw(2).expect("second native window");
-        let a = adapter.window_context(first, backend).expect("initial native window device");
-        let b = adapter.window_context(second, backend).expect("same physical device in next window");
-        let raw = adapter.raw_device_context(backend).expect("separate raw identity");
+        let a = adapter
+            .window_context(first, backend)
+            .expect("initial native window device");
+        let b = adapter
+            .window_context(second, backend)
+            .expect("same physical device in next window");
+        let raw = adapter
+            .raw_device_context(backend)
+            .expect("separate raw identity");
         assert_eq!(a.device, b.device);
         let mut expected = vec![a, b];
         expected.sort_unstable_by_key(|context| context.source.raw());
         assert_eq!(
-            adapter.retire_window_device(backend).expect("checked device retirement"),
+            adapter
+                .retire_window_device(backend)
+                .expect("checked device retirement"),
             expected,
         );
         assert!(
-            adapter.retire_window_device(backend)
+            adapter
+                .retire_window_device(backend)
                 .expect("repeat retirement is idempotent")
                 .is_empty(),
         );
-        let after = adapter.window_context(first, backend).expect("replacement device");
+        let after = adapter
+            .window_context(first, backend)
+            .expect("replacement device");
         assert_eq!(after.source, a.source);
-        assert_ne!(after.device, a.device, "removed hardware gets a new generation");
+        assert_ne!(
+            after.device, a.device,
+            "removed hardware gets a new generation"
+        );
         assert_eq!(
-            adapter.raw_device_context(backend).expect("raw identity unaffected"),
+            adapter
+                .raw_device_context(backend)
+                .expect("raw identity unaffected"),
             raw,
             "raw-device identity is owned by its own retirement method"
         );

@@ -129,10 +129,8 @@ impl<'a> UiNativePointerHostRead<'a> {
         origin: NativePointerOrigin,
         slots: &mut UiRuntimeSlotsResource,
         event: PointerEvent,
-    ) -> Result<
-        (UiRuntimeDisplayedPresentation, PointerSubmission),
-        NativePointerIngressError,
-    > {
+    ) -> Result<(UiRuntimeDisplayedPresentation, PointerSubmission), NativePointerIngressError>
+    {
         recipients.submit_displayed_native_pointer(
             origin,
             self.windows,
