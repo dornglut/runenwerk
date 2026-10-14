@@ -1,12 +1,10 @@
 use crate::app::WindowedAppState;
-use crate::plugins::render::host::{
-    RenderSurfaceRegistryResource, native as render_native_host,
-};
+use crate::plugins::render::host::{RenderSurfaceRegistryResource, native as render_native_host};
 use crate::plugins::ui::{
-    NativeInputRecipient, NativeInputRecipientError, UiNativeInputRecipientsResource,
+    NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
+    UiNativeInputRecipientsResource, UiRuntimeDisplayedPresentation,
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
-    NativePointerOrigin, UiRuntimeDisplayedPresentation, native_keyboard_finality,
-    native_no_focused_keyboard_claim_witness, native_pointer_finality,
+    native_keyboard_finality, native_no_focused_keyboard_claim_witness, native_pointer_finality,
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
@@ -94,10 +92,7 @@ struct NativeUiMouseTranslator {
     clippy::cast_possible_truncation,
     reason = "native f64 cursor positions are finite and checked against the f32 range before conversion"
 )]
-fn native_logical_mouse_point(
-    position: PhysicalPosition<f64>,
-    scale: f64,
-) -> Result<LogicalPoint> {
+fn native_logical_mouse_point(position: PhysicalPosition<f64>, scale: f64) -> Result<LogicalPoint> {
     anyhow::ensure!(scale.is_finite() && scale > 0.0, "invalid native scale");
     let x = position.x / scale;
     let y = position.y / scale;
@@ -641,9 +636,11 @@ impl WinitRunner {
                 .context("missing InputState resource")?;
             input.handle_continuity_loss(context, ContinuityLoss::Source);
         }
-        let windows: Vec<_> = self.native_ui_mice.iter().filter_map(|(window, lifetime)| {
-            (lifetime.source == context.source).then_some(*window)
-        }).collect();
+        let windows: Vec<_> = self
+            .native_ui_mice
+            .iter()
+            .filter_map(|(window, lifetime)| (lifetime.source == context.source).then_some(*window))
+            .collect();
         for window in windows {
             self.cancel_native_ui_mouse(window);
         }
@@ -667,12 +664,16 @@ impl WinitRunner {
         let Ok(slots) = self.state.world.resource_mut::<UiRuntimeSlotsResource>() else {
             return;
         };
-        if !slots.input_ownership(lifetime.recipient)
+        if !slots
+            .input_ownership(lifetime.recipient)
             .is_ok_and(|observed| observed.scope() == &lifetime.scope)
         {
             return;
         }
-        if slots.submit_native_pointer(lifetime.recipient, cancel).is_ok() {
+        if slots
+            .submit_native_pointer(lifetime.recipient, cancel)
+            .is_ok()
+        {
             let _ = slots.pump_native_input_records(lifetime.recipient);
         }
     }
@@ -689,8 +690,10 @@ impl WinitRunner {
     ) -> Result<()> {
         let device = Self::native_ui_device(context)?;
         if self.native_ui_mice.get(&window).is_some_and(|old| {
-            old.recipient != slot || old.binding_epoch != binding_epoch
-                || old.source != context.source || old.device != device
+            old.recipient != slot
+                || old.binding_epoch != binding_epoch
+                || old.source != context.source
+                || old.device != device
         }) {
             self.cancel_native_ui_mouse(window);
         }
