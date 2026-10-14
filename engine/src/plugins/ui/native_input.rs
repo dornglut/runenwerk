@@ -65,9 +65,49 @@ pub enum NativeInputRecipientError {
 pub struct UiNativeInputRecipientsResource {
     bindings: BTreeMap<NativeWindowId, WindowRecipientBinding>,
     next_epoch: u64,
+    /// An explicit application selection, not visual z-order or a UI mount.
+    /// Realized only once the native primary window is Created and UI is Running.
+    requested_primary: Option<NativeInputRecipient>,
 }
 
 impl UiNativeInputRecipientsResource {
+    /// Declare primary input ownership during App configuration, before the
+    /// native window exists. A UI mount alone NEVER makes this choice.
+    pub fn request_primary(
+        &mut self,
+        recipient: NativeInputRecipient,
+    ) -> Result<(), NativeInputRecipientError> {
+        if let Some(requested) = self.requested_primary {
+            return if requested == recipient {
+                Ok(())
+            } else {
+                Err(NativeInputRecipientError::ConflictingRecipient)
+            };
+        }
+        if let Some(WindowRecipientBinding::Bound(existing)) =
+            self.bindings.get(&NativeWindowId::primary())
+            && existing.recipient != recipient
+        {
+            return Err(NativeInputRecipientError::ConflictingRecipient);
+        }
+        self.requested_primary = Some(recipient);
+        Ok(())
+    }
+
+    /// Admit the declared selection against the real created primary window,
+    /// actual mounted slot and current M13 Running scope. Idempotent if native
+    /// startup is re-entered, and never silently chooses a visible slot.
+    pub fn realize_requested_primary(
+        &mut self,
+        windows: &WindowStateRegistryResource,
+        slots: &mut UiRuntimeSlotsResource,
+    ) -> Result<bool, NativeInputRecipientError> {
+        let Some(recipient) = self.requested_primary else {
+            return Ok(false);
+        };
+        self.bind(NativeWindowId::primary(), recipient, windows, slots)
+    }
+
     /// An identical live binding is idempotent; changing target requires retire.
     /// All UI registrations obtain the actual runtime scope synchronously.
     pub fn bind(
@@ -349,6 +389,45 @@ mod tests {
         let second = NativeWindowId::try_from_raw(2).expect("second window ID");
         windows.register_created_window(second, "second", (320, 240), 1.0, false);
         (windows, first, second)
+    }
+
+    #[test]
+    fn declared_primary_native_recipient_requires_explicit_selection_and_created_window() {
+        let (windows, primary, _) = windows();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        assert_eq!(
+            recipients
+                .realize_requested_primary(&windows, &mut slots)
+                .expect("no input binding is an intentional render-only state"),
+            false
+        );
+        let slot = mount_slot(&mut slots);
+        recipients
+            .request_primary(NativeInputRecipient::RunenUiSlot(slot))
+            .expect("author deliberately selected the primary keyboard recipient");
+        assert_eq!(
+            recipients.request_primary(NativeInputRecipient::LegacyNativeConsumer),
+            Err(NativeInputRecipientError::ConflictingRecipient),
+            "selection cannot be implicitly overwritten by another consumer"
+        );
+        assert_eq!(
+            recipients.realize_requested_primary(&windows, &mut slots),
+            Ok(true)
+        );
+        let epoch = recipients
+            .binding_epoch_for_window(primary)
+            .expect("one live exact binding");
+        assert_eq!(
+            recipients.realize_requested_primary(&windows, &mut slots),
+            Ok(false),
+            "repeat startup cannot advance binding identity or create a second owner"
+        );
+        assert_eq!(recipients.binding_epoch_for_window(primary), Some(epoch));
+        assert_eq!(
+            recipients.resolve(primary, &windows, &mut slots),
+            Ok(NativeInputRecipient::RunenUiSlot(slot))
+        );
     }
 
     #[test]

@@ -323,6 +323,31 @@ impl WinitRunner {
     /// Resolve the original native window's one semantic input recipient before
     /// routing. Absence is legacy only when NO UI runtime is mounted; a stale
     /// or retired UI binding never becomes a game input fallback.
+    /// Materialize only the author-declared primary input target once the
+    /// window is real and startup has installed all mounted UI resources.
+    /// No presentation order, UI mount count or implicit z-order is consulted.
+    fn realize_declared_primary_input(&mut self) -> Result<()> {
+        let world = &mut self.state.world;
+        let Some(mut recipients) = world.remove_resource::<UiNativeInputRecipientsResource>()
+        else {
+            return Ok(());
+        };
+        let result = (|| -> Result<()> {
+            let mut slots = world
+                .remove_resource::<UiRuntimeSlotsResource>()
+                .context("declared native UI recipient has no slot authority")?;
+            let operation = (|| -> Result<()> {
+                let windows = world.resource::<WindowStateRegistryResource>()?;
+                recipients.realize_requested_primary(windows, &mut slots)?;
+                Ok(())
+            })();
+            world.insert_resource(slots);
+            operation
+        })();
+        world.insert_resource(recipients);
+        result
+    }
+
     fn native_input_recipient(
         &mut self,
         window: NativeWindowId,
@@ -1187,6 +1212,13 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
 
         if let Err(err) = self.run_startup_if_needed() {
             self.exit_with_error(event_loop, anyhow!("runtime startup failed: {err:#}"));
+            return;
+        }
+        if let Err(err) = self.realize_declared_primary_input() {
+            self.exit_with_error(
+                event_loop,
+                anyhow!("declared native primary input target invalid: {err:#}"),
+            );
             return;
         }
 
