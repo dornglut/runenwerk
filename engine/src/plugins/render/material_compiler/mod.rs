@@ -28,7 +28,8 @@ use wgsl::{
     material_scene_table_product_wgsl,
 };
 
-pub const MATERIAL_WGSL_COMPILER_CONTRACT_VERSION: u32 = 2;
+// v3 changes preview/scene direct lighting and scene-table input identity.
+pub const MATERIAL_WGSL_COMPILER_CONTRACT_VERSION: u32 = 3;
 
 pub fn compile_material_shader(
     request: MaterialShaderCompileRequest<'_>,

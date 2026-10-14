@@ -90,9 +90,10 @@ fn validate_renderer_capabilities(ir: &MaterialIr) -> Result<(), MaterialShaderC
                     input.name.as_str(),
                     "base_color" | "roughness" | "metallic" | "emissive" | "opacity"
                 ),
-                MaterialOutputTarget::RenderMaterial => {
-                    matches!(input.name.as_str(), "base_color" | "emissive" | "opacity")
-                }
+                MaterialOutputTarget::RenderMaterial => matches!(
+                    input.name.as_str(),
+                    "base_color" | "roughness" | "metallic" | "emissive" | "opacity"
+                ),
                 MaterialOutputTarget::FieldMaterialChannel => {
                     unreachable!("field material target rejected before output input admission")
                 }
