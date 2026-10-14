@@ -112,15 +112,13 @@ impl KeyChord {
             && self.super_key.matches(modifiers.super_key)
     }
 
-    fn matches_pressed(
-        &self,
-        physical: ModifiersSnapshot,
-        eligible: ModifiersSnapshot,
-    ) -> bool {
+    fn matches_pressed(&self, physical: ModifiersSnapshot, eligible: ModifiersSnapshot) -> bool {
         self.shift.matches_pressed(physical.shift, eligible.shift)
             && self.ctrl.matches_pressed(physical.ctrl, eligible.ctrl)
             && self.alt.matches_pressed(physical.alt, eligible.alt)
-            && self.super_key.matches_pressed(physical.super_key, eligible.super_key)
+            && self
+                .super_key
+                .matches_pressed(physical.super_key, eligible.super_key)
     }
 }
 
@@ -609,7 +607,10 @@ impl ActionState {
         input: &InputState,
         contribution: &PressedActionContributor,
     ) -> bool {
-        let Some(press) = input.keyboard_press_samples().get(contribution.sample_index) else {
+        let Some(press) = input
+            .keyboard_press_samples()
+            .get(contribution.sample_index)
+        else {
             return false;
         };
         !press.retired_by_continuity
