@@ -192,17 +192,12 @@ impl WinitRunner {
             // continuity loss is source-specific semantic input and retains
             // the original recipient snapshot before the canonical group is
             // applied. It cannot be reinterpreted by Editor after rebinding.
-            let recipient = match self.native_input_recipient(native_window_id) {
-                Ok((recipient, _)) => Some(recipient),
-                Err(error)
-                    if error.downcast_ref::<NativeInputRecipientError>()
-                        == Some(&NativeInputRecipientError::MissingRecipient) =>
-                {
-                    None
-                }
-                Err(error) => return Err(error),
-            };
-            return self.apply_event_group_for_recipient(
+            let selection = self.native_input_recipient(native_window_id);
+            let recipient = selection.as_ref().ok().map(|(recipient, _)| *recipient);
+            // Focus/physical continuity is NOT contingent on a healthy UI
+            // recipient. Journal admission remains atomic; a stale target
+            // still fails, but only AFTER the original loss retracted input.
+            self.apply_event_group_for_recipient(
                 native_window_id,
                 [
                     PlatformEvent::Focused { focused },
@@ -212,7 +207,17 @@ impl WinitRunner {
                     },
                 ],
                 recipient,
-            );
+            )?;
+            match selection {
+                Ok(_) => Ok(()),
+                Err(error)
+                    if error.downcast_ref::<NativeInputRecipientError>()
+                        == Some(&NativeInputRecipientError::MissingRecipient) =>
+                {
+                    Ok(())
+                }
+                Err(error) => Err(error),
+            }
         }
         self.apply_event_for_native_window(native_window_id, PlatformEvent::Focused { focused })
     }
@@ -221,12 +226,18 @@ impl WinitRunner {
         let Some(context) = self.input_adapter.window_source_context(native_window_id) else {
             return Ok(false);
         };
-        self.apply_semantic_native_input(
+        let selection = self.native_input_recipient(native_window_id);
+        let recipient = selection.as_ref().ok().map(|(recipient, _)| *recipient);
+        // A stale UI recipient must not strand the old physical source in
+        // the host allocator or leave its held gameplay contributors live.
+        // Journal admission failure still aborts BEFORE retiring the source.
+        self.apply_event_group_for_recipient(
             native_window_id,
-            PlatformEvent::InputContinuityLost {
+            [PlatformEvent::InputContinuityLost {
                 context,
                 loss: ContinuityLoss::Source,
-            },
+            }],
+            recipient,
         )?;
         let retired = self
             .input_adapter
@@ -245,7 +256,16 @@ impl WinitRunner {
             self.state.world.insert_resource(actions);
             result?;
         }
-        Ok(true)
+        match selection {
+            Ok(_) => Ok(true),
+            Err(error)
+                if error.downcast_ref::<NativeInputRecipientError>()
+                    == Some(&NativeInputRecipientError::MissingRecipient) =>
+            {
+                Ok(true)
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Retire the semantic input recipient and its completed-display mapping
@@ -1209,19 +1229,28 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 self.apply_event_for_native_window(native_window_id, PlatformEvent::CloseRequested)
             }
             WindowEvent::Focused(focused) => {
-                if !focused {
+                // UI cancellation is best-effort only for ordering: even a
+                // terminal/stale M13 target cannot intercept the operating
+                // system's original focus-loss and physical-key revocation.
+                let cancellation = if !focused {
                     match self.native_input_recipient(native_window_id) {
                         Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
-                            self.cancel_native_ui_keyboard(native_window_id, slot)?;
+                            self.cancel_native_ui_keyboard(native_window_id, slot)
                         }
-                        Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => {}
+                        Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => Ok(()),
                         Err(error)
                             if error.downcast_ref::<NativeInputRecipientError>()
-                                == Some(&NativeInputRecipientError::MissingRecipient) => {}
-                        Err(error) => return Err(error),
+                                == Some(&NativeInputRecipientError::MissingRecipient) =>
+                        {
+                            Ok(())
+                        }
+                        Err(error) => Err(error),
                     }
-                }
-                self.apply_window_focus_event(native_window_id, focused)
+                } else {
+                    Ok(())
+                };
+                self.apply_window_focus_event(native_window_id, focused)?;
+                cancellation
             }
             WindowEvent::Resized(size) => self.apply_event_for_native_window(
                 native_window_id,
@@ -1674,6 +1703,106 @@ mod tests {
                 .window_source_context(NativeWindowId::primary())
                 .map(|value| value.source),
             Some(context.source)
+        );
+    }
+
+    #[test]
+    fn stale_native_recipient_cannot_prevent_original_focus_and_source_retirement() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        let primary = NativeWindowId::primary();
+        let context = runner
+            .input_adapter
+            .window_context(primary, winit::event::DeviceId::dummy())
+            .expect("one original window input source");
+        runner
+            .apply_event(normalized_shift_press(context))
+            .expect("original physical Down admitted");
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("input state")
+                .shift_down()
+        );
+
+        // A recipient registry without mounted UI slots is inconsistent and
+        // must be reported, but never prevents physical focus loss.
+        runner
+            .state
+            .world
+            .insert_resource(UiNativeInputRecipientsResource::default());
+        assert!(
+            runner.apply_window_focus_event(primary, false).is_err(),
+            "stale semantic route remains observable as an error"
+        );
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("physical reducer")
+                .shift_down(),
+            "original focus loss must retract held physical input"
+        );
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .expect("native windows")
+                .record(primary)
+                .expect("primary native window")
+                .focused,
+            "native window focus truth is still updated"
+        );
+        let journal = runner
+            .state
+            .world
+            .resource::<PlatformWindowEventQueueResource>()
+            .expect("one original journal");
+        assert!(
+            !journal
+                .events()
+                .last()
+                .expect("source continuity observation retained")
+                .authorized_for_legacy_editor(),
+            "stale-target continuity cannot be dispatched as Editor-owned input"
+        );
+
+        let mut teardown = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        teardown.state.world.insert_resource(InputState::new());
+        let context = teardown
+            .input_adapter
+            .window_context(primary, winit::event::DeviceId::dummy())
+            .expect("native teardown source");
+        teardown
+            .apply_event(normalized_shift_press(context))
+            .expect("teardown original Down");
+        teardown
+            .state
+            .world
+            .insert_resource(UiNativeInputRecipientsResource::default());
+        assert!(
+            teardown.retire_window_input_source(primary).is_err(),
+            "unresolvable recipient is still reported"
+        );
+        assert!(
+            teardown
+                .input_adapter
+                .window_source_context(primary)
+                .is_none(),
+            "original physical source identity must be retired despite stale UI route"
+        );
+        assert!(
+            !teardown
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("neutral input")
+                .shift_down(),
+            "source retirement must retract the held key"
         );
     }
 
