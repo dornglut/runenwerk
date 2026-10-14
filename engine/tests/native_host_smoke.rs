@@ -10,8 +10,7 @@ use engine::plugins::render::{
     Gfx, RenderFlow, RenderFrameProducerId, SurfaceFrameSubmissionOrder,
 };
 use engine::plugins::ui::{
-    AppUiExt, UiNativeInputRecipientsResource, UiRuntimeFontConfiguration,
-    UiRuntimeNativeMapping,
+    AppUiExt, UiNativeInputRecipientsResource, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
     UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
     UiRuntimeSlotsResource, UiScreen, UiTypedActionDescriptor, UiTypedScreenId, UiTypedSource,
 };
