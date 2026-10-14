@@ -1937,15 +1937,26 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 let context = self
                     .input_adapter
                     .window_context(native_window_id, device_id)?;
+                let original_delta = delta.clone();
                 let input = scroll_input(delta, phase);
-                let result = self.apply_semantic_native_input(
+                self.apply_semantic_native_input(
                     native_window_id,
                     PlatformEvent::MouseWheel { context, input },
-                );
-                if result.is_ok() {
-                    self.request_redraw_for_native_window(native_window_id);
+                )?;
+                if let Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch))) =
+                    self.native_input_recipient(native_window_id)
+                {
+                    self.route_ui_mouse_wheel(
+                        native_window_id,
+                        slot,
+                        epoch,
+                        device_id,
+                        context,
+                        &original_delta,
+                    )?;
                 }
-                result
+                self.request_redraw_for_native_window(native_window_id);
+                Ok(())
             }
             WindowEvent::CursorMoved {
                 device_id,
