@@ -2495,6 +2495,26 @@ mod tests {
                 .authorized_for_legacy_editor(),
             "selected RunenUI input cannot be double-dispatched to Editor"
         );
+        // A native button with no prior authentic cursor position cannot
+        // manufacture a logical hit point or a new RunenUI pressed stream.
+        let unknown_position_context = runner
+            .input_adapter
+            .window_context(secondary, winit::event::DeviceId::dummy())
+            .expect("original normalized window-event input context");
+        runner
+            .route_ui_mouse_button(
+                secondary,
+                slot,
+                bound_epoch,
+                unknown_position_context,
+                winit::event::ElementState::Pressed,
+                winit::event::MouseButton::Left,
+            )
+            .expect("missing native point is a deliberate UI nonclaim");
+        assert!(
+            !runner.native_ui_mice.contains_key(&secondary),
+            "a button without original cursor stream may not synthesize a pointer lifetime"
+        );
         // A device-free namespace change is still a hard translator
         // lifetime boundary; no previous UI pressed keys or modifiers survive.
         let source_a = InputSourceId::new(91);
