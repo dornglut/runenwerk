@@ -218,7 +218,7 @@ impl WinitRunner {
         let Some(context) = self.input_adapter.window_source_context(native_window_id) else {
             return Ok(false);
         };
-        self.apply_event_for_native_window(
+        self.apply_semantic_native_input(
             native_window_id,
             PlatformEvent::InputContinuityLost {
                 context,
