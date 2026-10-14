@@ -1,9 +1,10 @@
 use crate::app::WindowedAppState;
-use crate::plugins::render::host::{RenderSurfaceRegistryResource, native as render_native_host};
+use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
     UiNativeInputRecipientsResource, UiRuntimeDisplayedPresentation,
-    UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
+    UiNativePointerHostRead, UiRuntimePresentationAssociationsResource, UiRuntimeSlotId,
+    UiRuntimeSlotsResource,
     native_keyboard_finality, native_no_focused_keyboard_claim_witness, native_pointer_finality,
 };
 use crate::plugins::{ActionState, InputState};
@@ -729,11 +730,9 @@ impl WinitRunner {
                 .input_ownership(slot)
                 .map_err(|error| anyhow!("native UI pointer pre-state unavailable: {error:?}"))?;
             let recipients = world.resource::<UiNativeInputRecipientsResource>()?;
-            let windows = world.resource::<WindowStateRegistryResource>()?;
-            let presentations = world.resource::<UiRuntimePresentationAssociationsResource>()?;
-            let surfaces = world.resource::<RenderSurfaceRegistryResource>()?;
-            let displayed = recipients
-                .displayed_pointer_input(window, windows, &mut slots, presentations, surfaces)?
+            let host = UiNativePointerHostRead::from_world(world)?;
+            let displayed = host
+                .displayed_input(recipients, window, &mut slots)?
                 .context("no completed-Present UI pointer input context")?;
             let point = displayed_native_mouse_point(&displayed, position, modifiers)?;
             let mice = &mut self.native_ui_mice;
@@ -760,13 +759,11 @@ impl WinitRunner {
                 .cursor_moved(device, point)
                 .map_err(|error| anyhow!("native UI mouse translation failed: {error:?}"))?;
             let pointer = event.pointer_id();
-            let (_, submission) = recipients
-                .submit_displayed_native_pointer(
+            let (_, submission) = host
+                .submit(
+                    recipients,
                     NativePointerOrigin::new(window, device),
-                    windows,
                     &mut slots,
-                    presentations,
-                    surfaces,
                     event,
                 )
                 .map_err(|error| anyhow!("native displayed pointer admission failed: {error:?}"))?;
