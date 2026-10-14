@@ -36,12 +36,12 @@ use runenui_runtime::{UiInputConflict, UiInputFinality};
 use runenui_winit::keyboard_input::{
     KeyboardInputOutcome, KeyboardInputState, NativeKeyTransition,
 };
-use runenui_winit::mouse_input::{MouseInputState, TranslatedPointerPoint};
+use runenui_winit::mouse_input::{MouseButtonOutcome, MouseInputState, TranslatedPointerPoint};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 use winit::application::ApplicationHandler;
 use winit::dpi::PhysicalPosition;
-use winit::event::{DeviceEvent, WindowEvent};
+use winit::event::{DeviceEvent, ElementState, MouseButton, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
 
@@ -837,6 +837,93 @@ impl WinitRunner {
                 ?window,
                 ?error,
                 "native UI cursor withheld without gameplay grant"
+            );
+        }
+        Ok(())
+    }
+
+    /// Admit one original native mouse button against the EXISTING neutral
+    /// cursor stream, the exact current completed Present and a reached M13
+    /// pointer receipt. No cursor point is invented if the device has not
+    /// supplied one; a suppressed press/release never grants gameplay.
+    fn route_ui_mouse_button(
+        &mut self,
+        window: NativeWindowId,
+        slot: UiRuntimeSlotId,
+        binding_epoch: u64,
+        context: InputContext,
+        state: ElementState,
+        button: MouseButton,
+    ) -> Result<()> {
+        let device = Self::native_ui_device(context)?;
+        let Some(mut lifetime) = self.native_ui_mice.remove(&window) else {
+            // No authentic previous cursor position/stream. The pinned mouse
+            // adapter would suppress the press; do not invent UI point truth.
+            return Ok(());
+        };
+        if lifetime.recipient != slot
+            || lifetime.binding_epoch != binding_epoch
+            || lifetime.source != context.source
+            || lifetime.device != device
+        {
+            self.native_ui_mice.insert(window, lifetime);
+            self.cancel_native_ui_mouse(window);
+            return Ok(());
+        }
+        let modifiers = self.native_ui_modifiers.get(&window).copied()
+            .unwrap_or(KeyModifiers::NONE);
+        let world = &mut self.state.world;
+        let mut slots = world.remove_resource::<UiRuntimeSlotsResource>()
+            .context("selected native UI mouse button lacks slot authority")?;
+        let operation = (|| -> Result<()> {
+            let before = slots.input_ownership(slot)
+                .map_err(|error| anyhow!("native mouse button pre-state unavailable: {error:?}"))?;
+            anyhow::ensure!(
+                before.scope() == &lifetime.scope,
+                "native mouse button stream belongs to a retired M13 scope"
+            );
+            let recipients = world.resource::<UiNativeInputRecipientsResource>()?;
+            let host = UiNativePointerHostRead::from_world(world)?;
+            let displayed = host.displayed_input(recipients, window, &mut slots)?
+                .context("native mouse button has no completed displayed hit context")?;
+            let point = lifetime.mouse.last_native_position()
+                .map(|position| displayed_native_mouse_point(&displayed, position, modifiers))
+                .transpose()?;
+            let event = lifetime.mouse.button_input(device, state, button, point)
+                .map_err(|error| anyhow!("native UI button translator rejected input: {error:?}"))?;
+            let MouseButtonOutcome::Submit(event) = event else {
+                // The pinned adapter tracks suppressed Down/Up pairs; they
+                // carry neither UI claims nor gameplay permission.
+                return Ok(());
+            };
+            let pointer = event.pointer_id();
+            let (_, submission) = host.submit(
+                recipients,
+                NativePointerOrigin::new(window, device),
+                &mut slots,
+                event,
+            ).map_err(|error| anyhow!("native button displayed admission failed: {error:?}"))?;
+            let (batch, status) = slots.pump_native_input_records(slot)
+                .map_err(|error| anyhow!("native button M13 pump unavailable: {error:?}"))?;
+            let finality = native_pointer_finality(
+                before.scope(), device, pointer, displayed.input_context.surface_id(),
+                submission, &batch, &status,
+            );
+            anyhow::ensure!(
+                finality.is_ok(),
+                "native button lacks exact M13 pointer settlement: {finality:?}"
+            );
+            Ok(())
+        })();
+        world.insert_resource(slots);
+        self.native_ui_mice.insert(window, lifetime);
+        if let Err(error) = operation {
+            self.cancel_native_ui_mouse(window);
+            tracing::trace!(
+                target: "engine.runtime.input",
+                ?window,
+                ?error,
+                "native UI button withheld without gameplay grant"
             );
         }
         Ok(())
@@ -1722,14 +1809,19 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     .input_adapter
                     .window_context(native_window_id, device_id)?;
                 let input = pointer_button_input(state, button);
-                let result = self.apply_semantic_native_input(
+                self.apply_semantic_native_input(
                     native_window_id,
                     PlatformEvent::MouseInput { context, input },
-                );
-                if result.is_ok() {
-                    self.request_redraw_for_native_window(native_window_id);
+                )?;
+                if let Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch))) =
+                    self.native_input_recipient(native_window_id)
+                {
+                    self.route_ui_mouse_button(
+                        native_window_id, slot, epoch, context, state, button,
+                    )?;
                 }
-                result
+                self.request_redraw_for_native_window(native_window_id);
+                Ok(())
             }
             WindowEvent::Touch(touch) => {
                 let context = self
