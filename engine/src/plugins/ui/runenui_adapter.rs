@@ -2090,6 +2090,26 @@ mod tests {
     }
 
     #[test]
+    fn native_committed_text_rejects_unmounted_target_without_losing_original_utf8() {
+        let mut slots = UiRuntimeSlotsResource::default();
+        let text = CommittedTextEvent::new("漢字é", Some(InputDeviceId::new(11).unwrap()))
+            .expect("original nonempty Unicode text");
+        let error = slots
+            .submit_native_text(UiRuntimeSlotId(u64::MAX), text)
+            .expect_err("a nonexistent native M13 recipient cannot accept text");
+        match error {
+            UiRuntimeNativeTextAdmissionError::Slot {
+                failure: UiRuntimeSlotOperationFailure::MissingSlot,
+                event,
+            } => {
+                assert_eq!(event.text(), "漢字é");
+                assert_eq!(event.device_id(), InputDeviceId::new(11));
+            }
+            other => panic!("unexpected M13 native text admission result: {other:?}"),
+        }
+    }
+
+    #[test]
     fn native_pointer_admission_keeps_exact_device_stream_surface_and_m13_sequence() {
         use runenui_core::{LogicalPoint, NoHostProtocol, PointerDeviceKind, PointerPhase};
         use runenui_runtime::{InputArbitrationRecord, UiInputFamily};
