@@ -318,9 +318,7 @@ impl WinitRunner {
             } else if slots.is_empty() {
                 Ok((NativeInputRecipient::LegacyNativeConsumer, None))
             } else {
-                Err(anyhow!(
-                    "mounted UI runtime has no explicit native input recipient registry"
-                ))
+                Err(NativeInputRecipientError::MissingRecipient.into())
             }
         })();
         world.insert_resource(slots);
