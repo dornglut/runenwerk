@@ -441,35 +441,39 @@ impl WinitRunner {
                     .world
                     .resource_mut::<UiRuntimeSlotsResource>()
                     .context("selected UI runtime vanished from native host")?;
-                let before = slots.input_ownership(slot);
-                match (before, slots.submit_native_keyboard(slot, event)) {
-                    (Ok(before), Ok(submission)) => match slots.pump_native_input_records(slot) {
-                        Ok((batch, status)) => matches!(
-                            native_keyboard_finality(
-                                before.scope(),
-                                device,
-                                submission,
-                                &batch,
-                                &status,
+                match slots.input_ownership(slot) {
+                    Ok(before) => match slots.submit_native_keyboard(slot, event) {
+                        Ok(submission) => match slots.pump_native_input_records(slot) {
+                            Ok((batch, status)) => matches!(
+                                native_keyboard_finality(
+                                    before.scope(),
+                                    device,
+                                    submission,
+                                    &batch,
+                                    &status,
+                                ),
+                                Ok(UiInputFinality::Committed(ref facts))
+                                    if matches!(
+                                        facts.conflict(),
+                                        UiInputConflict::Unclaimed
+                                            | UiInputConflict::ObservedNonexclusive
+                                    )
                             ),
-                            Ok(UiInputFinality::Committed(ref facts))
-                                if matches!(
-                                    facts.conflict(),
-                                    UiInputConflict::Unclaimed
-                                        | UiInputConflict::ObservedNonexclusive
+                            Err(_) => false,
+                        },
+                        Err(error) => {
+                            let after = slots.input_ownership(slot);
+                            after.is_ok_and(|after| {
+                                native_no_focused_keyboard_claim_witness(
+                                    device, &before, &after, &error,
                                 )
-                        ),
-                        Err(_) => false,
+                            })
+                        }
                     },
-                    (Ok(before), Err(error)) => {
-                        let after = slots.input_ownership(slot);
-                        after.is_ok_and(|after| {
-                            native_no_focused_keyboard_claim_witness(
-                                device, &before, &after, &error,
-                            )
-                        })
-                    }
-                    (Err(_), _) => false,
+                    // No owner-authored pre-state means no input mutation and
+                    // no game grant. A later observation cannot be fabricated
+                    // from a successful framework queue submission.
+                    Err(_) => false,
                 }
             }
             KeyboardInputOutcome::Suppressed(_) => false,
