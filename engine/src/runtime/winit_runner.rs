@@ -4,8 +4,8 @@ use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
     UiNativeInputRecipientsResource, UiNativePointerHostRead, UiRuntimeDisplayedPresentation,
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
-    native_keyboard_finality, native_no_focused_keyboard_claim_witness, native_pointer_finality,
-    native_text_finality,
+    UiRuntimeNativeTextAdmissionError, native_keyboard_finality,
+    native_no_focused_keyboard_claim_witness, native_pointer_finality, native_text_finality,
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
@@ -717,13 +717,32 @@ impl WinitRunner {
         };
         let submission = match slots.submit_native_text(slot, event) {
             Ok(receipt) => receipt,
-            Err(error) => {
+            Err(UiRuntimeNativeTextAdmissionError::Slot { failure, event }) => {
+                tracing::warn!(
+                    target: "engine.runtime.input",
+                    ?failure,
+                    bytes = event.text().len(),
+                    "native IME text rejected by missing/invalid slot authority"
+                );
+                return Err(anyhow!("native IME text target unavailable: {failure:?}"));
+            }
+            Err(UiRuntimeNativeTextAdmissionError::Framework(error)) => {
+                let kind = error.kind();
                 tracing::trace!(
                     target: "engine.runtime.input",
-                    ?error,
-                    "native IME committed text rejected by pinned M13 runtime"
+                    ?kind,
+                    bytes = error.event().text().len(),
+                    "native IME committed text rejected by pinned M13 ownership"
                 );
-                return Ok(());
+                return if matches!(
+                    kind,
+                    runenui_runtime::SubmitTextErrorKind::NoFocusedTarget
+                        | runenui_runtime::SubmitTextErrorKind::FocusedTargetNotTextCapable
+                ) {
+                    Ok(())
+                } else {
+                    Err(anyhow!("native IME text submission failed: {kind:?}"))
+                };
             }
         };
         let (batch, status) = slots

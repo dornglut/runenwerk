@@ -37,7 +37,9 @@ pub use presentation::*;
 pub use publish::*;
 pub use report::*;
 pub use resources::*;
-pub(crate) use runenui_adapter::native_text_finality;
+pub(crate) use runenui_adapter::{
+    UiRuntimeNativeTextAdmissionError, native_text_finality,
+};
 pub use runenui_adapter::{
     UiRuntimeFontConfiguration, UiRuntimeHostRequestDisposition,
     UiRuntimeNativeKeyboardAdmissionError, UiRuntimeNativeKeyboardEvidenceFailure,
