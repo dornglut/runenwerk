@@ -3,14 +3,17 @@
 
 use std::collections::BTreeMap;
 
-use runenui_runtime::{InputArbitrationScope, InputOwnershipSnapshot, RuntimeStatus};
+use runenui_core::{InputDeviceId, PointerEvent};
+use runenui_runtime::{
+    InputArbitrationScope, InputOwnershipSnapshot, PointerSubmission, RuntimeStatus,
+};
 
 use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::runtime::{NativeWindowId, NativeWindowLifecycleState, WindowStateRegistryResource};
 
 use super::{
     UiRuntimeDisplayedPresentation, UiRuntimePresentationAssociationsResource, UiRuntimeSlotId,
-    UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
+    UiRuntimeNativePointerAdmissionError, UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -61,6 +64,37 @@ pub enum NativeInputRecipientError {
 
 /// Exactly one explicit semantic recipient per native window. No substitute
 /// RunenUI focus, presentation, physical input or game permission authority.
+/// Original-event rejection stays explicit; no legacy gameplay fallback is
+/// manufactured from a missing terminal display or unrelated pointer device.
+#[derive(Debug)]
+pub enum NativePointerIngressError {
+    LegacyRecipient(Box<PointerEvent>),
+    MissingDisplay {
+        reason: NativeInputRecipientError,
+        event: Box<PointerEvent>,
+    },
+    MismatchedDisplay(Box<PointerEvent>),
+    MismatchedDevice(Box<PointerEvent>),
+    Admission(UiRuntimeNativePointerAdmissionError),
+}
+
+impl NativePointerIngressError {
+    /// Recover the unaccepted original event from any rejection stage.
+    #[must_use]
+    pub fn into_event(self) -> PointerEvent {
+        match self {
+            Self::LegacyRecipient(event)
+            | Self::MismatchedDisplay(event)
+            | Self::MismatchedDevice(event)
+            | Self::MissingDisplay { event, .. } => *event,
+            Self::Admission(UiRuntimeNativePointerAdmissionError::Slot { event, .. }) => *event,
+            Self::Admission(UiRuntimeNativePointerAdmissionError::Framework(error)) => {
+                error.into_event()
+            }
+        }
+    }
+}
+
 #[derive(Default, runen_ecs::Resource)]
 pub struct UiNativeInputRecipientsResource {
     bindings: BTreeMap<NativeWindowId, WindowRecipientBinding>,
@@ -242,6 +276,51 @@ impl UiNativeInputRecipientsResource {
                 Ok(Some(displayed.clone()))
             }
         }
+    }
+
+    /// Physically identified native pointer admission MUST begin with the
+    /// existing terminal completed-Present association for this exact native
+    /// recipient. Merely published or GPU-submitted paint cannot supply the
+    /// input context. The canonical pinned runtime still owns actual routing.
+    pub fn submit_displayed_native_pointer(
+        &self,
+        window: NativeWindowId,
+        expected_device: InputDeviceId,
+        windows: &WindowStateRegistryResource,
+        slots: &mut UiRuntimeSlotsResource,
+        presentations: &UiRuntimePresentationAssociationsResource,
+        render_surfaces: &RenderSurfaceRegistryResource,
+        event: PointerEvent,
+    ) -> Result<
+        (UiRuntimeDisplayedPresentation, PointerSubmission),
+        NativePointerIngressError,
+    > {
+        let displayed = match self.displayed_pointer_input(
+            window,
+            windows,
+            slots,
+            presentations,
+            render_surfaces,
+        ) {
+            Ok(Some(displayed)) => displayed,
+            Ok(None) => return Err(NativePointerIngressError::LegacyRecipient(Box::new(event))),
+            Err(reason) => {
+                return Err(NativePointerIngressError::MissingDisplay {
+                    reason,
+                    event: Box::new(event),
+                });
+            }
+        };
+        if event.surface_context() != &displayed.input_context {
+            return Err(NativePointerIngressError::MismatchedDisplay(Box::new(event)));
+        }
+        if event.device_id() != Some(expected_device) {
+            return Err(NativePointerIngressError::MismatchedDevice(Box::new(event)));
+        }
+        let submission = slots
+            .submit_native_pointer(displayed.slot_id, event)
+            .map_err(NativePointerIngressError::Admission)?;
+        Ok((displayed, submission))
     }
 
     /// Retire on native window destruction, target change or source loss.
