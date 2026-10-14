@@ -210,12 +210,10 @@ impl WinitRunner {
     /// Forget only after the native window record is actually destroyed.
     /// A still-bound recipient is rejected by the owning registry; retirement
     /// and display invalidation may never be skipped just to reclaim storage.
-    fn forget_destroyed_native_input_recipient(
-        &mut self,
-        window: NativeWindowId,
-    ) -> Result<bool> {
+    fn forget_destroyed_native_input_recipient(&mut self, window: NativeWindowId) -> Result<bool> {
         let world = &mut self.state.world;
-        let Some(mut recipients) = world.remove_resource::<UiNativeInputRecipientsResource>() else {
+        let Some(mut recipients) = world.remove_resource::<UiNativeInputRecipientsResource>()
+        else {
             return Ok(false);
         };
         let result = world
@@ -1378,12 +1376,16 @@ mod tests {
                 .to_string(),
             NativeInputRecipientError::InactiveWindow.to_string()
         );
-        assert!(runner
-            .retire_native_input_recipient(secondary)
-            .expect("native retirement"));
-        assert!(!runner
-            .retire_native_input_recipient(secondary)
-            .expect("idempotent retirement"));
+        assert!(
+            runner
+                .retire_native_input_recipient(secondary)
+                .expect("native retirement")
+        );
+        assert!(
+            !runner
+                .retire_native_input_recipient(secondary)
+                .expect("idempotent retirement")
+        );
 
         let mut slots = runner
             .state
@@ -1416,20 +1418,28 @@ mod tests {
             .resource_mut::<WindowStateRegistryResource>()
             .expect("native windows")
             .remove_window(secondary);
-        assert!(runner
-            .forget_destroyed_native_input_recipient(secondary)
-            .expect("retired destroyed window can be pruned"));
-        assert!(!runner
-            .forget_destroyed_native_input_recipient(secondary)
-            .expect("pruning is idempotent"));
-        assert!(runner
-            .state
-            .world
-            .has_resource::<UiNativeInputRecipientsResource>());
-        assert!(runner
-            .state
-            .world
-            .has_resource::<UiRuntimePresentationAssociationsResource>());
+        assert!(
+            runner
+                .forget_destroyed_native_input_recipient(secondary)
+                .expect("retired destroyed window can be pruned")
+        );
+        assert!(
+            !runner
+                .forget_destroyed_native_input_recipient(secondary)
+                .expect("pruning is idempotent")
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .has_resource::<UiNativeInputRecipientsResource>()
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .has_resource::<UiRuntimePresentationAssociationsResource>()
+        );
     }
 
     #[test]
