@@ -415,7 +415,10 @@ impl WinitRunner {
         // Retire the original framework-held keyboard stream while its
         // source/recipient binding is still valid. After retirement, a
         // synthetic Cancel cannot safely cross into a replacement M13 scope.
-        if let Some(slot) = self.native_ui_keyboards.get(&window).map(|state| state.recipient)
+        if let Some(slot) = self
+            .native_ui_keyboards
+            .get(&window)
+            .map(|state| state.recipient)
             && let Err(error) = self.cancel_native_ui_keyboard(window, slot)
         {
             // Invalid framework state cannot prevent mandatory native target
