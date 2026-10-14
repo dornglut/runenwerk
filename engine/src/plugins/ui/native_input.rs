@@ -436,7 +436,10 @@ impl UiNativeInputRecipientsResource {
 
 #[cfg(test)]
 mod tests {
-    use runenui_core::{LogicalLength, NoHostProtocol, StyleEnvironment, UiApp, View, text};
+    use runenui_core::{
+        LogicalLength, LogicalPoint, NoHostProtocol, PointerDeviceKind, PointerId, PointerPhase,
+        StyleEnvironment, UiApp, View, text,
+    };
     use runenui_runtime::{LogicalSize, RasterScale, SurfaceBuildContext};
 
     use super::*;
@@ -444,6 +447,7 @@ mod tests {
     use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::ui::{
         UiRuntimeFontConfiguration, UiRuntimeNativeMapping, UiRuntimePresentationBinding,
+        native_pointer_finality,
         UiTypedScreenId,
     };
 
@@ -904,6 +908,19 @@ mod tests {
             .publish_surface_for_slot(slot, &context)
             .expect("real RunenUI runtime publication");
         let expected = publication.input_context().clone();
+        let device = InputDeviceId::new(7).expect("actual checked native device");
+        let other_device = InputDeviceId::new(8).expect("different physical device");
+        let pointer = PointerId::new(1).expect("native mouse pointer identity");
+        let native_pointer = |device_id| {
+            PointerEvent::new(
+                pointer,
+                PointerDeviceKind::Mouse,
+                PointerPhase::Move,
+                LogicalPoint::new(12.0, 8.0).expect("finite native logical point"),
+                expected.clone(),
+            )
+            .with_device_id(device_id)
+        };
         let publication_id = presentations
             .stage(
                 binding.clone(),
@@ -923,6 +940,21 @@ mod tests {
             ),
             Err(NativeInputRecipientError::NoCompletedPresentation)
         ));
+        assert!(matches!(
+            recipients.submit_displayed_native_pointer(
+                first,
+                device,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+                native_pointer(device),
+            ),
+            Err(NativePointerIngressError::MissingDisplay {
+                reason: NativeInputRecipientError::NoCompletedPresentation,
+                ..
+            })
+        ), "submitted paint is not an input context until completed Present");
         assert!(presentations.associate_accepted_submission(publication_id));
         assert!(matches!(
             recipients.displayed_pointer_input(
@@ -951,6 +983,53 @@ mod tests {
             .expect("only completed display is available");
         assert_eq!(displayed.input_context, expected);
         assert_eq!(displayed.mapping.native_window_id(), first);
+        let wrong = recipients
+            .submit_displayed_native_pointer(
+                first,
+                device,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+                native_pointer(other_device),
+            )
+            .expect_err("a foreign original device cannot impersonate the native cursor");
+        assert!(matches!(wrong, NativePointerIngressError::MismatchedDevice(_)));
+        assert_eq!(
+            wrong.into_event().device_id(),
+            Some(other_device),
+            "even rejected device identity is preserved"
+        );
+        let (checked_display, submission) = recipients
+            .submit_displayed_native_pointer(
+                first,
+                device,
+                &windows,
+                &mut slots,
+                &presentations,
+                &render_surfaces,
+                native_pointer(device),
+            )
+            .expect("only exact completed-native-display evidence can admit pointer input");
+        assert_eq!(checked_display.input_context, expected);
+        let ownership = slots.input_ownership(slot).expect("M13 scope is Running");
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("one actual pinned ordered M13 pointer result");
+        assert_eq!(status, Ok(()));
+        assert!(
+            native_pointer_finality(
+                ownership.scope(),
+                device,
+                pointer,
+                expected.surface_id(),
+                submission,
+                &batch,
+                &status,
+            )
+            .is_ok(),
+            "original device/stream/display and M13 sequence must all agree"
+        );
         assert!(
             presentations
                 .displayed_for_native_recipient(slot, second)
