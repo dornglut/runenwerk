@@ -636,6 +636,30 @@ impl WinitRunner {
         Ok(true)
     }
 
+    /// Retire only the pinned M13 mouse stream in its original live scope.
+    /// A cancellation is never interpreted as an original physical Up.
+    fn cancel_native_ui_mouse(&mut self, window: NativeWindowId) {
+        let Some(mut lifetime) = self.native_ui_mice.remove(&window) else {
+            return;
+        };
+        let modifiers = self.native_ui_modifiers.get(&window).copied()
+            .unwrap_or(KeyModifiers::NONE);
+        let Some(cancel) = lifetime.mouse.invalidate_point_authority(modifiers) else {
+            return;
+        };
+        let Ok(slots) = self.state.world.resource_mut::<UiRuntimeSlotsResource>() else {
+            return;
+        };
+        if !slots.input_ownership(lifetime.recipient)
+            .is_ok_and(|observed| observed.scope() == &lifetime.scope)
+        {
+            return;
+        }
+        if slots.submit_native_pointer(lifetime.recipient, cancel).is_ok() {
+            let _ = slots.pump_native_input_records(lifetime.recipient);
+        }
+    }
+
     /// Preserve one original recipient for native pointer, wheel and touch
     /// callbacks too. Until pinned M13 pointer delivery is integrated, UI-owned
     /// input stays neutral physical evidence; it is NEVER dispatched to Editor
