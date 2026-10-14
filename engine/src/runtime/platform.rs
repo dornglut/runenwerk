@@ -217,6 +217,7 @@ impl PlatformWindowEvent {
         if matches!(
             &self.event,
             PlatformEvent::KeyboardInput { .. }
+                | PlatformEvent::InputContinuityLost { .. }
                 | PlatformEvent::TextInput { .. }
                 | PlatformEvent::MouseWheel { .. }
                 | PlatformEvent::CursorMoved { .. }
@@ -335,6 +336,18 @@ mod tests {
         let lifecycle = PlatformWindowEvent::new(id, PlatformEvent::Focused { focused: false })
             .with_native_input_recipient(None);
         assert!(lifecycle.authorized_for_legacy_editor());
+        let revoked = PlatformWindowEvent::new(
+            id,
+            PlatformEvent::InputContinuityLost {
+                context: test_context(),
+                loss: ContinuityLoss::Source,
+            },
+        )
+        .with_native_input_recipient(None);
+        assert!(
+            !revoked.authorized_for_legacy_editor(),
+            "a foreign source continuity loss must not mutate legacy Editor input"
+        );
     }
 
     fn test_context() -> InputContext {

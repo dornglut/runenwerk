@@ -188,7 +188,18 @@ impl WinitRunner {
         if !focused
             && let Some(context) = self.input_adapter.window_source_context(native_window_id)
         {
-            return self.apply_event_group(
+            // The focus transition is window lifecycle truth; the associated
+            // continuity loss is source-specific semantic input and retains
+            // the original recipient snapshot before the canonical group is
+            // applied. It cannot be reinterpreted by Editor after rebinding.
+            let recipient = match self.native_input_recipient(native_window_id) {
+                Ok((recipient, _)) => Some(recipient),
+                Err(error)
+                    if error.downcast_ref::<NativeInputRecipientError>()
+                        == Some(&NativeInputRecipientError::MissingRecipient) => None,
+                Err(error) => return Err(error),
+            };
+            return self.apply_event_group_for_recipient(
                 native_window_id,
                 [
                     PlatformEvent::Focused { focused },
@@ -197,6 +208,7 @@ impl WinitRunner {
                         loss: ContinuityLoss::Source,
                     },
                 ],
+                recipient,
             );
         }
         self.apply_event_for_native_window(native_window_id, PlatformEvent::Focused { focused })
