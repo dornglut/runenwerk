@@ -396,11 +396,10 @@ mod tests {
         let (windows, primary, _) = windows();
         let mut slots = UiRuntimeSlotsResource::default();
         let mut recipients = UiNativeInputRecipientsResource::default();
-        assert_eq!(
-            recipients
+        assert!(
+            !recipients
                 .realize_requested_primary(&windows, &mut slots)
-                .expect("no input binding is an intentional render-only state"),
-            false
+                .expect("no input binding is an intentional render-only state")
         );
         let slot = mount(&mut slots, 15);
         recipients
