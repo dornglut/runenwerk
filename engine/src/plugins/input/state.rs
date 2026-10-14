@@ -872,9 +872,7 @@ impl InputState {
         self.keyboard_held_contributors
             .iter()
             .find(|held| held.context == context && &held.physical_key == key)
-            .is_some_and(|held| {
-                held.generation.is_some() || held.generationless_game_eligible
-            })
+            .is_some_and(|held| held.generation.is_some() || held.generationless_game_eligible)
     }
 
     /// Return the exact physical Down generation, never an inferred key press
