@@ -345,6 +345,7 @@ impl WinitRunner {
         // Source retirement is a mandatory native pointer-stream boundary,
         // even when an original window callback is no longer forthcoming.
         self.cancel_native_ui_mouse(native_window_id);
+        self.cancel_native_ui_touch(native_window_id);
         let Some(context) = self.input_adapter.window_source_context(native_window_id) else {
             return Ok(false);
         };
@@ -397,6 +398,7 @@ impl WinitRunner {
         // Cancel against the previous pinned M13 scope before removing the
         // recipient and its terminal displayed input authority.
         self.cancel_native_ui_mouse(window);
+        self.cancel_native_ui_touch(window);
         let world = &mut self.state.world;
         if !world.has_resource::<UiNativeInputRecipientsResource>() {
             return Ok(false);
@@ -722,6 +724,16 @@ impl WinitRunner {
         for window in windows.iter().copied() {
             self.cancel_native_ui_mouse(window);
         }
+        let touch_windows: Vec<_> = self
+            .native_ui_touches
+            .iter()
+            .filter_map(|(window, lifetime)| {
+                lifetime.backend_devices.contains(&device_id).then_some(*window)
+            })
+            .collect();
+        for window in touch_windows.iter().copied() {
+            self.cancel_native_ui_touch(window);
+        }
         let window_contexts = self.input_adapter.retire_window_device(device_id)?;
         let raw_context = self.input_adapter.retire_raw_device(device_id)?;
         // Device removal also retires the pinned keyboard translator lifetime.
@@ -750,7 +762,7 @@ impl WinitRunner {
             }
         }
         if window_contexts.is_empty() && raw_context.is_none() {
-            return Ok(!windows.is_empty());
+            return Ok(!windows.is_empty() || !touch_windows.is_empty());
         }
         {
             let input = self
@@ -1508,6 +1520,10 @@ impl WinitRunner {
         for window in mouse_windows {
             self.cancel_native_ui_mouse(window);
         }
+        let touch_windows: Vec<_> = self.native_ui_touches.keys().copied().collect();
+        for window in touch_windows {
+            self.cancel_native_ui_touch(window);
+        }
         let cleanup = shutdown_native_ui(&mut self.state.world);
         self.shutdown_done = cleanup.is_ok();
         cleanup
@@ -1950,6 +1966,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 // system's original focus-loss and physical-key revocation.
                 if !focused {
                     self.cancel_native_ui_mouse(native_window_id);
+                    self.cancel_native_ui_touch(native_window_id);
                 }
                 let cancellation = if !focused {
                     match self.native_input_recipient(native_window_id) {
@@ -1973,6 +1990,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             }
             WindowEvent::Resized(size) => {
                 self.cancel_native_ui_mouse(native_window_id);
+                self.cancel_native_ui_touch(native_window_id);
                 self.apply_event_for_native_window(
                     native_window_id,
                     PlatformEvent::Resized {
@@ -1983,6 +2001,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.cancel_native_ui_mouse(native_window_id);
+                self.cancel_native_ui_touch(native_window_id);
                 let size = window.inner_size();
                 self.apply_event_for_native_window(
                     native_window_id,
