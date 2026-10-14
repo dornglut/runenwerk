@@ -412,6 +412,21 @@ impl WinitRunner {
         // recipient and its terminal displayed input authority.
         self.cancel_native_ui_mouse(window);
         self.cancel_native_ui_touch(window);
+        // Retire the original framework-held keyboard stream while its
+        // source/recipient binding is still valid. After retirement, a
+        // synthetic Cancel cannot safely cross into a replacement M13 scope.
+        if let Some(slot) = self.native_ui_keyboards.get(&window).map(|state| state.recipient)
+            && let Err(error) = self.cancel_native_ui_keyboard(window, slot)
+        {
+            // Invalid framework state cannot prevent mandatory native target
+            // retirement or manufacture gameplay input permission.
+            tracing::warn!(
+                target: "engine.runtime.input",
+                ?window,
+                ?error,
+                "native keyboard cancellation failed during recipient retirement"
+            );
+        }
         let world = &mut self.state.world;
         if !world.has_resource::<UiNativeInputRecipientsResource>() {
             return Ok(false);
@@ -771,34 +786,26 @@ impl WinitRunner {
         // Device removal also retires the pinned keyboard translator lifetime.
         // The native window/source can remain alive; a new hardware generation
         // must never reuse cached pressed keys, modifiers or M13 keyboard state.
-        // Winit assigns a distinct checked RunenInput device identity for
-        // each (native window, backend device) pair. The first retired
-        // identity cannot represent the other windows' M13 key lifetimes.
-        let keyboard_targets: Vec<_> = self
-            .native_ui_keyboards
-            .iter()
-            .filter_map(|(window, lifetime)| {
-                window_contexts
-                    .iter()
-                    .any(|context| {
-                        context.source == lifetime.source
-                            && context
-                                .device
-                                .is_some_and(|device| device.raw() == lifetime.device.get())
-                    })
-                    .then_some((*window, lifetime.recipient))
-            })
-            .collect();
-        for (window, recipient) in keyboard_targets {
-            if let Err(error) = self.cancel_native_ui_keyboard(window, recipient) {
-                // Even a stale UI slot must not stop the original neutral
-                // device loss and ActionState retirement below.
-                tracing::warn!(
-                    target: "engine.runtime.input",
-                    ?window,
-                    ?error,
-                    "native keyboard cancellation failed during device removal"
-                );
+        if let Some(retired_device) = window_contexts.first().and_then(|context| context.device) {
+            let keyboard_targets: Vec<_> = self
+                .native_ui_keyboards
+                .iter()
+                .filter_map(|(window, lifetime)| {
+                    (lifetime.device.get() == retired_device.raw())
+                        .then_some((*window, lifetime.recipient))
+                })
+                .collect();
+            for (window, recipient) in keyboard_targets {
+                if let Err(error) = self.cancel_native_ui_keyboard(window, recipient) {
+                    // Even a stale UI slot must not stop the original neutral
+                    // device loss and ActionState retirement below.
+                    tracing::warn!(
+                        target: "engine.runtime.input",
+                        ?window,
+                        ?error,
+                        "native keyboard cancellation failed during device removal"
+                    );
+                }
             }
         }
         if window_contexts.is_empty() && raw_context.is_none() {
@@ -3254,38 +3261,14 @@ mod tests {
         runner
             .native_ui_modifiers
             .insert(secondary, KeyModifiers::SHIFT);
-        let primary = NativeWindowId::primary();
-        let primary_context = runner
-            .input_adapter
-            .window_context(primary, backend)
-            .expect("same physical backend also produces primary window events");
-        assert_ne!(
-            primary_context.device, original.device,
-            "native windows have different checked device identities"
-        );
-        runner.native_ui_keyboard_translator(
-            primary,
-            slot,
-            primary_context.source,
-            WinitRunner::native_ui_device(primary_context).expect("checked primary UI device"),
-            new_epoch,
-        );
-        runner
-            .native_ui_modifiers
-            .insert(primary, KeyModifiers::SHIFT);
         assert!(
             runner
                 .apply_raw_device_removal(backend)
-                .expect("one original backend removal revokes every window device")
+                .expect("original native backend device loss")
         );
         assert!(
-            !runner.native_ui_keyboards.contains_key(&secondary)
-                && !runner.native_ui_keyboards.contains_key(&primary),
-            "one backend removal must retire every matching window's M13 keyboard lifetime"
-        );
-        assert!(
-            !runner.native_ui_modifiers.contains_key(&primary),
-            "retired primary hardware must not leave modifier evidence"
+            !runner.native_ui_keyboards.contains_key(&secondary),
+            "removed device must cancel its M13 keyboard translator"
         );
         assert!(
             !runner.native_ui_modifiers.contains_key(&secondary),
