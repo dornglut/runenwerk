@@ -37,6 +37,7 @@ pub use presentation::*;
 pub use publish::*;
 pub use report::*;
 pub use resources::*;
+pub(crate) use runenui_adapter::native_text_finality;
 pub use runenui_adapter::{
     UiRuntimeFontConfiguration, UiRuntimeHostRequestDisposition,
     UiRuntimeNativeKeyboardAdmissionError, UiRuntimeNativeKeyboardEvidenceFailure,
@@ -45,7 +46,6 @@ pub use runenui_adapter::{
     UiRuntimeSlotMountReport, UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
     native_keyboard_finality, native_no_focused_keyboard_claim_witness, native_pointer_finality,
 };
-pub(crate) use runenui_adapter::native_text_finality;
 pub use schedule::*;
 pub use screen::*;
 pub use source::*;

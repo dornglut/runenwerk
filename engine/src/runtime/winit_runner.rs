@@ -31,8 +31,8 @@ use crate::runtime::{NativeHostEvent, NativeWakeTransport};
 use anyhow::{Context, Result, anyhow};
 use runen_input::{ContinuityLoss, InputContext, InputSourceId, PhysicalKeyIdentity};
 use runenui_core::{
-    CommittedTextEvent, InputDeviceId as UiInputDeviceId, KeyModifiers,
-    KeyboardCompositionState, LogicalDelta, LogicalPoint,
+    CommittedTextEvent, InputDeviceId as UiInputDeviceId, KeyModifiers, KeyboardCompositionState,
+    LogicalDelta, LogicalPoint,
 };
 use runenui_runtime::{UiInputConflict, UiInputFinality};
 use runenui_winit::keyboard_input::{
@@ -729,13 +729,7 @@ impl WinitRunner {
         let (batch, status) = slots
             .pump_native_input_records(slot)
             .map_err(|error| anyhow!("native IME M13 pump unavailable: {error:?}"))?;
-        let evidence = native_text_finality(
-            before.scope(),
-            None,
-            submission,
-            &batch,
-            &status,
-        );
+        let evidence = native_text_finality(before.scope(), None, submission, &batch, &status);
         if !matches!(evidence, Ok(UiInputFinality::Committed(_))) {
             tracing::trace!(
                 target: "engine.runtime.input",

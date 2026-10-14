@@ -1,8 +1,7 @@
 use runenui_core::{
-    Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, InputDeviceId,
-    CommittedTextEvent, KeyboardEvent, PointerEvent, PointerId, SemanticCommand, SurfaceId,
-    UiApp, View, button,
-    column, text,
+    CommittedTextEvent, Effects, Element, ElementId, FontFamilyName, GenericFontFamily,
+    HostProtocol, InputDeviceId, KeyboardEvent, PointerEvent, PointerId, SemanticCommand,
+    SurfaceId, UiApp, View, button, column, text,
 };
 #[cfg(test)]
 use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment};
@@ -13,8 +12,7 @@ use runenui_runtime::{
     InputObservationError, InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch,
     KeyboardSubmission, PointerSubmission, PumpBudget, SubmitKeyboardError,
     SubmitKeyboardErrorKind, SubmitPointerError, SubmitTextError, SurfaceBuildContext,
-    SurfacePublication, TextSubmission,
-    UiInputFamily, UiInputFinality,
+    SurfacePublication, TextSubmission, UiInputFamily, UiInputFinality,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -251,7 +249,10 @@ pub(crate) fn native_text_finality(
     if batch.final_ownership().scope() != scope {
         return Err(Failure::WrongScope);
     }
-    if !batch.processed_through().is_some_and(|through| through >= submission.sequence()) {
+    if !batch
+        .processed_through()
+        .is_some_and(|through| through >= submission.sequence())
+    {
         return Err(Failure::NotProcessed);
     }
     let mut found = None;
