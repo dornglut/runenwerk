@@ -669,7 +669,7 @@ impl WinitRunner {
                 .native_ui_keyboards
                 .iter()
                 .filter_map(|(window, lifetime)| {
-                    (lifetime.device.raw() == retired_device.raw())
+                    (lifetime.device.get() == retired_device.raw())
                         .then_some((*window, lifetime.recipient))
                 })
                 .collect();
