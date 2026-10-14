@@ -3,8 +3,7 @@ use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, UiNativeInputRecipientsResource,
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
-    native_keyboard_finality,
-    native_no_focused_keyboard_claim_witness,
+    native_keyboard_finality, native_no_focused_keyboard_claim_witness,
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
@@ -333,11 +332,14 @@ impl WinitRunner {
         source: InputSourceId,
         binding_epoch: u64,
     ) -> &mut KeyboardInputState {
-        let replaced = self.native_ui_keyboards.get(&window).is_some_and(|existing| {
-            existing.recipient != slot
-                || existing.source != source
-                || existing.binding_epoch != binding_epoch
-        });
+        let replaced = self
+            .native_ui_keyboards
+            .get(&window)
+            .is_some_and(|existing| {
+                existing.recipient != slot
+                    || existing.source != source
+                    || existing.binding_epoch != binding_epoch
+            });
         if replaced {
             // No key/modifier stream from the previous binding may become
             // a pressed continuation under the replacement physical source.
@@ -1753,7 +1755,10 @@ mod tests {
             .insert(secondary, KeyModifiers::SHIFT);
         runner.native_ui_keyboard_translator(secondary, slot, source_b, bound_epoch);
         assert_eq!(
-            runner.native_ui_keyboards.get(&secondary).map(|state| state.source),
+            runner
+                .native_ui_keyboards
+                .get(&secondary)
+                .map(|state| state.source),
             Some(source_b)
         );
         assert!(

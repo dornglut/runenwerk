@@ -352,6 +352,26 @@ mod tests {
     }
 
     #[test]
+    fn binding_epoch_exhaustion_rejects_without_implicit_recipient_mutation() {
+        let (windows, first, _) = windows();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients.next_epoch = u64::MAX;
+        assert_eq!(
+            recipients.bind(
+                first,
+                NativeInputRecipient::LegacyNativeConsumer,
+                &windows,
+                &mut slots,
+            ),
+            Err(NativeInputRecipientError::BindingEpochExhausted),
+        );
+        assert!(recipients.bindings.is_empty());
+        assert_eq!(recipients.binding_epoch_for_window(first), None);
+        assert_eq!(recipients.next_epoch, u64::MAX);
+    }
+
+    #[test]
     fn game_only_window_without_any_ui_runtime_retains_existing_route() {
         let (windows, first, _) = windows();
         let mut slots = UiRuntimeSlotsResource::default();
