@@ -206,9 +206,9 @@ impl InputBindings {
         F: FnMut(&PhysicalKeyIdentity) -> bool,
     {
         self.by_action.get(action).is_some_and(|chords| {
-            chords.iter().any(|chord| {
-                key_is_down(&chord.key) && chord.matches_pressed(physical, eligible)
-            })
+            chords
+                .iter()
+                .any(|chord| key_is_down(&chord.key) && chord.matches_pressed(physical, eligible))
         })
     }
 
@@ -785,10 +785,7 @@ impl ActionState {
         context: InputContext,
     ) -> ModifiersSnapshot {
         let down = |code: KeyCode| {
-            input.physical_key_down_in(
-                context,
-                &PhysicalKeyIdentity::code(format!("{code:?}")),
-            )
+            input.physical_key_down_in(context, &PhysicalKeyIdentity::code(format!("{code:?}")))
         };
         ModifiersSnapshot {
             shift: down(KeyCode::ShiftLeft) || down(KeyCode::ShiftRight),
