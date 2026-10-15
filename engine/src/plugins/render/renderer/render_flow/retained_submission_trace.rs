@@ -30,7 +30,7 @@ impl RetainedSubmissionTrace {
     /// Time-bounded, opt-in native counterfactual: serialize entire GPU frames
     /// through the existing RunenGPU progress point BEFORE graph preparation.
     /// This must never become normal interactive runtime policy.
-    pub(super) fn serialize_native_frame_if_enabled(
+    pub(in crate::plugins::render::renderer) fn serialize_native_frame_if_enabled(
         &mut self,
         context: &GpuContext,
     ) -> anyhow::Result<()> {
