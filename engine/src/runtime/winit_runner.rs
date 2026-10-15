@@ -1018,16 +1018,23 @@ impl WinitRunner {
         let before = slots.input_ownership(recipient).map_err(|error| {
             anyhow!("native keyboard device-loss M13 ownership unavailable: {error:?}")
         })?;
-        let events = {
+        let (events, last_device_retired) = {
             let lifetime = self
                 .native_ui_keyboards
                 .get_mut(&window)
                 .context("selected original native keyboard lifetime vanished")?;
             lifetime.devices.remove(&device);
-            lifetime
+            let events = lifetime
                 .keyboard
-                .cancel_device(device, modifiers, native_keyboard_composition(&before))
+                .cancel_device(device, modifiers, native_keyboard_composition(&before));
+            (events, lifetime.devices.is_empty())
         };
+        // Winit modifiers are window-wide physical evidence, not a new
+        // keyboard-state owner. Once the last device leaves, no cached
+        // modifier may be inherited by a successor hardware generation.
+        if last_device_retired {
+            self.native_ui_modifiers.remove(&window);
+        }
         for event in events {
             let submission = slots
                 .submit_native_keyboard(recipient, event)
@@ -3721,30 +3728,36 @@ mod tests {
             !runner.native_ui_modifiers.contains_key(&secondary),
             "new recipient epoch cannot inherit prior physical modifier state"
         );
-        // Nominal window/slot/source/epoch identity is not sufficient: a
-        // reappearing hardware device has a distinct checked generation.
+        // A second original keyboard sharing the same window, source, slot
+        // and binding epoch is NOT a replacement lifetime. It cannot evict
+        // device A's pressed state or reset the live window modifiers.
         runner
             .native_ui_modifiers
             .insert(secondary, KeyModifiers::SHIFT);
-        let replacement_device = UiInputDeviceId::new(8).expect("checked replacement device");
+        let second_device = UiInputDeviceId::new(8).expect("checked second device");
         runner.native_ui_keyboard_translator(
             secondary,
             slot,
             source_b,
-            replacement_device,
+            second_device,
             new_epoch,
         );
-        assert!(
-            !runner.native_ui_modifiers.contains_key(&secondary),
-            "replaced hardware may not inherit modifiers from old device lifetime"
-        );
         assert_eq!(
-            runner
-                .native_ui_keyboards
-                .get(&secondary)
-                .map(|state| state.device),
-            Some(replacement_device)
+            runner.native_ui_modifiers.get(&secondary),
+            Some(&KeyModifiers::SHIFT),
+            "simultaneous keyboard B must not clear the existing modifier observation"
         );
+        let lifetime = runner
+            .native_ui_keyboards
+            .get(&secondary)
+            .expect("shared native keyboard lifetime remains available");
+        assert_eq!(lifetime.devices.len(), 2);
+        assert!(
+            lifetime
+                .devices
+                .contains(&UiInputDeviceId::new(7).expect("device A remains live"))
+        );
+        assert!(lifetime.devices.contains(&second_device));
 
         // Backend device removal retracts that framework lifetime BEFORE
         // its neutral physical device generation is reallocated, without
@@ -3770,12 +3783,15 @@ mod tests {
                 .expect("original native backend device loss")
         );
         assert!(
-            !runner.native_ui_keyboards.contains_key(&secondary),
-            "removed device must cancel its M13 keyboard translator"
+            runner
+                .native_ui_keyboards
+                .get(&secondary)
+                .is_some_and(|lifetime| lifetime.devices.is_empty()),
+            "device removal retires only its membership, not the reusable window translator"
         );
         assert!(
             !runner.native_ui_modifiers.contains_key(&secondary),
-            "removed device cannot leave pressed modifier evidence"
+            "last device removal must clear stale physical modifier evidence"
         );
         let successor = runner
             .input_adapter
