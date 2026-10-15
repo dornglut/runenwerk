@@ -472,7 +472,6 @@ pub fn native_no_focused_keyboard_claim_witness(
     };
     if framework.kind() != SubmitKeyboardErrorKind::NoFocusedTarget
         || framework.event().phase() != KeyboardPhase::Down
-        || framework.event().is_repeat()
         || framework.event().device_id() != Some(expected_device)
         || before != after
         || before.status() != runenui_runtime::RuntimeStatus::Running
