@@ -1166,6 +1166,7 @@ impl WinitRunner {
                     .then_some(*window)
             })
             .collect();
+        let mut cancellation_failure: Option<anyhow::Error> = None;
         // Exactly one RunenInput window-device identity exists for this backend
         // device across its window sources. Raw identity is a separate namespace.
         if let Some(retired_device) = window_contexts.first().and_then(|context| context.device) {
@@ -1180,6 +1181,9 @@ impl WinitRunner {
                         ?error,
                         "native touch device cancellation failed during device removal"
                     );
+                    if cancellation_failure.is_none() {
+                        cancellation_failure = Some(error);
+                    }
                 }
             }
             let keyboard_windows: Vec<_> = self
@@ -1199,10 +1203,16 @@ impl WinitRunner {
                         ?error,
                         "native keyboard device cancellation failed during device removal"
                     );
+                    if cancellation_failure.is_none() {
+                        cancellation_failure = Some(error);
+                    }
                 }
             }
         }
         if window_contexts.is_empty() && raw_context.is_none() {
+            if let Some(error) = cancellation_failure {
+                return Err(error);
+            }
             return Ok(!windows.is_empty() || !touch_windows.is_empty());
         }
         {
@@ -1221,6 +1231,9 @@ impl WinitRunner {
         // Original device removal is an immediate action-lifetime boundary,
         // not a permission change deferred to the next input system frame.
         self.project_actions_after_native_continuity()?;
+        if let Some(error) = cancellation_failure {
+            return Err(error);
+        }
         Ok(true)
     }
 
