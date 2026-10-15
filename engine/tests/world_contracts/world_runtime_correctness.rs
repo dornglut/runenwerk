@@ -3,7 +3,7 @@ use engine::plugins::world::adapters::resources::{
 };
 use engine::plugins::world::chunks::DirtyChunkMapResource;
 use engine::plugins::world::chunks::lifecycle::{
-    ChunkLifecycleState, WorldChunkRuntimeMapResource, WorldChunkRuntimeRecord,
+    ChunkLifecycleState, WorldChunkRuntimeMapResource,
 };
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
 use engine::plugins::world::plugin::{
@@ -1781,19 +1781,17 @@ fn world_revision_advances_only_for_integrated_outputs() {
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
-        completed.outputs.push_back(WorldCompletedBuildOutput {
-            chunk_id,
-            target_chunk_revision: ChunkRevision(99),
-            target_build_generation: BuildGeneration(8),
-            staleness: WorldBuildStaleness::Current,
-            chunk_payload: sdf_chunk_payload(
+        completed
+            .outputs
+            .push_back(WorldCompletedBuildOutput::generic(
                 chunk_id,
                 ChunkRevision(99),
-                ChunkGeneration::default(),
-                0,
-            ),
-            region_summary: RegionSdfSummary::default(),
-        });
+                BuildGeneration(8),
+                WorldBuildStaleness::Current,
+                sdf_chunk_payload(chunk_id, ChunkRevision(99), ChunkGeneration::default(), 0),
+                RegionSdfSummary::default(),
+                engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
+            ));
     }
 
     app = app
@@ -1829,19 +1827,14 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
             .expect("chunk runtime should exist");
-        runtime_chunks.by_chunk_id.insert(
-            chunk_id,
-            WorldChunkRuntimeRecord {
-                chunk_id,
-                lifecycle: ChunkLifecycleState::Rebuilding,
-                chunk_revision: ChunkRevision(4),
-                chunk_generation: Default::default(),
-                build_generation: BuildGeneration(4),
-                dirty_reasons: Default::default(),
-                pending_build_generation: Some(BuildGeneration(5)),
-                gameplay_locked: false,
-            },
-        );
+        {
+            let record = runtime_chunks.ensure_chunk(chunk_id);
+            record.lifecycle = ChunkLifecycleState::Rebuilding;
+            record.chunk_revision = ChunkRevision(4);
+            record.chunk_generation = Default::default();
+            record.build_generation = BuildGeneration(4);
+            record.pending_build_generation = Some(BuildGeneration(5));
+        }
     }
     {
         let dirty = app
@@ -1855,14 +1848,17 @@ fn dirty_reasons_while_rebuilding_are_preserved_for_followup_build() {
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
-        completed.outputs.push_back(WorldCompletedBuildOutput {
-            chunk_id,
-            target_chunk_revision: ChunkRevision(5),
-            target_build_generation: BuildGeneration(5),
-            staleness: WorldBuildStaleness::Current,
-            chunk_payload: sdf_chunk_payload(chunk_id, ChunkRevision(5), ChunkGeneration(5), 0),
-            region_summary: RegionSdfSummary::default(),
-        });
+        completed
+            .outputs
+            .push_back(WorldCompletedBuildOutput::generic(
+                chunk_id,
+                ChunkRevision(5),
+                BuildGeneration(5),
+                WorldBuildStaleness::Current,
+                sdf_chunk_payload(chunk_id, ChunkRevision(5), ChunkGeneration(5), 0),
+                RegionSdfSummary::default(),
+                engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
+            ));
     }
 
     let app = app
@@ -2020,33 +2016,31 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
             .expect("chunk runtime should exist");
-        runtime_chunks.by_chunk_id.insert(
-            chunk_id,
-            WorldChunkRuntimeRecord {
-                chunk_id,
-                lifecycle: ChunkLifecycleState::Rebuilding,
-                chunk_revision: ChunkRevision(10),
-                chunk_generation: ChunkGeneration(10),
-                build_generation: BuildGeneration(10),
-                dirty_reasons: Default::default(),
-                pending_build_generation: Some(BuildGeneration(11)),
-                gameplay_locked: false,
-            },
-        );
+        {
+            let record = runtime_chunks.ensure_chunk(chunk_id);
+            record.lifecycle = ChunkLifecycleState::Rebuilding;
+            record.chunk_revision = ChunkRevision(10);
+            record.chunk_generation = ChunkGeneration(10);
+            record.build_generation = BuildGeneration(10);
+            record.pending_build_generation = Some(BuildGeneration(11));
+        }
     }
     {
         let completed = app
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
-        completed.outputs.push_back(WorldCompletedBuildOutput {
-            chunk_id,
-            target_chunk_revision: ChunkRevision(11),
-            target_build_generation: BuildGeneration(11),
-            staleness: WorldBuildStaleness::Current,
-            chunk_payload: sdf_chunk_payload(chunk_id, ChunkRevision(10), ChunkGeneration(11), 0),
-            region_summary: RegionSdfSummary::default(),
-        });
+        completed
+            .outputs
+            .push_back(WorldCompletedBuildOutput::generic(
+                chunk_id,
+                ChunkRevision(11),
+                BuildGeneration(11),
+                WorldBuildStaleness::Current,
+                sdf_chunk_payload(chunk_id, ChunkRevision(10), ChunkGeneration(11), 0),
+                RegionSdfSummary::default(),
+                engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
+            ));
     }
 
     let app = app
@@ -2077,9 +2071,19 @@ fn integration_drops_output_when_payload_revision_contract_mismatches() {
         .get(&chunk_id)
         .expect("runtime record should remain present");
     assert_eq!(
-        record.pending_build_generation,
-        Some(BuildGeneration(11)),
-        "rejected integration must keep pending generation unchanged"
+        record.pending_build_generation, None,
+        "terminally rejected integration must release the failed pending generation"
+    );
+    assert!(
+        record.exact_read_recovery_required(),
+        "old exact sources must not appear current after a failed replacement"
+    );
+    assert_eq!(record.chunk_revision, ChunkRevision(10));
+    assert_eq!(record.chunk_generation, ChunkGeneration(10));
+    assert_eq!(record.build_generation, BuildGeneration(10));
+    assert!(
+        matches!(record.lifecycle, ChunkLifecycleState::Unloaded),
+        "without committed CPU bytes a failed first generation remains unloaded"
     );
 }
 
@@ -2094,38 +2098,31 @@ fn integration_drops_output_when_payload_chunk_id_contract_mismatches() {
             .world_mut()
             .resource_mut::<WorldChunkRuntimeMapResource>()
             .expect("chunk runtime should exist");
-        runtime_chunks.by_chunk_id.insert(
-            chunk_id,
-            WorldChunkRuntimeRecord {
-                chunk_id,
-                lifecycle: ChunkLifecycleState::Rebuilding,
-                chunk_revision: ChunkRevision(2),
-                chunk_generation: ChunkGeneration(2),
-                build_generation: BuildGeneration(2),
-                dirty_reasons: Default::default(),
-                pending_build_generation: Some(BuildGeneration(3)),
-                gameplay_locked: false,
-            },
-        );
+        {
+            let record = runtime_chunks.ensure_chunk(chunk_id);
+            record.lifecycle = ChunkLifecycleState::Rebuilding;
+            record.chunk_revision = ChunkRevision(2);
+            record.chunk_generation = ChunkGeneration(2);
+            record.build_generation = BuildGeneration(2);
+            record.pending_build_generation = Some(BuildGeneration(3));
+        }
     }
     {
         let completed = app
             .world_mut()
             .resource_mut::<WorldCompletedBuildQueueResource>()
             .expect("completed queue should exist");
-        completed.outputs.push_back(WorldCompletedBuildOutput {
-            chunk_id,
-            target_chunk_revision: ChunkRevision(3),
-            target_build_generation: BuildGeneration(3),
-            staleness: WorldBuildStaleness::Current,
-            chunk_payload: sdf_chunk_payload(
-                wrong_chunk_id,
+        completed
+            .outputs
+            .push_back(WorldCompletedBuildOutput::generic(
+                chunk_id,
                 ChunkRevision(3),
-                ChunkGeneration(3),
-                0,
-            ),
-            region_summary: RegionSdfSummary::default(),
-        });
+                BuildGeneration(3),
+                WorldBuildStaleness::Current,
+                sdf_chunk_payload(wrong_chunk_id, ChunkRevision(3), ChunkGeneration(3), 0),
+                RegionSdfSummary::default(),
+                engine::plugins::world::build::WorldCompletedBuildOrigin::ExternalPackage,
+            ));
     }
 
     let app = app
@@ -2599,4 +2596,168 @@ fn rejected_metric_replacement_preserves_prior_ordinary_and_metric_state() {
             .and_then(|record| record.pending_build_generation),
         pending_before
     );
+}
+
+#[test]
+fn failed_external_replacement_preserves_cpu_clears_pending_and_accepts_retry() {
+    use engine::plugins::world::chunks::lifecycle::ChunkLifecycleState;
+    let mut app = fixed_world_app();
+    let id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 55, y: 0, z: 0 });
+    let first = sdf_chunk_payload(id, ChunkRevision(1), ChunkGeneration(1), 701);
+    let first_desc = runtime_sdf_descriptor(7290, &first);
+    enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            first_desc,
+            vec![first.clone()],
+            RegionSdfSummary::default(),
+        ),
+    )
+    .expect("first generation enqueues");
+    app = app.run_for_fixed_steps(1).expect("first commits");
+
+    let next = sdf_chunk_payload(id, ChunkRevision(2), ChunkGeneration(2), 702);
+    let next_desc = runtime_sdf_descriptor(7290, &next);
+    let package = WorldSdfRuntimePayloadPackage::new(
+        next_desc.clone(),
+        vec![next.clone()],
+        RegionSdfSummary::default(),
+    );
+    assert_eq!(
+        enqueue_runtime_sdf_package(&mut app, package.clone()).unwrap(),
+        1
+    );
+    let queued = app
+        .world_mut()
+        .resource_mut::<WorldCompletedBuildQueueResource>()
+        .unwrap();
+    let output = queued.outputs.front_mut().unwrap();
+    // Simulate a terminally malformed completed output after enqueue metadata was published.
+    output.chunk_payload.chunk_revision = ChunkRevision(300);
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("malformed completion drops");
+
+    let w = app.world();
+    assert_eq!(
+        w.resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&id),
+        Some(&first)
+    );
+    let record = w
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&id)
+        .unwrap();
+    assert_eq!(record.pending_build_generation, None);
+    assert_eq!(record.chunk_generation, ChunkGeneration(1));
+    assert!(matches!(record.lifecycle, ChunkLifecycleState::Ready));
+    // Enqueue-time catalog points to N+1, yet the committed CPU is still N.
+    assert_eq!(
+        w.resource::<WorldRuntimeSdfProductCatalogResource>()
+            .unwrap()
+            .product(next_desc.product_core().identity),
+        Some(&next_desc)
+    );
+
+    assert_eq!(enqueue_runtime_sdf_package(&mut app, package).unwrap(), 1);
+    app = app.run_for_fixed_steps(1).expect("valid retry commits");
+    assert_eq!(
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&id),
+        Some(&next)
+    );
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&id)
+        .unwrap();
+    assert!(record.pending_build_generation.is_none());
+    assert_eq!(record.chunk_generation, ChunkGeneration(2));
+}
+
+#[test]
+fn failed_generic_completion_recovers_dirty_retry_authority() {
+    use engine::plugins::world::chunks::lifecycle::ChunkLifecycleState;
+    let mut app = fixed_world_app();
+    let id = ChunkId::new(WorldId::new(0), ChunkCoord3 { x: 56, y: 0, z: 0 });
+    let first = sdf_chunk_payload(id, ChunkRevision(1), ChunkGeneration(1), 800);
+    enqueue_runtime_sdf_package(
+        &mut app,
+        WorldSdfRuntimePayloadPackage::new(
+            runtime_sdf_descriptor(7291, &first),
+            vec![first.clone()],
+            RegionSdfSummary::default(),
+        ),
+    )
+    .unwrap();
+    app = app.run_for_fixed_steps(1).unwrap();
+
+    // A generic job has already claimed generation N+1; its completed bytes
+    // fail the revision contract. The same World lifecycle must release N+1.
+    {
+        let record = app
+            .world_mut()
+            .resource_mut::<WorldChunkRuntimeMapResource>()
+            .unwrap();
+        let r = record.by_chunk_id.get_mut(&id).unwrap();
+        r.pending_build_generation = Some(BuildGeneration(2));
+        r.lifecycle = ChunkLifecycleState::Rebuilding;
+    }
+    app.world_mut()
+        .resource_mut::<WorldCompletedBuildQueueResource>()
+        .unwrap()
+        .outputs
+        .push_back(WorldCompletedBuildOutput::generic(
+            id,
+            ChunkRevision(2),
+            BuildGeneration(2),
+            WorldBuildStaleness::Current,
+            sdf_chunk_payload(id, ChunkRevision(999), ChunkGeneration(2), 801),
+            RegionSdfSummary::default(),
+            engine::plugins::world::build::WorldCompletedBuildOrigin::OperationWindow,
+        ));
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("failed operation job releases intent");
+    assert_eq!(
+        app.world()
+            .resource::<SdfChunkStoreResource>()
+            .unwrap()
+            .chunks
+            .get(&id),
+        Some(&first)
+    );
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&id)
+        .unwrap();
+    assert!(record.pending_build_generation.is_none());
+    assert!(matches!(record.lifecycle, ChunkLifecycleState::Dirty));
+    assert!(!record.dirty_reasons.is_empty());
+
+    // The built-in dirty dispatch, not a second lifecycle manager, retries N+1.
+    app = app
+        .run_for_fixed_steps(1)
+        .expect("dirty job dispatched and integrated");
+    let record = app
+        .world()
+        .resource::<WorldChunkRuntimeMapResource>()
+        .unwrap()
+        .by_chunk_id
+        .get(&id)
+        .unwrap();
+    assert!(record.pending_build_generation.is_none());
+    assert_eq!(record.chunk_generation, ChunkGeneration(2));
 }
