@@ -1003,6 +1003,7 @@ impl WinitRunner {
         ) {
             // Stale target cannot receive a synthetic event in a new scope.
             self.native_ui_keyboards.remove(&window);
+            self.native_ui_modifiers.remove(&window);
             return Ok(());
         }
         let modifiers = self
@@ -1018,25 +1019,23 @@ impl WinitRunner {
         let before = slots.input_ownership(recipient).map_err(|error| {
             anyhow!("native keyboard device-loss M13 ownership unavailable: {error:?}")
         })?;
-        let (events, last_device_retired) = {
+        let events = {
             let lifetime = self
                 .native_ui_keyboards
                 .get_mut(&window)
                 .context("selected original native keyboard lifetime vanished")?;
             lifetime.devices.remove(&device);
-            let events = lifetime.keyboard.cancel_device(
+            lifetime.keyboard.cancel_device(
                 device,
                 modifiers,
                 native_keyboard_composition(&before),
-            );
-            (events, lifetime.devices.is_empty())
+            )
         };
-        // Winit modifiers are window-wide physical evidence, not a new
-        // keyboard-state owner. Once the last device leaves, no cached
-        // modifier may be inherited by a successor hardware generation.
-        if last_device_retired {
-            self.native_ui_modifiers.remove(&window);
-        }
+        // The winit modifier callback is window-wide; no original hardware
+        // identity proves whether Shift/Ctrl belonged to removed A or live B.
+        // Fail closed on every removal (not just the last keyboard) until
+        // another authentic window modifier observation arrives.
+        self.native_ui_modifiers.remove(&window);
         for event in events {
             let submission = slots
                 .submit_native_keyboard(recipient, event)
@@ -3618,6 +3617,44 @@ mod tests {
         assert!(
             !runner.native_ui_touches.contains_key(&secondary),
             "a touch cannot allocate a live input stream without terminal Present"
+        );
+        // A removed modifier-carrying keyboard must not lend its old
+        // window-global Shift/Ctrl snapshot to device B. B's translator
+        // membership remains live and the next authentic modifier callback
+        // may reestablish the aggregate state.
+        let device_a = UiInputDeviceId::new(31).expect("device A identity");
+        let device_b = UiInputDeviceId::new(32).expect("device B identity");
+        runner.native_ui_keyboard_translator(
+            secondary,
+            slot,
+            unknown_position_context.source,
+            device_a,
+            bound_epoch,
+        );
+        runner.native_ui_keyboard_translator(
+            secondary,
+            slot,
+            unknown_position_context.source,
+            device_b,
+            bound_epoch,
+        );
+        runner
+            .native_ui_modifiers
+            .insert(secondary, KeyModifiers::SHIFT);
+        runner
+            .cancel_native_ui_keyboard_device(secondary, device_a)
+            .expect("device A empty-key stream retires in its original M13 scope");
+        assert!(
+            runner
+                .native_ui_keyboards
+                .get(&secondary)
+                .is_some_and(|state| state.devices.contains(&device_b)
+                    && !state.devices.contains(&device_a)),
+            "device B's original translator state survives A removal"
+        );
+        assert!(
+            !runner.native_ui_modifiers.contains_key(&secondary),
+            "A removal invalidates the unattributed window modifier snapshot"
         );
         // A device-free namespace change is still a hard translator
         // lifetime boundary; no previous UI pressed keys or modifiers survive.
