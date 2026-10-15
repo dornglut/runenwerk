@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-25
+last_reviewed: 2026-10-15
 publication: primary
 ---
 
@@ -17,7 +17,9 @@ procedural population authoring APIs.
 What it demonstrates:
 
 - ECS simulation state (`BoidsRenderState`) projected into flow uniforms.
-- ping-pong storage simulation (`boids.instances`) on a compute pass.
+- ping-pong storage simulation (`boids.instances`) on a compute pass;
+  both retained buffers and all count/scan/scatter scratch arrays opt into
+  descriptor-guaranteed zero initialization for strict GPU read/write admission.
 - procedural-owned draw authoring through `RenderFlow::procedural_pass_builder(...)`.
 - bounded uniform-grid neighbor lookup instead of a production O(n^2) all-boids loop.
 - reusable procedural camera projection through `ProceduralCamera2d`,
@@ -50,7 +52,12 @@ unbounded populations are intentionally out of scope for this example.
 
 The simulation region is declared as `boids.fixed_step` and derives submitted
 substeps from runtime fixed-time resources. The frame delta is kept as evidence
-input, not a hidden example-local scheduler.
+input, not a hidden example-local scheduler. The example derives its shader
+step base from the engine's completed-step count minus the fixed steps admitted
+this frame, rather than maintaining a second simulation clock. Frames without
+any fixed step do not consume the first seed. The first actual fixed region
+seeds once on substep zero; explicit GPU zero initialization is only a safe
+storage coverage contract, not the authored population initialization.
 
 The draw pass uses a producer-owned `ProceduralCamera2d` with
 `FillViewport { fixed_axis: Vertical }`. Renderer procedural code derives the
@@ -59,11 +66,29 @@ not own camera truth. The boids shader projects world positions through
 `ProceduralCamera2dUniform`, so landscape, portrait, square, and extreme aspect
 surfaces keep equal projected world x/y scale.
 
-Run:
+Run the original flocking law:
 
 ```bash
 cargo run -p engine --example boids_render_flow
 ```
+
+Run the **alternative three-species local-rule experiment** through the same
+Runenwerk App, ECS state, RenderFlow, fixed-step, GPU grid and instanced
+impostor renderer:
+
+```bash
+cargo run -p engine --example boids_render_flow -- --species
+```
+
+The three example-local species use deterministic instance-index identities.
+Their asymmetric attraction/repulsion law and short-range exclusion produce
+different interactions from the default alignment/cohesion/separation model.
+The color indicates species; the geometric impostor is **not** a world-solid
+or the authority for any simulation state. Both laws remain shader-defined,
+not general-purpose authored rule programs. There is no validated CPU oracle,
+adaptive split/merge, persistent world truth, SDF interaction, or guaranteed
+numerical determinism across backends. The goal is a bounded, visual
+**Runenwerk-native feasibility comparison**, not architectural adoption.
 
 Evidence:
 

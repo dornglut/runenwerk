@@ -199,6 +199,27 @@ impl RenderFlow {
         Ok((self, handle))
     }
 
+    /// Opt-in retained storage initialization. Ordinary storage remains
+    /// uninitialized unless its caller supplies a descriptor contract.
+    pub fn storage_array_with_initialization<T>(
+        mut self,
+        label: impl Into<String>,
+        len: u64,
+        initialization: GpuBufferInitialization,
+    ) -> Result<(Self, GpuBufferHandle), RenderFlowAuthoringError>
+    where
+        T: GpuParams + 'static,
+    {
+        let id = self.register_storage_array_with_lifetime_and_initialization::<T>(
+            label.into(),
+            len,
+            GpuResourceLifetime::Retained,
+            initialization,
+        )?;
+        let handle = self.buffer_handle(id)?;
+        Ok((self, handle))
+    }
+
     pub fn double_buffer_storage_array<T>(
         mut self,
         label: impl Into<String>,
@@ -212,16 +233,36 @@ impl RenderFlow {
     }
 
     pub fn double_buffer_storage_array_with_handle<T>(
-        mut self,
+        self,
         label: impl Into<String>,
         len: u64,
     ) -> Result<(Self, RenderDoubleBuffer), RenderFlowAuthoringError>
     where
         T: GpuParams + 'static,
     {
+        self.double_buffer_storage_array_with_handle_and_initialization::<T>(
+            label,
+            len,
+            GpuBufferInitialization::Uninitialized,
+        )
+    }
+
+    /// Explicitly establish both retained ping-pong buffer initial states.
+    pub fn double_buffer_storage_array_with_handle_and_initialization<T>(
+        mut self,
+        label: impl Into<String>,
+        len: u64,
+        initialization: GpuBufferInitialization,
+    ) -> Result<(Self, RenderDoubleBuffer), RenderFlowAuthoringError>
+    where
+        T: GpuParams + 'static,
+    {
         let base_label = label.into();
-        let (a_id, b_id) =
-            self.register_double_buffer_storage_array::<T>(base_label.clone(), len)?;
+        let (a_id, b_id) = self.register_double_buffer_storage_array_with_initialization::<T>(
+            base_label.clone(),
+            len,
+            initialization,
+        )?;
         let handle = RenderDoubleBuffer::new(
             base_label,
             self.buffer_handle(a_id)?,
@@ -693,6 +734,10 @@ impl RenderFlow {
         T: GpuParams + 'static,
     {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
+            let existing = self.buffer_handle(id)?;
+            if existing.descriptor().initialization() != &initialization {
+                return Err(RenderFlowAuthoringError::ConflictingStorageInitialization { label });
+            }
             return Ok(id);
         }
 
@@ -717,24 +762,61 @@ impl RenderFlow {
     where
         T: GpuParams + 'static,
     {
+        self.register_double_buffer_storage_array_with_initialization::<T>(
+            base_label,
+            len,
+            GpuBufferInitialization::Uninitialized,
+        )
+    }
+
+    fn register_double_buffer_storage_array_with_initialization<T>(
+        &mut self,
+        base_label: String,
+        len: u64,
+        initialization: GpuBufferInitialization,
+    ) -> Result<(GpuWorkResourceId, GpuWorkResourceId), RenderFlowAuthoringError>
+    where
+        T: GpuParams + 'static,
+    {
         if let Some(existing) = self.ping_pong_storage.get(base_label.as_str()) {
+            if self
+                .buffer_handle(existing.a_id)?
+                .descriptor()
+                .initialization()
+                != &initialization
+                || self
+                    .buffer_handle(existing.b_id)?
+                    .descriptor()
+                    .initialization()
+                    != &initialization
+            {
+                return Err(RenderFlowAuthoringError::ConflictingStorageInitialization {
+                    label: base_label,
+                });
+            }
             return Ok((existing.a_id, existing.b_id));
         }
 
         let a_label = format!("{base_label}.a");
-        let a = RenderResourceDeclaration::declare_storage_array::<T>(
-            &mut self.next_resource_id,
-            a_label.clone(),
-            len,
-        )?;
+        let a =
+            RenderResourceDeclaration::declare_storage_array_with_lifetime_and_initialization::<T>(
+                &mut self.next_resource_id,
+                a_label.clone(),
+                len,
+                GpuResourceLifetime::Retained,
+                initialization.clone(),
+            )?;
         let a_id = *a.id();
 
         let b_label = format!("{base_label}.b");
-        let b = RenderResourceDeclaration::declare_storage_array::<T>(
-            &mut self.next_resource_id,
-            b_label.clone(),
-            len,
-        )?;
+        let b =
+            RenderResourceDeclaration::declare_storage_array_with_lifetime_and_initialization::<T>(
+                &mut self.next_resource_id,
+                b_label.clone(),
+                len,
+                GpuResourceLifetime::Retained,
+                initialization,
+            )?;
         let b_id = *b.id();
         self.upsert_labeled_resource(a_label, a_id, a);
         self.upsert_labeled_resource(b_label, b_id, b);

@@ -9,6 +9,7 @@ struct VsOut {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) local_position: vec2<f32>,
     @location(1) local_velocity: vec2<f32>,
+    @location(2) species: f32,
 };
 
 @group(0) @binding(0)
@@ -25,6 +26,7 @@ fn normalize_or_up(value: vec2<f32>) -> vec2<f32> {
 @vertex
 fn vs_main(
     @builtin(vertex_index) vertex_index: u32,
+    @builtin(instance_index) instance_index: u32,
     @location(0) instance_position: vec2<f32>,
     @location(1) instance_velocity: vec2<f32>,
     @location(2) instance_visual_heading: vec2<f32>,
@@ -55,6 +57,7 @@ fn vs_main(
     out.clip_position = vec4<f32>(clip_position, 0.0, 1.0);
     out.local_position = local;
     out.local_velocity = normalize_or_up(instance_velocity);
+    out.species = f32(instance_index % 3u);
     return out;
 }
 
@@ -71,8 +74,20 @@ fn fs_main(input: VsOut) -> @location(0) vec4<f32> {
 
     let mask = clamp(max(max(body, nose), tail * 0.78), 0.0, 1.0);
     let glow = halo * 0.34;
-    let base = vec3<f32>(0.30, 0.95, 0.82);
-    let hot = vec3<f32>(0.88, 1.0, 0.92);
+    var base = vec3<f32>(0.30, 0.95, 0.82);
+    var hot = vec3<f32>(0.88, 1.0, 0.92);
+    if (draw_params.sprite.w > 0.5) {
+        if (input.species < 0.5) {
+            base = vec3<f32>(0.96, 0.34, 0.42);
+            hot = vec3<f32>(1.0, 0.76, 0.80);
+        } else if (input.species < 1.5) {
+            base = vec3<f32>(0.26, 0.66, 1.0);
+            hot = vec3<f32>(0.82, 0.92, 1.0);
+        } else {
+            base = vec3<f32>(0.91, 0.77, 0.21);
+            hot = vec3<f32>(1.0, 0.96, 0.70);
+        }
+    }
     let color = mix(base * 0.45, hot, clamp(mask + glow, 0.0, 1.0));
     let alpha = clamp(mask + glow * 0.62, 0.0, 1.0);
     return vec4<f32>(color, alpha);

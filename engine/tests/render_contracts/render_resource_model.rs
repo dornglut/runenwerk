@@ -95,6 +95,56 @@ fn transient_storage_declarations_do_not_claim_descriptor_initialization() {
 }
 
 #[test]
+fn retained_storage_initialization_is_explicit_and_default_remains_uninitialized() {
+    let (flow, ordinary) = RenderFlow::new("retained.initialization")
+        .storage_array::<StorageResourceTestParams>("plain", 3)
+        .expect("ordinary retained storage should declare");
+    let (flow, zeroed) = flow
+        .storage_array_with_initialization::<StorageResourceTestParams>(
+            "zeroed",
+            3,
+            GpuBufferInitialization::Zeroed,
+        )
+        .expect("explicit zeroed storage should declare");
+    let (flow, pair) = flow
+        .double_buffer_storage_array_with_handle_and_initialization::<StorageResourceTestParams>(
+            "pair",
+            3,
+            GpuBufferInitialization::Zeroed,
+        )
+        .expect("explicit zeroed double-buffer should declare");
+
+    assert_eq!(
+        ordinary.descriptor().initialization(),
+        &GpuBufferInitialization::Uninitialized
+    );
+    for buffer in [zeroed, pair.a().clone(), pair.b().clone()] {
+        assert_eq!(
+            buffer.descriptor().initialization(),
+            &GpuBufferInitialization::Zeroed
+        );
+        assert_eq!(
+            buffer.descriptor().common().lifetime(),
+            GpuResourceLifetime::Retained
+        );
+    }
+    assert!(flow.resource_id("pair.a").is_some());
+    assert!(flow.resource_id("pair.b").is_some());
+
+    let conflict = flow
+        .double_buffer_storage_array_with_handle_and_initialization::<StorageResourceTestParams>(
+            "pair",
+            3,
+            GpuBufferInitialization::Uninitialized,
+        )
+        .expect_err("same retained resources must not silently change initialization");
+    assert!(matches!(
+        conflict,
+        engine::plugins::render::RenderFlowAuthoringError::ConflictingStorageInitialization { .. }
+    ));
+}
+
+#[test]
 fn typed_ids_preserve_pass_raw_value_and_sort_resources_by_owner_local_identity() {
     let pass = RenderPassId::try_from_raw(7).unwrap();
     let raw: u64 = pass.into();
