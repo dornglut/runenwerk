@@ -21,5 +21,5 @@ fn advance_boids_simulation_system(
     fixed: Res<FixedTimeState>,
     mut state: ResMut<BoidsRenderState>,
 ) {
-    state.advance_by_frame_delta(time.delta_seconds, fixed.steps_ran_last_frame);
+    state.synchronize_fixed_frame(time.delta_seconds, *fixed);
 }

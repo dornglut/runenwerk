@@ -52,10 +52,12 @@ unbounded populations are intentionally out of scope for this example.
 
 The simulation region is declared as `boids.fixed_step` and derives submitted
 substeps from runtime fixed-time resources. The frame delta is kept as evidence
-input, not a hidden example-local scheduler. Frames without any admitted fixed
-step do not consume the simulation's first-seed tick. The first actual fixed
-region seeds once on substep zero; explicit GPU zero initialization is only a
-safe storage coverage contract, not the authored population initialization.
+input, not a hidden example-local scheduler. The example derives its shader
+step base from the engine's completed-step count minus the fixed steps admitted
+this frame, rather than maintaining a second simulation clock. Frames without
+any fixed step do not consume the first seed. The first actual fixed region
+seeds once on substep zero; explicit GPU zero initialization is only a safe
+storage coverage contract, not the authored population initialization.
 
 The draw pass uses a producer-owned `ProceduralCamera2d` with
 `FillViewport { fixed_axis: Vertical }`. Renderer procedural code derives the
