@@ -2403,8 +2403,22 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 }
             }
             WindowEvent::Ime(Ime::Commit(text)) => {
+                // Empty OS Commit still ends a live preedit generation, but
+                // must never manufacture empty durable text.
                 if text.is_empty() {
-                    return Ok(());
+                    return match self.native_input_recipient(native_window_id) {
+                        Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
+                            self.route_ui_ime_finish(slot, false)
+                        }
+                        Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => Ok(()),
+                        Err(error)
+                            if error.downcast_ref::<NativeInputRecipientError>()
+                                == Some(&NativeInputRecipientError::MissingRecipient) =>
+                        {
+                            Ok(())
+                        }
+                        Err(error) => Err(error),
+                    };
                 }
                 let selected = self.native_input_recipient(native_window_id);
                 match selected {
