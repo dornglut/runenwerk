@@ -1100,7 +1100,9 @@ impl WinitRunner {
         };
         for event in events {
             let pointer = event.pointer_id();
-            let surface = event.surface_context().surface_id();
+            // Retain the original displayed surface identity after the
+            // framework takes ownership of the cancellation event.
+            let surface = event.surface_context().surface_id().clone();
             let submission = slots
                 .submit_native_pointer(recipient, event)
                 .map_err(|error| {
@@ -1113,7 +1115,7 @@ impl WinitRunner {
                 before.scope(),
                 device,
                 pointer,
-                surface,
+                &surface,
                 submission,
                 &batch,
                 &status,
