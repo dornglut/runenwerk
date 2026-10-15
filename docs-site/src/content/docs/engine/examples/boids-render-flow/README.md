@@ -59,11 +59,29 @@ not own camera truth. The boids shader projects world positions through
 `ProceduralCamera2dUniform`, so landscape, portrait, square, and extreme aspect
 surfaces keep equal projected world x/y scale.
 
-Run:
+Run the original flocking law:
 
 ```bash
 cargo run -p engine --example boids_render_flow
 ```
+
+Run the **alternative three-species local-rule experiment** through the same
+Runenwerk App, ECS state, RenderFlow, fixed-step, GPU grid and instanced
+impostor renderer:
+
+```bash
+cargo run -p engine --example boids_render_flow -- --species
+```
+
+The three example-local species use deterministic instance-index identities.
+Their asymmetric attraction/repulsion law and short-range exclusion produce
+different interactions from the default alignment/cohesion/separation model.
+The color indicates species; the geometric impostor is **not** a world-solid
+or the authority for any simulation state. Both laws remain shader-defined,
+not general-purpose authored rule programs. There is no validated CPU oracle,
+adaptive split/merge, persistent world truth, SDF interaction, or guaranteed
+numerical determinism across backends. The goal is a bounded, visual
+**Runenwerk-native feasibility comparison**, not architectural adoption.
 
 Evidence:
 

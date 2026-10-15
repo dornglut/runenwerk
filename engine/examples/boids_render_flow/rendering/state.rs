@@ -10,6 +10,30 @@ pub(crate) const DEFAULT_WORLD_CENTER: [f32; 2] = [0.5, 0.5];
 pub(crate) const DEFAULT_VISIBLE_WORLD_HEIGHT: f32 = 1.0;
 pub(crate) const DEFAULT_SPRITE_HALF_EXTENTS_WORLD: [f32; 2] = [0.0084, 0.01575];
 
+/// Example-local interaction law. Neither variant is a world-state authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum BoidsRuleFamily {
+    #[default]
+    Flocking,
+    SpeciesInteraction,
+}
+
+impl BoidsRuleFamily {
+    pub(crate) const fn shader_mode(self) -> f32 {
+        match self {
+            Self::Flocking => 0.0,
+            Self::SpeciesInteraction => 1.0,
+        }
+    }
+
+    pub(crate) const fn window_title(self) -> &'static str {
+        match self {
+            Self::Flocking => "Boids Render Flow - Public API Example",
+            Self::SpeciesInteraction => "Particle Rule Experiment - Species Interactions",
+        }
+    }
+}
+
 const MODE_SEED: u32 = 0;
 const MODE_CLEAR_COUNTS: u32 = 1;
 const MODE_COUNT_CELLS: u32 = 2;
@@ -45,6 +69,7 @@ pub(crate) struct BoidsDrawParams {
 
 #[derive(Debug, Clone, runen_ecs::Resource)]
 pub(crate) struct BoidsRenderState {
+    rule: BoidsRuleFamily,
     tick: u32,
     boid_count: u32,
     initialized: bool,
@@ -60,6 +85,7 @@ impl Default for BoidsRenderState {
     fn default() -> Self {
         let fixed_delta_seconds = 1.0 / DEFAULT_SIMULATION_FPS;
         Self {
+            rule: BoidsRuleFamily::default(),
             tick: 0,
             boid_count: DEFAULT_BOID_COUNT,
             initialized: false,
@@ -80,6 +106,10 @@ impl Default for BoidsRenderState {
 }
 
 impl BoidsRenderState {
+    pub(crate) fn with_rule(rule: BoidsRuleFamily) -> Self {
+        Self { rule, ..Self::default() }
+    }
+
     pub(crate) fn advance_by_frame_delta(&mut self, delta_seconds: f32) {
         self.last_frame_delta_seconds = delta_seconds.clamp(0.0, 1.0 / 15.0).max(1.0 / 240.0);
         if !self.initialized {
@@ -141,9 +171,13 @@ impl BoidsRenderState {
             ],
             sim_c: [
                 0.16, // center_weight
-                0.12, // jitter_strength
+                if self.rule == BoidsRuleFamily::SpeciesInteraction {
+                    0.04
+                } else {
+                    0.12
+                }, // jitter_strength
                 self.simulation_fps,
-                0.0,
+                self.rule.shader_mode(),
             ],
         }
     }
@@ -158,7 +192,9 @@ impl BoidsRenderState {
         surface_size: (u32, u32),
     ) -> Result<BoidsDrawParams, ProceduralCamera2dError> {
         let camera = self.camera.uniform_for_surface(surface_size)?;
-        let sprite = self.sprite_sizing.to_uniform_sprite(camera)?;
+        let mut sprite = self.sprite_sizing.to_uniform_sprite(camera)?;
+        // The example's fourth sprite slot is unused by geometry projection.
+        sprite[3] = self.rule.shader_mode();
         Ok(BoidsDrawParams {
             world_to_clip: camera.world_to_clip,
             viewport: camera.viewport,
@@ -272,6 +308,17 @@ mod tests {
     fn draw_params_reject_empty_surface_instead_of_silent_fallback() {
         let state = BoidsRenderState::default();
         assert!(state.try_draw_params((0, 900)).is_err());
+    }
+
+    #[test]
+    fn species_interactions_select_distinct_simulation_and_presentation_law() {
+        let flock = BoidsRenderState::default();
+        let species = BoidsRenderState::with_rule(super::BoidsRuleFamily::SpeciesInteraction);
+        assert_eq!(flock.compute_params().sim_c[3], 0.0);
+        assert_eq!(species.compute_params().sim_c[3], 1.0);
+        assert_eq!(flock.draw_params((1280, 720)).sprite[3], 0.0);
+        assert_eq!(species.draw_params((1280, 720)).sprite[3], 1.0);
+        assert_eq!(flock.compute_params().sim_a, species.compute_params().sim_a);
     }
 
     #[test]

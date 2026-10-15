@@ -17,7 +17,7 @@ struct ComputeParams {
     grid: vec4<u32>, // cells_x, cells_y, cell_count, padding
     sim_a: vec4<f32>, // delta_seconds, max_speed, max_force, neighbor_radius
     sim_b: vec4<f32>, // separation_radius, alignment_weight, cohesion_weight, separation_weight
-    sim_c: vec4<f32>, // center_weight, jitter_strength, simulation_fps, padding
+    sim_c: vec4<f32>, // center_weight, jitter_strength, simulation_fps, law_mode
 };
 
 @group(0) @binding(0)
@@ -148,6 +148,7 @@ fn simulate_boid(index: u32, boid_count: u32, tick: u32) -> BoidAgent {
     let separation_weight = params.sim_b.w;
     let center_weight = params.sim_c.x;
     let jitter_strength = params.sim_c.y;
+    let species_mode = params.sim_c.w > 0.5;
 
     var boid = boids_a[index];
     if (tick == 0u) {
@@ -157,6 +158,7 @@ fn simulate_boid(index: u32, boid_count: u32, tick: u32) -> BoidAgent {
     var alignment = vec2<f32>(0.0, 0.0);
     var cohesion_delta_sum = vec2<f32>(0.0, 0.0);
     var separation = vec2<f32>(0.0, 0.0);
+    var species_force = vec2<f32>(0.0, 0.0);
     var neighbor_count = 0u;
     var separation_count = 0u;
 
@@ -188,21 +190,40 @@ fn simulate_boid(index: u32, boid_count: u32, tick: u32) -> BoidAgent {
                 let other = boids_a[other_index];
                 let delta = wrap_delta(other.position - boid.position);
                 let dist = length(delta);
-                if (dist < neighbor_radius) {
-                    alignment = alignment + other.velocity;
-                    cohesion_delta_sum = cohesion_delta_sum + delta;
-                    neighbor_count = neighbor_count + 1u;
-                }
-                if (dist < separation_radius) {
-                    let safe_dist = max(dist, 0.0005);
-                    separation = separation - delta / safe_dist;
-                    separation_count = separation_count + 1u;
+                if (species_mode) {
+                    // Species identities are deliberately example-local, derived from
+                    // stable population indices rather than a new particle registry.
+                    if (dist < neighbor_radius && dist > 0.0005) {
+                        let species = index % 3u;
+                        let other_species = other_index % 3u;
+                        var affinity = 0.72;
+                        if (species == other_species) {
+                            affinity = 0.90;
+                        } else if ((species + 1u) % 3u == other_species) {
+                            affinity = -0.68;
+                        }
+                        let direction = delta / dist;
+                        let interaction = affinity * (1.0 - dist / neighbor_radius);
+                        let short_repulsion = max(0.0, 0.025 - dist) * 65.0;
+                        species_force = species_force + direction * (interaction - short_repulsion);
+                    }
+                } else {
+                    if (dist < neighbor_radius) {
+                        alignment = alignment + other.velocity;
+                        cohesion_delta_sum = cohesion_delta_sum + delta;
+                        neighbor_count = neighbor_count + 1u;
+                    }
+                    if (dist < separation_radius) {
+                        let safe_dist = max(dist, 0.0005);
+                        separation = separation - delta / safe_dist;
+                        separation_count = separation_count + 1u;
+                    }
                 }
             }
         }
     }
 
-    var acceleration = vec2<f32>(0.0, 0.0);
+    var acceleration = species_force * 0.20;
     if (neighbor_count > 0u) {
         let inv_neighbor_count = 1.0 / f32(neighbor_count);
 
@@ -235,7 +256,7 @@ fn simulate_boid(index: u32, boid_count: u32, tick: u32) -> BoidAgent {
     boid.velocity = boid.velocity + acceleration * delta_seconds;
     boid.velocity = limit_magnitude(boid.velocity, max_speed);
 
-    let min_speed = max_speed * 0.25;
+    let min_speed = select(max_speed * 0.25, 0.0, species_mode);
     if (length(boid.velocity) < min_speed) {
         let stable_dir = normalize_or_zero(boid.velocity + vec2<f32>(0.0001, 0.0001));
         boid.velocity = stable_dir * min_speed;
