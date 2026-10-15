@@ -1,6 +1,7 @@
 use runenui_core::{
     CommittedTextEvent, CompositionGeneration, CompositionRange, Effects, Element, ElementId,
-    FontFamilyName, GenericFontFamily, HostProtocol, InputDeviceId, KeyboardEvent, PointerEvent,
+    FontFamilyName, GenericFontFamily, HostProtocol, InputDeviceId, KeyboardEvent, KeyboardPhase,
+    PointerEvent,
     PointerId, SemanticCommand, SurfaceId, UiApp, View, button, column, text,
 };
 #[cfg(test)]
@@ -470,6 +471,8 @@ pub fn native_no_focused_keyboard_claim_witness(
         return false;
     };
     if framework.kind() != SubmitKeyboardErrorKind::NoFocusedTarget
+        || framework.event().phase() != KeyboardPhase::Down
+        || framework.event().is_repeat()
         || framework.event().device_id() != Some(expected_device)
         || before != after
         || before.status() != runenui_runtime::RuntimeStatus::Running
@@ -2860,6 +2863,33 @@ mod tests {
             &after_unfocused,
             &rejected,
         ));
+        // A synthesized cancellation is not the original keyboard Down
+        // occurrence for which the owner authorized NoFocusedTarget nonclaim.
+        let cancel = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Cancel,
+                    PhysicalKey::Code(String::from("KeyW")),
+                    LogicalKey::Character(String::from("w")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(native_device),
+                ),
+            )
+            .expect_err("no focused RunenUI target for Cancel");
+        let after_cancel = slots
+            .input_ownership(slot)
+            .expect("synthetic rejection cannot mutate M13 ownership");
+        assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
+            &after_unfocused,
+            &after_cancel,
+            &cancel,
+        ));
+        assert_eq!(slots.ingress_epoch(slot), Some(epoch));
 
         let focus_id = ElementId::new("native.keyboard.focus").expect("valid authored target");
         let runtime = slots
