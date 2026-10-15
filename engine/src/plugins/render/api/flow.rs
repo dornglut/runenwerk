@@ -779,8 +779,15 @@ impl RenderFlow {
         T: GpuParams + 'static,
     {
         if let Some(existing) = self.ping_pong_storage.get(base_label.as_str()) {
-            if self.buffer_handle(existing.a_id)?.descriptor().initialization() != &initialization
-                || self.buffer_handle(existing.b_id)?.descriptor().initialization()
+            if self
+                .buffer_handle(existing.a_id)?
+                .descriptor()
+                .initialization()
+                != &initialization
+                || self
+                    .buffer_handle(existing.b_id)?
+                    .descriptor()
+                    .initialization()
                     != &initialization
             {
                 return Err(RenderFlowAuthoringError::ConflictingStorageInitialization {

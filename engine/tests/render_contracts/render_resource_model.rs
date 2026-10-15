@@ -101,12 +101,16 @@ fn retained_storage_initialization_is_explicit_and_default_remains_uninitialized
         .expect("ordinary retained storage should declare");
     let (flow, zeroed) = flow
         .storage_array_with_initialization::<StorageResourceTestParams>(
-            "zeroed", 3, GpuBufferInitialization::Zeroed,
+            "zeroed",
+            3,
+            GpuBufferInitialization::Zeroed,
         )
         .expect("explicit zeroed storage should declare");
     let (flow, pair) = flow
         .double_buffer_storage_array_with_handle_and_initialization::<StorageResourceTestParams>(
-            "pair", 3, GpuBufferInitialization::Zeroed,
+            "pair",
+            3,
+            GpuBufferInitialization::Zeroed,
         )
         .expect("explicit zeroed double-buffer should declare");
 
@@ -129,7 +133,9 @@ fn retained_storage_initialization_is_explicit_and_default_remains_uninitialized
 
     let conflict = flow
         .double_buffer_storage_array_with_handle_and_initialization::<StorageResourceTestParams>(
-            "pair", 3, GpuBufferInitialization::Uninitialized,
+            "pair",
+            3,
+            GpuBufferInitialization::Uninitialized,
         )
         .expect_err("same retained resources must not silently change initialization");
     assert!(matches!(
