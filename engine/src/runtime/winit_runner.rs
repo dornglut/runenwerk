@@ -981,7 +981,13 @@ impl WinitRunner {
     fn apply_raw_device_removal(&mut self, device_id: winit::event::DeviceId) -> Result<bool> {
         // Winit window events and DeviceEvents have separately allocated
         // RunenInput identities. They share only the original backend DeviceId.
-        // Cancel the live UI pointer while its original M13 scope still exists.
+        // Preflight both identity namespaces and retire them atomically BEFORE
+        // mutating a UI translator. A fallible allocation or missing raw source
+        // must not leave RunenUI cancelled while neutral held keys remain live.
+        let (window_contexts, raw_context) =
+            self.input_adapter.retire_backend_device(device_id)?;
+        // UI Cancels still use the original pinned M13 recipient and scope;
+        // the removed physical IDs remain preserved in window_contexts.
         let windows: Vec<_> = self
             .native_ui_mice
             .iter()
@@ -1005,8 +1011,6 @@ impl WinitRunner {
         for window in touch_windows.iter().copied() {
             self.cancel_native_ui_touch(window);
         }
-        let window_contexts = self.input_adapter.retire_window_device(device_id)?;
-        let raw_context = self.input_adapter.retire_raw_device(device_id)?;
         // Device removal also retires the pinned keyboard translator lifetime.
         // The native window/source can remain alive; a new hardware generation
         // must never reuse cached pressed keys, modifiers or M13 keyboard state.

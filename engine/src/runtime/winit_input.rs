@@ -156,6 +156,28 @@ impl WinitInputAdapter {
     /// namespace and cannot be used to revoke these original window inputs.
     /// Each observed window source gets exact device-scoped continuity loss;
     /// other hardware devices sharing its source remain unaffected.
+    /// Retire both separately allocated identities for one original backend
+    /// removal, with every fallible check completed before either namespace
+    /// changes. The native host can then issue framework Cancels and neutral
+    /// continuity loss without a partial retirement after an early error.
+    pub(crate) fn retire_backend_device(
+        &mut self,
+        backend_device_id: DeviceId,
+    ) -> Result<(Vec<InputContext>, Option<InputContext>), NativeInputIdentityFailure> {
+        // The only raw-retirement failure is an inconsistent pre-existing
+        // device/source pair. Check it before the fallible window-context
+        // allocation or either identity removal.
+        if let Some(device) = self.raw_devices.get(&backend_device_id)
+            && !self.raw_sources.contains_key(device)
+        {
+            return Err(NativeInputIdentityFailure::MissingRawSource);
+        }
+        let window_contexts = self.retire_window_device(backend_device_id)?;
+        // No external mutation can intervene between preflight and removal.
+        let raw_context = self.retire_raw_device(backend_device_id)?;
+        Ok((window_contexts, raw_context))
+    }
+
     pub(crate) fn retire_window_device(
         &mut self,
         backend_device_id: DeviceId,
@@ -549,6 +571,65 @@ mod tests {
             raw,
             "raw-device identity is owned by its own retirement method"
         );
+    }
+
+    #[test]
+    fn atomic_backend_removal_retires_both_namespaces_and_preserves_window_sources() {
+        let mut adapter = WinitInputAdapter::default();
+        let backend = DeviceId::dummy();
+        let first = NativeWindowId::primary();
+        let second = NativeWindowId::try_from_raw(2).expect("second native window");
+        let a = adapter.window_context(first, backend).expect("first window device");
+        let b = adapter.window_context(second, backend).expect("same device, second source");
+        let raw = adapter.raw_device_context(backend).expect("raw device identity");
+
+        let (mut windows, retired_raw) = adapter
+            .retire_backend_device(backend)
+            .expect("one original backend retirement");
+        windows.sort_unstable_by_key(|context| context.source.raw());
+        let mut expected = vec![a, b];
+        expected.sort_unstable_by_key(|context| context.source.raw());
+        assert_eq!(windows, expected);
+        assert_eq!(retired_raw, Some(raw));
+        assert_eq!(
+            adapter.retire_backend_device(backend),
+            Ok((Vec::new(), None)),
+            "repeated backend removal never recreates a neutral identity"
+        );
+
+        let successor = adapter.window_context(first, backend).expect("new window generation");
+        let raw_successor = adapter.raw_device_context(backend).expect("new raw generation");
+        assert_eq!(successor.source, a.source, "window source survives device loss");
+        assert_ne!(successor.device, a.device);
+        assert_ne!(raw_successor.device, raw.device);
+        assert_ne!(raw_successor.source, raw.source);
+    }
+
+    #[test]
+    fn invalid_raw_pair_aborts_backend_removal_before_window_identity_is_retired() {
+        let mut adapter = WinitInputAdapter::default();
+        let backend = DeviceId::dummy();
+        let window = NativeWindowId::primary();
+        let original_window = adapter.window_context(window, backend).expect("device");
+        let raw = adapter.raw_device_context(backend).expect("raw");
+        let raw_device = raw.device.expect("raw context has original device");
+        let raw_source = adapter.raw_sources.remove(&raw_device).expect("raw source exists");
+
+        assert_eq!(
+            adapter.retire_backend_device(backend),
+            Err(NativeInputIdentityFailure::MissingRawSource)
+        );
+        assert_eq!(
+            adapter.window_context(window, backend).expect("window remains admitted"),
+            original_window,
+            "preflight failure may not silently retire the unrelated window-event identity"
+        );
+        adapter.raw_sources.insert(raw_device, raw_source);
+        let (windows, retired_raw) = adapter
+            .retire_backend_device(backend)
+            .expect("recovered raw pair retires atomically");
+        assert_eq!(windows, vec![original_window]);
+        assert_eq!(retired_raw, Some(raw));
     }
 
     #[test]
