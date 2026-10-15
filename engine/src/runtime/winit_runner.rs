@@ -4,7 +4,9 @@ use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
     UiNativeInputRecipientsResource, UiNativePointerHostRead, UiRuntimeDisplayedPresentation,
     UiRuntimeNativeTextAdmissionError, UiRuntimePresentationAssociationsResource, UiRuntimeSlotId,
-    UiRuntimeSlotsResource, native_keyboard_finality, native_no_focused_keyboard_claim_witness,
+    UiRuntimeSlotsResource, UiRuntimeNativeCompositionAdmissionError,
+    native_composition_finality, native_keyboard_finality,
+    native_no_focused_keyboard_claim_witness,
     native_pointer_finality, native_text_finality,
 };
 use crate::plugins::{ActionState, InputState};
@@ -693,10 +695,123 @@ impl WinitRunner {
         Ok(())
     }
 
+    /// Original Winit preedit has no trustworthy DeviceId. Composition
+    /// generation, focus, scope and routing remain the pinned RunenUI owner's
+    /// facts; Engine keeps no second IME generation or pending preedit queue.
+    fn route_ui_ime_preedit(
+        &mut self,
+        slot: UiRuntimeSlotId,
+        preedit: String,
+        range: Option<(usize, usize)>,
+    ) -> Result<()> {
+        let selected_range = range
+            .map(|(from, to)| runenui_core::CompositionRange::new(&preedit, from, to))
+            .transpose()
+            .context("original Winit preedit range is not a valid UTF-8 byte range")?;
+        let slots = self.state.world.resource_mut::<UiRuntimeSlotsResource>()
+            .context("selected native IME preedit lacks pinned UI slot")?;
+        let mut before = slots.input_ownership(slot)
+            .map_err(|error| anyhow!("native preedit has no settled M13 owner: {error:?}"))?;
+        let generation = if let Some(generation) = before.keyboard().composition_generation() {
+            generation.clone()
+        } else {
+            if preedit.is_empty() {
+                return Ok(());
+            }
+            let start = match slots.start_native_composition(slot) {
+                Ok(start) => start,
+                Err(UiRuntimeNativeCompositionAdmissionError::Start(error))
+                    if matches!(
+                        error.kind(),
+                        runenui_runtime::SubmitCompositionErrorKind::NoFocusedTarget
+                            | runenui_runtime::SubmitCompositionErrorKind::FocusedTargetNotCompositionCapable
+                    ) => return Ok(()),
+                Err(error) => return Err(anyhow!("native composition start rejected: {error:?}")),
+            };
+            let (batch, status) = slots.pump_native_input_records(slot)
+                .map_err(|e| anyhow!("native composition start pump rejected: {e:?}"))?;
+            let finality = native_composition_finality(
+                before.scope(), start.sequence(), &batch, &status,
+            );
+            anyhow::ensure!(
+                matches!(finality, Ok(UiInputFinality::Committed(_))),
+                "native composition start lacks exact M13 settlement: {finality:?}"
+            );
+            before = slots.input_ownership(slot)
+                .map_err(|e| anyhow!("composition start left M13 ownership unsettled: {e:?}"))?;
+            anyhow::ensure!(
+                before.keyboard().composition_generation() == Some(start.generation()),
+                "composition generation changed before original preedit update"
+            );
+            start.generation().clone()
+        };
+        let submitted = match slots.update_native_composition(
+            slot, generation, preedit, selected_range,
+        ) {
+            Ok(receipt) => receipt,
+            Err(UiRuntimeNativeCompositionAdmissionError::Event(error))
+                if matches!(
+                    error.kind(),
+                    runenui_runtime::SubmitCompositionErrorKind::MissingGeneration
+                        | runenui_runtime::SubmitCompositionErrorKind::StaleGeneration
+                ) => return Ok(()),
+            Err(error) => return Err(anyhow!("native preedit M13 ingress rejected: {error:?}")),
+        };
+        let (batch, status) = slots.pump_native_input_records(slot)
+            .map_err(|e| anyhow!("native preedit M13 pump rejected: {e:?}"))?;
+        let finality = native_composition_finality(
+            before.scope(), submitted.sequence(), &batch, &status,
+        );
+        anyhow::ensure!(
+            matches!(finality, Ok(UiInputFinality::Committed(_))),
+            "native preedit lacked exact M13 composition settlement: {finality:?}"
+        );
+        Ok(())
+    }
+
+    /// An original IME commit ends the framework's active generation before
+    /// submitting durable text. Disabled/focus loss cancels that generation.
+    /// Neither can synthesize physical keyboard transitions.
+    fn route_ui_ime_finish(&mut self, slot: UiRuntimeSlotId, cancel: bool) -> Result<()> {
+        let slots = self.state.world.resource_mut::<UiRuntimeSlotsResource>()
+            .context("native IME finish lost pinned UI slot")?;
+        let before = slots.input_ownership(slot)
+            .map_err(|error| anyhow!("native IME finish has no M13 owner: {error:?}"))?;
+        let Some(generation) = before.keyboard().composition_generation().cloned() else {
+            return Ok(());
+        };
+        let submission = if cancel {
+            slots.cancel_native_composition(slot, generation)
+        } else {
+            slots.end_native_composition(slot, generation)
+        };
+        let submission = match submission {
+            Ok(receipt) => receipt,
+            Err(UiRuntimeNativeCompositionAdmissionError::Event(error))
+                if matches!(
+                    error.kind(),
+                    runenui_runtime::SubmitCompositionErrorKind::MissingGeneration
+                        | runenui_runtime::SubmitCompositionErrorKind::StaleGeneration
+                ) => return Ok(()),
+            Err(error) => return Err(anyhow!("native IME finish rejected: {error:?}")),
+        };
+        let (batch, status) = slots.pump_native_input_records(slot)
+            .map_err(|e| anyhow!("native IME finish pump rejected: {e:?}"))?;
+        let finality = native_composition_finality(
+            before.scope(), submission.sequence(), &batch, &status,
+        );
+        anyhow::ensure!(
+            matches!(finality, Ok(UiInputFinality::Committed(_))),
+            "native IME finish lacked exact M13 settlement: {finality:?}"
+        );
+        Ok(())
+    }
+
     /// Route one original OS-committed IME text occurrence to the selected
     /// M13 text owner. IME carries no winit device ID; do not invent one from
     /// the last key or guess the keyboard's physical lifetime.
     fn route_ui_ime_commit(&mut self, slot: UiRuntimeSlotId, text: String) -> Result<()> {
+        self.route_ui_ime_finish(slot, false)?;
         let event = CommittedTextEvent::new(text, None)
             .context("empty original committed text must be filtered at native ingress")?;
         let slots = self
