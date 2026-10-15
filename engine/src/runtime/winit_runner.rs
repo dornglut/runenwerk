@@ -718,9 +718,13 @@ impl WinitRunner {
                 return Ok(());
             }
         };
-        let slots = self.state.world.resource_mut::<UiRuntimeSlotsResource>()
+        let slots = self
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
             .context("selected native IME preedit lacks pinned UI slot")?;
-        let mut before = slots.input_ownership(slot)
+        let mut before = slots
+            .input_ownership(slot)
             .map_err(|error| anyhow!("native preedit has no settled M13 owner: {error:?}"))?;
         let generation = if let Some(generation) = before.keyboard().composition_generation() {
             generation.clone()
@@ -741,16 +745,17 @@ impl WinitRunner {
                 }
                 Err(error) => return Err(anyhow!("native composition start rejected: {error:?}")),
             };
-            let (batch, status) = slots.pump_native_input_records(slot)
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
                 .map_err(|e| anyhow!("native composition start pump rejected: {e:?}"))?;
-            let finality = native_composition_finality(
-                before.scope(), start.sequence(), &batch, &status,
-            );
+            let finality =
+                native_composition_finality(before.scope(), start.sequence(), &batch, &status);
             anyhow::ensure!(
                 matches!(finality, Ok(UiInputFinality::Committed(_))),
                 "native composition start lacks exact M13 settlement: {finality:?}"
             );
-            before = slots.input_ownership(slot)
+            before = slots
+                .input_ownership(slot)
                 .map_err(|e| anyhow!("composition start left M13 ownership unsettled: {e:?}"))?;
             anyhow::ensure!(
                 before.keyboard().composition_generation() == Some(start.generation()),
@@ -758,26 +763,30 @@ impl WinitRunner {
             );
             start.generation().clone()
         };
-        let submitted = match slots.update_native_composition(
-            slot, generation, preedit, selected_range,
-        ) {
-            Ok(receipt) => receipt,
-            Err(UiRuntimeNativeCompositionAdmissionError::Event(error))
-                if matches!(
-                    error.kind(),
-                    runenui_runtime::SubmitCompositionErrorKind::MissingGeneration
-                        | runenui_runtime::SubmitCompositionErrorKind::StaleGeneration
-                ) => return Ok(()),
-            Err(UiRuntimeNativeCompositionAdmissionError::Slot(failure)) => {
-                return Err(anyhow!("native preedit slot invalid: {failure:?}"));
-            }
-            Err(error) => return Err(anyhow!("native preedit M13 ingress rejected: {error:?}")),
-        };
-        let (batch, status) = slots.pump_native_input_records(slot)
+        let submitted =
+            match slots.update_native_composition(slot, generation, preedit, selected_range) {
+                Ok(receipt) => receipt,
+                Err(UiRuntimeNativeCompositionAdmissionError::Event(error))
+                    if matches!(
+                        error.kind(),
+                        runenui_runtime::SubmitCompositionErrorKind::MissingGeneration
+                            | runenui_runtime::SubmitCompositionErrorKind::StaleGeneration
+                    ) =>
+                {
+                    return Ok(());
+                }
+                Err(UiRuntimeNativeCompositionAdmissionError::Slot(failure)) => {
+                    return Err(anyhow!("native preedit slot invalid: {failure:?}"));
+                }
+                Err(error) => {
+                    return Err(anyhow!("native preedit M13 ingress rejected: {error:?}"));
+                }
+            };
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
             .map_err(|e| anyhow!("native preedit M13 pump rejected: {e:?}"))?;
-        let finality = native_composition_finality(
-            before.scope(), submitted.sequence(), &batch, &status,
-        );
+        let finality =
+            native_composition_finality(before.scope(), submitted.sequence(), &batch, &status);
         anyhow::ensure!(
             matches!(finality, Ok(UiInputFinality::Committed(_))),
             "native preedit lacked exact M13 composition settlement: {finality:?}"
@@ -789,9 +798,13 @@ impl WinitRunner {
     /// submitting durable text. Disabled/focus loss cancels that generation.
     /// Neither can synthesize physical keyboard transitions.
     fn route_ui_ime_finish(&mut self, slot: UiRuntimeSlotId, cancel: bool) -> Result<()> {
-        let slots = self.state.world.resource_mut::<UiRuntimeSlotsResource>()
+        let slots = self
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
             .context("native IME finish lost pinned UI slot")?;
-        let before = slots.input_ownership(slot)
+        let before = slots
+            .input_ownership(slot)
             .map_err(|error| anyhow!("native IME finish has no M13 owner: {error:?}"))?;
         let Some(generation) = before.keyboard().composition_generation().cloned() else {
             return Ok(());
@@ -808,17 +821,20 @@ impl WinitRunner {
                     error.kind(),
                     runenui_runtime::SubmitCompositionErrorKind::MissingGeneration
                         | runenui_runtime::SubmitCompositionErrorKind::StaleGeneration
-                ) => return Ok(()),
+                ) =>
+            {
+                return Ok(());
+            }
             Err(UiRuntimeNativeCompositionAdmissionError::Slot(failure)) => {
                 return Err(anyhow!("native IME finish slot invalid: {failure:?}"));
             }
             Err(error) => return Err(anyhow!("native IME finish rejected: {error:?}")),
         };
-        let (batch, status) = slots.pump_native_input_records(slot)
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
             .map_err(|e| anyhow!("native IME finish pump rejected: {e:?}"))?;
-        let finality = native_composition_finality(
-            before.scope(), submission.sequence(), &batch, &status,
-        );
+        let finality =
+            native_composition_finality(before.scope(), submission.sequence(), &batch, &status);
         anyhow::ensure!(
             matches!(finality, Ok(UiInputFinality::Committed(_))),
             "native IME finish lacked exact M13 settlement: {finality:?}"
@@ -2365,7 +2381,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => Ok(()),
                     Err(error)
                         if error.downcast_ref::<NativeInputRecipientError>()
-                            == Some(&NativeInputRecipientError::MissingRecipient) => Ok(()),
+                            == Some(&NativeInputRecipientError::MissingRecipient) =>
+                    {
+                        Ok(())
+                    }
                     Err(error) => Err(error),
                 }
             }
@@ -2377,7 +2396,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => Ok(()),
                     Err(error)
                         if error.downcast_ref::<NativeInputRecipientError>()
-                            == Some(&NativeInputRecipientError::MissingRecipient) => Ok(()),
+                            == Some(&NativeInputRecipientError::MissingRecipient) =>
+                    {
+                        Ok(())
+                    }
                     Err(error) => Err(error),
                 }
             }
