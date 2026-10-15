@@ -36,11 +36,11 @@ mod logical_operations;
 mod logical_timing;
 mod observation;
 mod occurrences;
-mod retained_submission_trace;
 mod pipeline_realization;
 mod preflight_cache;
 mod program_sources;
 mod provenance;
+mod retained_submission_trace;
 mod runtime_resources;
 
 /// Opaque G4C3 pipeline realization retained between the renderer's realization and G5
@@ -73,7 +73,6 @@ pub(super) use gpu_timing::{
 pub(super) use observation::{
     RendererGpuObservationOutput, RendererGpuObservationState, RunenUiGpuPresentationWitness,
 };
-pub(super) use retained_submission_trace::RetainedSubmissionTrace;
 pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
 pub(crate) use program_sources::RendererProgramSourceAuthority;
 pub(super) use provenance::{
@@ -83,6 +82,7 @@ pub(super) use provenance::{
     feature_runtime_version, hash_view_signature, material_specialization_fragment_hash,
     pass_consumes_material_resources, resolve_shader_material, resolve_shader_material_for_packet,
 };
+pub(super) use retained_submission_trace::RetainedSubmissionTrace;
 pub(crate) use runtime_resources::{
     FlowRuntimeResources, ResolvedTextureRef, RuntimeResourceKey, RuntimeResourceKind,
 };
