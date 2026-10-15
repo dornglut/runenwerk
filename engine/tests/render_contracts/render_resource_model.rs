@@ -126,6 +126,16 @@ fn retained_storage_initialization_is_explicit_and_default_remains_uninitialized
     }
     assert!(flow.resource_id("pair.a").is_some());
     assert!(flow.resource_id("pair.b").is_some());
+
+    let conflict = flow
+        .double_buffer_storage_array_with_handle_and_initialization::<StorageResourceTestParams>(
+            "pair", 3, GpuBufferInitialization::Uninitialized,
+        )
+        .expect_err("same retained resources must not silently change initialization");
+    assert!(matches!(
+        conflict,
+        engine::plugins::render::RenderFlowAuthoringError::ConflictingStorageInitialization { .. }
+    ));
 }
 
 #[test]
