@@ -571,16 +571,16 @@ impl WinitRunner {
             self.native_ui_keyboards.remove(&window);
             self.native_ui_modifiers.remove(&window);
         }
-        let lifetime = self
-            .native_ui_keyboards
-            .entry(window)
-            .or_insert_with(|| NativeUiKeyboardTranslator {
-                recipient: slot,
-                source,
-                devices: HashSet::new(),
-                binding_epoch,
-                keyboard: KeyboardInputState::default(),
-            });
+        let lifetime =
+            self.native_ui_keyboards
+                .entry(window)
+                .or_insert_with(|| NativeUiKeyboardTranslator {
+                    recipient: slot,
+                    source,
+                    devices: HashSet::new(),
+                    binding_epoch,
+                    keyboard: KeyboardInputState::default(),
+                });
         lifetime.devices.insert(device);
         &mut lifetime.keyboard
     }
@@ -1024,19 +1024,21 @@ impl WinitRunner {
                 .get_mut(&window)
                 .context("selected original native keyboard lifetime vanished")?;
             lifetime.devices.remove(&device);
-            lifetime.keyboard.cancel_device(
-                device,
-                modifiers,
-                native_keyboard_composition(&before),
-            )
+            lifetime
+                .keyboard
+                .cancel_device(device, modifiers, native_keyboard_composition(&before))
         };
         for event in events {
-            let submission = slots.submit_native_keyboard(recipient, event).map_err(|error| {
-                anyhow!("native keyboard device-loss M13 submission rejected: {error:?}")
-            })?;
-            let (batch, status) = slots.pump_native_input_records(recipient).map_err(|error| {
-                anyhow!("native keyboard device-loss M13 pump failed: {error:?}")
-            })?;
+            let submission = slots
+                .submit_native_keyboard(recipient, event)
+                .map_err(|error| {
+                    anyhow!("native keyboard device-loss M13 submission rejected: {error:?}")
+                })?;
+            let (batch, status) = slots
+                .pump_native_input_records(recipient)
+                .map_err(|error| {
+                    anyhow!("native keyboard device-loss M13 pump failed: {error:?}")
+                })?;
             let evidence =
                 native_keyboard_finality(before.scope(), device, submission, &batch, &status);
             anyhow::ensure!(
@@ -1058,7 +1060,11 @@ impl WinitRunner {
         let Some((recipient, epoch, scope)) =
             self.native_ui_touches.get(&window).and_then(|lifetime| {
                 lifetime.backend_devices.contains(&backend_device).then(|| {
-                    (lifetime.recipient, lifetime.binding_epoch, lifetime.scope.clone())
+                    (
+                        lifetime.recipient,
+                        lifetime.binding_epoch,
+                        lifetime.scope.clone(),
+                    )
                 })
             })
         else {
@@ -1095,12 +1101,14 @@ impl WinitRunner {
         for event in events {
             let pointer = event.pointer_id();
             let surface = event.surface_context().surface_id();
-            let submission = slots.submit_native_pointer(recipient, event).map_err(|error| {
-                anyhow!("native touch device-loss M13 submission rejected: {error:?}")
-            })?;
-            let (batch, status) = slots.pump_native_input_records(recipient).map_err(|error| {
-                anyhow!("native touch device-loss M13 pump failed: {error:?}")
-            })?;
+            let submission = slots
+                .submit_native_pointer(recipient, event)
+                .map_err(|error| {
+                    anyhow!("native touch device-loss M13 submission rejected: {error:?}")
+                })?;
+            let (batch, status) = slots
+                .pump_native_input_records(recipient)
+                .map_err(|error| anyhow!("native touch device-loss M13 pump failed: {error:?}"))?;
             let evidence = native_pointer_finality(
                 before.scope(),
                 device,
@@ -1153,8 +1161,7 @@ impl WinitRunner {
             let ui_device = UiInputDeviceId::new(retired_device.raw())
                 .context("retired keyboard/touch device identity is zero")?;
             for window in touch_windows.iter().copied() {
-                if let Err(error) =
-                    self.cancel_native_ui_touch_device(window, device_id, ui_device)
+                if let Err(error) = self.cancel_native_ui_touch_device(window, device_id, ui_device)
                 {
                     tracing::warn!(
                         target: "engine.runtime.input",
@@ -3617,8 +3624,16 @@ mod tests {
             .expect("same-window multi-device lifetime");
         assert_eq!(original.source, source_a);
         assert_eq!(original.devices.len(), 2);
-        assert!(original.devices.contains(&UiInputDeviceId::new(7).expect("device A")));
-        assert!(original.devices.contains(&UiInputDeviceId::new(8).expect("device B")));
+        assert!(
+            original
+                .devices
+                .contains(&UiInputDeviceId::new(7).expect("device A"))
+        );
+        assert!(
+            original
+                .devices
+                .contains(&UiInputDeviceId::new(8).expect("device B"))
+        );
         assert_eq!(
             runner.native_ui_modifiers.get(&secondary),
             Some(&KeyModifiers::SHIFT),
