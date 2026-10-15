@@ -1,8 +1,7 @@
 use runenui_core::{
     CommittedTextEvent, CompositionGeneration, CompositionRange, Effects, Element, ElementId,
     FontFamilyName, GenericFontFamily, HostProtocol, InputDeviceId, KeyboardEvent, PointerEvent,
-    PointerId, SemanticCommand,
-    SurfaceId, UiApp, View, button, column, text,
+    PointerId, SemanticCommand, SurfaceId, UiApp, View, button, column, text,
 };
 #[cfg(test)]
 use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment};
@@ -778,7 +777,8 @@ impl UiRuntimeSlotKind {
     }
 
     fn start_composition(
-        &mut self, device: Option<InputDeviceId>,
+        &mut self,
+        device: Option<InputDeviceId>,
     ) -> Result<CompositionStartSubmission, SubmitCompositionStartError> {
         match self {
             Self::Counter(runtime) => runtime.start_composition(device),
