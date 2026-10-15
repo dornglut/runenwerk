@@ -1035,22 +1035,47 @@ impl WinitRunner {
         // another authentic window modifier observation arrives.
         self.native_ui_modifiers.remove(&window);
         for event in events {
-            let submission = slots
-                .submit_native_keyboard(recipient, event)
-                .map_err(|error| {
-                    anyhow!("native keyboard device-loss M13 submission rejected: {error:?}")
-                })?;
-            let (batch, status) = slots
-                .pump_native_input_records(recipient)
-                .map_err(|error| {
-                    anyhow!("native keyboard device-loss M13 pump failed: {error:?}")
-                })?;
-            let evidence =
-                native_keyboard_finality(before.scope(), device, submission, &batch, &status);
-            anyhow::ensure!(
-                matches!(evidence, Ok(UiInputFinality::Committed(_))),
-                "native keyboard device-loss Cancel lacked exact M13 settlement: {evidence:?}"
-            );
+            let pre_cancel = slots.input_ownership(recipient).map_err(|error| {
+                anyhow!("native keyboard Cancel M13 pre-state unavailable: {error:?}")
+            })?;
+            match slots.submit_native_keyboard(recipient, event) {
+                Ok(submission) => {
+                    let (batch, status) = slots
+                        .pump_native_input_records(recipient)
+                        .map_err(|error| {
+                            anyhow!("native keyboard device-loss M13 pump failed: {error:?}")
+                        })?;
+                    let evidence = native_keyboard_finality(
+                        pre_cancel.scope(),
+                        device,
+                        submission,
+                        &batch,
+                        &status,
+                    );
+                    anyhow::ensure!(
+                        matches!(evidence, Ok(UiInputFinality::Committed(_))),
+                        "native keyboard device-loss Cancel lacked exact M13 settlement: {evidence:?}"
+                    );
+                }
+                Err(error) => {
+                    // A rejected original key in a genuinely unfocused runtime
+                    // never had an M13 pressed target. Its adapter Cancel is
+                    // consequently a neutral nonclaim, NOT an unprocessed
+                    // accepted M13 key lifetime. No gameplay grant is made.
+                    let after = slots.input_ownership(recipient).map_err(|reason| {
+                        anyhow!("native keyboard Cancel M13 post-state unavailable: {reason:?}")
+                    })?;
+                    anyhow::ensure!(
+                        native_no_focused_keyboard_claim_witness(
+                            device,
+                            &pre_cancel,
+                            &after,
+                            &error,
+                        ),
+                        "native keyboard device-loss Cancel rejected without exact no-focus evidence: {error:?}"
+                    );
+                }
+            }
         }
         Ok(())
     }
