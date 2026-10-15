@@ -36,6 +36,7 @@ mod logical_operations;
 mod logical_timing;
 mod observation;
 mod occurrences;
+mod retained_submission_trace;
 mod pipeline_realization;
 mod preflight_cache;
 mod program_sources;
@@ -72,6 +73,7 @@ pub(super) use gpu_timing::{
 pub(super) use observation::{
     RendererGpuObservationOutput, RendererGpuObservationState, RunenUiGpuPresentationWitness,
 };
+pub(super) use retained_submission_trace::RetainedSubmissionTrace;
 pub(crate) use preflight_cache::RendererPreparedFramePreflightCacheEntry;
 pub(crate) use program_sources::RendererProgramSourceAuthority;
 pub(super) use provenance::{

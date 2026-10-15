@@ -97,6 +97,7 @@ impl Renderer {
             last_capture_selector_results: Vec::new(),
             last_captured_textures: Vec::new(),
             gpu_observations: super::render_flow::RendererGpuObservationState::default(),
+            retained_submission_trace: Default::default(),
             pending_gpu_observation_output:
                 super::render_flow::RendererGpuObservationOutput::default(),
             runenui_gpu_accepted: Vec::new(),
