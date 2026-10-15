@@ -41,6 +41,22 @@ var<storage, read_write> cell_cursors: array<AtomicCounter>;
 @group(0) @binding(6)
 var<storage, read_write> sorted_indices: array<U32Word>;
 
+// Mirrors the existing RenderFixedStepIterationUniformRaw (32 bytes).
+// Every compute pass in boids.fixed_step declares this graph-owned binding.
+struct FixedStepIteration {
+    substep_index: u32,
+    submitted_substeps: u32,
+    max_substeps: u32,
+    saturated_frames_low: u32,
+    fixed_dt_seconds: f32,
+    accumulator_seconds: f32,
+    reserved0: f32,
+    reserved1: f32,
+};
+
+@group(0) @binding(7)
+var<uniform> fixed_step_iteration: FixedStepIteration;
+
 const MODE_SEED: u32 = 0u;
 const MODE_CLEAR_COUNTS: u32 = 1u;
 const MODE_COUNT_CELLS: u32 = 2u;
@@ -336,7 +352,11 @@ fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     if (mode == MODE_SIMULATE_GRID) {
-        boids_b[index] = simulate_boid(index, boid_count, tick);
+        // Distinguish repeated substeps inside one app frame. The iteration uniform
+        // must be shader-visible, not just added to the RenderFlow bind group.
+        boids_b[index] = simulate_boid(
+            index, boid_count, tick + fixed_step_iteration.substep_index
+        );
         return;
     }
 

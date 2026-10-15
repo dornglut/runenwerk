@@ -459,6 +459,66 @@ mod tests {
     }
 
     #[test]
+    fn compute_shader_declares_all_runtime_graph_bindings_including_fixed_step() {
+        let module = naga::front::wgsl::parse_str(include_str!(
+            "../../../../assets/shaders/boids_compute.wgsl"
+        ))
+        .expect("boids compute shader should parse");
+
+        let declarations = module
+            .global_variables
+            .iter()
+            .filter_map(|(_, variable)| {
+                variable
+                    .binding
+                    .as_ref()
+                    .map(|binding| (binding.group, binding.binding))
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+
+        // This is a runtime bind-group compatibility contract, not just WGSL
+        // syntax validation: fixed_step_region() injects slot (0, 7).
+        let flow = build_render_flow();
+        for pass in flow
+            .graph()
+            .passes
+            .passes
+            .iter()
+            .filter(|pass| pass.kind == RenderPassKind::Compute)
+        {
+            let graph_bindings = pass
+                .shader_bindings
+                .iter()
+                .map(|binding| (binding.key().group(), binding.key().binding()))
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(
+                graph_bindings, declarations,
+                "compute pass '{}' must bind exactly its shader declarations",
+                pass.label
+            );
+        }
+
+        assert_eq!(declarations.len(), 8);
+        let iteration = module
+            .global_variables
+            .iter()
+            .find(|(_, variable)| {
+                variable
+                    .binding
+                    .as_ref()
+                    .is_some_and(|binding| binding.group == 0 && binding.binding == 7)
+            })
+            .expect("fixed-step iteration shader binding must exist")
+            .1;
+        assert_eq!(iteration.space, naga::AddressSpace::Uniform);
+        assert_eq!(
+            std::mem::size_of::<engine::plugins::render::RenderFixedStepIterationUniformRaw>(),
+            32,
+            "fixed-step shader uniform must match the existing host ABI"
+        );
+    }
+
+    #[test]
     fn boids_shaders_parse_as_wgsl() {
         validate_wgsl(include_str!(
             "../../../../assets/shaders/boids_compute.wgsl"
