@@ -2693,6 +2693,19 @@ mod tests {
         assert_eq!(
             native_pointer_finality(
                 before.scope(),
+                device,
+                pointer,
+                published.input_context().surface_id(),
+                admitted,
+                &batch,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::Unsettled),
+            "a failed canonical M13 pump never qualifies an earlier matching pointer receipt"
+        );
+        assert_eq!(
+            native_pointer_finality(
+                before.scope(),
                 other_device,
                 pointer,
                 published.input_context().surface_id(),
