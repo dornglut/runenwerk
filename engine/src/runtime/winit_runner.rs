@@ -3602,6 +3602,28 @@ mod tests {
         runner
             .native_ui_modifiers
             .insert(secondary, KeyModifiers::SHIFT);
+        // Device B must not replace device A's translator and silently
+        // discard its framework-owned pressed-key state or host modifiers.
+        runner.native_ui_keyboard_translator(
+            secondary,
+            slot,
+            source_a,
+            UiInputDeviceId::new(8).expect("distinct checked test device"),
+            bound_epoch,
+        );
+        let original = runner
+            .native_ui_keyboards
+            .get(&secondary)
+            .expect("same-window multi-device lifetime");
+        assert_eq!(original.source, source_a);
+        assert_eq!(original.devices.len(), 2);
+        assert!(original.devices.contains(&UiInputDeviceId::new(7).expect("device A")));
+        assert!(original.devices.contains(&UiInputDeviceId::new(8).expect("device B")));
+        assert_eq!(
+            runner.native_ui_modifiers.get(&secondary),
+            Some(&KeyModifiers::SHIFT),
+            "a second native keyboard must not reset the first stream's modifiers"
+        );
         runner.native_ui_keyboard_translator(
             secondary,
             slot,
