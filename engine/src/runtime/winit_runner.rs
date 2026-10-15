@@ -1322,6 +1322,9 @@ impl WinitRunner {
         let mut slots = world
             .remove_resource::<UiRuntimeSlotsResource>()
             .context("selected UI pointer has no slot authority")?;
+        // Before framework ingress a rejected observation is neutral-only;
+        // after an actual M13 attempt, missing finality is a host error.
+        let mut m13_submission_attempted = false;
         let operation = (|| -> Result<()> {
             let before = slots
                 .input_ownership(slot)
@@ -1356,6 +1359,7 @@ impl WinitRunner {
                 .cursor_moved(device, point)
                 .map_err(|error| anyhow!("native UI mouse translation failed: {error:?}"))?;
             let pointer = event.pointer_id();
+            m13_submission_attempted = true;
             let (_, submission) = host
                 .submit(
                     recipients,
@@ -1391,6 +1395,9 @@ impl WinitRunner {
                 ?error,
                 "native UI cursor withheld without gameplay grant"
             );
+            if m13_submission_attempted {
+                return Err(error.context("native UI cursor M13 submission or settlement failed"));
+            }
         }
         Ok(())
     }
@@ -1432,6 +1439,9 @@ impl WinitRunner {
         let mut slots = world
             .remove_resource::<UiRuntimeSlotsResource>()
             .context("selected native UI mouse button lacks slot authority")?;
+        // Before framework ingress a rejected observation is neutral-only;
+        // after an actual M13 attempt, missing finality is a host error.
+        let mut m13_submission_attempted = false;
         let operation = (|| -> Result<()> {
             let before = slots
                 .input_ownership(slot)
@@ -1462,6 +1472,7 @@ impl WinitRunner {
                 return Ok(());
             };
             let pointer = event.pointer_id();
+            m13_submission_attempted = true;
             let (_, submission) = host
                 .submit(
                     recipients,
@@ -1498,6 +1509,9 @@ impl WinitRunner {
                 ?error,
                 "native UI button withheld without gameplay grant"
             );
+            if m13_submission_attempted {
+                return Err(error.context("native UI button M13 submission or settlement failed"));
+            }
         }
         Ok(())
     }
@@ -1550,6 +1564,9 @@ impl WinitRunner {
                 return Err(anyhow!("native UI wheel has no pinned slot authority"));
             }
         };
+        // Before framework ingress a rejected observation is neutral-only;
+        // after an actual M13 attempt, missing finality is a host error.
+        let mut m13_submission_attempted = false;
         let operation = (|| -> Result<()> {
             let before = slots
                 .input_ownership(slot)
@@ -1578,6 +1595,7 @@ impl WinitRunner {
                 .wheel(device, point, logical_delta)
                 .map_err(|error| anyhow!("native wheel translator rejected input: {error:?}"))?;
             let pointer = event.pointer_id();
+            m13_submission_attempted = true;
             let (_, submission) = host
                 .submit(
                     recipients,
@@ -1614,6 +1632,9 @@ impl WinitRunner {
                 ?error,
                 "native wheel withheld without gameplay grant"
             );
+            if m13_submission_attempted {
+                return Err(error.context("native UI wheel M13 submission or settlement failed"));
+            }
         }
         Ok(())
     }
@@ -1641,6 +1662,9 @@ impl WinitRunner {
         let mut slots = world
             .remove_resource::<UiRuntimeSlotsResource>()
             .context("selected native touch has no pinned slot authority")?;
+        // Before framework ingress a rejected observation is neutral-only;
+        // after an actual M13 attempt, missing finality is a host error.
+        let mut m13_submission_attempted = false;
         let operation = (|| -> Result<()> {
             let before = slots
                 .input_ownership(slot)
@@ -1686,6 +1710,7 @@ impl WinitRunner {
                 lifetime.backend_devices.clear();
             }
             let pointer = event.pointer_id();
+            m13_submission_attempted = true;
             let (_, submission) = host
                 .submit(
                     recipients,
@@ -1721,6 +1746,9 @@ impl WinitRunner {
                 ?error,
                 "native touch withheld without gameplay permission"
             );
+            if m13_submission_attempted {
+                return Err(error.context("native UI touch M13 submission or settlement failed"));
+            }
         }
         Ok(())
     }
