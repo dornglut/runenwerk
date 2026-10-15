@@ -2970,6 +2970,17 @@ mod tests {
         );
 
         assert_eq!(
+            native_keyboard_finality(
+                settled.scope(),
+                native_device,
+                receipt,
+                &batch,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::Unsettled),
+            "even a matching accepted keyboard receipt is invalid after a failed M13 pump"
+        );
+        assert_eq!(
             native_keyboard_finality(settled.scope(), another_device, receipt, &batch, &status,),
             Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongDevice),
             "an unrelated device cannot borrow this exact M13 receipt"

@@ -648,6 +648,10 @@ impl WinitRunner {
             .native_ui_keyboard_translator(window, slot, context.source, device, binding_epoch)
             .key_input(device, &transition, modifiers, composition);
 
+        // Once the real M13 queue has admitted a keyboard occurrence,
+        // missing finality is not merely a gameplay nonclaim: continuing the
+        // host could preserve an unresolved framework keyboard lifetime.
+        let mut admitted_failure: Option<anyhow::Error> = None;
         let permit = match translated {
             KeyboardInputOutcome::Submit(event) => {
                 let slots = self
@@ -657,22 +661,34 @@ impl WinitRunner {
                     .context("selected UI runtime vanished from native host")?;
                 match slots.submit_native_keyboard(slot, event) {
                     Ok(submission) => match slots.pump_native_input_records(slot) {
-                        Ok((batch, status)) => matches!(
-                            native_keyboard_finality(
+                        Ok((batch, status)) => {
+                            let evidence = native_keyboard_finality(
                                 before.scope(),
                                 device,
                                 submission,
                                 &batch,
                                 &status,
-                            ),
-                            Ok(UiInputFinality::Committed(ref facts))
-                                if matches!(
+                            );
+                            match &evidence {
+                                Ok(UiInputFinality::Committed(facts)) => matches!(
                                     facts.conflict(),
                                     UiInputConflict::Unclaimed
                                         | UiInputConflict::ObservedNonexclusive
-                                )
-                        ),
-                        Err(_) => false,
+                                ),
+                                _ => {
+                                    admitted_failure = Some(anyhow!(
+                                        "native keyboard lacked exact committed M13 settlement: {evidence:?}"
+                                    ));
+                                    false
+                                }
+                            }
+                        }
+                        Err(error) => {
+                            admitted_failure = Some(anyhow!(
+                                "native keyboard admitted M13 work but its pump failed: {error:?}"
+                            ));
+                            false
+                        }
                     },
                     Err(error) => {
                         let after = slots.input_ownership(slot);
@@ -692,6 +708,11 @@ impl WinitRunner {
         // Revocation happens before PreUpdate/CoreSet::Input.
         if !permit && matches!(original.state, winit::event::ElementState::Pressed) {
             self.deny_native_keyboard_lifetime(context, &physical_key)?;
+        }
+        // The genuine physical Down remains denied before returning the
+        // terminal framework error; an ambiguous pump may not grant gameplay.
+        if let Some(error) = admitted_failure {
+            return Err(error);
         }
         Ok(())
     }
