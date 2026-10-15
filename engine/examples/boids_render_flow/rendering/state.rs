@@ -107,7 +107,10 @@ impl Default for BoidsRenderState {
 
 impl BoidsRenderState {
     pub(crate) fn with_rule(rule: BoidsRuleFamily) -> Self {
-        Self { rule, ..Self::default() }
+        Self {
+            rule,
+            ..Self::default()
+        }
     }
 
     pub(crate) fn advance_by_frame_delta(&mut self, delta_seconds: f32) {
@@ -154,6 +157,11 @@ impl BoidsRenderState {
 
     fn params_for_mode(&self, mode: u32) -> BoidsComputeParams {
         let cell_count = self.grid_cell_count();
+        let jitter_strength = if self.rule == BoidsRuleFamily::SpeciesInteraction {
+            0.04
+        } else {
+            0.12
+        };
         BoidsComputeParams {
             meta: [self.tick, mode, self.boid_count, cell_count],
             grid: [self.grid_cells[0], self.grid_cells[1], cell_count, 0],
@@ -171,11 +179,7 @@ impl BoidsRenderState {
             ],
             sim_c: [
                 0.16, // center_weight
-                if self.rule == BoidsRuleFamily::SpeciesInteraction {
-                    0.04
-                } else {
-                    0.12
-                }, // jitter_strength
+                jitter_strength,
                 self.simulation_fps,
                 self.rule.shader_mode(),
             ],
