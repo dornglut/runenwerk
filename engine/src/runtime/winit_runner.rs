@@ -2214,7 +2214,12 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 let cancellation = if !focused {
                     match self.native_input_recipient(native_window_id) {
                         Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
-                            self.cancel_native_ui_keyboard(native_window_id, slot)
+                            // Preserve pinned reference ordering: cancel
+                            // native keyboard contributors while composition
+                            // is still active, then cancel that generation.
+                            let keys = self.cancel_native_ui_keyboard(native_window_id, slot);
+                            let composition = self.route_ui_ime_finish(slot, true);
+                            keys.and(composition)
                         }
                         Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => Ok(()),
                         Err(error)
@@ -2331,6 +2336,31 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     self.request_redraw_for_native_window(native_window_id);
                 }
                 result
+            }
+            WindowEvent::Ime(Ime::Enabled) => Ok(()),
+            WindowEvent::Ime(Ime::Preedit(preedit, range)) => {
+                match self.native_input_recipient(native_window_id) {
+                    Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
+                        self.route_ui_ime_preedit(slot, preedit, range)
+                    }
+                    Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => Ok(()),
+                    Err(error)
+                        if error.downcast_ref::<NativeInputRecipientError>()
+                            == Some(&NativeInputRecipientError::MissingRecipient) => Ok(()),
+                    Err(error) => Err(error),
+                }
+            }
+            WindowEvent::Ime(Ime::Disabled) => {
+                match self.native_input_recipient(native_window_id) {
+                    Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
+                        self.route_ui_ime_finish(slot, true)
+                    }
+                    Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => Ok(()),
+                    Err(error)
+                        if error.downcast_ref::<NativeInputRecipientError>()
+                            == Some(&NativeInputRecipientError::MissingRecipient) => Ok(()),
+                    Err(error) => Err(error),
+                }
             }
             WindowEvent::Ime(Ime::Commit(text)) => {
                 if text.is_empty() {
