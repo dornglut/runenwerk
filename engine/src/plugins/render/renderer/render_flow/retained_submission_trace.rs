@@ -19,7 +19,7 @@ struct AcceptedTrace {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct RetainedSubmissionTrace {
+pub(in crate::plugins::render::renderer) struct RetainedSubmissionTrace {
     accepted: Vec<AcceptedTrace>,
 }
 
