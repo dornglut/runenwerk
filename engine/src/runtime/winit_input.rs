@@ -579,9 +579,15 @@ mod tests {
         let backend = DeviceId::dummy();
         let first = NativeWindowId::primary();
         let second = NativeWindowId::try_from_raw(2).expect("second native window");
-        let a = adapter.window_context(first, backend).expect("first window device");
-        let b = adapter.window_context(second, backend).expect("same device, second source");
-        let raw = adapter.raw_device_context(backend).expect("raw device identity");
+        let a = adapter
+            .window_context(first, backend)
+            .expect("first window device");
+        let b = adapter
+            .window_context(second, backend)
+            .expect("same device, second source");
+        let raw = adapter
+            .raw_device_context(backend)
+            .expect("raw device identity");
 
         let (mut windows, retired_raw) = adapter
             .retire_backend_device(backend)
@@ -597,9 +603,16 @@ mod tests {
             "repeated backend removal never recreates a neutral identity"
         );
 
-        let successor = adapter.window_context(first, backend).expect("new window generation");
-        let raw_successor = adapter.raw_device_context(backend).expect("new raw generation");
-        assert_eq!(successor.source, a.source, "window source survives device loss");
+        let successor = adapter
+            .window_context(first, backend)
+            .expect("new window generation");
+        let raw_successor = adapter
+            .raw_device_context(backend)
+            .expect("new raw generation");
+        assert_eq!(
+            successor.source, a.source,
+            "window source survives device loss"
+        );
         assert_ne!(successor.device, a.device);
         assert_ne!(raw_successor.device, raw.device);
         assert_ne!(raw_successor.source, raw.source);
@@ -613,14 +626,19 @@ mod tests {
         let original_window = adapter.window_context(window, backend).expect("device");
         let raw = adapter.raw_device_context(backend).expect("raw");
         let raw_device = raw.device.expect("raw context has original device");
-        let raw_source = adapter.raw_sources.remove(&raw_device).expect("raw source exists");
+        let raw_source = adapter
+            .raw_sources
+            .remove(&raw_device)
+            .expect("raw source exists");
 
         assert_eq!(
             adapter.retire_backend_device(backend),
             Err(NativeInputIdentityFailure::MissingRawSource)
         );
         assert_eq!(
-            adapter.window_context(window, backend).expect("window remains admitted"),
+            adapter
+                .window_context(window, backend)
+                .expect("window remains admitted"),
             original_window,
             "preflight failure may not silently retire the unrelated window-event identity"
         );

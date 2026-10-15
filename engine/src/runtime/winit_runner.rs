@@ -984,8 +984,7 @@ impl WinitRunner {
         // Preflight both identity namespaces and retire them atomically BEFORE
         // mutating a UI translator. A fallible allocation or missing raw source
         // must not leave RunenUI cancelled while neutral held keys remain live.
-        let (window_contexts, raw_context) =
-            self.input_adapter.retire_backend_device(device_id)?;
+        let (window_contexts, raw_context) = self.input_adapter.retire_backend_device(device_id)?;
         // UI Cancels still use the original pinned M13 recipient and scope;
         // the removed physical IDs remain preserved in window_contexts.
         let windows: Vec<_> = self
