@@ -46,8 +46,8 @@ pub use runenui_adapter::{
     native_keyboard_finality, native_no_focused_keyboard_claim_witness, native_pointer_finality,
 };
 pub(crate) use runenui_adapter::{
-    UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeCompositionEvidenceFailure,
-    UiRuntimeNativeTextAdmissionError, native_composition_finality, native_text_finality,
+    UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeTextAdmissionError,
+    native_composition_finality, native_text_finality,
 };
 pub use schedule::*;
 pub use screen::*;
