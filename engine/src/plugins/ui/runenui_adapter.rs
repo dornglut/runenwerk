@@ -293,6 +293,70 @@ pub(crate) enum UiRuntimeNativeCompositionAdmissionError {
     Event(SubmitCompositionError),
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum UiRuntimeNativeCompositionEvidenceFailure {
+    Unsettled,
+    WrongScope,
+    NotProcessed,
+    MissingReceipt,
+    DuplicateReceipt,
+    WrongFamily,
+    WrongDevice,
+    InvalidRevision,
+}
+
+/// Only a reached, unique composition-family M13 settlement in the original
+/// framework scope may qualify an OS preedit/end/cancel observation. No
+/// ownership, focus, generation or text payload is mirrored by this checker.
+pub(crate) fn native_composition_finality(
+    scope: &InputArbitrationScope,
+    sequence: runenui_runtime::WorkSequence,
+    batch: &InputPumpBatch,
+    status: &Result<(), UiRuntimeSlotOperationFailure>,
+) -> Result<UiInputFinality, UiRuntimeNativeCompositionEvidenceFailure> {
+    use UiRuntimeNativeCompositionEvidenceFailure as Failure;
+    if status.is_err()
+        || batch.pause_reason().is_some()
+        || !batch.report().is_quiescent()
+        || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
+    {
+        return Err(Failure::Unsettled);
+    }
+    if batch.final_ownership().scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if !batch.processed_through().is_some_and(|end| end >= sequence) {
+        return Err(Failure::NotProcessed);
+    }
+    let mut found = None;
+    for record in batch.ordered_records() {
+        let InputArbitrationRecord::InputSettled(settlement) = record else {
+            continue;
+        };
+        if settlement.sequence() != sequence {
+            continue;
+        }
+        if found.is_some() {
+            return Err(Failure::DuplicateReceipt);
+        }
+        found = Some(settlement);
+    }
+    let settlement = found.ok_or(Failure::MissingReceipt)?;
+    if settlement.scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if settlement.family() != UiInputFamily::Composition {
+        return Err(Failure::WrongFamily);
+    }
+    if settlement.device_id().is_some() {
+        return Err(Failure::WrongDevice);
+    }
+    if settlement.ownership_revision() > batch.final_ownership().revision() {
+        return Err(Failure::InvalidRevision);
+    }
+    Ok(settlement.finality().clone())
+}
+
 /// A native pointer rejection retains the exact unaccepted event.
 #[derive(Debug)]
 pub enum UiRuntimeNativePointerAdmissionError {
