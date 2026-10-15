@@ -704,10 +704,20 @@ impl WinitRunner {
         preedit: String,
         range: Option<(usize, usize)>,
     ) -> Result<()> {
-        let selected_range = range
+        let selected_range = match range
             .map(|(from, to)| runenui_core::CompositionRange::new(&preedit, from, to))
             .transpose()
-            .context("original Winit preedit range is not a valid UTF-8 byte range")?;
+        {
+            Ok(range) => range,
+            Err(error) => {
+                tracing::trace!(
+                    target: "engine.runtime.input",
+                    ?error,
+                    "invalid OS preedit UTF-8 range rejected without changing M13"
+                );
+                return Ok(());
+            }
+        };
         let slots = self.state.world.resource_mut::<UiRuntimeSlotsResource>()
             .context("selected native IME preedit lacks pinned UI slot")?;
         let mut before = slots.input_ownership(slot)
@@ -726,6 +736,9 @@ impl WinitRunner {
                         runenui_runtime::SubmitCompositionErrorKind::NoFocusedTarget
                             | runenui_runtime::SubmitCompositionErrorKind::FocusedTargetNotCompositionCapable
                     ) => return Ok(()),
+                Err(UiRuntimeNativeCompositionAdmissionError::Slot(failure)) => {
+                    return Err(anyhow!("native composition slot unavailable: {failure:?}"));
+                }
                 Err(error) => return Err(anyhow!("native composition start rejected: {error:?}")),
             };
             let (batch, status) = slots.pump_native_input_records(slot)
@@ -755,6 +768,9 @@ impl WinitRunner {
                     runenui_runtime::SubmitCompositionErrorKind::MissingGeneration
                         | runenui_runtime::SubmitCompositionErrorKind::StaleGeneration
                 ) => return Ok(()),
+            Err(UiRuntimeNativeCompositionAdmissionError::Slot(failure)) => {
+                return Err(anyhow!("native preedit slot invalid: {failure:?}"));
+            }
             Err(error) => return Err(anyhow!("native preedit M13 ingress rejected: {error:?}")),
         };
         let (batch, status) = slots.pump_native_input_records(slot)
@@ -793,6 +809,9 @@ impl WinitRunner {
                     runenui_runtime::SubmitCompositionErrorKind::MissingGeneration
                         | runenui_runtime::SubmitCompositionErrorKind::StaleGeneration
                 ) => return Ok(()),
+            Err(UiRuntimeNativeCompositionAdmissionError::Slot(failure)) => {
+                return Err(anyhow!("native IME finish slot invalid: {failure:?}"));
+            }
             Err(error) => return Err(anyhow!("native IME finish rejected: {error:?}")),
         };
         let (batch, status) = slots.pump_native_input_records(slot)
