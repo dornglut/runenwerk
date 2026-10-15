@@ -67,9 +67,7 @@ impl RetainedSubmissionTrace {
         frame: u64,
         surface: u64,
     ) -> Option<BTreeSet<GpuWorkResourceId>> {
-        if std::env::var_os(TRACE_ENV).is_none()
-            && std::env::var_os(SERIAL_CONTROL_ENV).is_none()
-        {
+        if std::env::var_os(TRACE_ENV).is_none() && std::env::var_os(SERIAL_CONTROL_ENV).is_none() {
             return None;
         }
         let resources = observed_retained_accesses(graph);
