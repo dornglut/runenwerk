@@ -3,11 +3,10 @@ use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
     UiNativeInputRecipientsResource, UiNativePointerHostRead, UiRuntimeDisplayedPresentation,
-    UiRuntimeNativeTextAdmissionError, UiRuntimePresentationAssociationsResource, UiRuntimeSlotId,
-    UiRuntimeSlotsResource, UiRuntimeNativeCompositionAdmissionError,
+    UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeTextAdmissionError,
+    UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
     native_composition_finality, native_keyboard_finality,
-    native_no_focused_keyboard_claim_witness,
-    native_pointer_finality, native_text_finality,
+    native_no_focused_keyboard_claim_witness, native_pointer_finality, native_text_finality,
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;

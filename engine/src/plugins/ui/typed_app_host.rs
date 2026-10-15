@@ -72,7 +72,9 @@ pub(super) trait TypedRuntimeOps {
         device: Option<InputDeviceId>,
     ) -> Result<CompositionStartSubmission, SubmitCompositionStartError>;
     fn update_composition(
-        &mut self, generation: CompositionGeneration, preedit: String,
+        &mut self,
+        generation: CompositionGeneration,
+        preedit: String,
         range: Option<CompositionRange>,
     ) -> Result<CompositionSubmission, SubmitCompositionError>;
     fn end_composition(
@@ -133,26 +135,32 @@ impl<A: UiApp + 'static> TypedRuntimeOps for TypedRuntime<A> {
     }
 
     fn start_composition(
-        &mut self, device: Option<InputDeviceId>,
+        &mut self,
+        device: Option<InputDeviceId>,
     ) -> Result<CompositionStartSubmission, SubmitCompositionStartError> {
         self.runtime.start_composition(device)
     }
 
     fn update_composition(
-        &mut self, generation: CompositionGeneration, preedit: String,
+        &mut self,
+        generation: CompositionGeneration,
+        preedit: String,
         range: Option<CompositionRange>,
     ) -> Result<CompositionSubmission, SubmitCompositionError> {
-        self.runtime.submit_composition_update(generation, preedit, range)
+        self.runtime
+            .submit_composition_update(generation, preedit, range)
     }
 
     fn end_composition(
-        &mut self, generation: CompositionGeneration,
+        &mut self,
+        generation: CompositionGeneration,
     ) -> Result<CompositionSubmission, SubmitCompositionError> {
         self.runtime.submit_composition_end(generation)
     }
 
     fn cancel_composition(
-        &mut self, generation: CompositionGeneration,
+        &mut self,
+        generation: CompositionGeneration,
     ) -> Result<CompositionSubmission, SubmitCompositionError> {
         self.runtime.cancel_composition(generation)
     }
