@@ -1,5 +1,5 @@
 use runenui_core::{
-    CommittedTextEvent, Effects, Element, ElementId, FontFamilyName, GenericFontFamily,
+    CommittedTextEvent, CompositionGeneration, CompositionRange, Effects, Element, ElementId, FontFamilyName, GenericFontFamily,
     HostProtocol, InputDeviceId, KeyboardEvent, PointerEvent, PointerId, SemanticCommand,
     SurfaceId, UiApp, View, button, column, text,
 };
@@ -8,10 +8,10 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 #[cfg(test)]
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
-    AppRuntime, HostRequestToken, InputArbitrationRecord, InputArbitrationScope,
+    AppRuntime, CompositionStartSubmission, CompositionSubmission, HostRequestToken, InputArbitrationRecord, InputArbitrationScope,
     InputObservationError, InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch,
     KeyboardSubmission, PointerSubmission, PumpBudget, SubmitKeyboardError,
-    SubmitKeyboardErrorKind, SubmitPointerError, SubmitTextError, SurfaceBuildContext,
+    SubmitCompositionError, SubmitCompositionStartError, SubmitKeyboardErrorKind, SubmitPointerError, SubmitTextError, SurfaceBuildContext,
     SurfacePublication, TextSubmission, UiInputFamily, UiInputFinality,
 };
 use ui_artifacts::UiRuntimeArtifact;
@@ -699,6 +699,43 @@ impl UiRuntimeSlotKind {
         match self {
             Self::Counter(runtime) => runtime.submit_text(event),
             Self::Typed(runtime) => runtime.submit_text(event),
+        }
+    }
+
+    fn start_composition(
+        &mut self, device: Option<InputDeviceId>,
+    ) -> Result<CompositionStartSubmission, SubmitCompositionStartError> {
+        match self {
+            Self::Counter(runtime) => runtime.start_composition(device),
+            Self::Typed(runtime) => runtime.start_composition(device),
+        }
+    }
+
+    fn update_composition(
+        &mut self, generation: CompositionGeneration, preedit: String,
+        range: Option<CompositionRange>,
+    ) -> Result<CompositionSubmission, SubmitCompositionError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_composition_update(generation, preedit, range),
+            Self::Typed(runtime) => runtime.update_composition(generation, preedit, range),
+        }
+    }
+
+    fn end_composition(
+        &mut self, generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, SubmitCompositionError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_composition_end(generation),
+            Self::Typed(runtime) => runtime.end_composition(generation),
+        }
+    }
+
+    fn cancel_composition(
+        &mut self, generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, SubmitCompositionError> {
+        match self {
+            Self::Counter(runtime) => runtime.cancel_composition(generation),
+            Self::Typed(runtime) => runtime.cancel_composition(generation),
         }
     }
 
@@ -4119,6 +4156,31 @@ mod tests {
                 event: CommittedTextEvent,
             ) -> Result<TextSubmission, SubmitTextError> {
                 self.runtime.submit_text(event)
+            }
+
+            fn start_composition(
+                &mut self, device: Option<InputDeviceId>,
+            ) -> Result<CompositionStartSubmission, SubmitCompositionStartError> {
+                self.runtime.start_composition(device)
+            }
+
+            fn update_composition(
+                &mut self, generation: CompositionGeneration, preedit: String,
+                range: Option<CompositionRange>,
+            ) -> Result<CompositionSubmission, SubmitCompositionError> {
+                self.runtime.submit_composition_update(generation, preedit, range)
+            }
+
+            fn end_composition(
+                &mut self, generation: CompositionGeneration,
+            ) -> Result<CompositionSubmission, SubmitCompositionError> {
+                self.runtime.submit_composition_end(generation)
+            }
+
+            fn cancel_composition(
+                &mut self, generation: CompositionGeneration,
+            ) -> Result<CompositionSubmission, SubmitCompositionError> {
+                self.runtime.cancel_composition(generation)
             }
 
             fn pending_redraw(&mut self) -> bool {
