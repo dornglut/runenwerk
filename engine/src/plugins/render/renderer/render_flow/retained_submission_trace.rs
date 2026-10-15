@@ -4,14 +4,11 @@
 //! or admission authority. Descriptor initial-content participation is partly GPU-private, so
 //! these resource IDs are conservative trace context, never a correctness gate.
 use runen_gpu::{
-    GpuContext, GpuPreparedWorkGraph, GpuResourceRef, GpuSubmission, GpuSubmissionStatus,
-    GpuWorkResourceId,
+    GpuPreparedWorkGraph, GpuResourceRef, GpuSubmission, GpuSubmissionStatus, GpuWorkResourceId,
 };
 use std::collections::BTreeSet;
-use std::time::{Duration, Instant};
 
 const TRACE_ENV: &str = "RUNENWERK_GPU_RETAINED_TRACE";
-const SERIAL_CONTROL_ENV: &str = "RUNENWERK_GPU_RETAINED_SERIAL_CONTROL";
 
 #[derive(Debug)]
 struct AcceptedTrace {
@@ -27,47 +24,13 @@ pub(in crate::plugins::render::renderer) struct RetainedSubmissionTrace {
 }
 
 impl RetainedSubmissionTrace {
-    /// Time-bounded, opt-in native counterfactual: serialize entire GPU frames
-    /// through the existing RunenGPU progress point BEFORE graph preparation.
-    /// This must never become normal interactive runtime policy.
-    pub(in crate::plugins::render::renderer) fn serialize_native_frame_if_enabled(
-        &mut self,
-        context: &GpuContext,
-    ) -> anyhow::Result<()> {
-        if std::env::var_os(SERIAL_CONTROL_ENV).is_none() {
-            return Ok(());
-        }
-        let deadline = Instant::now() + Duration::from_secs(10);
-        loop {
-            let active = self
-                .accepted
-                .iter()
-                .filter(|record| {
-                    matches!(record.submission.status(), GpuSubmissionStatus::Accepted)
-                })
-                .count();
-            if active == 0 {
-                return Ok(());
-            }
-            if Instant::now() >= deadline {
-                anyhow::bail!(
-                    "bounded retained GPU serialization control timed out with {active} accepted submissions"
-                );
-            }
-            // Same public context, called only from Gfx's existing frame-progress
-            // owner. No private WGPU polling, additional scheduler or thread.
-            context.progress();
-            std::thread::yield_now();
-        }
-    }
-
     pub(super) fn before_submission(
         &mut self,
         graph: &GpuPreparedWorkGraph,
         frame: u64,
         surface: u64,
     ) -> Option<BTreeSet<GpuWorkResourceId>> {
-        if std::env::var_os(TRACE_ENV).is_none() && std::env::var_os(SERIAL_CONTROL_ENV).is_none() {
+        if std::env::var_os(TRACE_ENV).is_none() {
             return None;
         }
         let resources = observed_retained_accesses(graph);
