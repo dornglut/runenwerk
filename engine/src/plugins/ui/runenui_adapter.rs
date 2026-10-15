@@ -284,6 +284,15 @@ pub(crate) fn native_text_finality(
     Ok(settlement.finality().clone())
 }
 
+/// Structured pinned composition admission: slot authority, original
+/// start request and framework composition event failures stay distinguishable.
+#[derive(Debug)]
+pub(crate) enum UiRuntimeNativeCompositionAdmissionError {
+    Slot(UiRuntimeSlotOperationFailure),
+    Start(SubmitCompositionStartError),
+    Event(SubmitCompositionError),
+}
+
 /// A native pointer rejection retains the exact unaccepted event.
 #[derive(Debug)]
 pub enum UiRuntimeNativePointerAdmissionError {
@@ -1360,6 +1369,77 @@ impl UiRuntimeSlotsResource {
         slot.ingress_epoch = next;
         slot.requires_settlement = true;
         Ok(receipt)
+    }
+
+    /// Canonical native composition admission shares one ingress epoch and
+    /// one pinned RunenUI queue with keyboard, pointer and committed text.
+    /// Neither native preedit nor composition generation is owned by Engine.
+    fn admit_native_composition<T>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        submit: impl FnOnce(
+            &mut UiRuntimeSlotKind,
+        ) -> Result<T, UiRuntimeNativeCompositionAdmissionError>,
+    ) -> Result<T, UiRuntimeNativeCompositionAdmissionError> {
+        let slot = self
+            .slot_mut(slot_id)
+            .map_err(UiRuntimeNativeCompositionAdmissionError::Slot)?;
+        let next = slot
+            .next_ingress_epoch()
+            .map_err(UiRuntimeNativeCompositionAdmissionError::Slot)?;
+        let receipt = submit(&mut slot.runtime)?;
+        slot.ingress_epoch = next;
+        slot.requires_settlement = true;
+        Ok(receipt)
+    }
+
+    pub(crate) fn start_native_composition(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<CompositionStartSubmission, UiRuntimeNativeCompositionAdmissionError> {
+        self.admit_native_composition(slot_id, |runtime| {
+            runtime
+                .start_composition(None)
+                .map_err(UiRuntimeNativeCompositionAdmissionError::Start)
+        })
+    }
+
+    pub(crate) fn update_native_composition(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        generation: CompositionGeneration,
+        preedit: String,
+        range: Option<CompositionRange>,
+    ) -> Result<CompositionSubmission, UiRuntimeNativeCompositionAdmissionError> {
+        self.admit_native_composition(slot_id, |runtime| {
+            runtime
+                .update_composition(generation, preedit, range)
+                .map_err(UiRuntimeNativeCompositionAdmissionError::Event)
+        })
+    }
+
+    pub(crate) fn end_native_composition(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, UiRuntimeNativeCompositionAdmissionError> {
+        self.admit_native_composition(slot_id, |runtime| {
+            runtime
+                .end_composition(generation)
+                .map_err(UiRuntimeNativeCompositionAdmissionError::Event)
+        })
+    }
+
+    pub(crate) fn cancel_native_composition(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, UiRuntimeNativeCompositionAdmissionError> {
+        self.admit_native_composition(slot_id, |runtime| {
+            runtime
+                .cancel_composition(generation)
+                .map_err(UiRuntimeNativeCompositionAdmissionError::Event)
+        })
     }
 
     /// Return one actual canonical pump result with ALL ordered M13 records.
