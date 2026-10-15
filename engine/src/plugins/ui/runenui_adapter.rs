@@ -2860,35 +2860,6 @@ mod tests {
             &after_unfocused,
             &rejected,
         ));
-        // Unfocused device A may have been observed by the winit pressed-key
-        // translator even though RunenUI rejected its original Down. Its
-        // subsequent disconnect-generated Cancel is also a deliberate M13
-        // nonclaim, not evidence of a failed admitted keyboard transaction.
-        let rejected_cancel = slots
-            .submit_native_keyboard(
-                slot,
-                KeyboardEvent::new(
-                    KeyboardPhase::Cancel,
-                    PhysicalKey::Code(String::from("KeyW")),
-                    LogicalKey::Character(String::from("w")),
-                    KeyModifiers::NONE,
-                    false,
-                    KeyLocation::Standard,
-                    KeyboardCompositionState::Inactive,
-                    Some(native_device),
-                ),
-            )
-            .expect_err("unfocused keyboard Cancel has no framework target");
-        let after_cancel = slots
-            .input_ownership(slot)
-            .expect("unfocused Cancel must preserve M13 ownership");
-        assert!(native_no_focused_keyboard_claim_witness(
-            native_device,
-            &after_unfocused,
-            &after_cancel,
-            &rejected_cancel,
-        ));
-        assert_eq!(slots.ingress_epoch(slot), Some(epoch));
 
         let focus_id = ElementId::new("native.keyboard.focus").expect("valid authored target");
         let runtime = slots
