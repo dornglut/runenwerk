@@ -1025,11 +1025,9 @@ impl WinitRunner {
                 .get_mut(&window)
                 .context("selected original native keyboard lifetime vanished")?;
             lifetime.devices.remove(&device);
-            lifetime.keyboard.cancel_device(
-                device,
-                modifiers,
-                native_keyboard_composition(&before),
-            )
+            lifetime
+                .keyboard
+                .cancel_device(device, modifiers, native_keyboard_composition(&before))
         };
         // The winit modifier callback is window-wide; no original hardware
         // identity proves whether Shift/Ctrl belonged to removed A or live B.
@@ -3648,8 +3646,9 @@ mod tests {
             runner
                 .native_ui_keyboards
                 .get(&secondary)
-                .is_some_and(|state| state.devices.contains(&device_b)
-                    && !state.devices.contains(&device_a)),
+                .is_some_and(
+                    |state| state.devices.contains(&device_b) && !state.devices.contains(&device_a)
+                ),
             "device B's original translator state survives A removal"
         );
         assert!(
