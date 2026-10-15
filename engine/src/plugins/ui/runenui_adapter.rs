@@ -2445,6 +2445,133 @@ mod tests {
             edited, "漢字é",
             "real native text reached the actual M10 editor without duplication"
         );
+
+        // Complete the independently sequenced later Unicode commit before
+        // starting a new composition lifecycle on the same real focused field.
+        let (_, finish_text) = slots
+            .pump_native_input_records(slot)
+            .expect("all earlier committed text settles first");
+        assert_eq!(finish_text, Ok(()));
+
+        let before_start = slots
+            .input_ownership(slot)
+            .expect("the same focused typed owner remains live");
+        let start = slots
+            .start_native_composition(slot)
+            .expect("real focused TextField accepts original OS composition start");
+        let (start_batch, start_status) = slots
+            .pump_native_input_records(slot)
+            .expect("M13 composition start returns ordered evidence");
+        assert_eq!(start_status, Ok(()));
+        assert!(matches!(
+            native_composition_finality(
+                before_start.scope(),
+                start.sequence(),
+                &start_batch,
+                &start_status
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        let started = slots
+            .input_ownership(slot)
+            .expect("M13 composition generation is observable");
+        assert_eq!(
+            started.keyboard().composition_generation(),
+            Some(start.generation()),
+            "RunenUI, never Engine, owns the active generation"
+        );
+
+        let preedit = "aßz";
+        let range = CompositionRange::new(preedit, 1, 3)
+            .expect("UTF-8 range aligns with the ß scalar");
+        let update = slots
+            .update_native_composition(
+                slot,
+                start.generation().clone(),
+                preedit.to_owned(),
+                Some(range),
+            )
+            .expect("accepted original Unicode preedit");
+        let (update_batch, update_status) = slots
+            .pump_native_input_records(slot)
+            .expect("preedit remains in the same canonical M13 input queue");
+        assert_eq!(update_status, Ok(()));
+        assert!(matches!(
+            native_composition_finality(
+                started.scope(),
+                update.sequence(),
+                &update_batch,
+                &update_status
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+
+        let before_end = slots
+            .input_ownership(slot)
+            .expect("original composition still owns the focused field");
+        let end = slots
+            .end_native_composition(slot, start.generation().clone())
+            .expect("original native IME commit ends its generation");
+        let (end_batch, end_status) = slots
+            .pump_native_input_records(slot)
+            .expect("composition end must settle before durable commit");
+        assert_eq!(end_status, Ok(()));
+        assert!(matches!(
+            native_composition_finality(
+                before_end.scope(),
+                end.sequence(),
+                &end_batch,
+                &end_status
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert!(
+            slots
+                .input_ownership(slot)
+                .expect("composition end settled")
+                .keyboard()
+                .composition_generation()
+                .is_none()
+        );
+
+        let renewed = slots
+            .start_native_composition(slot)
+            .expect("new OS preedit receives a distinct canonical generation");
+        let (_, renewed_status) = slots
+            .pump_native_input_records(slot)
+            .expect("second composition start settles");
+        assert_eq!(renewed_status, Ok(()));
+        let before_cancel = slots
+            .input_ownership(slot)
+            .expect("new composition has one M13 owner");
+        assert_eq!(
+            before_cancel.keyboard().composition_generation(),
+            Some(renewed.generation())
+        );
+        let cancel = slots
+            .cancel_native_composition(slot, renewed.generation().clone())
+            .expect("OS IME disabled cancels the current generation");
+        let (cancel_batch, cancel_status) = slots
+            .pump_native_input_records(slot)
+            .expect("composition cancel has exact ordered settlement");
+        assert_eq!(cancel_status, Ok(()));
+        assert!(matches!(
+            native_composition_finality(
+                before_cancel.scope(),
+                cancel.sequence(),
+                &cancel_batch,
+                &cancel_status
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert!(
+            slots
+                .input_ownership(slot)
+                .expect("canonical cancellation settled")
+                .keyboard()
+                .composition_generation()
+                .is_none()
+        );
     }
 
     #[test]
