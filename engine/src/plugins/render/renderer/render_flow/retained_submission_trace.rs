@@ -30,9 +30,7 @@ impl RetainedSubmissionTrace {
         frame: u64,
         surface: u64,
     ) -> Option<BTreeSet<GpuWorkResourceId>> {
-        if std::env::var_os(TRACE_ENV).is_none() {
-            return None;
-        }
+        std::env::var_os(TRACE_ENV)?;
         let resources = observed_retained_accesses(graph);
         // Gfx has already invoked its one nonblocking RunenGPU progress point.
         // Record terminal transitions before retiring completed trace entries.
