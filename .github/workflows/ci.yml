@@ -26,8 +26,8 @@ jobs:
     name: Runenwerk validation
     uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@72103b957ed506b843c2db2f87d663af7413c646
 
-  runenrender-r6-vulkan-execution:
-    name: RunenRender Vulkan execution proofs
+  runenrender-r6-vulkan-native:
+    name: RunenRender Vulkan native/arena/consumer proofs
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -146,6 +146,85 @@ jobs:
           cargo +stable test -p engine \
             --test runenrender_ordinary_public_api \
             --locked -- --nocapture --test-threads=1
+
+  runenrender-r6-vulkan-render-lab:
+    name: RunenRender Vulkan Render Lab proofs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Resolve expected revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            merge_group) expected_revision="$EVENT_SHA" ;;
+            push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+          test -n "$expected_revision"
+          echo "expected_revision=$expected_revision" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.revision.outputs.expected_revision }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove checked-out revision
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          actual_revision="$(git rev-parse HEAD)"
+          echo "Expected revision: $EXPECTED_REVISION"
+          echo "Actual revision:   $actual_revision"
+          test "$actual_revision" = "$EXPECTED_REVISION"
+
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache Cargo data
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-targets: false
+
+      - name: Set up Rust compiler cache
+        uses: "Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba" # v0.0.11
+        with:
+          version: "v0.18.0"
+
+      - name: Enable Rust compiler cache
+        run: |
+          {
+            echo "CARGO_INCREMENTAL=0"
+            echo "SCCACHE_GHA_ENABLED=on"
+            echo "RUSTC_WRAPPER=sccache"
+          } >> "$GITHUB_ENV"
+
+      - name: Install Mesa Vulkan fallback
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools xvfb xauth libxkbcommon-x11-0
+          icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
+          test -n "$icd"
+          echo "Lavapipe ICD: $icd"
+          echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+          echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
+          echo "WGPU_BACKEND=vulkan" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=${RUNNER_TEMP}/runenrender-vulkan-xdg" >> "$GITHUB_ENV"
+          mkdir -p "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+          chmod 700 "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+
+      - name: Prove Vulkan software adapter
+        run: vulkaninfo --summary
 
       - name: Run Render Lab founding-direct artifact proof
         env:
@@ -532,3 +611,22 @@ jobs:
           path: render-lab/comparison
           if-no-files-found: error
           retention-days: 7
+
+  runenrender-r6-vulkan-execution:
+    name: RunenRender Vulkan execution proofs
+    needs:
+      - runenrender-r6-vulkan-native
+      - runenrender-r6-vulkan-render-lab
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require successful native and Render Lab execution proofs
+        env:
+          NATIVE_RESULT: ${{ needs.runenrender-r6-vulkan-native.result }}
+          RENDER_LAB_RESULT: ${{ needs.runenrender-r6-vulkan-render-lab.result }}
+        run: |
+          set -euo pipefail
+          printf 'Native: %s\nRender Lab: %s\n' "$NATIVE_RESULT" "$RENDER_LAB_RESULT"
+          test "$NATIVE_RESULT" = success
+          test "$RENDER_LAB_RESULT" = success
