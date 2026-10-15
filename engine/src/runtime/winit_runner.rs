@@ -1024,9 +1024,11 @@ impl WinitRunner {
                 .get_mut(&window)
                 .context("selected original native keyboard lifetime vanished")?;
             lifetime.devices.remove(&device);
-            let events = lifetime
-                .keyboard
-                .cancel_device(device, modifiers, native_keyboard_composition(&before));
+            let events = lifetime.keyboard.cancel_device(
+                device,
+                modifiers,
+                native_keyboard_composition(&before),
+            );
             (events, lifetime.devices.is_empty())
         };
         // Winit modifiers are window-wide physical evidence, not a new
@@ -3735,13 +3737,7 @@ mod tests {
             .native_ui_modifiers
             .insert(secondary, KeyModifiers::SHIFT);
         let second_device = UiInputDeviceId::new(8).expect("checked second device");
-        runner.native_ui_keyboard_translator(
-            secondary,
-            slot,
-            source_b,
-            second_device,
-            new_epoch,
-        );
+        runner.native_ui_keyboard_translator(secondary, slot, source_b, second_device, new_epoch);
         assert_eq!(
             runner.native_ui_modifiers.get(&secondary),
             Some(&KeyModifiers::SHIFT),
