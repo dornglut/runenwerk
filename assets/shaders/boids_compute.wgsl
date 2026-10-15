@@ -327,7 +327,7 @@ fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
     }
 
     if (mode == MODE_SEED) {
-        if (tick == 0u) {
+        if (tick == 0u && fixed_step_iteration.substep_index == 0u) {
             let seeded = seed_boid(index, boid_count);
             boids_a[index] = seeded;
             boids_b[index] = seeded;

@@ -113,14 +113,18 @@ impl BoidsRenderState {
         }
     }
 
-    pub(crate) fn advance_by_frame_delta(&mut self, delta_seconds: f32) {
+    pub(crate) fn advance_by_frame_delta(&mut self, delta_seconds: f32, admitted_substeps: u32) {
         self.last_frame_delta_seconds = delta_seconds.clamp(0.0, 1.0 / 15.0).max(1.0 / 240.0);
+        // Zero-step frames cannot execute the fixed-step seed pass.
+        if admitted_substeps == 0 {
+            return;
+        }
         if !self.initialized {
             self.initialized = true;
             return;
         }
 
-        self.tick = self.tick.saturating_add(1);
+        self.tick = self.tick.saturating_add(admitted_substeps);
     }
 
     pub(crate) fn compute_params(&self) -> BoidsComputeParams {
@@ -246,7 +250,7 @@ mod tests {
     #[test]
     fn first_update_keeps_seed_tick() {
         let mut state = BoidsRenderState::default();
-        state.advance_by_frame_delta(1.0 / 120.0);
+        state.advance_by_frame_delta(1.0 / 120.0, 1);
         let params = state.compute_params();
         assert_eq!(params.meta[0], 0);
         assert_eq!(params.meta[1], super::MODE_SIMULATE_GRID);
@@ -254,10 +258,23 @@ mod tests {
     }
 
     #[test]
+    fn zero_substep_frames_do_not_consume_initial_gpu_seed() {
+        let mut state = BoidsRenderState::default();
+        state.advance_by_frame_delta(1.0 / 1000.0, 0);
+        state.advance_by_frame_delta(1.0 / 1000.0, 0);
+        assert_eq!(state.submitted_step_count(), 0);
+
+        state.advance_by_frame_delta(1.0 / 60.0, 1);
+        assert_eq!(state.submitted_step_count(), 0);
+        state.advance_by_frame_delta(1.0 / 60.0, 2);
+        assert_eq!(state.submitted_step_count(), 2);
+    }
+
+    #[test]
     fn second_update_steps_and_publish_params_select_render_buffer_copy() {
         let mut state = BoidsRenderState::default();
-        state.advance_by_frame_delta(1.0 / 120.0);
-        state.advance_by_frame_delta(1.0 / 120.0);
+        state.advance_by_frame_delta(1.0 / 120.0, 1);
+        state.advance_by_frame_delta(1.0 / 120.0, 1);
         let compute = state.compute_params();
         assert_eq!(compute.meta[0], 1);
         assert_eq!(compute.meta[1], super::MODE_SIMULATE_GRID);
@@ -274,7 +291,7 @@ mod tests {
     #[test]
     fn frame_delta_is_evidence_only_for_fixed_step_simulation() {
         let mut state = BoidsRenderState::default();
-        state.advance_by_frame_delta(1.0 / 30.0);
+        state.advance_by_frame_delta(1.0 / 30.0, 1);
 
         assert_eq!(
             state.compute_params().sim_a[0],

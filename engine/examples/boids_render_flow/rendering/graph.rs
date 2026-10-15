@@ -6,7 +6,7 @@ use engine::plugins::render::{
     ProceduralBufferBinding, ProceduralPassDescriptor, ProceduralTargetDescriptor, RenderFlow,
     RenderVertexBufferLayout, RenderVertexFormat, U32Counter, U32ScanElement,
 };
-use runen_gpu::GpuBindingKey;
+use runen_gpu::{GpuBindingKey, GpuBufferInitialization};
 
 pub(crate) fn build_render_flow() -> RenderFlow {
     let grid_cell_count = (DEFAULT_GRID_CELLS_X * DEFAULT_GRID_CELLS_Y) as u64;
@@ -16,22 +16,39 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .expect("render flow authoring should succeed")
         .with_color_target("boids.color")
         .expect("render flow authoring should succeed")
-        .double_buffer_storage_array_with_handle::<BoidAgent>(
+        .double_buffer_storage_array_with_handle_and_initialization::<BoidAgent>(
             "boids.instances",
             DEFAULT_BOID_COUNT as u64,
+            GpuBufferInitialization::Zeroed,
         )
         .expect("render flow authoring should succeed");
     let (flow, grid_cell_counts) = flow
-        .storage_array::<U32Counter>("boids.grid.cell_counts", grid_cell_count)
+        .storage_array_with_initialization::<U32Counter>(
+            "boids.grid.cell_counts",
+            grid_cell_count,
+            GpuBufferInitialization::Zeroed,
+        )
         .expect("render flow authoring should succeed");
     let (flow, grid_cell_offsets) = flow
-        .storage_array::<U32ScanElement>("boids.grid.cell_offsets", grid_cell_count)
+        .storage_array_with_initialization::<U32ScanElement>(
+            "boids.grid.cell_offsets",
+            grid_cell_count,
+            GpuBufferInitialization::Zeroed,
+        )
         .expect("render flow authoring should succeed");
     let (flow, grid_scatter_cursors) = flow
-        .storage_array::<U32Counter>("boids.grid.scatter_cursors", grid_cell_count)
+        .storage_array_with_initialization::<U32Counter>(
+            "boids.grid.scatter_cursors",
+            grid_cell_count,
+            GpuBufferInitialization::Zeroed,
+        )
         .expect("render flow authoring should succeed");
     let (flow, grid_sorted_indices) = flow
-        .storage_array::<U32ScanElement>("boids.grid.sorted_indices", DEFAULT_BOID_COUNT as u64)
+        .storage_array_with_initialization::<U32ScanElement>(
+            "boids.grid.sorted_indices",
+            DEFAULT_BOID_COUNT as u64,
+            GpuBufferInitialization::Zeroed,
+        )
         .expect("render flow authoring should succeed");
     let grid_plan = BoundedUniformGrid2dBuildPlan::new(
         "boids.grid",
@@ -329,6 +346,34 @@ mod tests {
         );
         assert_eq!(pass_kind(&flow, "boids.draw"), RenderPassKind::Graphics);
         assert_eq!(pass_kind(&flow, "boids.present"), RenderPassKind::Present);
+    }
+
+    #[test]
+    fn declared_storage_has_real_first_frame_initialization_coverage() {
+        let flow = build_render_flow();
+        for label in [
+            "boids.instances.a",
+            "boids.instances.b",
+            "boids.grid.cell_counts",
+            "boids.grid.cell_offsets",
+            "boids.grid.scatter_cursors",
+            "boids.grid.sorted_indices",
+        ] {
+            let id = flow.resource_id(label).expect("declared storage identity");
+            let resource = flow
+                .graph()
+                .resources
+                .resources
+                .iter()
+                .find(|resource| *resource.id() == id)
+                .expect("declared resource");
+            let handle = resource.buffer_handle().expect("storage buffer handle");
+            assert_eq!(
+                handle.descriptor().initialization(),
+                &GpuBufferInitialization::Zeroed,
+                "{label} must have guaranteed first-frame coverage",
+            );
+        }
     }
 
     #[test]

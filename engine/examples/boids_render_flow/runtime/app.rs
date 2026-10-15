@@ -1,7 +1,7 @@
 use crate::rendering::{BoidsRenderState, BoidsRuleFamily, build_render_flow};
 use anyhow::Result;
 use engine::plugins::{DebugMetricsPlugin, RenderPlugin, ScenePlugin, default_plugins};
-use engine::prelude::{App, AppRenderExt, Res, ResMut, Time, Update};
+use engine::prelude::{App, AppRenderExt, FixedTimeState, Res, ResMut, Time, Update};
 
 pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     let mut app = App::new();
@@ -16,6 +16,10 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     app.run()
 }
 
-fn advance_boids_simulation_system(time: Res<Time>, mut state: ResMut<BoidsRenderState>) {
-    state.advance_by_frame_delta(time.delta_seconds);
+fn advance_boids_simulation_system(
+    time: Res<Time>,
+    fixed: Res<FixedTimeState>,
+    mut state: ResMut<BoidsRenderState>,
+) {
+    state.advance_by_frame_delta(time.delta_seconds, fixed.steps_ran_last_frame);
 }
