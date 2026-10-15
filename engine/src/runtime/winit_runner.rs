@@ -898,13 +898,10 @@ impl WinitRunner {
             .pump_native_input_records(slot)
             .map_err(|error| anyhow!("native IME M13 pump unavailable: {error:?}"))?;
         let evidence = native_text_finality(before.scope(), None, submission, &batch, &status);
-        if !matches!(evidence, Ok(UiInputFinality::Committed(_))) {
-            tracing::trace!(
-                target: "engine.runtime.input",
-                ?evidence,
-                "native IME text had no committed M13 settlement"
-            );
-        }
+        anyhow::ensure!(
+            matches!(evidence, Ok(UiInputFinality::Committed(_))),
+            "native IME text lacked exact committed M13 settlement: {evidence:?}"
+        );
         Ok(())
     }
 
