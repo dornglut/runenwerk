@@ -993,6 +993,11 @@ impl Gfx {
             return Ok(timings);
         }
         let render_surface_id = prepared_frame.surface.render_surface_id;
+        // A diagnostic-only serialized control for root-cause qualification.
+        // It runs before acquiring the surface and before preparing G3/G5 work.
+        self.renderer
+            .retained_submission_trace
+            .serialize_native_frame_if_enabled(self.ctx.context())?;
         let acquire_start = Instant::now();
         let acquired = self.ctx.acquire_surface_image(render_surface_id)?;
         timings.acquire_ms = acquire_start.elapsed().as_secs_f32() * 1000.0;
