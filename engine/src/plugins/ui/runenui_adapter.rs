@@ -1,8 +1,7 @@
 use runenui_core::{
     CommittedTextEvent, CompositionGeneration, CompositionRange, Effects, Element, ElementId,
     FontFamilyName, GenericFontFamily, HostProtocol, InputDeviceId, KeyboardEvent, KeyboardPhase,
-    PointerEvent,
-    PointerId, SemanticCommand, SurfaceId, UiApp, View, button, column, text,
+    PointerEvent, PointerId, SemanticCommand, SurfaceId, UiApp, View, button, column, text,
 };
 #[cfg(test)]
 use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment};
