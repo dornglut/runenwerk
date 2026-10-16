@@ -859,6 +859,11 @@ pub struct Renderer {
     runenui_gpu_rejected: Vec<(RunenUiPublicationId, &'static str)>,
 }
 
+pub use render_flow::{
+    RenderGpuFrameSubmissionReceipt, RenderGpuFrameTerminalBatch, RenderGpuFrameTerminalDisposition,
+    RenderGpuFrameTerminalOutcome,
+};
+
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct Gfx {
     ctx: RenderGpuContext,
@@ -904,6 +909,18 @@ impl Gfx {
         Vec<(RunenUiPublicationId, &'static str)>,
     ) {
         self.renderer.take_runenui_terminal_publications()
+    }
+
+    /// Exact RunenGPU accepted-submission handles correlated to ordinary
+    /// renderer frames and surfaces; statuses are read from RunenGPU itself.
+    pub fn pending_gpu_frame_submissions(&self) -> Vec<RenderGpuFrameSubmissionReceipt> {
+        self.renderer.pending_gpu_frame_submissions()
+    }
+
+    /// Consume terminal GPU outcomes without mistaking them for published
+    /// domain simulation steps or visible presentation.
+    pub fn take_gpu_frame_terminal_outcomes(&mut self) -> RenderGpuFrameTerminalBatch {
+        self.renderer.take_gpu_frame_terminal_outcomes()
     }
 
     pub fn attach_surface(

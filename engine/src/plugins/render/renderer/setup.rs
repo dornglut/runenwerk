@@ -201,6 +201,22 @@ impl Renderer {
             .append(&mut progressed.runenui_rejected);
     }
 
+    /// Accepted work is traced independently of optional timing/capture/UI.
+    /// These receipts reference the exact RunenGPU submission status handles.
+    pub fn pending_gpu_frame_submissions(
+        &self,
+    ) -> Vec<super::RenderGpuFrameSubmissionReceipt> {
+        self.submission_lifecycle.pending_receipts()
+    }
+
+    /// Returns terminal outcomes once, preserving a nonzero loss counter when
+    /// the bounded delivery buffer overflowed before consumption.
+    pub fn take_gpu_frame_terminal_outcomes(
+        &mut self,
+    ) -> super::RenderGpuFrameTerminalBatch {
+        self.submission_lifecycle.take_terminal()
+    }
+
     /// Consumes only renderer-proven terminal presentation identities. Their
     /// source publication content remains owned by the UiPlugin ledger.
     pub(in crate::plugins::render) fn take_runenui_terminal_publications(

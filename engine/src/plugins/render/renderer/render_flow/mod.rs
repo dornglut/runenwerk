@@ -88,3 +88,7 @@ pub(crate) use runtime_resources::{
     FlowRuntimeResources, ResolvedTextureRef, RuntimeResourceKey, RuntimeResourceKind,
 };
 pub(super) use submission_lifecycle::RendererSubmissionLifecycle;
+pub use submission_lifecycle::{
+    RenderGpuFrameSubmissionReceipt, RenderGpuFrameTerminalBatch, RenderGpuFrameTerminalDisposition,
+    RenderGpuFrameTerminalOutcome,
+};
