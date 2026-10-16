@@ -33,6 +33,7 @@ pub enum RenderGpuStepDemandError {
     SubmissionPending,
     SubmissionFailed,
     DeviceGenerationChanged,
+    ReconstructionReceiptIsPriorWork,
 }
 
 impl std::fmt::Display for RenderGpuStepDemandError {
@@ -184,6 +185,85 @@ impl<T> RenderGpuStepDemand<T> {
         let steps = self.pending.drain(..count).collect();
         self.accepted = Some(AcceptedSteps { submission, steps });
         Ok(Some(result))
+    }
+
+    /// Requeue exactly the accepted historical prefix after the producer has
+    /// independently reconstructed its *previous verified* semantic state.
+    ///
+    /// Recovery is deliberately an explicit producer decision. The earlier
+    /// submission must have terminalized: an Accepted write may still execute
+    /// and race reconstruction. The distinct reconstruction receipt must be
+    /// Completed on the current GPU generation; the callback must additionally
+    /// verify that its effects actually restore the state represented by
+    /// `completed_tick` (for example by correlating a canonical restore work
+    /// node and checking its GPU readback).
+    ///
+    /// An ordinary zero-initialized descriptor or a different generation is not
+    /// itself reconstruction evidence. In particular, this method does not
+    /// authorize replay of a potentially partial write without an exact,
+    /// application-verified replacement of its effects.
+    ///
+    /// On any rejection, all original historical inputs and the accepted
+    /// submission remain owned by the producer. After successful verification,
+    /// no CPU tick is reissued: only the original accepted prefix moves back
+    /// before later queued steps for *fresh* preparation and G5 admission.
+    pub fn requeue_verified_after_reconstruction<E>(
+        &mut self,
+        current_affinity: GpuContextAffinity,
+        reconstruction: &GpuSubmission,
+        verify: impl FnOnce(
+            &GpuSubmission,
+            &GpuSubmission,
+            &[RenderGpuStepIntent<T>],
+        ) -> Result<(), E>,
+    ) -> Result<(), RenderGpuStepCommitError<E>> {
+        let batch = self
+            .accepted
+            .as_ref()
+            .ok_or(RenderGpuStepCommitError::Submission(
+                RenderGpuStepDemandError::NoAcceptedBatch,
+            ))?;
+        if matches!(batch.submission.status(), GpuSubmissionStatus::Accepted) {
+            return Err(RenderGpuStepCommitError::Submission(
+                RenderGpuStepDemandError::SubmissionPending,
+            ));
+        }
+        if reconstruction.affinity() != current_affinity {
+            return Err(RenderGpuStepCommitError::Submission(
+                RenderGpuStepDemandError::DeviceGenerationChanged,
+            ));
+        }
+        if reconstruction.affinity() == batch.submission.affinity()
+            && reconstruction.id() == batch.submission.id()
+        {
+            return Err(RenderGpuStepCommitError::Submission(
+                RenderGpuStepDemandError::ReconstructionReceiptIsPriorWork,
+            ));
+        }
+        match reconstruction.status() {
+            GpuSubmissionStatus::Accepted => {
+                return Err(RenderGpuStepCommitError::Submission(
+                    RenderGpuStepDemandError::SubmissionPending,
+                ));
+            }
+            GpuSubmissionStatus::Failed(_) => {
+                return Err(RenderGpuStepCommitError::Submission(
+                    RenderGpuStepDemandError::SubmissionFailed,
+                ));
+            }
+            GpuSubmissionStatus::Completed => {}
+        }
+        verify(reconstruction, &batch.submission, &batch.steps)
+            .map_err(RenderGpuStepCommitError::Verification)?;
+
+        // Allocate before transferring ownership: subsequent work only moves
+        // already-captured values, without reconstructing or cloning inputs.
+        let mut requeued = VecDeque::with_capacity(self.outstanding());
+        let batch = self.accepted.take().expect("verified accepted batch");
+        requeued.extend(batch.steps);
+        requeued.append(&mut self.pending);
+        self.pending = requeued;
+        Ok(())
     }
 
     pub fn accepted_submission(&self) -> Option<&GpuSubmission> {

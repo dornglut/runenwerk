@@ -7,7 +7,8 @@
 //! It deliberately never interprets RetainedContinuityChanged as retryable.
 use runen_gpu::{
     GpuBindingKey, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization, GpuBufferRegion,
-    GpuBufferUsage, GpuCapabilityProfile, GpuComputeOperation, GpuComputePipelineDescriptor,
+    GpuBufferUsage, GpuCapabilityProfile, GpuCapabilityRequirements, GpuClearOperation,
+    GpuComputeOperation, GpuComputePipelineDescriptor,
     GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory, GpuDispatchIntent,
     GpuDispatchSize, GpuExecutionPreference, GpuReadbackId, GpuReadbackOperation,
     GpuReadbackStatus, GpuReconstruction, GpuResourceLabel, GpuResourceLifetime,
@@ -62,7 +63,11 @@ fn state_buffer() -> GpuBufferHandle {
                 GpuResourceLifetime::Retained,
                 GpuReconstruction::SourceBacked,
                 64,
-                [GpuBufferUsage::Storage, GpuBufferUsage::CopySource],
+                [
+                    GpuBufferUsage::Storage,
+                    GpuBufferUsage::CopySource,
+                    GpuBufferUsage::CopyDestination,
+                ],
                 GpuBufferInitialization::Zeroed,
             )
             .expect("zeroed retained source-backed state descriptor"),
@@ -533,4 +538,217 @@ fn captured_producer_steps_survive_real_g5_rejection_and_fresh_reprepare() {
     });
     assert_eq!(committed, Ok(2));
     assert_eq!(producer.outstanding(), 0);
+}
+
+#[test]
+fn verified_reconstruction_requeues_exact_accepted_steps_without_reissuing_cpu_ticks() {
+    let Some(context) = context() else {
+        return;
+    };
+    let buffer = state_buffer();
+    let pipeline = pipeline();
+    let mut producer = engine::plugins::render::RenderGpuStepDemand::new(0, 4);
+    producer
+        .capture_batch(vec![
+            Step {
+                tick: 1,
+                increments: 2,
+            },
+            Step {
+                tick: 2,
+                increments: 1,
+            },
+        ])
+        .expect("capture original historical inputs");
+
+    let original_readback = producer
+        .submit_with(1, |candidate| {
+            let inputs = candidate
+                .iter()
+                .map(|step| *step.input())
+                .collect::<Vec<_>>();
+            let (fragment, readback) = batch_fragment(&buffer, &pipeline, &inputs);
+            pollster::block_on(context.submit_work("fixed.step.recovery.original", [fragment]))
+                .map(|submission| (submission, readback))
+        })
+        .expect("first batch admission")
+        .expect("first captured step");
+    let original = producer
+        .accepted_submission()
+        .expect("admitted batch")
+        .clone();
+    assert_eq!(producer.outstanding(), 2);
+    progress_to_terminal(&context, &original);
+
+    use engine::plugins::render::RenderGpuStepCommitError;
+    assert_eq!(
+        producer.commit_verified(context.affinity(), |_, _| {
+            Err::<(), &'static str>("semantic proof rejected")
+        }),
+        Err(RenderGpuStepCommitError::Verification("semantic proof rejected"))
+    );
+    assert_eq!(
+        producer.requeue_verified_after_reconstruction(
+            context.affinity(),
+            &original,
+            |_, _, _| Ok::<(), &'static str>(())
+        ),
+        Err(RenderGpuStepCommitError::Submission(
+            engine::plugins::render::RenderGpuStepDemandError::ReconstructionReceiptIsPriorWork
+        )),
+        "an original successful submission cannot masquerade as reconstruction"
+    );
+    assert_eq!(
+        producer.accepted_submission().map(GpuSubmission::id),
+        Some(original.id())
+    );
+
+    // Canonical, explicit replacement on the same resource, followed by an
+    // exact readback. No implicit Zeroed-descriptor reseeding is accepted.
+    let mut restore = GpuWorkFragmentBuilder::new(
+        label("fixed.step.recovery.restore"),
+        provenance("fixed.step.recovery.restore"),
+    );
+    restore
+        .declare_resource(buffer.clone().into())
+        .expect("declare original retained state");
+    let clear = GpuClearOperation::buffer_zero(
+        GpuBufferRegion::whole(&buffer).expect("bounded retained restore"),
+    )
+    .expect("copy-destination clear is admissible");
+    restore
+        .add_node(
+            label("fixed.step.recovery.clear"),
+            GpuWorkOperation::Clear(clear),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("fixed.step.recovery.restore"),
+        )
+        .expect("canonical retained clear");
+    let restore_readback = GpuReadbackId::allocate().expect("unique restore readback");
+    restore
+        .add_node(
+            label("fixed.step.recovery.verify"),
+            GpuWorkOperation::Readback(
+                GpuReadbackOperation::new(
+                    GpuBufferRegion::whole(&buffer).expect("whole buffer").into(),
+                    restore_readback,
+                )
+                .expect("restore readback"),
+            ),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance("fixed.step.recovery.restore"),
+        )
+        .expect("readback after actual clear");
+    let restored = pollster::block_on(context.submit_work(
+        "fixed.step.recovery.canonical-restore",
+        [restore.finish().expect("canonical reconstruction graph")],
+    ))
+    .expect("restoration follows terminal predecessor");
+    progress_to_terminal(&context, &restored);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let Some(readback) = restored.readback(restore_readback) else {
+            panic!("required restore readback missing");
+        };
+        match readback.status() {
+            GpuReadbackStatus::Ready(_) => break,
+            GpuReadbackStatus::Failed(failure) => panic!("restore readback failed: {failure:?}"),
+            GpuReadbackStatus::Pending => {
+                assert!(Instant::now() < deadline, "restore readback never ready");
+                context.progress();
+                std::thread::yield_now();
+            }
+        }
+    }
+
+    assert_eq!(
+        producer.requeue_verified_after_reconstruction(
+            context.affinity(),
+            &restored,
+            |restore_submission, previous, steps| {
+                assert_eq!(previous.id(), original.id());
+                assert_eq!(steps.len(), 1);
+                assert_eq!(steps[0].tick(), 1);
+                let readback = restore_submission
+                    .readback(restore_readback)
+                    .expect("reconstruction receipt owns observed GPU bytes");
+                let GpuReadbackStatus::Ready(bytes) = readback.status() else {
+                    return Err("reconstruction proof unavailable");
+                };
+                if u32::from_le_bytes(bytes.as_bytes()[..4].try_into().unwrap()) != 0 {
+                    return Err("previously verified state was not restored");
+                }
+                Ok::<(), &'static str>(())
+            }
+        ),
+        Ok(())
+    );
+    assert!(producer.accepted_submission().is_none());
+    assert_eq!((producer.requested_tick(), producer.completed_tick()), (2, 0));
+    assert_eq!(
+        producer
+            .candidate(2)
+            .iter()
+            .map(|step| (step.tick(), step.input().increments))
+            .collect::<Vec<_>>(),
+        vec![(1, 2), (2, 1)]
+    );
+
+    let replay_readback = producer
+        .submit_with(2, |candidate| {
+            let steps = candidate
+                .iter()
+                .map(|step| *step.input())
+                .collect::<Vec<_>>();
+            let (fragment, readback) = batch_fragment(&buffer, &pipeline, &steps);
+            pollster::block_on(context.submit_work("fixed.step.recovery.replay", [fragment]))
+                .map(|submission| (submission, readback))
+        })
+        .expect("replay freshly admitted by G5")
+        .expect("requeued work");
+    let replay = producer
+        .accepted_submission()
+        .expect("replay receipt")
+        .clone();
+    assert_ne!(replay.id(), original.id());
+    progress_to_terminal(&context, &replay);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let outcome = replay
+            .readback(replay_readback)
+            .expect("replay readback")
+            .status();
+        if !matches!(outcome, GpuReadbackStatus::Pending) {
+            break;
+        }
+        assert!(Instant::now() < deadline, "replay readback never ready");
+        context.progress();
+        std::thread::yield_now();
+    }
+    assert_eq!(
+        producer.commit_verified(context.affinity(), |submission, steps| {
+            assert_eq!(
+                steps.iter().map(|s| s.tick()).collect::<Vec<_>>(),
+                vec![1, 2]
+            );
+            let GpuReadbackStatus::Ready(bytes) = submission
+                .readback(replay_readback)
+                .expect("exact semantic readback")
+                .status()
+            else {
+                return Err("replay readback failed or missing");
+            };
+            if u32::from_le_bytes(bytes.as_bytes()[..4].try_into().unwrap()) != 3 {
+                return Err("replayed GPU contents differ from historical steps");
+            }
+            Ok::<(), &'static str>(())
+        }),
+        Ok(2)
+    );
+    assert_eq!(producer.outstanding(), 0);
+    assert_ne!(original_readback, replay_readback);
 }
