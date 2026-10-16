@@ -3662,6 +3662,25 @@ mod tests {
 
     #[test]
     fn saturated_original_journal_cannot_cancel_ui_before_physical_source_retirement() {
+        use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+
+        struct Probe;
+        impl runenui_core::UiApp for Probe {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::text("original source lifetime probe")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
         runner.state.world.insert_resource(InputState::new());
         let secondary = NativeWindowId::try_from_raw(2).expect("secondary native window");
@@ -3672,6 +3691,18 @@ mod tests {
         runner
             .apply_event_for_native_window(secondary, normalized_shift_press(context))
             .expect("neutral keyboard Down precedes the saturated journal");
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<Probe>(
+                UiTypedScreenId::new("native.source.retirement.preflight"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("real typed framework runtime");
+        runner.state.world.insert_resource(slots);
+        let device = WinitRunner::native_ui_device(context).expect("original checked device");
+        runner.native_ui_keyboard_translator(secondary, slot, context.source, device, 1);
         assert!(
             runner
                 .state
@@ -3713,6 +3744,13 @@ mod tests {
                 .expect("original physical truth")
                 .shift_down(),
             "the failed source-loss journal must not silently erase the physical Down"
+        );
+        assert!(
+            runner
+                .native_ui_keyboards
+                .get(&secondary)
+                .is_some_and(|translator| translator.devices.contains(&device)),
+            "pre-admission failure must not discard the original RunenUI translator lifetime"
         );
     }
 
