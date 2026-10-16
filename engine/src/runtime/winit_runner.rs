@@ -1322,9 +1322,9 @@ impl WinitRunner {
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("native mouse Cancel lost its pinned framework runtime")?;
-        let before = slots.input_ownership(lifetime.recipient).map_err(|error| {
-            anyhow!("native mouse Cancel M13 pre-state unavailable: {error:?}")
-        })?;
+        let before = slots
+            .input_ownership(lifetime.recipient)
+            .map_err(|error| anyhow!("native mouse Cancel M13 pre-state unavailable: {error:?}"))?;
         if before.scope() != &lifetime.scope {
             // A stale stream must not be submitted to a replacement scope.
             return Ok(());
@@ -1369,9 +1369,9 @@ impl WinitRunner {
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("native touch Cancel lost its pinned framework runtime")?;
-        let before = slots.input_ownership(lifetime.recipient).map_err(|error| {
-            anyhow!("native touch Cancel M13 pre-state unavailable: {error:?}")
-        })?;
+        let before = slots
+            .input_ownership(lifetime.recipient)
+            .map_err(|error| anyhow!("native touch Cancel M13 pre-state unavailable: {error:?}"))?;
         if before.scope() != &lifetime.scope {
             // A retired generation must not cancel a newly mounted UI owner.
             return Ok(());
@@ -1384,7 +1384,9 @@ impl WinitRunner {
             let surface = event.surface_context().surface_id().clone();
             let submission = slots
                 .submit_native_pointer(lifetime.recipient, event)
-                .map_err(|error| anyhow!("native touch Cancel M13 admission rejected: {error:?}"))?;
+                .map_err(|error| {
+                    anyhow!("native touch Cancel M13 admission rejected: {error:?}")
+                })?;
             let (batch, status) = slots
                 .pump_native_input_records(lifetime.recipient)
                 .map_err(|error| anyhow!("native touch Cancel M13 pump failed: {error:?}"))?;
@@ -2857,9 +2859,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 self.request_redraw_for_native_window(native_window_id);
                 Ok(())
             }
-            WindowEvent::CursorLeft { .. } => {
-                self.cancel_native_ui_mouse(native_window_id)
-            }
+            WindowEvent::CursorLeft { .. } => self.cancel_native_ui_mouse(native_window_id),
             WindowEvent::MouseInput {
                 device_id,
                 state,
