@@ -5692,11 +5692,8 @@ mod tests {
             NativeInputRecipientError::InactiveWindow.to_string()
         );
         assert!(
-            crate::plugins::ui::unmount_retired_native_ui_slot(
-                &mut runner.state.world,
-                slot
-            )
-            .is_err(),
+            crate::plugins::ui::unmount_retired_native_ui_slot(&mut runner.state.world, slot)
+                .is_err(),
             "an original live native recipient must block premature M13 destruction"
         );
         assert!(
@@ -5776,12 +5773,10 @@ mod tests {
             .expect("real framework M13 scope still running")
             .scope()
             .clone();
-        let retirement = crate::plugins::ui::unmount_retired_native_ui_slot(
-            &mut runner.state.world,
-            slot,
-        )
-        .expect("retired native slot may shut down through the World")
-        .expect("exactly one runtime was still mounted");
+        let retirement =
+            crate::plugins::ui::unmount_retired_native_ui_slot(&mut runner.state.world, slot)
+                .expect("retired native slot may shut down through the World")
+                .expect("exactly one runtime was still mounted");
         assert_eq!(retirement.final_ownership().scope(), &original_scope);
         assert_eq!(
             retirement.final_ownership().status(),
@@ -5798,12 +5793,9 @@ mod tests {
             "actual original M13 scope retirement must survive runner teardown"
         );
         assert!(
-            crate::plugins::ui::unmount_retired_native_ui_slot(
-                &mut runner.state.world,
-                slot
-            )
-            .expect("idempotent retired slot teardown")
-            .is_none()
+            crate::plugins::ui::unmount_retired_native_ui_slot(&mut runner.state.world, slot)
+                .expect("idempotent retired slot teardown")
+                .is_none()
         );
     }
 
