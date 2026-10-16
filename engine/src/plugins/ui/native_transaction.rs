@@ -1108,8 +1108,7 @@ mod tests {
         let mut world = setup();
         let slot = world.resource::<Probe>().unwrap().slot;
         world.insert_resource(UiRuntimePresentationAssociationsResource::default());
-        let retired = retire_native_input_recipient(&mut world, NativeWindowId::primary())
-            .unwrap();
+        let retired = retire_native_input_recipient(&mut world, NativeWindowId::primary()).unwrap();
         assert!(retired);
         let presentation = world
             .remove_resource::<UiRuntimePresentationAssociationsResource>()
