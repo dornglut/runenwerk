@@ -16,7 +16,6 @@ use runen_gpu::{
     GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
     admit_static_wgsl_sources,
 };
-use std::collections::VecDeque;
 use std::num::NonZeroU64;
 use std::time::{Duration, Instant};
 
@@ -110,51 +109,40 @@ struct Step {
     increments: u8,
 }
 
-/// A test-only immutable batch. Retained-resource reservation is not mirrored here.
+/// GPU readback-specific proof attached to the exact admitted semantic
+/// batch. Immutable step capture/ownership is the shipping producer transport.
 struct AcceptedBatch {
-    submission: GpuSubmission,
-    last_tick: u64,
     expected_counter: u32,
     readback: GpuReadbackId,
 }
 
-/// A *semantic step* ledger, not a copy of G5's internal GPU resource table.
-/// Work is removed from the pending queue only when G5 actually accepts it.
 struct StepLedger {
-    next_tick: u64,
-    completed_tick: u64,
+    history: engine::plugins::render::RenderGpuStepDemand<Step>,
     completed_counter: u32,
-    backlog: VecDeque<Step>,
     accepted: Option<AcceptedBatch>,
-    limit: usize,
 }
 
 impl StepLedger {
     fn new(limit: usize) -> Self {
         Self {
-            next_tick: 1,
-            completed_tick: 0,
+            history: engine::plugins::render::RenderGpuStepDemand::new(0, limit),
             completed_counter: 0,
-            backlog: VecDeque::new(),
             accepted: None,
-            limit,
         }
     }
 
     fn requested_tick(&self) -> u64 {
-        self.next_tick - 1
+        self.history.requested_tick()
+    }
+
+    fn completed_tick(&self) -> u64 {
+        self.history.completed_tick()
     }
 
     fn outstanding(&self) -> usize {
-        self.backlog.len()
-            + self.accepted.as_ref().map_or(0, |batch| {
-                usize::try_from(batch.last_tick - self.completed_tick)
-                    .expect("bounded GPU step interval")
-            })
+        self.history.outstanding()
     }
 
-    /// Reject excess demand *atomically*. A real producer must choose and
-    /// document its domain-specific wait, backpressure, or resync policy.
     fn request(&mut self, increments: &[u8]) -> Result<(), &'static str> {
         if increments
             .iter()
@@ -162,67 +150,50 @@ impl StepLedger {
         {
             return Err("invalid captured step increment");
         }
-        let next_outstanding = self
-            .outstanding()
-            .checked_add(increments.len())
-            .ok_or("step backlog overflow")?;
-        if next_outstanding > self.limit {
-            return Err("step backlog limit");
-        }
-        let next_tick = self
-            .next_tick
-            .checked_add(u64::try_from(increments.len()).map_err(|_| "step count overflow")?)
-            .ok_or("step identity exhausted")?;
-        for (index, increment) in increments.iter().copied().enumerate() {
-            let tick = self.next_tick + u64::try_from(index).expect("within checked count");
-            self.backlog.push_back(Step {
-                tick,
-                increments: increment,
-            });
-        }
-        self.next_tick = next_tick;
+        let snapshots = increments
+            .iter()
+            .enumerate()
+            .map(|(index, increment)| {
+                let offset = u64::try_from(index).map_err(|_| "step count overflow")?;
+                let tick = self.history.requested_tick()
+                    .checked_add(offset + 1)
+                    .ok_or("tick identity exhausted")?;
+                Ok(Step { tick, increments: *increment })
+            })
+            .collect::<Result<Vec<_>, &'static str>>()?;
+        self.history
+            .capture_batch(snapshots)
+            .map_err(|_| "step demand capacity or identity exhausted")?;
         Ok(())
     }
 
-    /// Called without waiting from host frames. Does not prepare a graph while
-    /// this producer has accepted unfinished state mutation.
     fn admit(
         &mut self,
         context: &GpuContext,
         state: &GpuBufferHandle,
         pipeline: &GpuComputePipelineDescriptor,
     ) -> bool {
-        if self.accepted.is_some() || self.backlog.is_empty() {
+        let snapshots = self.history.candidate(3)
+            .iter()
+            .map(|entry| *entry.input())
+            .collect::<Vec<_>>();
+        if snapshots.is_empty() {
             return false;
         }
-        let snapshot = self.backlog.iter().copied().take(3).collect::<Vec<_>>();
-        assert_eq!(
-            snapshot.first().expect("nonempty").tick,
-            self.completed_tick + 1
-        );
-        for window in snapshot.windows(2) {
+        assert_eq!(snapshots[0].tick, self.history.completed_tick() + 1);
+        for window in snapshots.windows(2) {
             assert_eq!(window[1].tick, window[0].tick + 1);
         }
-        let (fragment, readback) = batch_fragment(state, pipeline, &snapshot);
+        let (fragment, readback) = batch_fragment(state, pipeline, &snapshots);
         let submission =
             pollster::block_on(context.submit_work("runenwerk.fixed-step.fresh-batch", [fragment]))
                 .expect("test producer is uncontended and re-prepares after terminal completion");
-        assert_eq!(submission.status(), GpuSubmissionStatus::Accepted);
         let expected_counter = self.completed_counter
-            + snapshot
-                .iter()
-                .map(|step| u32::from(step.increments))
-                .sum::<u32>();
-        let last_tick = snapshot.last().expect("nonempty").tick;
-        for expected in &snapshot {
-            assert_eq!(self.backlog.pop_front(), Some(*expected));
-        }
-        self.accepted = Some(AcceptedBatch {
-            submission,
-            last_tick,
-            expected_counter,
-            readback,
-        });
+            + snapshots.iter().map(|step| u32::from(step.increments)).sum::<u32>();
+        self.history
+            .accept(submission, snapshots.len())
+            .expect("accepted exact producer batch");
+        self.accepted = Some(AcceptedBatch { expected_counter, readback });
         true
     }
 
@@ -230,16 +201,16 @@ impl StepLedger {
         let Some(accepted) = self.accepted.as_ref() else {
             return;
         };
+        let submission = self.history.accepted_submission().expect("accepted GPU batch");
         assert_eq!(
-            accepted.submission.affinity(),
+            submission.affinity(),
             context.affinity(),
             "generation replacement requires semantic reconstruction, not replay"
         );
-        match accepted.submission.status() {
+        match submission.status() {
             GpuSubmissionStatus::Accepted => {}
             GpuSubmissionStatus::Completed => {
-                let result = accepted
-                    .submission
+                let result = submission
                     .readback(accepted.readback)
                     .expect("required proof readback")
                     .status();
@@ -252,8 +223,9 @@ impl StepLedger {
                         .expect("four-byte readback"),
                 );
                 assert_eq!(observed, accepted.expected_counter);
+                self.history.commit_completed(context.affinity())
+                    .expect("producer verified exact completed batch");
                 self.completed_counter = observed;
-                self.completed_tick = accepted.last_tick;
                 self.accepted = None;
             }
             GpuSubmissionStatus::Failed(failure) => {
@@ -331,7 +303,7 @@ fn delayed_gpu_batches_consume_all_captured_steps_once() {
     // CPU frame 1: one step accepted by G5, not yet claimed completed.
     ledger.request(&[1]).expect("first captured step");
     assert!(ledger.admit(&context, &buffer, &pipeline));
-    assert_eq!(ledger.completed_tick, 0);
+    assert_eq!(ledger.completed_tick(), 0);
     assert_eq!(ledger.outstanding(), 1);
 
     // CPU frames 2-4: no step, then two, then one; GPU predecessor
@@ -343,7 +315,7 @@ fn delayed_gpu_batches_consume_all_captured_steps_once() {
     ledger.request(&[1]).expect("one-step frame");
     assert!(!ledger.admit(&context, &buffer, &pipeline));
     assert_eq!(ledger.requested_tick(), 4);
-    assert_eq!(ledger.completed_tick, 0);
+    assert_eq!(ledger.completed_tick(), 0);
     assert_eq!(ledger.outstanding(), 4);
 
     // Capacity does not silently discard an earlier event or advance time.
@@ -351,29 +323,19 @@ fn delayed_gpu_batches_consume_all_captured_steps_once() {
     assert_eq!(ledger.requested_tick(), 4);
     assert_eq!(ledger.outstanding(), 4);
 
-    let first = ledger
-        .accepted
-        .as_ref()
-        .expect("first submission")
-        .submission
-        .clone();
+    let first = ledger.history.accepted_submission().expect("first submission").clone();
     progress_to_terminal(&context, &first);
     ledger.reconcile(&context);
-    assert_eq!((ledger.completed_tick, ledger.completed_counter), (1, 1));
+    assert_eq!((ledger.completed_tick(), ledger.completed_counter), (1, 1));
 
     // Freshly formed graph batches *captured* steps 2..4, including their
     // differing work weights, not a replacement latest-frame step count.
     assert!(ledger.admit(&context, &buffer, &pipeline));
-    let second = ledger
-        .accepted
-        .as_ref()
-        .expect("second submission")
-        .submission
-        .clone();
-    assert_eq!(ledger.completed_tick, 1);
+    let second = ledger.history.accepted_submission().expect("second submission").clone();
+    assert_eq!(ledger.completed_tick(), 1);
     progress_to_terminal(&context, &second);
     ledger.reconcile(&context);
-    assert_eq!((ledger.requested_tick(), ledger.completed_tick), (4, 4));
+    assert_eq!((ledger.requested_tick(), ledger.completed_tick()), (4, 4));
     assert_eq!(ledger.completed_counter, 7);
     assert_eq!(ledger.outstanding(), 0);
     assert!(!ledger.admit(&context, &buffer, &pipeline));
