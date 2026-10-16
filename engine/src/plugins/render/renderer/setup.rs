@@ -97,6 +97,7 @@ impl Renderer {
             last_capture_selector_results: Vec::new(),
             last_captured_textures: Vec::new(),
             gpu_observations: super::render_flow::RendererGpuObservationState::default(),
+            submission_lifecycle: Default::default(),
             retained_submission_trace: Default::default(),
             pending_gpu_observation_output:
                 super::render_flow::RendererGpuObservationOutput::default(),
@@ -130,6 +131,7 @@ impl Renderer {
         // capture consume the resulting public lifecycle facts; neither feature creates a poll
         // loop or reaches into the backend.
         context.progress();
+        self.submission_lifecycle.reconcile(context);
         self.render_sessions.reconcile();
         let super::render_flow::RendererGpuObservationOutput {
             timing_evidence,
