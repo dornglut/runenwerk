@@ -1114,6 +1114,45 @@ fn late_m13_source_denial_removes_already_released_same_frame_press() {
 }
 
 #[test]
+fn late_m13_denial_replaces_retired_block_after_up_and_new_down() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let source = InputContext::new(InputSourceId::new(905), Some(InputDeviceId::new(25)));
+    let key = physical_key(KeyCode::KeyW);
+
+    input.handle_normalized_keyboard(source, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    let first = input.keyboard_down_generation_in(source, &key).unwrap();
+    actions.revoke_keyboard_lifetime(&input, source, &key, first);
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+
+    // This genuine Up and fresh Down happen without an intervening
+    // ActionState projection. The previously blocked generation must be
+    // retired before a new M13 conflict denies the new physical lifetime.
+    input.handle_normalized_keyboard(source, &normalized_key(DigitalState::Released));
+    input.handle_normalized_keyboard(source, &normalized_key(DigitalState::Pressed));
+    let second = input.keyboard_down_generation_in(source, &key).unwrap();
+    assert_ne!(first, second);
+    actions.revoke_source_keyboard_for_ui_ownership(&input, source.source);
+    actions.project(&input);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+
+    clear_frame(&mut input, &mut actions);
+    assert!(
+        !actions.action_down(action::WORLD_MOVE_UP),
+        "the new denied generation must remain blocked after FrameEnd"
+    );
+
+    input.handle_normalized_keyboard(source, &normalized_key(DigitalState::Released));
+    actions.project(&input);
+    clear_frame(&mut input, &mut actions);
+    input.handle_normalized_keyboard(source, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+}
+
+#[test]
 fn ui_owned_modifier_cannot_keep_a_game_chord_held() {
     let mut input = InputState::new();
     let mut actions = ActionState::new();

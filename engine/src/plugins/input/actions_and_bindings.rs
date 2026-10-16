@@ -561,7 +561,10 @@ impl ActionState {
         input: &InputState,
         source: InputSourceId,
     ) {
-        let mut changed = false;
+        // An authentic Up followed by a new Down can occur before the next
+        // action projection. Retire the old blocked generation before deciding
+        // whether the new held generation needs its own persistent denial.
+        self.retire_genuinely_released_denials(input);
         // Pressed may still be observable after a same-frame physical Up.
         for press in input
             .keyboard_press_samples()
@@ -578,7 +581,6 @@ impl ActionState {
                     key: press.physical_key.clone(),
                     generation: press.generation,
                 });
-                changed = true;
             }
         }
 
@@ -595,7 +597,6 @@ impl ActionState {
                         key: key.clone(),
                         generation,
                     });
-                    changed = true;
                 }
             }
             if !self.blocked_held_key(context, key) {
@@ -605,13 +606,10 @@ impl ActionState {
                     generation,
                     releases_seen,
                 });
-                changed = true;
             }
         }
-        if changed {
-            self.retract_ineligible_pressed_contributors(input);
-            self.recompute_action_down_states(input);
-        }
+        self.retract_ineligible_pressed_contributors(input);
+        self.recompute_action_down_states(input);
     }
 
     /// A native UI recipient may suppress a synthetic Press or a repeat
