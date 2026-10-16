@@ -447,7 +447,10 @@ impl WinitRunner {
         }
         let world = &mut self.state.world;
         if !world.has_resource::<UiNativeInputRecipientsResource>() {
-            return Ok(false);
+            return match cancellation_failure {
+                Some(error) => Err(error),
+                None => Ok(false),
+            };
         }
         if !world.has_resource::<UiRuntimePresentationAssociationsResource>() {
             return Err(anyhow!(
@@ -2566,9 +2569,9 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 self.apply_event_for_native_window(native_window_id, PlatformEvent::CloseRequested)
             }
             WindowEvent::Focused(focused) => {
-                // UI cancellation is best-effort only for ordering: even a
-                // terminal/stale M13 target cannot intercept the operating
-                // system's original focus-loss and physical-key revocation.
+                // Attempt framework cancellation before the original focus
+                // transition, but report failure only after its mandatory
+                // physical continuity and game-action revocation complete.
                 let pointer_cancellation = if !focused {
                     let mouse = self.cancel_native_ui_mouse(native_window_id);
                     let touch = self.cancel_native_ui_touch(native_window_id);
