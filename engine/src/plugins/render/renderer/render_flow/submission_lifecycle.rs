@@ -4,6 +4,7 @@
 //! execution. This integration layer retains exact public submission handles
 //! independently of optional timing, capture, or UI presentation observations.
 //! It neither performs GPU progress nor attempts to reserve retained resources.
+use crate::plugins::render::{PreparedFlowInvocationId, RenderFlowId};
 use runen_gpu::{
     GpuContext, GpuContextAffinity, GpuExecutionLifecycleState, GpuSubmission,
     GpuSubmissionFailure, GpuSubmissionId, GpuSubmissionStatus,
@@ -15,6 +16,33 @@ struct AcceptedFrameSubmission {
     submission: GpuSubmission,
     frame: u64,
     surface: u64,
+    invocations: Vec<RenderGpuFrameInvocationReceipt>,
+}
+
+/// Selected ordinary flow invocations present in a composed frame's admitted
+/// workload. This identifies a prepared producer scope, not a proof that any
+/// particular semantic fixed step was executed or published.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderGpuFrameInvocationReceipt {
+    flow_id: RenderFlowId,
+    invocation_id: PreparedFlowInvocationId,
+}
+
+impl RenderGpuFrameInvocationReceipt {
+    pub fn new(flow_id: RenderFlowId, invocation_id: PreparedFlowInvocationId) -> Self {
+        Self {
+            flow_id,
+            invocation_id,
+        }
+    }
+
+    pub const fn flow_id(&self) -> RenderFlowId {
+        self.flow_id
+    }
+
+    pub fn invocation_id(&self) -> &PreparedFlowInvocationId {
+        &self.invocation_id
+    }
 }
 
 // This is a bounded *observation delivery* buffer, not a G5 reservation table
@@ -41,6 +69,7 @@ pub struct RenderGpuFrameTerminalOutcome {
     submission: GpuSubmissionId,
     affinity: GpuContextAffinity,
     disposition: RenderGpuFrameTerminalDisposition,
+    invocations: Vec<RenderGpuFrameInvocationReceipt>,
 }
 
 impl RenderGpuFrameTerminalOutcome {
@@ -62,6 +91,10 @@ impl RenderGpuFrameTerminalOutcome {
 
     pub fn disposition(&self) -> &RenderGpuFrameTerminalDisposition {
         &self.disposition
+    }
+
+    pub fn invocations(&self) -> &[RenderGpuFrameInvocationReceipt] {
+        &self.invocations
     }
 }
 
@@ -98,6 +131,7 @@ pub struct RenderGpuFrameSubmissionReceipt {
     frame: u64,
     surface: u64,
     submission: GpuSubmission,
+    invocations: Vec<RenderGpuFrameInvocationReceipt>,
 }
 
 impl RenderGpuFrameSubmissionReceipt {
@@ -111,6 +145,10 @@ impl RenderGpuFrameSubmissionReceipt {
 
     pub fn submission(&self) -> &GpuSubmission {
         &self.submission
+    }
+
+    pub fn invocations(&self) -> &[RenderGpuFrameInvocationReceipt] {
+        &self.invocations
     }
 }
 
@@ -166,6 +204,7 @@ impl RendererSubmissionLifecycle {
         submission: GpuSubmission,
         frame: u64,
         surface: u64,
+        invocations: Vec<RenderGpuFrameInvocationReceipt>,
     ) {
         // Reconcile public status only; the enclosing Gfx already owns the one
         // nonblocking GPU progress call. RunenGPU enforces physical capacity.
@@ -189,6 +228,7 @@ impl RendererSubmissionLifecycle {
             submission,
             frame,
             surface,
+            invocations,
         });
     }
 
@@ -201,6 +241,7 @@ impl RendererSubmissionLifecycle {
                 frame: entry.frame,
                 surface: entry.surface,
                 submission: entry.submission.clone(),
+                invocations: entry.invocations.clone(),
             })
             .collect()
     }
@@ -280,6 +321,7 @@ impl RendererSubmissionLifecycle {
                     submission: accepted.submission.id(),
                     affinity: accepted.submission.affinity(),
                     disposition: outcome,
+                    invocations: accepted.invocations.clone(),
                 },
             );
             false
