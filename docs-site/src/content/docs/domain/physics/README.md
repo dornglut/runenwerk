@@ -27,7 +27,10 @@ for later physics capabilities only when separately activated.
 
 ## Ownership
 
-The boundary is:
+The flow below describes **the implemented P1 SDF-first character path**, not a
+mandatory WorldSDF dependency for every later Physics scene. General-purpose ordinary
+primitive Physics and its separate solver adapter are governed by the second-stage
+direction below.
 
 ```text
 world_sdf
