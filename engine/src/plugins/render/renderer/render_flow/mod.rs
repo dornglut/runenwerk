@@ -84,7 +84,7 @@ pub(super) use provenance::{
     pass_consumes_material_resources, resolve_shader_material, resolve_shader_material_for_packet,
 };
 pub(super) use retained_submission_trace::RetainedSubmissionTrace;
-pub(super) use submission_lifecycle::RendererSubmissionLifecycle;
 pub(crate) use runtime_resources::{
     FlowRuntimeResources, ResolvedTextureRef, RuntimeResourceKey, RuntimeResourceKind,
 };
+pub(super) use submission_lifecycle::RendererSubmissionLifecycle;
