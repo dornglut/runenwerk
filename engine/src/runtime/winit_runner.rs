@@ -631,7 +631,9 @@ impl WinitRunner {
                     ?error,
                     "no M13 pre-input ownership: original keyboard remains neutral only"
                 );
-                return Ok(());
+                return Err(anyhow!(
+                    "native keyboard M13 pre-input ownership unavailable: {error:?}"
+                ));
             }
         };
         let composition = native_keyboard_composition(&before);
@@ -651,7 +653,7 @@ impl WinitRunner {
         // Once the real M13 queue has admitted a keyboard occurrence,
         // missing finality is not merely a gameplay nonclaim: continuing the
         // host could preserve an unresolved framework keyboard lifetime.
-        let mut admitted_failure: Option<anyhow::Error> = None;
+        let mut m13_failure: Option<anyhow::Error> = None;
         let permit = match translated {
             KeyboardInputOutcome::Submit(event) => {
                 let slots = self
@@ -676,7 +678,7 @@ impl WinitRunner {
                                         | UiInputConflict::ObservedNonexclusive
                                 ),
                                 _ => {
-                                    admitted_failure = Some(anyhow!(
+                                    m13_failure = Some(anyhow!(
                                         "native keyboard lacked exact committed M13 settlement: {evidence:?}"
                                     ));
                                     false
@@ -684,20 +686,33 @@ impl WinitRunner {
                             }
                         }
                         Err(error) => {
-                            admitted_failure = Some(anyhow!(
+                            m13_failure = Some(anyhow!(
                                 "native keyboard admitted M13 work but its pump failed: {error:?}"
                             ));
                             false
                         }
                     },
-                    Err(error) => {
-                        let after = slots.input_ownership(slot);
-                        after.is_ok_and(|after| {
-                            native_no_focused_keyboard_claim_witness(
+                    Err(error) => match slots.input_ownership(slot) {
+                        Ok(after)
+                            if native_no_focused_keyboard_claim_witness(
                                 device, &before, &after, &error,
-                            )
-                        })
-                    }
+                            ) =>
+                        {
+                            true
+                        }
+                        Ok(_) => {
+                            m13_failure = Some(anyhow!(
+                                "native keyboard M13 admission rejected without exact original no-focus evidence: {error:?}"
+                            ));
+                            false
+                        }
+                        Err(observation) => {
+                            m13_failure = Some(anyhow!(
+                                "native keyboard M13 admission rejected and post-state observation failed: {error:?}; {observation:?}"
+                            ));
+                            false
+                        }
+                    },
                 }
             }
             KeyboardInputOutcome::Suppressed(_) => false,
@@ -711,7 +726,7 @@ impl WinitRunner {
         }
         // The genuine physical Down remains denied before returning the
         // terminal framework error; an ambiguous pump may not grant gameplay.
-        if let Some(error) = admitted_failure {
+        if let Some(error) = m13_failure {
             return Err(error);
         }
         Ok(())
