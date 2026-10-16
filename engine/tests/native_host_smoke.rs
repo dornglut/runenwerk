@@ -1434,8 +1434,7 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                 matches!(
                     refused,
                     engine::plugins::render::RenderGpuStepCommitError::Verification(_)
-                )
-                    && producer.completed_tick() == 0
+                ) && producer.completed_tick() == 0
                     && producer.requested_tick() == 4
                     && producer.pending_len() == 1
                     && producer.accepted_steps().len() == 3
