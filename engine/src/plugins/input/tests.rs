@@ -1461,3 +1461,142 @@ fn synthetic_modifier_release_cannot_fabricate_forbidden_pressed_or_held_shortcu
     assert!(actions.action_down("game.no-shift-w"));
     assert!(!actions.action_pressed("game.no-shift-w"));
 }
+
+#[test]
+fn native_ui_pointer_truth_does_not_leak_into_legacy_gameplay_projection() {
+    use crate::plugins::ui::NativeInputRecipient;
+    use crate::runtime::platform::{PlatformEvent, apply_native_recipient_input_event};
+    use runen_input::{ScrollDelta, ScrollDomain, ScrollInput};
+
+    let legacy = InputContext::new(InputSourceId::new(801), Some(InputDeviceId::new(11)));
+    let ui = InputContext::new(InputSourceId::new(802), Some(InputDeviceId::new(12)));
+    let legacy_route = Some(NativeInputRecipient::LegacyNativeConsumer);
+    let ui_route = None;
+    let left_down = |context| PlatformEvent::MouseInput {
+        context,
+        input: PointerButtonInput {
+            button: PointerButton::Left,
+            state: DigitalState::Pressed,
+        },
+    };
+    let left_up = |context| PlatformEvent::MouseInput {
+        context,
+        input: PointerButtonInput {
+            button: PointerButton::Left,
+            state: DigitalState::Released,
+        },
+    };
+
+    let mut input = InputState::new();
+    input.start_admitted_input_capture();
+    apply_native_recipient_input_event(&mut input, &left_down(legacy), legacy_route);
+    assert!(input.left_mouse_down());
+    assert!(input.left_mouse_pressed());
+    input.clear_frame();
+
+    // A UI Down must be neutral physical truth but not a second legacy press.
+    apply_native_recipient_input_event(&mut input, &left_down(ui), ui_route);
+    assert!(input.pointer_button_down_anywhere(PointerButton::Left));
+    assert!(input.left_mouse_down(), "the independent legacy held source survives");
+    assert!(!input.left_mouse_pressed());
+    assert!(input.mouse_button_transitions().is_empty());
+
+    // UI cursor/wheel/touch do not move the gameplay cursor or steal the
+    // legacy primary contact. Original source-local observations remain.
+    apply_native_recipient_input_event(
+        &mut input,
+        &PlatformEvent::CursorMoved {
+            context: legacy,
+            position: Point2::new(10.0, 20.0, CoordinateSpace::WindowPhysicalPixels),
+        },
+        legacy_route,
+    );
+    apply_native_recipient_input_event(
+        &mut input,
+        &PlatformEvent::MouseWheel {
+            context: legacy,
+            input: ScrollInput {
+                delta: ScrollDelta::vertical_only(1.0),
+                domain: ScrollDomain::Unspecified,
+                phase: None,
+            },
+        },
+        legacy_route,
+    );
+    assert_eq!(input.mouse_position, (10.0, 20.0));
+    assert_eq!(input.scroll_delta, 1.0);
+    apply_native_recipient_input_event(
+        &mut input,
+        &PlatformEvent::CursorMoved {
+            context: ui,
+            position: Point2::new(99.0, 88.0, CoordinateSpace::WindowPhysicalPixels),
+        },
+        ui_route,
+    );
+    apply_native_recipient_input_event(
+        &mut input,
+        &PlatformEvent::MouseWheel {
+            context: ui,
+            input: ScrollInput {
+                delta: ScrollDelta::vertical_only(7.0),
+                domain: ScrollDomain::Unspecified,
+                phase: None,
+            },
+        },
+        ui_route,
+    );
+    apply_native_recipient_input_event(
+        &mut input,
+        &PlatformEvent::Touch {
+            context: ui,
+            input: ContactInput {
+                contact: ContactId::new(33),
+                phase: ContactPhase::Begin,
+                position: Point2::new(40.0, 50.0, CoordinateSpace::WindowPhysicalPixels),
+                pressure: None,
+                altitude_angle_radians: None,
+            },
+        },
+        ui_route,
+    );
+    assert_eq!(input.mouse_position, (10.0, 20.0));
+    assert_eq!(input.scroll_delta, 1.0);
+    assert!(input.touch_samples().is_empty());
+
+    // A genuine legacy release ends only the legacy game held projection,
+    // even when the UI's separate source remains physically pressed.
+    input.clear_frame();
+    apply_native_recipient_input_event(&mut input, &left_up(legacy), legacy_route);
+    assert!(!input.left_mouse_down());
+    assert!(input.left_mouse_released());
+    assert!(
+        input.pointer_button_down_anywhere(PointerButton::Left),
+        "the UI source still owns its independently admitted physical Down"
+    );
+    input.clear_frame();
+    apply_native_recipient_input_event(&mut input, &left_up(ui), ui_route);
+    assert!(!input.left_mouse_down());
+    assert!(!input.left_mouse_released());
+
+    // Source retirement must clear derived legacy held eligibility without
+    // fabricating a mouse-button release or erasing unrelated physical truth.
+    apply_native_recipient_input_event(&mut input, &left_down(legacy), legacy_route);
+    input.clear_frame();
+    apply_native_recipient_input_event(
+        &mut input,
+        &PlatformEvent::InputContinuityLost {
+            context: legacy,
+            loss: ContinuityLoss::Device,
+        },
+        ui_route,
+    );
+    assert!(!input.left_mouse_down());
+    assert!(!input.left_mouse_released());
+    assert!(input.mouse_button_transitions().is_empty());
+    let captured = input.stop_admitted_input_capture();
+    assert!(captured.iter().any(|group| group.context == ui
+        && matches!(
+            group.observations.as_slice(),
+            [InputObservation::Contact(_)]
+        )));
+}

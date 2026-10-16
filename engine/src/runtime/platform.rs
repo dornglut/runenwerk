@@ -2,8 +2,8 @@ use crate::plugins::InputState;
 use crate::plugins::ui::NativeInputRecipient;
 use crate::runtime::window::{NativeWindowId, NativeWindowRecord};
 use runen_input::{
-    ContactInput, ContinuityLoss, InputContext, KeyboardInput, Point2, PointerButtonInput,
-    ScrollInput,
+    ContactInput, ContinuityLoss, InputContext, InputObservation, KeyboardInput, Point2,
+    PointerButtonInput, ScrollInput,
 };
 
 #[derive(Debug, Clone)]
@@ -262,6 +262,56 @@ pub fn apply_platform_input_event(input: &mut InputState, event: &PlatformEvent)
         | PlatformEvent::Resized { .. }
         | PlatformEvent::ScaleFactorChanged { .. }
         | PlatformEvent::RedrawRequested => {}
+    }
+}
+
+/// The selected original native recipient controls only derived legacy
+/// gameplay input. RunenInput always receives the physical pointer observation;
+/// RunenUI/M13 independently decides its own semantic input processing.
+pub(crate) fn apply_native_recipient_input_event(
+    input: &mut InputState,
+    event: &PlatformEvent,
+    recipient: Option<NativeInputRecipient>,
+) {
+    if recipient == Some(NativeInputRecipient::LegacyNativeConsumer) {
+        apply_platform_input_event(input, event);
+        return;
+    }
+    match event {
+        PlatformEvent::MouseWheel {
+            context,
+            input: scroll,
+        } => input.handle_nonlegacy_native_pointer_observation(
+            *context,
+            InputObservation::Scroll(*scroll),
+        ),
+        PlatformEvent::CursorMoved { context, position } => {
+            input.handle_nonlegacy_native_pointer_observation(
+                *context,
+                InputObservation::AbsolutePointerPosition {
+                    position: *position,
+                },
+            );
+        }
+        PlatformEvent::MouseInput {
+            context,
+            input: button,
+        } => input.handle_nonlegacy_native_pointer_observation(
+            *context,
+            InputObservation::PointerButton(*button),
+        ),
+        PlatformEvent::Touch {
+            context,
+            input: contact,
+        } => input.handle_nonlegacy_native_pointer_observation(
+            *context,
+            InputObservation::Contact(contact.clone()),
+        ),
+        PlatformEvent::TextInput { .. } => {
+            // Original UI-bound text is submitted to the owning M13 runtime;
+            // it is not simultaneously legacy gameplay/Editor typed text.
+        }
+        _ => apply_platform_input_event(input, event),
     }
 }
 

@@ -6,6 +6,7 @@ use runen_input::{
     PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput, RelativeMotionUnit,
     ScrollDelta, ScrollDomain, ScrollInput, Vector2,
 };
+use std::collections::HashSet;
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
 
@@ -166,6 +167,11 @@ pub struct InputState {
     pub mouse_position: (f32, f32),
     mouse_motion_samples: Vec<MouseMotionSample>,
     mouse_button_transitions: Vec<MouseButtonTransitionSample>,
+    /// Derived legacy/gameplay eligibility, not physical authority. The
+    /// canonical held button truth stays in RunenInput per source/device.
+    /// Only original legacy-routed button Down contributes here; UI-routed
+    /// button lifetimes never affect a source-erased gameplay read.
+    legacy_mouse_buttons_down: HashSet<(InputContext, PointerButton)>,
     touch_samples: Vec<TouchInputSample>,
     device_observation_groups: Vec<InputObservationGroup>,
     admitted_input_capture_active: bool,
@@ -194,6 +200,7 @@ impl Default for InputState {
             mouse_position: (0.0, 0.0),
             mouse_motion_samples: Vec::new(),
             mouse_button_transitions: Vec::new(),
+            legacy_mouse_buttons_down: HashSet::new(),
             touch_samples: Vec::new(),
             device_observation_groups: Vec::new(),
             admitted_input_capture_active: false,
@@ -225,6 +232,9 @@ impl InputState {
                     self.observe_keyboard_contributor(group.context, input);
                 }
                 InputObservation::ContinuityLoss(loss) => {
+                    self.legacy_mouse_buttons_down.retain(|(context, _)| {
+                        !continuity_loss_contains_context(group.context, *loss, *context)
+                    });
                     self.keyboard_held_contributors.retain(|contributor| {
                         !continuity_loss_contains_context(group.context, *loss, contributor.context)
                     });
@@ -429,6 +439,17 @@ impl InputState {
         }
     }
 
+    /// Native UI and unresolved recipients admit original pointer truth only.
+    /// Legacy mouse/touch/text projections are opt-in at the one native host
+    /// recipient boundary; this does not change RunenInput's physical state.
+    pub(crate) fn handle_nonlegacy_native_pointer_observation(
+        &mut self,
+        context: InputContext,
+        observation: InputObservation,
+    ) {
+        let _ = self.admit_group(&InputObservationGroup::single(context, observation));
+    }
+
     pub(crate) fn handle_normalized_keyboard(
         &mut self,
         context: InputContext,
@@ -551,12 +572,26 @@ impl InputState {
         context: InputContext,
         input: PointerButtonInput,
     ) -> Result<(), InputError> {
-        let was_down_anywhere = self.neutral.pointer_button_down_anywhere(input.button);
+        let was_down_anywhere = self
+            .legacy_mouse_buttons_down
+            .iter()
+            .any(|(_, button)| *button == input.button);
         self.admit_group(&InputObservationGroup::single(
             context,
             InputObservation::PointerButton(input),
         ))?;
-        let is_down_anywhere = self.neutral.pointer_button_down_anywhere(input.button);
+        match input.state {
+            DigitalState::Pressed => {
+                self.legacy_mouse_buttons_down.insert((context, input.button));
+            }
+            DigitalState::Released => {
+                self.legacy_mouse_buttons_down.remove(&(context, input.button));
+            }
+        }
+        let is_down_anywhere = self
+            .legacy_mouse_buttons_down
+            .iter()
+            .any(|(_, button)| *button == input.button);
 
         let changed = match input.state {
             DigitalState::Pressed => !was_down_anywhere && is_down_anywhere,
@@ -919,7 +954,9 @@ impl InputState {
     }
 
     fn button_down(&self, button: PointerButton) -> bool {
-        self.neutral.pointer_button_down_anywhere(button)
+        self.legacy_mouse_buttons_down
+            .iter()
+            .any(|(_, held)| *held == button)
     }
 
     #[cfg(test)]

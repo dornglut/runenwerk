@@ -18,7 +18,7 @@ use crate::runtime::frame_pacing::{
 use crate::runtime::native_window_hooks::with_native_window_hooks;
 use crate::runtime::platform::{
     PlatformEvent, PlatformWindowEvent, PlatformWindowEventQueueResource,
-    apply_native_window_event, apply_platform_input_event,
+    apply_native_recipient_input_event, apply_native_window_event,
 };
 use crate::runtime::presentation::ensure_primary_presentation_metrics;
 use crate::runtime::window::{
@@ -2151,7 +2151,7 @@ impl WinitRunner {
             PlatformWindowEvent::new(native_window_id, event).with_native_input_recipient(recipient)
         });
         for entry in &journal {
-            self.apply_admitted_event(native_window_id, &entry.event)?;
+            self.apply_admitted_event(native_window_id, &entry.event, recipient)?;
         }
         self.state
             .world
@@ -2165,6 +2165,7 @@ impl WinitRunner {
         &mut self,
         native_window_id: NativeWindowId,
         event: &PlatformEvent,
+        recipient: Option<NativeInputRecipient>,
     ) -> Result<()> {
         match event {
             PlatformEvent::KeyboardInput { .. }
@@ -2180,7 +2181,7 @@ impl WinitRunner {
                         .world
                         .resource_mut::<InputState>()
                         .context("missing InputState resource")?;
-                    apply_platform_input_event(input, event);
+                    apply_native_recipient_input_event(input, event, recipient);
                 }
                 if matches!(event, PlatformEvent::InputContinuityLost { .. }) {
                     // Focus loss/source invalidation can arrive after the ECS
