@@ -1290,48 +1290,44 @@ mod tests {
     }
 
     #[test]
-    fn fixed_step_projection_refuses_to_silently_discard_completed_cpu_ticks() {
+    fn fixed_step_projection_must_match_exact_completed_cpu_interval() {
         for completed in [0, 1, 4] {
-            assert_eq!(
-                checked_fixed_step_substeps(completed, 4, 4, "test.simulation").unwrap(),
-                completed,
-            );
+            ensure_exact_fixed_step_projection(completed, completed, "simulation")
+                .expect("matching CPU and GPU ticks are valid");
         }
-        let region_error = checked_fixed_step_substeps(3, 4, 2, "test.simulation")
-            .expect_err("a smaller GPU region must not drop completed CPU work");
-        assert!(
-            region_error
-                .to_string()
-                .contains("refusing silent GPU-step truncation")
-        );
-        let budget_error = checked_fixed_step_substeps(4, 2, 4, "test.simulation")
-            .expect_err("a changed catch-up budget must not silently truncate CPU work");
-        assert!(
-            budget_error
-                .to_string()
-                .contains("refusing silent GPU-step truncation")
-        );
+        let truncated = ensure_exact_fixed_step_projection(3, 2, "simulation")
+            .expect_err("projected GPU steps must not silently omit CPU ticks");
+        let message = truncated.to_string();
+        assert!(message.contains("refusing silent GPU-step truncation or duplication"));
+        let fabricated = ensure_exact_fixed_step_projection(2, 3, "simulation")
+            .expect_err("projected GPU steps must not invent CPU ticks");
+        assert!(fabricated.to_string().contains("projected 3 GPU substeps"));
     }
 
     #[test]
-    fn prepared_flow_rejects_completed_cpu_steps_exceeding_gpu_region_capacity() {
-        let flow = RenderFlow::new("test.fixed.region.capacity")
-            .compute_pass("simulate")
-            .dispatch([1, 1, 1])
-            .finish()
-            .fixed_step_region(
-                "simulation",
-                2,
-                [(
-                    "simulate",
-                    runen_gpu::GpuBindingKey::try_new(0, 0).expect("valid test binding"),
-                )],
-            )
-            .expect("fixed step authoring")
-            .validate()
-            .expect("fixed step graph validation");
-        let compiled = compile_flow_plan(&flow).expect("test flow compiles");
-        let region = &compiled.execution.fixed_step_regions[0];
+    fn active_gpu_region_rejects_truncation_without_blocking_inactive_explicit_flow() {
+        let make_flow = |explicit_only| {
+            let flow = RenderFlow::new("prepare.fixed.region")
+                .compute_pass("simulate")
+                .dispatch([1, 1, 1])
+                .finish()
+                .fixed_step_region(
+                    "simulation",
+                    2,
+                    [(
+                        "simulate",
+                        runen_gpu::GpuBindingKey::try_new(0, 0).expect("valid test binding"),
+                    )],
+                )
+                .expect("fixed-step authoring");
+            let flow = if explicit_only {
+                flow.explicit_invocations_only()
+            } else {
+                flow
+            };
+            compile_flow_plan(&flow.validate().expect("fixed-step graph validation"))
+                .expect("fixed-step compilation")
+        };
         let config = FixedTimeConfig::default();
         let budget = CatchupBudget {
             max_steps_per_frame: 4,
@@ -1346,16 +1342,44 @@ mod tests {
             (TypeId::of::<FixedTimeState>(), &cpu_advanced as &dyn Any),
             (TypeId::of::<CatchupBudget>(), &budget as &dyn Any),
         ]);
-        let err = build_prepared_flow_inputs(
-            std::slice::from_ref(&compiled),
+        let requests = PreparedRenderFrameRequestResource::default();
+        let flow = make_flow(false);
+        let main_inputs = build_prepared_flow_inputs(
+            std::slice::from_ref(&flow),
             &extracted,
             (640, 480),
         )
-        .expect_err("GPU region may not silently truncate CPU-completed ticks");
-        assert!(
-            err.to_string()
-                .contains("refusing silent GPU-step truncation")
-        );
+        .expect("preliminary metadata may be bounded");
+        let err = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
+            std::slice::from_ref(&flow),
+            &extracted,
+            &main_inputs,
+            &[],
+            &requests,
+        )
+        .expect_err("selected simulation cannot omit CPU-completed ticks");
+        assert!(err.to_string().contains("refusing silent GPU-step truncation"));
+
+        // An unrequested explicit flow is inert. Its preliminary metadata must
+        // not prevent independent main-surface content from proceeding.
+        let inactive = make_flow(true);
+        let inactive_inputs = build_prepared_flow_inputs(
+            std::slice::from_ref(&inactive),
+            &extracted,
+            (640, 480),
+        )
+        .expect("unrequested flow may prepare metadata");
+        let idle = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
+            std::slice::from_ref(&inactive),
+            &extracted,
+            &inactive_inputs,
+            &[],
+            &requests,
+        )
+        .expect("an inactive explicit-only flow must not fail unrelated rendering");
+        assert!(idle.is_empty());
 
         let cpu_advanced = FixedTimeState {
             steps_ran_last_frame: 2,
@@ -1367,13 +1391,24 @@ mod tests {
             (TypeId::of::<FixedTimeState>(), &cpu_advanced as &dyn Any),
             (TypeId::of::<CatchupBudget>(), &budget as &dyn Any),
         ]);
-        let input = build_prepared_flow_inputs(
-            std::slice::from_ref(&compiled),
+        let main_inputs = build_prepared_flow_inputs(
+            std::slice::from_ref(&flow),
             &extracted,
             (640, 480),
         )
-        .expect("exact bounded GPU step projection");
-        let bytes = &input[&compiled.flow_id].projected_uniform_bytes[&region.iteration_uniform];
+        .expect("bounded metadata");
+        let selected = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
+            std::slice::from_ref(&flow),
+            &extracted,
+            &main_inputs,
+            &[],
+            &requests,
+        )
+        .expect("exact bounded GPU region");
+        assert_eq!(selected.len(), 1);
+        let uniform_id = flow.execution.fixed_step_regions[0].iteration_uniform;
+        let bytes = &selected[0].inputs.projected_uniform_bytes[&uniform_id];
         let iteration = RenderFixedStepIterationUniform::from_uniform_bytes(bytes)
             .expect("typed fixed-step projection");
         assert_eq!(iteration.submitted_substeps, 2);
