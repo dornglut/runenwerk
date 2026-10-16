@@ -396,7 +396,12 @@ fn apply_historical_step_inputs(
         .render_passes
         .iter()
         .filter(|pass| region.pass_ids.contains(&pass.pass_id()))
-        .flat_map(|pass| pass.node().uniform_bindings.iter().map(|binding| *binding.uniform_id()))
+        .flat_map(|pass| {
+            pass.node()
+                .uniform_bindings
+                .iter()
+                .map(|binding| *binding.uniform_id())
+        })
         .collect::<BTreeSet<_>>();
     anyhow::ensure!(
         !required.contains(&region.iteration_uniform),

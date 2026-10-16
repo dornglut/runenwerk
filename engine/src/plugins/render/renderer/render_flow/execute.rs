@@ -658,7 +658,9 @@ impl Renderer {
                         anyhow::ensure!(
                             actual == required,
                             "GPU producer work for flow {:?} skipped a historical fixed-step pass ({} of {})",
-                            flow.flow_id, actual, required
+                            flow.flow_id,
+                            actual,
+                            required
                         );
                     }
                     scheduled_invocations.push_back((
@@ -815,52 +817,69 @@ impl Renderer {
                         for (ordinal, occurrence) in occurrences.into_iter().enumerate() {
                             let mut fixed_step_uploads = Vec::new();
                             if let Some(iteration) = occurrence.fixed_step_iteration {
-                                fixed_step_uploads.push(self.realize_fixed_step_iteration_upload(
-                                    context,
-                                    invocation.invocation_id.0.as_str(),
-                                    runtime_resources,
-                                    iteration.region,
-                                    iteration
-                                        .schedule
-                                        .with_substep_index(iteration.substep_index),
-                                    &mut maximum_occurrence,
-                                    occurrence.control_order_after.clone(),
-                                )?);
-                                if let Some(history) = invocation.inputs.fixed_step_history.as_ref() {
+                                fixed_step_uploads.push(
+                                    self.realize_fixed_step_iteration_upload(
+                                        context,
+                                        invocation.invocation_id.0.as_str(),
+                                        runtime_resources,
+                                        iteration.region,
+                                        iteration
+                                            .schedule
+                                            .with_substep_index(iteration.substep_index),
+                                        &mut maximum_occurrence,
+                                        occurrence.control_order_after.clone(),
+                                    )?,
+                                );
+                                if let Some(history) = invocation.inputs.fixed_step_history.as_ref()
+                                {
                                     let snapshot = history
                                         .steps
                                         .get(iteration.substep_index as usize)
-                                        .ok_or_else(|| anyhow::anyhow!("GPU historical step missing"))?;
+                                        .ok_or_else(|| {
+                                            anyhow::anyhow!("GPU historical step missing")
+                                        })?;
                                     let pass_id = execution_pass_id(occurrence.pass);
                                     let pass_node = flow
                                         .render_passes
                                         .iter()
                                         .find(|pass| pass.pass_id() == pass_id)
-                                        .ok_or_else(|| anyhow::anyhow!("compiled GPU step pass lacks authored bindings"))?;
+                                        .ok_or_else(|| {
+                                            anyhow::anyhow!(
+                                                "compiled GPU step pass lacks authored bindings"
+                                            )
+                                        })?;
                                     for binding in &pass_node.node().uniform_bindings {
                                         let uniform_id = *binding.uniform_id();
                                         let bytes = snapshot
                                             .input
                                             .uniforms
                                             .get(&uniform_id)
-                                            .ok_or_else(|| anyhow::anyhow!("producer step {} omits authored GPU uniform", snapshot.tick))?;
+                                            .ok_or_else(|| {
+                                                anyhow::anyhow!(
+                                                    "producer step {} omits authored GPU uniform",
+                                                    snapshot.tick
+                                                )
+                                            })?;
                                         let preceding = fixed_step_uploads
                                             .last()
                                             .expect("iteration upload exists")
                                             .occurrence;
                                         let prepared = runtime_resources
                                             .prepare_uniform_upload(uniform_id, bytes)?;
-                                        let runtime_buffer = runtime_resources.realize_invocation_uniform_buffer(
-                                            invocation.invocation_id.0.as_str(),
-                                            uniform_id,
-                                            prepared.layout().byte_len(),
-                                        )?;
+                                        let runtime_buffer = runtime_resources
+                                            .realize_invocation_uniform_buffer(
+                                                invocation.invocation_id.0.as_str(),
+                                                uniform_id,
+                                                prepared.layout().byte_len(),
+                                            )?;
                                         anyhow::ensure!(
                                             prepared.layout().byte_len() <= runtime_buffer.size,
                                             "historical GPU uniform exceeds realized buffer capacity"
                                         );
                                         fixed_step_uploads.push(RealizedLogicalBufferUpload {
-                                            occurrence: allocate_aux_occurrence(&mut maximum_occurrence)?,
+                                            occurrence: allocate_aux_occurrence(
+                                                &mut maximum_occurrence,
+                                            )?,
                                             operation: project_buffer_upload(
                                                 &runtime_buffer.handle,
                                                 prepared.as_bytes(),
@@ -1191,19 +1210,16 @@ impl Renderer {
         let mut uploads = Vec::new();
         for (buffer_id, bytes) in &flow_inputs.projected_uniform_bytes {
             if flow_inputs.fixed_step_history.is_some()
-                && flow
-                    .render_passes
-                    .iter()
-                    .any(|pass| {
-                        flow.execution.fixed_step_regions.iter().any(|region| {
-                            region.pass_ids.contains(&pass.pass_id())
-                                && pass
-                                    .node()
-                                    .uniform_bindings
-                                    .iter()
-                                    .any(|binding| binding.uniform_id() == buffer_id)
-                        })
+                && flow.render_passes.iter().any(|pass| {
+                    flow.execution.fixed_step_regions.iter().any(|region| {
+                        region.pass_ids.contains(&pass.pass_id())
+                            && pass
+                                .node()
+                                .uniform_bindings
+                                .iter()
+                                .any(|binding| binding.uniform_id() == buffer_id)
                     })
+                })
             {
                 // Each historical value is uploaded immediately ahead of its
                 // actual selected occurrence; latest ECS bytes are not replayed.
