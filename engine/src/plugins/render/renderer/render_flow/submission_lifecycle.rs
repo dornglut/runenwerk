@@ -83,8 +83,11 @@ impl RenderGpuFrameTerminalBatch {
         self.lost_outcomes
     }
 
-    pub fn is_complete(&self) -> bool {
-        self.lost_outcomes == 0
+    /// True when the bounded event stream has lost at least one terminal
+    /// notification since its last drain. False does not certify domain
+    /// continuity or GPU content validity.
+    pub const fn has_delivery_gap(&self) -> bool {
+        self.lost_outcomes > 0
     }
 }
 
@@ -218,6 +221,7 @@ impl RendererSubmissionLifecycle {
         let lifecycle = context.execution_lifecycle_state();
         let terminal = &mut self.terminal;
         let lost = &mut self.lost_terminal;
+        let previously_lost = *lost;
         self.accepted.retain(|accepted| {
             let status = accepted.submission.status();
             let disposition = classify_submission(
@@ -280,9 +284,10 @@ impl RendererSubmissionLifecycle {
             );
             false
         });
-        if *lost > 0 {
+        if *lost > previously_lost {
             tracing::error!(
                 target: "runenwerk.gpu.submission",
+                newly_lost_terminal_outcomes = *lost - previously_lost,
                 undelivered_terminal_outcomes = *lost,
                 retained_terminal_capacity = MAX_TERMINAL_OUTCOMES,
                 "GPU submission terminal outcome delivery overflow; consumer must not infer complete simulation continuity"
