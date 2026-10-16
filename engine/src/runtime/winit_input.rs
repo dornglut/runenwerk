@@ -142,6 +142,17 @@ impl WinitInputAdapter {
             .map(|source| InputContext::new(source, None))
     }
 
+    /// Enumerate precisely the still-live original native source mappings,
+    /// including sources whose window registry record was unexpectedly lost.
+    /// This is not a second window/source authority or a new held-key store.
+    pub(crate) fn window_source_ids(
+        &self,
+    ) -> impl Iterator<Item = (NativeWindowId, InputSourceId)> + '_ {
+        self.window_sources
+            .iter()
+            .map(|(window, source)| (*window, *source))
+    }
+
     pub(crate) fn retire_window_source(
         &mut self,
         native_window_id: NativeWindowId,

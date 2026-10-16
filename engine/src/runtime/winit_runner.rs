@@ -2323,18 +2323,21 @@ impl WinitRunner {
         if self.state.world.resource::<ActionState>().is_err() {
             return Ok(());
         }
-        let Ok(registry) = self.state.world.resource::<WindowStateRegistryResource>() else {
-            return Ok(());
-        };
-        let windows = registry
-            .records()
-            .map(|record| (record.native_window_id, record.lifecycle_state))
-            .collect::<Vec<_>>();
-        for (window, lifecycle) in windows {
-            let Some(context) = self.input_adapter.window_source_context(window) else {
-                continue;
-            };
-            let incompatible = if lifecycle != NativeWindowLifecycleState::Created {
+        // The original Winit source allocator may outlive a window record.
+        // Use its source identities to ensure orphaned physical holds are not
+        // silently skipped at the frame's input permission boundary.
+        let sources = self.input_adapter.window_source_ids().collect::<Vec<_>>();
+        for (window, source) in sources {
+            let created = self
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .ok()
+                .and_then(|windows| windows.record(window))
+                .is_some_and(|record| {
+                    record.lifecycle_state == NativeWindowLifecycleState::Created
+                });
+            let incompatible = if !created {
                 // Native close/retirement may precede physical-source cleanup.
                 // An old held game action cannot be authorized in that gap.
                 true
@@ -2360,7 +2363,7 @@ impl WinitRunner {
                 let update = world
                     .resource::<InputState>()
                     .map(|input| {
-                        actions.revoke_source_keyboard_for_ui_ownership(input, context.source);
+                        actions.revoke_source_keyboard_for_ui_ownership(input, source);
                     })
                     .context("native M13 reconciliation missing physical InputState");
                 world.insert_resource(actions);
@@ -3807,6 +3810,120 @@ mod tests {
                 .unwrap()
                 .action_down(crate::plugins::action::WORLD_MOVE_UP),
             "closing native recipient cannot leave old gameplay input held"
+        );
+    }
+
+    #[test]
+    fn orphaned_native_window_source_is_denied_without_affecting_other_window() {
+        use runen_input::{
+            DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+            ObservationOrigin,
+        };
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        let primary = NativeWindowId::primary();
+        let secondary = NativeWindowId::try_from_raw(2).unwrap();
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .unwrap()
+            .register_created_window(secondary, "secondary", (640, 480), 1.0, false);
+        let first = runner
+            .input_adapter
+            .window_context(primary, winit::event::DeviceId::dummy())
+            .unwrap();
+        let other = runner
+            .input_adapter
+            .window_context(secondary, winit::event::DeviceId::dummy())
+            .unwrap();
+        assert_ne!(first.source, other.source);
+
+        let down = KeyboardInput {
+            physical_key: PhysicalKeyIdentity::code("KeyW"),
+            logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+            location: KeyLocation::Standard,
+            state: DigitalState::Pressed,
+            repeat: false,
+            origin: ObservationOrigin::SourceReport,
+        };
+        {
+            let input = runner.state.world.resource_mut::<InputState>().unwrap();
+            input.handle_normalized_keyboard(first, &down);
+            input.handle_normalized_keyboard(other, &down);
+        }
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP)
+        );
+
+        // Simulate a lost window registry record while the Winit source
+        // allocator and RunenInput still retain their original physical key.
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .unwrap()
+            .remove_window(secondary)
+            .expect("original secondary was created");
+        assert!(
+            runner.input_adapter.window_source_context(secondary).is_some(),
+            "source retirement has not yet happened"
+        );
+        runner.reconcile_native_ui_keyboard_before_frame().unwrap();
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "the original primary game window must stay eligible"
+        );
+
+        // The orphan's real W Down remains in neutral physical truth but may
+        // no longer keep the aggregate gameplay action held after primary Up.
+        runner
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(
+                first,
+                &KeyboardInput {
+                    state: DigitalState::Released,
+                    ..down
+                },
+            );
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(other, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some()
+        );
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "orphaned W must not resurrect source-erased gameplay permission"
         );
     }
 
