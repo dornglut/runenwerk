@@ -272,6 +272,42 @@ impl UiNativeInputRecipientsResource {
         Ok(true)
     }
 
+    /// Raw winit DeviceEvent motion has no native-window identity. Certify
+    /// the old source-erased game/camera projection using only the actual
+    /// application-owned recipient declarations, never a focus or M13 hit
+    /// inference. A pending UI selection, retired binding or unbound window
+    /// while UI slots exist cannot silently become legacy game permission.
+    ///
+    /// Deliberately a read-only binding query: high-rate raw input must not
+    /// repeatedly pump or observe a UI runtime merely to reject attribution.
+    pub(crate) fn raw_motion_legacy_projection_allowed(
+        &self,
+        windows: &WindowStateRegistryResource,
+        allow_implicit_legacy: bool,
+    ) -> bool {
+        if matches!(
+            self.requested_primary,
+            Some(NativeInputRecipient::RunenUiSlot(_))
+        ) {
+            return false;
+        }
+
+        let mut has_created_window = false;
+        for window in windows
+            .records()
+            .filter(|record| record.lifecycle_state == NativeWindowLifecycleState::Created)
+        {
+            has_created_window = true;
+            match self.bindings.get(&window.native_window_id) {
+                Some(WindowRecipientBinding::Bound(binding))
+                    if binding.recipient == NativeInputRecipient::LegacyNativeConsumer => {}
+                None if allow_implicit_legacy => {}
+                _ => return false,
+            }
+        }
+        has_created_window
+    }
+
     /// Revalidate target and current scope on every native callback. Unknown,
     /// stopped, stale and capacity-paused UI runtime state never grants legacy
     /// gameplay fallback. An unbound ordinary game window retains its old route.

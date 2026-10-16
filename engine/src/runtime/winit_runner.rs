@@ -2240,28 +2240,32 @@ impl WinitRunner {
         projection
     }
 
-    /// Winit DeviceEvent::MouseMotion has a raw device identity, but no native
-    /// window, UI recipient, focus, or capture association. Preserve the
-    /// existing legacy projection only when *every* active native window has
-    /// an independently resolved legacy input recipient. Any UI or unknown
-    /// recipient prevents a global gameplay/camera motion projection; it
-    /// never prevents neutral RunenInput observation.
-    fn raw_motion_has_legacy_route(&mut self) -> bool {
-        let windows = match self.state.world.resource::<WindowStateRegistryResource>() {
-            Ok(registry) => registry
-                .records()
-                .filter(|window| window.lifecycle_state == NativeWindowLifecycleState::Created)
-                .map(|window| window.native_window_id)
-                .collect::<Vec<_>>(),
-            Err(_) => return false,
+    /// The raw device event has no window, focus or capture association.
+    /// Consult only the existing recipient declarations, rather than querying
+    /// live M13 ownership on each high-frequency device-motion callback.
+    /// All active native windows must be legacy eligible; unknown UI routing
+    /// is never a fallback to a global camera/gameplay delta.
+    fn raw_motion_has_legacy_route(&self) -> bool {
+        let world = &self.state.world;
+        let Ok(windows) = world.resource::<WindowStateRegistryResource>() else {
+            return false;
         };
-        !windows.is_empty()
-            && windows.into_iter().all(|window| {
-                matches!(
-                    self.native_input_recipient(window),
-                    Ok((NativeInputRecipient::LegacyNativeConsumer, _))
-                )
-            })
+        let has_created_window = || {
+            windows
+                .records()
+                .any(|record| record.lifecycle_state == NativeWindowLifecycleState::Created)
+        };
+        match (
+            world.resource::<UiRuntimeSlotsResource>(),
+            world.resource::<UiNativeInputRecipientsResource>(),
+        ) {
+            (Ok(slots), Ok(recipients)) => {
+                recipients.raw_motion_legacy_projection_allowed(windows, slots.is_empty())
+            }
+            (Ok(slots), Err(_)) => slots.is_empty() && has_created_window(),
+            (Err(_), Err(_)) => has_created_window(),
+            (Err(_), Ok(_)) => false,
+        }
     }
 
     fn apply_raw_mouse_motion(&mut self, context: InputContext, dx: f32, dy: f32) -> Result<()> {
