@@ -457,9 +457,9 @@ fn captured_producer_steps_survive_real_g5_rejection_and_fresh_reprepare() {
     let readback = producer
         .submit_with(2, |candidate| {
             let captured = candidate
-            .iter()
-            .map(|entry| *entry.input())
-            .collect::<Vec<_>>();
+                .iter()
+                .map(|entry| *entry.input())
+                .collect::<Vec<_>>();
             let (fresh_graph, readback) = batch_fragment(&buffer, &pipeline, &captured);
             pollster::block_on(
                 context.submit_work("fixed.step.g5.fresh-after-terminal", [fresh_graph]),
