@@ -1346,12 +1346,15 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                             .first_capture_frame
                             .is_none_or(|first| capture.identity.frame_index > first))
             };
+        // Normal producer code can read ECS observation; it must not need
+        // privileged access to the renderer or create another GPU progress
+        // loop just because the previous accepted frame is deferred.
         let capture = world
-            .resource::<Gfx>()
+            .resource::<RenderCapturedTextureState>()
             .ok()
-            .and_then(|gfx| {
-                gfx.renderer
-                    .last_captured_textures()
+            .and_then(|state| {
+                state
+                    .captures
                     .iter()
                     .find(|capture| matches_capture(capture))
                     .map(|capture| {
@@ -1360,24 +1363,6 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                             capture.terminal.clone(),
                             capture.sample_center_rgba8(),
                         )
-                    })
-            })
-            .or_else(|| {
-                world
-                    .resource::<RenderCapturedTextureState>()
-                    .ok()
-                    .and_then(|state| {
-                        state
-                            .captures
-                            .iter()
-                            .find(|capture| matches_capture(capture))
-                            .map(|capture| {
-                                (
-                                    capture.identity.frame_index,
-                                    capture.terminal.clone(),
-                                    capture.sample_center_rgba8(),
-                                )
-                            })
                     })
             });
         if let Some((capture_frame, terminal, pixel)) = capture {

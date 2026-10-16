@@ -817,6 +817,11 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
         let result = match render_result {
             Ok(timings) if !timings.submitted => {
+                publish_deferred_gpu_captures(
+                    &mut world,
+                    &gfx,
+                    prepared_frame.context.frame_index,
+                );
                 primary_contribution_state = PrimaryContributionState::Deferred;
                 deferred_deterministic_contributions
                     .extend(primary_deterministic_contributions.iter().cloned());
@@ -1206,6 +1211,23 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     detached_result
 }
 
+/// Publish terminal observation to ECS even when accepted work defers the
+/// next surface acquisition. The renderer retains the original capture and
+/// selector-result receipts for later diagnostic retirement; copying their
+/// observational view does not advance GPU or semantic state.
+fn publish_deferred_gpu_captures(world: &mut WorldMut, gfx: &Gfx, frame_index: u64) {
+    let captures = gfx.renderer.last_captured_textures();
+    if captures.is_empty() {
+        return;
+    }
+    if let Ok(state) = world.resource_mut::<RenderCapturedTextureState>() {
+        state.observe_frame(frame_index, captures);
+    }
+    if let Ok(inspector) = world.resource_mut::<RenderTextureInspectorState>() {
+        inspector.observe_captures(captures);
+    }
+}
+
 fn defer_unsubmitted_after_error(
     deferred: &mut Vec<RenderDeterministicFrameContribution>,
     contributions: &[RenderDeterministicFrameContribution],
@@ -1419,6 +1441,11 @@ fn render_additional_surfaces(
         })();
         let outcome = match render_result {
             Ok(timings) if !timings.submitted => {
+                publish_deferred_gpu_captures(
+                    world,
+                    gfx,
+                    prepared_frame.context.frame_index,
+                );
                 tracing::debug!(
                     frame = prepared_frame.context.frame_index,
                     surface = render_surface_id.raw(),

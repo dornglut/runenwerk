@@ -394,8 +394,12 @@ never proof of post-failure reconstruction. The ordinary
 G3 correctly rejects read-before-initialization.
 
 On a deferred source-owned frame the GPU context still progresses and
-completed observation/capture evidence is published without claiming that
-a new GPU frame was submitted. The native Vulkan historical smoke observes
+completed observation/capture evidence is published to ordinary ECS
+`RenderCapturedTextureState` and `RenderTextureInspectorState` without
+claiming that a new GPU frame was submitted. This applies to both primary
+and additional surfaces. The renderer retains its underlying capture and
+selector-result receipts for later frame diagnostics; publishing the ECS
+view does not consume G5 status or certify semantic completion. The native Vulkan historical smoke observes
 a composed fullscreen GPU result: its source-owned retained counter must
 sum to six, producing an exact green capture, before the test producer calls
 `commit_verified` for ticks 1–3. Only then does the same producer capture

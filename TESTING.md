@@ -105,8 +105,11 @@ semantic verification and requires the exact accepted batch and queued tick 4
 to remain unchanged. Only an independent successful verification callback
 may advance the completed cursor. After first-batch verification, step 4 (captured *before* completion) proves *a new, separately
 G5-accepted GPU submission* continues retained state from 6 to 10 (exact
-blue RGBA pixel), before committing tick 4. Deferred GPU progress must deliver each selected capture
-without acquiring another surface image or duplicating either batch.
+blue RGBA pixel), before committing tick 4. Deferred GPU progress must publish each selected capture to the ordinary ECS
+`RenderCapturedTextureState` for source-owned semantic verification **without**
+acquiring another surface image or duplicating either batch. The native
+producer test reads that ECS state, not renderer internals. Both primary and
+additional native surfaces use the same deferred-observation publication path.
 It rejects shader fallback rather than permitting a no-op simulation.
 
 This is a **hosted software Vulkan execution proof**, not a native end-user
