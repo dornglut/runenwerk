@@ -579,7 +579,10 @@ mod tests {
             Ok(())
         });
         assert!(rejected.is_err());
-        assert!(!called, "ordinary mutation may not bypass missing M13 prestate");
+        assert!(
+            !called,
+            "ordinary mutation may not bypass missing M13 prestate"
+        );
 
         // Unlike normal ingress, a bounded real RunenUI settlement must
         // remain possible; it revokes the exact physical game lifetime
