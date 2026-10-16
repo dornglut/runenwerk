@@ -364,10 +364,14 @@ impl WinitRunner {
     fn retire_window_input_source(&mut self, native_window_id: NativeWindowId) -> Result<bool> {
         // Source retirement is a mandatory native pointer-stream boundary,
         // even when an original window callback is no longer forthcoming.
-        self.cancel_native_ui_mouse(native_window_id);
-        self.cancel_native_ui_touch(native_window_id);
+        let mouse_cancel = self.cancel_native_ui_mouse(native_window_id);
+        let touch_cancel = self.cancel_native_ui_touch(native_window_id);
+        let cancellation_failure = mouse_cancel.err().or(touch_cancel.err());
         let Some(context) = self.input_adapter.window_source_context(native_window_id) else {
-            return Ok(false);
+            return match cancellation_failure {
+                Some(error) => Err(error),
+                None => Ok(false),
+            };
         };
         let selection = self.native_input_recipient(native_window_id);
         let recipient = selection.as_ref().ok().map(|(recipient, _)| *recipient);
@@ -399,6 +403,9 @@ impl WinitRunner {
             self.state.world.insert_resource(actions);
             result?;
         }
+        if let Some(error) = cancellation_failure {
+            return Err(error);
+        }
         match selection {
             Ok(_) => Ok(true),
             Err(error)
@@ -417,8 +424,9 @@ impl WinitRunner {
     fn retire_native_input_recipient(&mut self, window: NativeWindowId) -> Result<bool> {
         // Cancel against the previous pinned M13 scope before removing the
         // recipient and its terminal displayed input authority.
-        self.cancel_native_ui_mouse(window);
-        self.cancel_native_ui_touch(window);
+        let mouse_cancel = self.cancel_native_ui_mouse(window);
+        let touch_cancel = self.cancel_native_ui_touch(window);
+        let cancellation_failure = mouse_cancel.err().or(touch_cancel.err());
         // Retire the original framework-held keyboard stream while its
         // source/recipient binding is still valid. After retirement, a
         // synthetic Cancel cannot safely cross into a replacement M13 scope.
@@ -460,6 +468,9 @@ impl WinitRunner {
         if retired {
             self.native_ui_keyboards.remove(&window);
             self.native_ui_modifiers.remove(&window);
+        }
+        if let Some(error) = cancellation_failure {
+            return Err(error);
         }
         Ok(retired)
     }
@@ -1201,8 +1212,13 @@ impl WinitRunner {
                 (lifetime.backend_device == device_id).then_some(*window)
             })
             .collect();
+        let mut cancellation_failure: Option<anyhow::Error> = None;
         for window in windows.iter().copied() {
-            self.cancel_native_ui_mouse(window);
+            if let Err(error) = self.cancel_native_ui_mouse(window)
+                && cancellation_failure.is_none()
+            {
+                cancellation_failure = Some(error);
+            }
         }
         let touch_windows: Vec<_> = self
             .native_ui_touches
@@ -1214,7 +1230,6 @@ impl WinitRunner {
                     .then_some(*window)
             })
             .collect();
-        let mut cancellation_failure: Option<anyhow::Error> = None;
         // Exactly one RunenInput window-device identity exists for this backend
         // device across its window sources. Raw identity is a separate namespace.
         if let Some(retired_device) = window_contexts.first().and_then(|context| context.device) {
@@ -2093,17 +2108,30 @@ impl WinitRunner {
         if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>() {
             transport.close();
         }
+        let mut cancellation_failure: Option<anyhow::Error> = None;
         let mouse_windows: Vec<_> = self.native_ui_mice.keys().copied().collect();
         for window in mouse_windows {
-            self.cancel_native_ui_mouse(window);
+            if let Err(error) = self.cancel_native_ui_mouse(window)
+                && cancellation_failure.is_none()
+            {
+                cancellation_failure = Some(error);
+            }
         }
         let touch_windows: Vec<_> = self.native_ui_touches.keys().copied().collect();
         for window in touch_windows {
-            self.cancel_native_ui_touch(window);
+            if let Err(error) = self.cancel_native_ui_touch(window)
+                && cancellation_failure.is_none()
+            {
+                cancellation_failure = Some(error);
+            }
         }
         let cleanup = shutdown_native_ui(&mut self.state.world);
         self.shutdown_done = cleanup.is_ok();
-        cleanup
+        cleanup?;
+        if let Some(error) = cancellation_failure {
+            return Err(error);
+        }
+        Ok(())
     }
 
     fn request_native_redraw(&mut self, id: NativeWindowId, window: &Window) {
