@@ -328,12 +328,12 @@ impl Renderer {
             prepared_frame.surface.render_surface_id.raw(),
         );
         let prepared = pollster::block_on(context.prepare_submission(graph))?;
+        // Preserve RunenGPU's typed public rejection rather than flattening it into
+        // a diagnostic string. Runenwerk policy may inspect the actual rejection
+        // kind, but G5 still owns the validity and retryability distinction.
         let submission = context.submit_prepared(prepared).map_err(|rejection| {
-            anyhow::anyhow!(
-                "GPU frame submission rejected ({:?}): {}",
-                rejection.reason().kind(),
-                rejection.reason().detail()
-            )
+            let (_prepared, reason) = rejection.into_parts();
+            runen_gpu::GpuWorkSubmissionError::SubmissionRejected(reason)
         })?;
         self.retained_submission_trace.accepted(
             submission.clone(),
