@@ -363,6 +363,26 @@ impl WinitRunner {
     }
 
     fn retire_window_input_source(&mut self, native_window_id: NativeWindowId) -> Result<bool> {
+        // A required original source-loss journal entry MUST have its full
+        // bounded admission (and normalized reducer) proven before any M13
+        // Cancel mutates the separately owned framework pressed streams.
+        // Otherwise journal exhaustion could leave the original source live
+        // after RunenUI has irreversibly retired the same hardware lifetime.
+        let original_source = self.input_adapter.window_source_context(native_window_id);
+        if let Some(context) = original_source {
+            self.state
+                .world
+                .resource_mut::<PlatformWindowEventQueueResource>()
+                .context("native input journal missing before source retirement")?
+                .reserve_native_group(&[PlatformEvent::InputContinuityLost {
+                    context,
+                    loss: ContinuityLoss::Source,
+                }])?;
+            self.state
+                .world
+                .resource::<InputState>()
+                .context("native physical state missing before source retirement")?;
+        }
         // Source retirement is a mandatory native pointer-stream boundary,
         // even when an original window callback is no longer forthcoming.
         let mouse_cancel = self.cancel_native_ui_mouse(native_window_id);
@@ -379,7 +399,7 @@ impl WinitRunner {
             .err()
             .or(touch_cancel.err())
             .or(keyboard_cancel.err());
-        let Some(context) = self.input_adapter.window_source_context(native_window_id) else {
+        let Some(context) = original_source else {
             return match cancellation_failure {
                 Some(error) => Err(error),
                 None => Ok(false),
@@ -3631,6 +3651,62 @@ mod tests {
             .unwrap();
         assert_ne!(replacement.source, context.source);
         assert_eq!(replacement.device, context.device);
+    }
+
+    #[test]
+    fn saturated_original_journal_cannot_cancel_ui_before_physical_source_retirement() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        let secondary = NativeWindowId::try_from_raw(2).expect("secondary native window");
+        let context = runner
+            .input_adapter
+            .window_context(secondary, winit::event::DeviceId::dummy())
+            .expect("original checked source and device");
+        runner
+            .apply_event_for_native_window(secondary, normalized_shift_press(context))
+            .expect("neutral keyboard Down precedes the saturated journal");
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("one physical input reducer")
+                .shift_down()
+        );
+        // Exactly one original keyboard Down already occupies the journal.
+        // Force the existing finite 4096-event frame admission boundary.
+        let journal = runner
+            .state
+            .world
+            .resource_mut::<PlatformWindowEventQueueResource>()
+            .expect("one Engine native journal");
+        for _ in 0..4095 {
+            journal
+                .publish(PlatformWindowEvent::new(
+                    secondary,
+                    PlatformEvent::RedrawRequested,
+                ))
+                .expect("remaining bounded journal slots");
+        }
+        assert_eq!(journal.events().len(), 4096);
+        assert!(
+            runner.retire_window_input_source(secondary).is_err(),
+            "journal exhaustion must fail before framework cancellation or neutral retirement"
+        );
+        assert_eq!(
+            runner.input_adapter.window_source_context(secondary),
+            Some(InputContext::new(context.source, context.device)),
+            "no phantom source retirement after failed original continuity admission"
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("original physical truth")
+                .shift_down(),
+            "the failed source-loss journal must not silently erase the physical Down"
+        );
     }
 
     #[test]
