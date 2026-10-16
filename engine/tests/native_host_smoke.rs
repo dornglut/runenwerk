@@ -1236,10 +1236,11 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
         // A real debug capture (not CPU prediction or mere Completed status)
         // establishes the precise counter value 1+2+3 = 6. Red is a failure,
         // green is proof, in the actual composed fullscreen GPU pass.
-        let matches_capture = |capture: &engine::plugins::render::inspect::RenderCapturedTexture| {
-            capture.identity.flow_id() == self.flow.to_string()
-                && capture.identity.pass_id() == self.display_pass
-        };
+        let matches_capture =
+            |capture: &engine::plugins::render::inspect::RenderCapturedTexture| {
+                capture.identity.flow_id() == self.flow.to_string()
+                    && capture.identity.pass_id() == self.display_pass
+            };
         let capture = world
             .resource::<Gfx>()
             .ok()
@@ -1259,12 +1260,15 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                             .captures
                             .iter()
                             .find(|capture| matches_capture(capture))
-                            .map(|capture| (capture.terminal.clone(), capture.sample_center_rgba8()))
+                            .map(|capture| {
+                                (capture.terminal.clone(), capture.sample_center_rgba8())
+                            })
                     })
             });
         if let Some((terminal, pixel)) = capture {
             anyhow::ensure!(
-                terminal.code == engine::plugins::render::inspect::RenderCaptureTerminalCode::Completed,
+                terminal.code
+                    == engine::plugins::render::inspect::RenderCaptureTerminalCode::Completed,
                 "native historical GPU result capture failed: {terminal:?}"
             );
             anyhow::ensure!(
@@ -1300,7 +1304,9 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     );
                     Ok::<(), anyhow::Error>(())
                 })
-                .map_err(|error| anyhow::anyhow!("native producer GPU verification failed: {error}"))?;
+                .map_err(|error| {
+                    anyhow::anyhow!("native producer GPU verification failed: {error}")
+                })?;
             anyhow::ensure!(completed == 3, "native source committed wrong GPU tick");
             self.semantic_committed = true;
         }
@@ -1346,10 +1352,8 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
     let shader_registry = app.world_mut().resource_mut::<ShaderRegistryResource>()?;
     let shader =
         shader_registry.register_shader_with_id("native.historical.gpu.compute", asset_path);
-    let display_shader = shader_registry.register_shader_with_id(
-        "native.historical.gpu.display",
-        display_asset_path,
-    );
+    let display_shader = shader_registry
+        .register_shader_with_id("native.historical.gpu.display", display_asset_path);
     shader_registry.poll_updates();
     anyhow::ensure!(
         shader_registry.revision_for_handle(shader) > 0
