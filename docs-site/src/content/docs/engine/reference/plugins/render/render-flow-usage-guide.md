@@ -302,14 +302,18 @@ If the bounded queue cannot admit the whole interval, the original inputs
 are returned unchanged with a typed capacity/identity error. A zero-step
 interval changes nothing.
 
-`candidate(max_steps)` borrows the oldest not-yet-submitted inputs for a
-freshly built GPU graph. It never dequeues them. **Only after RunenGPU has
-actually accepted the matching submission** may the producer call
-`accept(submission, selected_steps)`. This moves the exact selected prefix
-from pending into a single accepted, immutable interval. Additional demand
-can be captured within the configured total bound, but no second interval
-is issued by this producer until its predecessor is resolved. This is
-*semantic producer backpressure*, not a shadow table of GPU resource locks.
+`candidate(max_steps)` inspects the oldest not-yet-submitted inputs
+without consuming them. The preferred `submit_with(max_steps, closure)`
+uses that immutable prefix to form a **fresh** RunenGPU graph and obtain
+the exact accepted `GpuSubmission`. A rejected graph leaves all historical
+inputs pending and unmodified. Acceptance atomically transfers precisely
+the selected prefix into a single accepted interval, without a separately
+fallible post-submission count association. The closure must faithfully
+lower the supplied semantic steps; Runenwerk never infers their meaning
+from GPU resource identities. Additional demand can be captured within
+the configured total bound, but no second interval is issued by this
+producer until its predecessor is resolved. This is *semantic producer
+backpressure*, not a shadow table of GPU resource locks.
 
 `commit_completed(current_affinity)` requires the producer to have checked
 that the exact accepted submission faithfully implemented its selected
