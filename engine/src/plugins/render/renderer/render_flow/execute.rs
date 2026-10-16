@@ -1594,12 +1594,12 @@ fn resolve_terminal_present_controls(
 /// Optional post-G5 provenance is not an admission or completion authority.
 /// Missing diagnostic cache entries are visible, but cannot roll back the
 /// already accepted submission or consume unrelated runtime cache entries.
-fn optional_accepted_provenance_resources(
-    cache: &mut BTreeMap<RenderFlowId, FlowRuntimeResources>,
+fn optional_accepted_provenance_resources<'a>(
+    cache: &'a mut BTreeMap<RenderFlowId, FlowRuntimeResources>,
     flow: RenderFlowId,
     frame: u64,
     invocation: &crate::plugins::render::PreparedFlowInvocationId,
-) -> Option<&mut FlowRuntimeResources> {
+) -> Option<&'a mut FlowRuntimeResources> {
     let Some(resources) = cache.get_mut(&flow) else {
         tracing::error!(
             target: "runenwerk.render.provenance",
@@ -1872,21 +1872,25 @@ mod tests {
         let mut runtime_cache = BTreeMap::new();
         runtime_cache.insert(present_flow, FlowRuntimeResources::default());
 
-        assert!(optional_accepted_provenance_resources(
-            &mut runtime_cache,
-            missing_flow,
-            42,
-            &invocation,
-        )
-        .is_none());
+        assert!(
+            optional_accepted_provenance_resources(
+                &mut runtime_cache,
+                missing_flow,
+                42,
+                &invocation,
+            )
+            .is_none()
+        );
         assert_eq!(runtime_cache.len(), 1);
-        assert!(optional_accepted_provenance_resources(
-            &mut runtime_cache,
-            present_flow,
-            42,
-            &invocation,
-        )
-        .is_some());
+        assert!(
+            optional_accepted_provenance_resources(
+                &mut runtime_cache,
+                present_flow,
+                42,
+                &invocation,
+            )
+            .is_some()
+        );
     }
 
     #[test]
