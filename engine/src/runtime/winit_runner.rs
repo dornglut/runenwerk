@@ -663,25 +663,17 @@ impl WinitRunner {
     /// window is real and startup has installed all mounted UI resources.
     /// No presentation order, UI mount count or implicit z-order is consulted.
     fn realize_declared_primary_input(&mut self) -> Result<()> {
-        let world = &mut self.state.world;
-        let Some(mut recipients) = world.remove_resource::<UiNativeInputRecipientsResource>()
-        else {
-            return Ok(());
-        };
-        let result = (|| -> Result<()> {
-            let mut slots = world
-                .remove_resource::<UiRuntimeSlotsResource>()
-                .context("declared native UI recipient has no slot authority")?;
-            let operation = (|| -> Result<()> {
-                let windows = world.resource::<WindowStateRegistryResource>()?;
-                recipients.realize_requested_primary(windows, &mut slots)?;
-                Ok(())
-            })();
-            world.insert_resource(slots);
-            operation
-        })();
-        world.insert_resource(recipients);
-        result
+        if self
+            .state
+            .world
+            .has_resource::<UiNativeInputRecipientsResource>()
+        {
+            // Native startup is not a special authority. Use the same
+            // source-correlated World transaction as a later ECS rebind so a
+            // preexisting held game key cannot survive this first selection.
+            crate::plugins::ui::realize_requested_native_primary(&mut self.state.world)?;
+        }
+        Ok(())
     }
 
     fn native_input_recipient(
@@ -5006,6 +4998,158 @@ mod tests {
                 .expect("same original native owner")
                 .1,
             Some(epoch),
+        );
+    }
+
+    #[test]
+    fn native_startup_selection_retracts_preexisting_source_game_hold() {
+        use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+        use runen_input::{
+            DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+            ObservationOrigin, PhysicalKeyIdentity,
+        };
+
+        struct StartupUi;
+        impl runenui_core::UiApp for StartupUi {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::text("native startup permission")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        let primary = NativeWindowId::primary();
+        let secondary = NativeWindowId::try_from_raw(2).unwrap();
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .unwrap()
+            .register_created_window(secondary, "independent game", (640, 480), 1.0, false);
+        let original = runner
+            .native_input_mut()
+            .window_context(primary, winit::event::DeviceId::dummy())
+            .unwrap();
+        let other = runner
+            .native_input_mut()
+            .window_context(secondary, winit::event::DeviceId::dummy())
+            .unwrap();
+        assert_ne!(original.source, other.source);
+        let press = KeyboardInput {
+            physical_key: PhysicalKeyIdentity::code("KeyW"),
+            logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+            location: KeyLocation::Standard,
+            state: DigitalState::Pressed,
+            repeat: false,
+            origin: ObservationOrigin::SourceReport,
+        };
+        let mut input = InputState::new();
+        input.handle_normalized_keyboard(original, &press);
+        input.handle_normalized_keyboard(other, &press);
+        let mut actions = ActionState::new();
+        actions.project(&input);
+        assert!(actions.action_down(crate::plugins::action::WORLD_MOVE_UP));
+        runner.state.world.insert_resource(input);
+        runner.state.world.insert_resource(actions);
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<StartupUi>(
+                UiTypedScreenId::new("native.startup.selected"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .request_primary(NativeInputRecipient::RunenUiSlot(slot))
+            .unwrap();
+        recipients
+            .bind(
+                secondary,
+                NativeInputRecipient::LegacyNativeConsumer,
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap(),
+                &mut slots,
+            )
+            .unwrap();
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+
+        runner
+            .realize_declared_primary_input()
+            .expect("startup must use the source-correlated World boundary");
+        let (recipient, first_epoch) = runner.native_input_recipient(primary).unwrap();
+        assert_eq!(recipient, NativeInputRecipient::RunenUiSlot(slot));
+        assert!(first_epoch.is_some());
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(original, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some(),
+            "startup selection cannot synthesize a neutral physical Up"
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "independent game source must retain its own W"
+        );
+
+        runner
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(
+                other,
+                &KeyboardInput {
+                    state: DigitalState::Released,
+                    ..press
+                },
+            );
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "already held UI-source W cannot resurrect after other source releases"
+        );
+        runner
+            .realize_declared_primary_input()
+            .expect("idempotent startup must keep the first recipient epoch");
+        assert_eq!(runner.native_input_recipient(primary).unwrap().1, first_epoch);
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP)
         );
     }
 
