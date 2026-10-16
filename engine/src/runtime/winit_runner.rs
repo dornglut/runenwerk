@@ -3549,7 +3549,12 @@ mod tests {
             .start_admitted_input_capture();
         runner.apply_raw_mouse_motion(raw, 3.0, -2.0).unwrap();
         assert_eq!(
-            runner.state.world.resource::<InputState>().unwrap().mouse_delta,
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .mouse_delta,
             (3.0, -2.0)
         );
 
@@ -3564,7 +3569,10 @@ mod tests {
             .slot_id()
             .expect("real M13 slot");
         runner.state.world.insert_resource(slots);
-        runner.state.world.insert_resource(UiNativeInputRecipientsResource::default());
+        runner
+            .state
+            .world
+            .insert_resource(UiNativeInputRecipientsResource::default());
         runner
             .state
             .world
@@ -3573,7 +3581,12 @@ mod tests {
             .clear_frame();
         runner.apply_raw_mouse_motion(raw, 5.0, 7.0).unwrap();
         assert_eq!(
-            runner.state.world.resource::<InputState>().unwrap().mouse_delta,
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .mouse_delta,
             (0.0, 0.0),
             "an unresolved UI recipient must not move the gameplay camera"
         );
@@ -3594,7 +3607,11 @@ mod tests {
             .bind(
                 NativeWindowId::primary(),
                 NativeInputRecipient::RunenUiSlot(slot),
-                runner.state.world.resource::<WindowStateRegistryResource>().unwrap(),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap(),
                 &mut slots,
             )
             .expect("one explicit active UI recipient");
@@ -3602,7 +3619,12 @@ mod tests {
         runner.state.world.insert_resource(recipients);
         runner.apply_raw_mouse_motion(raw, 11.0, 13.0).unwrap();
         assert_eq!(
-            runner.state.world.resource::<InputState>().unwrap().mouse_delta,
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .mouse_delta,
             (0.0, 0.0)
         );
 
@@ -3612,7 +3634,11 @@ mod tests {
             .resource_mut::<InputState>()
             .unwrap()
             .stop_admitted_input_capture();
-        assert_eq!(captured.len(), 3, "all genuine raw observations are neutral");
+        assert_eq!(
+            captured.len(),
+            3,
+            "all genuine raw observations are neutral"
+        );
         assert!(captured.iter().all(|group| group.context == raw
             && matches!(
                 group.observations.as_slice(),
