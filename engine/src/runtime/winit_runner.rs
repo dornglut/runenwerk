@@ -1417,7 +1417,7 @@ impl WinitRunner {
                 &status,
             );
             anyhow::ensure!(
-                finality.is_ok(),
+                matches!(finality, Ok(UiInputFinality::Committed(_))),
                 "native UI cursor lacked exact M13 pointer settlement: {finality:?}"
             );
             Ok(())
@@ -1530,7 +1530,7 @@ impl WinitRunner {
                 &status,
             );
             anyhow::ensure!(
-                finality.is_ok(),
+                matches!(finality, Ok(UiInputFinality::Committed(_))),
                 "native button lacks exact M13 pointer settlement: {finality:?}"
             );
             Ok(())
@@ -1653,7 +1653,7 @@ impl WinitRunner {
                 &status,
             );
             anyhow::ensure!(
-                finality.is_ok(),
+                matches!(finality, Ok(UiInputFinality::Committed(_))),
                 "native UI wheel had no exact M13 pointer settlement: {finality:?}"
             );
             Ok(())
@@ -1768,7 +1768,7 @@ impl WinitRunner {
                 &status,
             );
             anyhow::ensure!(
-                finality.is_ok(),
+                matches!(finality, Ok(UiInputFinality::Committed(_))),
                 "native touch lacked exact M13 pointer settlement: {finality:?}"
             );
             Ok(())
