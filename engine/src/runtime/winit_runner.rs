@@ -366,7 +366,18 @@ impl WinitRunner {
         // even when an original window callback is no longer forthcoming.
         let mouse_cancel = self.cancel_native_ui_mouse(native_window_id);
         let touch_cancel = self.cancel_native_ui_touch(native_window_id);
-        let cancellation_failure = mouse_cancel.err().or(touch_cancel.err());
+        let keyboard_cancel = match self
+            .native_ui_keyboards
+            .get(&native_window_id)
+            .map(|lifetime| lifetime.recipient)
+        {
+            Some(slot) => self.cancel_native_ui_keyboard(native_window_id, slot),
+            None => Ok(()),
+        };
+        let cancellation_failure = mouse_cancel
+            .err()
+            .or(touch_cancel.err())
+            .or(keyboard_cancel.err());
         let Some(context) = self.input_adapter.window_source_context(native_window_id) else {
             return match cancellation_failure {
                 Some(error) => Err(error),
