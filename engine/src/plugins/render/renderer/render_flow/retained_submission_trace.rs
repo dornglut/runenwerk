@@ -163,8 +163,14 @@ fn partition_public_candidates(
 ) -> PublicRetainedObservations {
     // Descriptor-only candidates must not be lost merely because the node
     // access list omits them. Conversely transient accesses are not retained.
-    let retained_accesses = accessed.intersection(&retained_descriptors).copied().collect();
-    let descriptor_only = retained_descriptors.difference(&accessed).copied().collect();
+    let retained_accesses = accessed
+        .intersection(&retained_descriptors)
+        .copied()
+        .collect();
+    let descriptor_only = retained_descriptors
+        .difference(&accessed)
+        .copied()
+        .collect();
     PublicRetainedObservations {
         accessed: retained_accesses,
         descriptor_only,
