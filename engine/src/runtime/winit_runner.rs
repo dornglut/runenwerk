@@ -2580,7 +2580,10 @@ impl WinitRunner {
                     Err(error)
                         if matches!(
                             error.downcast_ref::<NativeInputRecipientError>(),
-                            Some(NativeInputRecipientError::MissingRecipient | NativeInputRecipientError::InactiveWindow)
+                            Some(
+                                NativeInputRecipientError::MissingRecipient
+                                    | NativeInputRecipientError::InactiveWindow
+                            )
                         ) =>
                     {
                         false
