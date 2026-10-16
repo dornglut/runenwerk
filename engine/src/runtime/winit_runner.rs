@@ -301,7 +301,6 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
     let mut runner = WinitRunner {
         state,
         window_realizer: WinitWindowRealizer::default(),
-        input_adapter: WinitInputAdapter::default(),
         native_ui_keyboards: HashMap::new(),
         native_ui_mice: HashMap::new(),
         native_ui_touches: HashMap::new(),
@@ -346,6 +345,12 @@ fn shutdown_native_ui(world: &mut runen_ecs::World) -> Result<()> {
 }
 
 fn install_native_window_provider_resources(world: &mut runen_ecs::World) {
+    // The ECS World owns the *one* real winit source allocator. A native
+    // mutation can now resolve its original source without a mirrored map
+    // or an unverifiable primary-window assumption.
+    if !world.has_resource::<WinitInputAdapter>() {
+        world.insert_resource(WinitInputAdapter::default());
+    }
     ensure_primary_presentation_metrics(world);
     if !world.has_resource::<WindowStateRegistryResource>() {
         world.insert_resource(WindowStateRegistryResource::default());
@@ -358,7 +363,6 @@ fn install_native_window_provider_resources(world: &mut runen_ecs::World) {
 struct WinitRunner {
     state: WindowedAppState,
     window_realizer: WinitWindowRealizer,
-    input_adapter: WinitInputAdapter,
     /// Pinned native translator state; input ownership still lives in RunenUI.
     native_ui_keyboards: HashMap<NativeWindowId, NativeUiKeyboardTranslator>,
     native_ui_mice: HashMap<NativeWindowId, NativeUiMouseTranslator>,
@@ -378,6 +382,22 @@ struct WinitRunner {
 }
 
 impl WinitRunner {
+    /// The original winit identity allocator is directly World-owned, not
+    /// cloned into a second native/UI source authority.
+    fn native_input(&self) -> &WinitInputAdapter {
+        self.state
+            .world
+            .resource::<WinitInputAdapter>()
+            .expect("native host must install the original input allocator")
+    }
+
+    fn native_input_mut(&mut self) -> &mut WinitInputAdapter {
+        self.state
+            .world
+            .resource_mut::<WinitInputAdapter>()
+            .expect("native host must install the original input allocator")
+    }
+
     fn sync_window_state(&mut self, window: &Window) -> Result<()> {
         let (size_px, scale_factor) = {
             let registry = self
@@ -401,7 +421,7 @@ impl WinitRunner {
         focused: bool,
     ) -> Result<()> {
         if !focused
-            && let Some(context) = self.input_adapter.window_source_context(native_window_id)
+            && let Some(context) = self.native_input().window_source_context(native_window_id)
         {
             // The focus transition is window lifecycle truth; the associated
             // continuity loss is source-specific semantic input and retains
@@ -443,7 +463,7 @@ impl WinitRunner {
         // Cancel mutates the separately owned framework pressed streams.
         // Otherwise journal exhaustion could leave the original source live
         // after RunenUI has irreversibly retired the same hardware lifetime.
-        let original_source = self.input_adapter.window_source_context(native_window_id);
+        let original_source = self.native_input().window_source_context(native_window_id);
         if let Some(context) = original_source {
             self.state
                 .world
@@ -494,7 +514,7 @@ impl WinitRunner {
             recipient,
         )?;
         let retired = self
-            .input_adapter
+            .native_input_mut()
             .retire_window_source(native_window_id)
             .expect("known window input source must remain mapped until retirement");
         debug_assert_eq!(retired, context);
@@ -605,7 +625,7 @@ impl WinitRunner {
             // The original window source may remain physically held while a
             // new UI recipient is bound. No old game-held generation may be
             // carried into that replacement merely because M13 is unfocused.
-            if let Some(context) = self.input_adapter.window_source_context(window) {
+            if let Some(context) = self.native_input().window_source_context(window) {
                 self.revoke_native_game_keyboard_source(context.source)?;
             }
         }
@@ -1422,7 +1442,7 @@ impl WinitRunner {
         // Preflight both identity namespaces and retire them atomically BEFORE
         // mutating a UI translator. A fallible allocation or missing raw source
         // must not leave RunenUI cancelled while neutral held keys remain live.
-        let (window_contexts, raw_context) = self.input_adapter.retire_backend_device(device_id)?;
+        let (window_contexts, raw_context) = self.native_input_mut().retire_backend_device(device_id)?;
         // UI Cancels still use the original pinned M13 recipient and scope;
         // the removed physical IDs remain preserved in window_contexts.
         let windows: Vec<_> = self
@@ -2370,7 +2390,7 @@ impl WinitRunner {
         // The original Winit source allocator may outlive a window record.
         // Use its source identities to ensure orphaned physical holds are not
         // silently skipped at the frame's input permission boundary.
-        let sources = self.input_adapter.window_source_ids().collect::<Vec<_>>();
+        let sources = self.native_input().window_source_ids().collect::<Vec<_>>();
         for (window, source) in sources {
             let created = self
                 .state
@@ -3068,7 +3088,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 // and fail gameplay closed for that exact lifetime.
                 let recipient = self.native_input_recipient(native_window_id);
                 let context = self
-                    .input_adapter
+                    .native_input_mut()
                     .window_context(native_window_id, device_id)?;
                 let input = keyboard_input(&event, is_synthetic);
                 let physical_key = input.physical_key.clone();
@@ -3231,7 +3251,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 phase,
             } => {
                 let context = self
-                    .input_adapter
+                    .native_input_mut()
                     .window_context(native_window_id, device_id)?;
                 let original_delta = delta;
                 let input = scroll_input(delta, phase);
@@ -3259,7 +3279,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 position,
             } => {
                 let context = self
-                    .input_adapter
+                    .native_input_mut()
                     .window_context(native_window_id, device_id)?;
                 let original_position = position;
                 let neutral_point = cursor_position(position);
@@ -3292,7 +3312,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 button,
             } => {
                 let context = self
-                    .input_adapter
+                    .native_input_mut()
                     .window_context(native_window_id, device_id)?;
                 let input = pointer_button_input(state, button);
                 self.apply_semantic_native_input(
@@ -3316,7 +3336,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             }
             WindowEvent::Touch(touch) => {
                 let context = self
-                    .input_adapter
+                    .native_input_mut()
                     .window_context(native_window_id, touch.device_id)?;
                 let original_touch = touch;
                 let input = contact_input(touch);
@@ -3356,7 +3376,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
 
         let result: Result<()> = (|| match event {
             DeviceEvent::MouseMotion { delta } => {
-                let context = self.input_adapter.raw_device_context(device_id)?;
+                let context = self.native_input_mut().raw_device_context(device_id)?;
                 let result = self.apply_raw_mouse_motion(context, delta.0 as f32, delta.1 as f32);
                 if result.is_ok() {
                     self.request_redraw_for_native_window(NativeWindowId::primary());
@@ -3654,8 +3674,7 @@ mod tests {
         WinitRunner {
             state: app.into_windowed_state(),
             window_realizer: WinitWindowRealizer::default(),
-            input_adapter: WinitInputAdapter::default(),
-            native_ui_keyboards: HashMap::new(),
+                native_ui_keyboards: HashMap::new(),
             native_ui_mice: HashMap::new(),
             native_ui_touches: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
@@ -3833,7 +3852,7 @@ mod tests {
         runner.state.world.insert_resource(ActionState::new());
         let window = NativeWindowId::primary();
         let context = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(window, winit::event::DeviceId::dummy())
             .unwrap();
         runner
@@ -3885,6 +3904,42 @@ mod tests {
     }
 
     #[test]
+    fn native_original_source_identity_is_world_owned_not_a_parallel_runner_map() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        let window = NativeWindowId::primary();
+        let device = winit::event::DeviceId::dummy();
+        let identity = runner
+            .native_input_mut()
+            .window_context(window, device)
+            .expect("original native identity must be allocatable");
+        let world_identity = runner
+            .state
+            .world
+            .resource::<WinitInputAdapter>()
+            .expect("the original input allocator is a World resource")
+            .window_source_context(window)
+            .expect("same original source must remain registered");
+        assert_eq!(identity.source, world_identity.source);
+        let retired = runner
+            .state
+            .world
+            .resource_mut::<WinitInputAdapter>()
+            .unwrap()
+            .retire_window_source(window)
+            .expect("one original source authority owns retirement");
+        assert_eq!(retired.source, identity.source);
+        assert!(
+            runner.native_input().window_source_context(window).is_none(),
+            "the runner must observe World retirement without copying a map"
+        );
+        let next = runner
+            .native_input_mut()
+            .window_context(window, device)
+            .unwrap();
+        assert_ne!(next.source, identity.source, "retired identity cannot be reused");
+    }
+
+    #[test]
     fn orphaned_native_window_source_is_denied_without_affecting_other_window() {
         use runen_input::{
             DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
@@ -3903,11 +3958,11 @@ mod tests {
             .unwrap()
             .register_created_window(secondary, "secondary", (640, 480), 1.0, false);
         let first = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(primary, winit::event::DeviceId::dummy())
             .unwrap();
         let other = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(secondary, winit::event::DeviceId::dummy())
             .unwrap();
         assert_ne!(first.source, other.source);
@@ -3948,7 +4003,7 @@ mod tests {
             .expect("original secondary was created");
         assert!(
             runner
-                .input_adapter
+                .native_input()
                 .window_source_context(secondary)
                 .is_some(),
             "source retirement has not yet happened"
@@ -4038,11 +4093,11 @@ mod tests {
             .unwrap()
             .register_created_window(legacy, "legacy", (640, 480), 1.0, false);
         let first = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(primary, winit::event::DeviceId::dummy())
             .unwrap();
         let other = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(legacy, winit::event::DeviceId::dummy())
             .unwrap();
 
@@ -4200,11 +4255,11 @@ mod tests {
             .unwrap()
             .register_created_window(game_window, "independent game", (640, 480), 1.0, false);
         let first = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(ui_window, winit::event::DeviceId::dummy())
             .unwrap();
         let other = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(game_window, winit::event::DeviceId::dummy())
             .unwrap();
         let down = KeyboardInput {
@@ -4348,7 +4403,7 @@ mod tests {
             .insert_resource(UiRuntimePresentationAssociationsResource::default());
 
         let source = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(window, winit::event::DeviceId::dummy())
             .unwrap();
         runner
@@ -4385,7 +4440,7 @@ mod tests {
                 .expect("recipient retirement must preserve a real source")
         );
         assert!(
-            runner.input_adapter.window_source_context(window).is_some(),
+            runner.native_input().window_source_context(window).is_some(),
             "recipient retirement must not counterfeit physical device loss"
         );
         assert!(
@@ -4470,11 +4525,13 @@ mod tests {
 
         let mut windowed = App::new();
         configure_probe(&mut windowed);
+        windowed
+            .world_mut()
+            .insert_resource(WinitInputAdapter::default());
         let mut runner = WinitRunner {
             state: windowed.into_windowed_state(),
             window_realizer: WinitWindowRealizer::default(),
-            input_adapter: WinitInputAdapter::default(),
-            native_ui_keyboards: HashMap::new(),
+                native_ui_keyboards: HashMap::new(),
             native_ui_mice: HashMap::new(),
             native_ui_touches: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
@@ -4542,7 +4599,7 @@ mod tests {
         runner.state.world.insert_resource(InputState::new());
         let backend_device = winit::event::DeviceId::dummy();
         let context = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(NativeWindowId::primary(), backend_device)
             .unwrap();
         runner
@@ -4571,7 +4628,7 @@ mod tests {
         );
         assert_eq!(
             runner
-                .input_adapter
+                .native_input()
                 .window_source_context(NativeWindowId::primary())
                 .map(|value| value.source),
             Some(context.source)
@@ -4584,7 +4641,7 @@ mod tests {
         runner.state.world.insert_resource(InputState::new());
         let primary = NativeWindowId::primary();
         let context = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(primary, winit::event::DeviceId::dummy())
             .expect("one original window input source");
         runner
@@ -4646,7 +4703,7 @@ mod tests {
         let mut teardown = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
         teardown.state.world.insert_resource(InputState::new());
         let context = teardown
-            .input_adapter
+            .native_input_mut()
             .window_context(primary, winit::event::DeviceId::dummy())
             .expect("native teardown source");
         teardown
@@ -4662,7 +4719,7 @@ mod tests {
         );
         assert!(
             teardown
-                .input_adapter
+                .native_input()
                 .window_source_context(primary)
                 .is_none(),
             "original physical source identity must be retired despite stale UI route"
@@ -4685,7 +4742,7 @@ mod tests {
 
         assert_eq!(
             runner
-                .input_adapter
+                .native_input()
                 .window_source_context(NativeWindowId::primary()),
             None
         );
@@ -4694,7 +4751,7 @@ mod tests {
             .expect("focus loss should apply");
         assert_eq!(
             runner
-                .input_adapter
+                .native_input()
                 .window_source_context(NativeWindowId::primary()),
             None
         );
@@ -4723,7 +4780,7 @@ mod tests {
             .expect("native window authority")
             .register_created_window(secondary, "secondary", (800, 600), 1.0, false);
         let context = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(secondary, winit::event::DeviceId::dummy())
             .expect("original native source");
         runner
@@ -4750,7 +4807,7 @@ mod tests {
                 .retire_window_input_source(secondary)
                 .expect("approved close must retire original source without requiring Created"),
         );
-        assert_eq!(runner.input_adapter.window_source_context(secondary), None);
+        assert_eq!(runner.native_input().window_source_context(secondary), None);
         assert!(
             !runner
                 .state
@@ -4770,7 +4827,7 @@ mod tests {
             NativeWindowId::try_from_raw(2).expect("secondary native window id should be valid");
         let backend_device = winit::event::DeviceId::dummy();
         let context = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(secondary, backend_device)
             .unwrap();
         runner
@@ -4790,10 +4847,10 @@ mod tests {
                 .expect("input state")
                 .shift_down()
         );
-        assert_eq!(runner.input_adapter.window_source_context(secondary), None);
+        assert_eq!(runner.native_input().window_source_context(secondary), None);
 
         let replacement = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(secondary, backend_device)
             .unwrap();
         assert_ne!(replacement.source, context.source);
@@ -4825,7 +4882,7 @@ mod tests {
         runner.state.world.insert_resource(InputState::new());
         let secondary = NativeWindowId::try_from_raw(2).expect("secondary native window");
         let context = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(secondary, winit::event::DeviceId::dummy())
             .expect("original checked source and device");
         runner
@@ -4872,7 +4929,7 @@ mod tests {
             "journal exhaustion must fail before framework cancellation or neutral retirement"
         );
         assert_eq!(
-            runner.input_adapter.window_source_context(secondary),
+            runner.native_input().window_source_context(secondary),
             Some(InputContext::new(context.source, None)),
             "a failed continuity admission must retain the original window source, not invent a window device identity"
         );
@@ -5094,7 +5151,7 @@ mod tests {
         // A native button with no prior authentic cursor position cannot
         // manufacture a logical hit point or a new RunenUI pressed stream.
         let unknown_position_context = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(secondary, winit::event::DeviceId::dummy())
             .expect("original normalized window-event input context");
         runner
@@ -5437,7 +5494,7 @@ mod tests {
         // destroying the native window's logical source.
         let backend = winit::event::DeviceId::dummy();
         let original = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(secondary, backend)
             .expect("one checked backend device");
         runner.native_ui_keyboard_translator(
@@ -5467,7 +5524,7 @@ mod tests {
             "last device removal must clear stale physical modifier evidence"
         );
         let successor = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(secondary, backend)
             .expect("device can reappear with another checked generation");
         assert_eq!(successor.source, original.source);
@@ -5482,7 +5539,7 @@ mod tests {
             .scope()
             .clone();
         let actual_context = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(secondary, winit::event::DeviceId::dummy())
             .expect("fresh device generation");
         runner.native_ui_mice.insert(
@@ -5515,7 +5572,7 @@ mod tests {
         // must never be silently reported as a successfully retired contact.
         let stale_backend = winit::event::DeviceId::dummy();
         let retired = runner
-            .input_adapter
+            .native_input_mut()
             .retire_window_device(stale_backend)
             .expect("checked physical identity retires");
         assert!(!retired.is_empty());
@@ -5698,7 +5755,7 @@ mod tests {
         runner.state.world.insert_resource(InputState::new());
         runner.state.world.insert_resource(ActionState::new());
         let source = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(NativeWindowId::primary(), winit::event::DeviceId::dummy())
             .expect("actual native window source");
         runner
@@ -5746,7 +5803,7 @@ mod tests {
         );
         assert_eq!(
             runner
-                .input_adapter
+                .native_input()
                 .window_source_context(NativeWindowId::primary())
                 .map(|context| context.source),
             Some(source.source),
@@ -5761,7 +5818,7 @@ mod tests {
         runner.state.world.insert_resource(InputState::new());
         runner.state.world.insert_resource(ActionState::new());
         let source = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(NativeWindowId::primary(), winit::event::DeviceId::dummy())
             .expect("monotonic source and device identities");
         let key_press = PlatformEvent::KeyboardInput {
@@ -5808,7 +5865,7 @@ mod tests {
         assert!(!actions.action_down(action::WORLD_MOVE_UP));
         assert_eq!(
             runner
-                .input_adapter
+                .native_input()
                 .window_source_context(NativeWindowId::primary()),
             None
         );
@@ -5820,11 +5877,11 @@ mod tests {
         runner.state.world.insert_resource(InputState::new());
         let backend_device = winit::event::DeviceId::dummy();
         let window = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(NativeWindowId::primary(), backend_device)
             .unwrap();
         let raw = runner
-            .input_adapter
+            .native_input_mut()
             .raw_device_context(backend_device)
             .unwrap();
 
@@ -5834,13 +5891,13 @@ mod tests {
                 .expect("raw device removal should apply")
         );
         let replacement = runner
-            .input_adapter
+            .native_input_mut()
             .raw_device_context(backend_device)
             .unwrap();
         assert_ne!(replacement.source, raw.source);
         assert_ne!(replacement.device, raw.device);
         let replacement_window = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(NativeWindowId::primary(), backend_device)
             .expect("a new window-device lifetime on observed hardware reappearance");
         assert_eq!(
@@ -6052,7 +6109,7 @@ mod tests {
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
         runner.state.world.insert_resource(InputState::new());
         let context = runner
-            .input_adapter
+            .native_input_mut()
             .window_context(NativeWindowId::primary(), winit::event::DeviceId::dummy())
             .unwrap();
         for _ in 0..4095 {
@@ -6104,7 +6161,7 @@ mod tests {
         runner.state.world.remove_resource::<InputState>();
         let primary = NativeWindowId::primary();
         runner
-            .input_adapter
+            .native_input_mut()
             .window_context(primary, winit::event::DeviceId::dummy())
             .unwrap();
         let before = runner

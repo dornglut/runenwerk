@@ -16,7 +16,10 @@ use winit::keyboard::{Key, NativeKey, NativeKeyCode, PhysicalKey};
 
 const FIRST_WINIT_SOURCE_ID: u64 = 1024;
 
-#[derive(Debug)]
+/// The sole original native window/device → RunenInput identity allocator.
+/// It is stored directly in the Engine World so a native UI mutation
+/// transaction can query original source identity without shadow mappings.
+#[derive(Debug, runen_ecs::Resource)]
 pub(crate) struct WinitInputAdapter {
     next_source_id: u64,
     next_device_id: u64,
