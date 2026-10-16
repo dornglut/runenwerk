@@ -1497,7 +1497,10 @@ fn native_ui_pointer_truth_does_not_leak_into_legacy_gameplay_projection() {
     // A UI Down must be neutral physical truth but not a second legacy press.
     apply_native_recipient_input_event(&mut input, &left_down(ui), ui_route);
     assert!(input.pointer_button_down_anywhere(PointerButton::Left));
-    assert!(input.left_mouse_down(), "the independent legacy held source survives");
+    assert!(
+        input.left_mouse_down(),
+        "the independent legacy held source survives"
+    );
     assert!(!input.left_mouse_pressed());
     assert!(input.mouse_button_transitions().is_empty());
 

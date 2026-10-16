@@ -582,10 +582,12 @@ impl InputState {
         ))?;
         match input.state {
             DigitalState::Pressed => {
-                self.legacy_mouse_buttons_down.insert((context, input.button));
+                self.legacy_mouse_buttons_down
+                    .insert((context, input.button));
             }
             DigitalState::Released => {
-                self.legacy_mouse_buttons_down.remove(&(context, input.button));
+                self.legacy_mouse_buttons_down
+                    .remove(&(context, input.button));
             }
         }
         let is_down_anywhere = self
