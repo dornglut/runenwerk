@@ -56,13 +56,18 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         }
     }
 
+    // Shader polling and message publication are complete. Restore the
+    // registry before any fallible flow projection: invalid producer snapshots,
+    // rejected views or stale flow requests must never remove shader authority
+    // from the world and make subsequent recovery frames impossible.
+    let shader_revision = shader_registry.revision();
+    world.insert_resource(shader_registry);
     let surface_infos = prepared_surface_infos(&mut world, primary_target_size);
 
     let (flow_registry_revision, compiled_flows, execution_feature_ids, surface_packets) = {
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
             Ok(registry) => registry,
             Err(_) => {
-                world.insert_resource(shader_registry);
                 clear_prepared_frame(&mut world);
                 return Ok(());
             }
@@ -147,7 +152,7 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
                 context: PreparedFrameContext {
                     frame_index,
                     flow_registry_revision,
-                    shader_registry_revision: shader_registry.revision(),
+                    shader_registry_revision: shader_revision,
                     prepare_epoch,
                 },
                 surface,
@@ -161,7 +166,7 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
                 viewport_surface_bindings: viewport_surface_bindings.clone(),
                 contributions: surface_contributions,
                 shader: PreparedShaderSnapshot {
-                    registry_revision: shader_registry.revision(),
+                    registry_revision: shader_revision,
                 },
             }
         })
@@ -174,8 +179,6 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         prepared_resource.publish_set(prepared_frames);
         world.insert_resource(prepared_resource);
     }
-
-    world.insert_resource(shader_registry);
 
     if compiled_flows == 0 {
         clear_prepared_frame(&mut world);
@@ -403,6 +406,26 @@ fn apply_historical_step_inputs(
     anyhow::ensure!(
         !required.contains(&region.iteration_uniform),
         "flow {:?} reuses its iteration-control uniform as producer state",
+        flow.flow_id
+    );
+    // The same physical buffer cannot mean captured history inside the
+    // region and latest ECS state in a different pass. Until an owner authors
+    // distinct versions, reject that alias rather than silently changing what
+    // the unrelated pass reads.
+    let outside_region = flow
+        .render_passes
+        .iter()
+        .filter(|pass| !region.pass_ids.contains(&pass.pass_id()))
+        .flat_map(|pass| {
+            pass.node()
+                .uniform_bindings
+                .iter()
+                .map(|binding| *binding.uniform_id())
+        })
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        required.is_disjoint(&outside_region),
+        "flow {:?} shares a producer-owned historical uniform with a pass outside its fixed-step region",
         flow.flow_id
     );
     let history = stream
@@ -1679,6 +1702,81 @@ mod tests {
         )
         .expect_err("selected GPU step with missing source input must fail before G5");
         assert!(error.to_string().contains("does not capture exactly"));
+    }
+
+    #[test]
+    fn producer_history_rejects_shared_uniform_outside_selected_fixed_region() {
+        let (flow, shared) = RenderFlow::new("history.alias.conflict")
+            .with_state::<HistoricalProducerState>()
+            .uniform_buffer::<HistoricalUniform>("shared")
+            .expect("authored uniform resource");
+        let projected = |state: &HistoricalProducerState| HistoricalUniform {
+            value: state.latest_value,
+        };
+        let flow = flow
+            .compute_pass("historical.step")
+            .uniform_from_state_to(
+                runen_gpu::GpuBindingKey::try_new(0, 0).unwrap(),
+                shared.clone(),
+                projected,
+            )
+            .dispatch([1, 1, 1])
+            .finish()
+            .compute_pass("ordinary.step")
+            .uniform_from_state_to(
+                runen_gpu::GpuBindingKey::try_new(0, 0).unwrap(),
+                shared.clone(),
+                projected,
+            )
+            .dispatch([1, 1, 1])
+            .finish()
+            .fixed_step_region(
+                "historical.region",
+                4,
+                [(
+                    "historical.step",
+                    runen_gpu::GpuBindingKey::try_new(0, 1).unwrap(),
+                )],
+            )
+            .unwrap();
+        let compiled = compile_flow_plan(&flow.validate().unwrap()).unwrap();
+        let mut streams = RenderGpuFlowStepStreams::default();
+        streams.register(compiled.flow_id, 0, 4).unwrap();
+        streams
+            .stream_mut(compiled.flow_id)
+            .unwrap()
+            .capture(RenderGpuFixedStepInput {
+                uniforms: BTreeMap::from([(
+                    shared.diagnostic_identity(),
+                    bytemuck::bytes_of(&HistoricalUniform { value: 3 }.to_gpu()).to_vec(),
+                )]),
+                iteration: RenderFixedStepIterationUniform::new(0, 1, 4, 0, 1.0 / 60.0, 0.0),
+            })
+            .unwrap();
+        let latest = HistoricalProducerState { latest_value: 999 };
+        let config = FixedTimeConfig::default();
+        let budget = CatchupBudget::default();
+        let fixed = FixedTimeState::default();
+        let extracted: ExtractedRenderStateMap<'_> = BTreeMap::from([
+            (TypeId::of::<HistoricalProducerState>(), &latest as &dyn Any),
+            (TypeId::of::<FixedTimeConfig>(), &config as &dyn Any),
+            (TypeId::of::<FixedTimeState>(), &fixed as &dyn Any),
+            (TypeId::of::<CatchupBudget>(), &budget as &dyn Any),
+        ]);
+        let mut inputs = build_prepared_flow_inputs(
+            std::slice::from_ref(&compiled),
+            &extracted,
+            (640, 480),
+        )
+        .unwrap();
+        let failure = apply_historical_step_inputs(
+            &compiled,
+            inputs.get_mut(&compiled.flow_id).unwrap(),
+            &streams,
+        )
+        .expect_err("a uniform cannot be both immutable history and ordinary latest-state input");
+        assert!(failure.to_string().contains("outside its fixed-step region"));
+        assert_eq!(streams.stream(compiled.flow_id).unwrap().pending_len(), 1);
     }
 
     #[test]

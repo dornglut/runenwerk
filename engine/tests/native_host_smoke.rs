@@ -22,7 +22,7 @@ use engine::runtime::{
     NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, NativeWindowLifecycleState,
     WindowStateRegistryResource,
 };
-use runen_gpu::{GpuBindingKey, GpuSubmissionStatus};
+use runen_gpu::{GpuBindingKey, GpuBufferInitialization, GpuSubmissionStatus};
 use runenui_core::{FontFamilyName, GenericFontFamily, StyleEnvironment};
 use ui_controls::BUTTON_CONTROL_KIND_ID;
 use ui_definition::{
@@ -1273,7 +1273,11 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         .with_surface_color()?
         .uniform_buffer::<NativeHistoricalUniform>("native.historical.uniform")?;
     let (flow, counter) =
-        flow.storage_array::<NativeHistoricalCounter>("native.historical.counter", 1)?;
+        flow.storage_array_with_initialization::<NativeHistoricalCounter>(
+            "native.historical.counter",
+            1,
+            GpuBufferInitialization::Zeroed,
+        )?;
     let flow = flow
         .compute_pass("native.historical.step")
         .shader(shader)

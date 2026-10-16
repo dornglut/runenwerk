@@ -303,12 +303,13 @@ a typed `RenderGpuFramePostAcceptAssociationFailure`, exposing the accepted
 submission ID, originating context affinity, frame and surface for an exact
 comparison with the mandatory `Gfx::pending_gpu_frame_submissions()` handles.
 The typed error is *evidence of acceptance*, not proof of GPU completion,
-usable state, or a successful Present. A producer using
-`submit_with` must pass an actual accepted handle as the successful callback
-return without any later fallible host work; the ordinary RenderFlow integration
-will need an explicit admitted-work handoff and recovery policy before it can
-consume this transactional demand mechanism. This remains an open
-[Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291) boundary.
+usable state, or a successful Present. A producer using `submit_with` must
+pass an actual accepted handle as the callback success. The opt-in ordinary
+RenderFlow path instead binds its exact historical producer interval
+infallibly immediately after `submit_prepared` succeeds and **before**
+other fallible renderer bookkeeping. Domain verification and post-failure
+reconstruction remain [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291)
+acceptance work.
 
 ### Producer-owned immutable GPU-step demand
 
@@ -363,12 +364,40 @@ continuity test, including a bounded terminal-success reset/requeue proof.
 A failed/partially executed GPU write or generation-loss recovery remains
 a separate negative acceptance requirement; successful physical completion
 is not automatically a simulation-verified result.
-It is **not yet connected** to the ordinary composed RenderFlow preparation,
-surface acquisition, terminal receipt association or windowed boids example.
-The current RenderFlow fixed-step uniform ABI cannot be assumed to encode
-arbitrarily varying per-step source data merely because the demand queue
-exists. Those product integration requirements remain with
-[Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291).
+### Opt-in ordinary RenderFlow producer integration
+
+`RenderGpuFlowStepStreams` owns a bounded source stream keyed by the selected
+`RenderFlowId`. The semantic producer registers its stream and captures a
+`RenderGpuFixedStepInput` for every requested tick **before** irreversible
+domain progression. Each input contains exact per-step uniform bytes and its
+source-time `RenderFixedStepIterationUniform`; the latest ECS projection is
+never reconstructed as missing history. The selected flow must have exactly
+one fixed-step region, the input must cover precisely its authored pass
+uniforms, and the history must not share a uniform buffer with an ordinary
+pass outside the region. All violations reject preparation before G5.
+
+Ordinary RenderFlow expands those snapshots into actual repeated compute
+occurrences with source-specific ordered uploads. A producer whose previous
+accepted interval has not been semantically verified is deferred without
+acquiring a new surface image. On successful actual G5 admission, the
+precise source interval moves to its accepted receipt before later renderer
+work can fail. Unrelated independent surface work remains free to proceed;
+the current integration does **not** claim resource-granular scheduling of
+unrelated flows inside one deferred physical surface frame.
+
+`storage_array_with_initialization::<T>(label, len, initialization)`
+explicitly declares an initial RunenGPU buffer-content contract. For example,
+`GpuBufferInitialization::Zeroed` is appropriate when the **domain** defines
+a new stream's verified initial state as zero. Initialization at creation is
+never proof of post-failure reconstruction. The ordinary
+`storage_array::<T>` intentionally remains uninitialized by default, and
+G3 correctly rejects read-before-initialization.
+
+Physical `Completed` and successful Present remain distinct from producer
+semantic verification. Native-window original/species boids, unknown partial
+write repair, generation loss, independently proven cross-flow/surface
+contention and actual readback evidence remain separate acceptance work
+under [#1291](https://github.com/dornglut/runenwerk/issues/1291).
 
 ## Scale Working-Set Residency Evidence
 

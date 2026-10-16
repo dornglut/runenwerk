@@ -81,6 +81,23 @@ implement production RenderFlow scheduling or prove native windowed boids
 An exact-head green Vulkan lane is therefore a *scoped* integration result,
 not completion of [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291).
 
+## Native historical RenderFlow execution proof
+
+The hosted Vulkan native-window lane runs the opt-in
+`RUNENWERK_NATIVE_HISTORICAL_GPU_SMOKE=1` mode of
+`engine/tests/native_host_smoke.rs` on Mesa Vulkan under Xvfb. It constructs a
+real App/RenderPlugin and an ordinary composed RenderFlow with a G3-owned
+initially zeroed retained counter, independently captured heterogeneous
+producer uniforms and fixed-time controls, and a real WGSL compute mutation.
+The test requires exact G5 producer/frame receipt correspondence, terminal
+physical success and the absence of duplicated admission. It rejects shader
+fallback rather than permitting a no-op simulation.
+
+This is a **hosted software Vulkan execution proof**, not a native end-user
+hardware/driver qualification, an exact counter readback oracle, a proof of
+semantic producer verification/reconstruction after failure, or original and
+`--species` boids at 120+ visible frames. Those remain #1291 acceptance work.
+
 ## Supplemental RunenRender GPU execution proof
 
 Current Runenwerk CI also runs `RunenRender Vulkan execution proofs` for pull-request feature heads, merge-group integration revisions, accepted-main pushes, and manual dispatch. It resolves and proves the selected repository revision, restricts Vulkan loading to the installed Mesa software Vulkan implementation, and runs maintained native integration, direct standalone public-consumer, founding-direct, and Render Lab temporal-quality evidence.

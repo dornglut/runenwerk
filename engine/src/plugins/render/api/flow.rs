@@ -199,6 +199,29 @@ impl RenderFlow {
         Ok((self, handle))
     }
 
+    /// Declare a retained storage array with an explicit first-generation
+    /// initialization contract. This delegates initialization/coverage to
+    /// RunenGPU; it is not a retry, reset or semantic reconstruction policy.
+    /// The ordinary storage_array() remains uninitialized by default.
+    pub fn storage_array_with_initialization<T>(
+        mut self,
+        label: impl Into<String>,
+        len: u64,
+        initialization: GpuBufferInitialization,
+    ) -> Result<(Self, GpuBufferHandle), RenderFlowAuthoringError>
+    where
+        T: GpuParams + 'static,
+    {
+        let id = self.register_storage_array_with_lifetime_and_initialization::<T>(
+            label.into(),
+            len,
+            GpuResourceLifetime::Retained,
+            initialization,
+        )?;
+        let handle = self.buffer_handle(id)?;
+        Ok((self, handle))
+    }
+
     pub fn double_buffer_storage_array<T>(
         mut self,
         label: impl Into<String>,
