@@ -1018,6 +1018,11 @@ impl Gfx {
                 .has_in_flight_deterministic_producer(&surface_contributions),
         ) || gpu_step_streams.should_defer(prepared_frame)
         {
+            // A deferred frame still progresses earlier GPU work. Publish its
+            // terminal capture/observation output without claiming this frame
+            // was submitted; otherwise a semantic producer waiting on an
+            // exact GPU proof cannot ever release its accepted interval.
+            self.renderer.publish_progressed_gpu_observations();
             return Ok(timings);
         }
         // Check exact producer snapshots before leasing a G7A surface image.

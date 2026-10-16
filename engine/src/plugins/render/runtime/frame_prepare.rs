@@ -1763,19 +1763,20 @@ mod tests {
             (TypeId::of::<FixedTimeState>(), &fixed as &dyn Any),
             (TypeId::of::<CatchupBudget>(), &budget as &dyn Any),
         ]);
-        let mut inputs = build_prepared_flow_inputs(
-            std::slice::from_ref(&compiled),
-            &extracted,
-            (640, 480),
-        )
-        .unwrap();
+        let mut inputs =
+            build_prepared_flow_inputs(std::slice::from_ref(&compiled), &extracted, (640, 480))
+                .unwrap();
         let failure = apply_historical_step_inputs(
             &compiled,
             inputs.get_mut(&compiled.flow_id).unwrap(),
             &streams,
         )
         .expect_err("a uniform cannot be both immutable history and ordinary latest-state input");
-        assert!(failure.to_string().contains("outside its fixed-step region"));
+        assert!(
+            failure
+                .to_string()
+                .contains("outside its fixed-step region")
+        );
         assert_eq!(streams.stream(compiled.flow_id).unwrap().pending_len(), 1);
     }
 

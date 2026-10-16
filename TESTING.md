@@ -90,12 +90,17 @@ real App/RenderPlugin and an ordinary composed RenderFlow with a G3-owned
 initially zeroed retained counter, independently captured heterogeneous
 producer uniforms and fixed-time controls, and a real WGSL compute mutation.
 The test requires exact G5 producer/frame receipt correspondence, terminal
-physical success and the absence of duplicated admission. It rejects shader
-fallback rather than permitting a no-op simulation.
+physical success and the absence of duplicated admission. A second actual
+fullscreen GPU pass reads the retained counter and colors the captured surface
+pixel green iff the original heterogeneous step values sum to exactly 6; the
+test requires that exact RGBA pixel and only then commits the producer's
+semantic tick 3. Deferred GPU progress must deliver the selected capture
+without acquiring another surface image or issuing another producer batch.
+It rejects shader fallback rather than permitting a no-op simulation.
 
 This is a **hosted software Vulkan execution proof**, not a native end-user
-hardware/driver qualification, an exact counter readback oracle, a proof of
-semantic producer verification/reconstruction after failure, or original and
+hardware/driver qualification, a raw storage-buffer readback, a proof of
+reconstruction after partial GPU failure, or original and
 `--species` boids at 120+ visible frames. Those remain #1291 acceptance work.
 
 ## Supplemental RunenRender GPU execution proof

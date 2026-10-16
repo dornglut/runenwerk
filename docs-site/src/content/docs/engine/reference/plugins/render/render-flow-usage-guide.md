@@ -393,10 +393,18 @@ never proof of post-failure reconstruction. The ordinary
 `storage_array::<T>` intentionally remains uninitialized by default, and
 G3 correctly rejects read-before-initialization.
 
+On a deferred source-owned frame the GPU context still progresses and
+completed observation/capture evidence is published without claiming that
+a new GPU frame was submitted. The native Vulkan historical smoke observes
+a composed fullscreen GPU result: its source-owned retained counter must
+sum to six, producing an exact green capture, before the test producer calls
+`commit_verified`. This is an executable GPU result check, not a general
+storage-buffer readback or a guarantee that ordinary clients enable capture.
+
 Physical `Completed` and successful Present remain distinct from producer
 semantic verification. Native-window original/species boids, unknown partial
 write repair, generation loss, independently proven cross-flow/surface
-contention and actual readback evidence remain separate acceptance work
+contention and full native hardware qualification remain separate acceptance work
 under [#1291](https://github.com/dornglut/runenwerk/issues/1291).
 
 ## Scale Working-Set Residency Evidence
