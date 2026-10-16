@@ -333,10 +333,12 @@ the configured total bound, but no second interval is issued by this
 producer until its predecessor is resolved. This is *semantic producer
 backpressure*, not a shadow table of GPU resource locks.
 
-`commit_completed(current_affinity)` requires the producer to have checked
-that the exact accepted submission faithfully implemented its selected
-steps, and verifies both RunenGPU `Completed` status and matching device
-generation before advancing the producer's completed-tick cursor.
+`commit_verified(current_affinity, verification)` checks the originating
+RunenGPU context affinity and physical `Completed` status **before** invoking
+the producer's required verification against the exact accepted submission
+and its immutable captured inputs. Only successful verification advances
+the producer's completed-tick cursor; a verification error preserves
+the entire admitted batch and its source history.
 `Accepted`, `Failed`, and generation mismatch are **not** completion.
 An immediately failed accepted submission is retained, not retried as if
 no work had happened. After an unknown write or device change, the producer

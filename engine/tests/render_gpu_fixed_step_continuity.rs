@@ -240,23 +240,54 @@ impl StepLedger {
         match submission.status() {
             GpuSubmissionStatus::Accepted => {}
             GpuSubmissionStatus::Completed => {
-                let result = submission
-                    .readback(accepted.readback)
-                    .expect("required proof readback")
-                    .status();
-                let GpuReadbackStatus::Ready(bytes) = result else {
-                    panic!("completed GPU step batch must have ready readback: {result:?}");
-                };
-                let observed = u32::from_le_bytes(
-                    bytes.as_bytes()[0..4]
-                        .try_into()
-                        .expect("four-byte readback"),
+                // A physical terminal receipt cannot by itself authorize a
+                // semantic completed-tick increment. A negative verification
+                // must retain the exact accepted GPU work and input prefix.
+                use engine::plugins::render::RenderGpuStepCommitError;
+                let deliberately_unverified = self.history.commit_verified(
+                    context.affinity(),
+                    |_, _| Err::<(), &'static str>("semantic proof unavailable"),
                 );
-                assert_eq!(observed, accepted.expected_counter);
-                self.history
-                    .commit_completed(context.affinity())
-                    .expect("producer verified exact completed batch");
-                self.completed_counter = observed;
+                assert_eq!(
+                    deliberately_unverified,
+                    Err(RenderGpuStepCommitError::Verification(
+                        "semantic proof unavailable"
+                    ))
+                );
+                assert_eq!(
+                    self.history.accepted_submission().map(|s| s.id()),
+                    Some(submission.id())
+                );
+                let readback = accepted.readback;
+                let expected_counter = accepted.expected_counter;
+                let previous_tick = self.history.completed_tick();
+                let mut observed_counter = None;
+                let final_tick = self
+                    .history
+                    .commit_verified(context.affinity(), |actual_submission, captured| {
+                        assert!(!captured.is_empty(), "accepted batch must have steps");
+                        assert_eq!(captured[0].tick(), previous_tick + 1);
+                        let result = actual_submission
+                            .readback(readback)
+                            .expect("required exact-submission proof readback")
+                            .status();
+                        let GpuReadbackStatus::Ready(bytes) = result else {
+                            return Err("completed batch lacks ready GPU readback");
+                        };
+                        let observed = u32::from_le_bytes(
+                            bytes.as_bytes()[0..4]
+                                .try_into()
+                                .expect("four-byte readback"),
+                        );
+                        if observed != expected_counter {
+                            return Err("observed GPU result differs from captured inputs");
+                        }
+                        observed_counter = Some(observed);
+                        Ok::<(), &'static str>(())
+                    })
+                    .expect("producer verified exact completed GPU step batch");
+                assert!(final_tick > previous_tick);
+                self.completed_counter = observed_counter.expect("verified GPU counter");
                 self.accepted = None;
             }
             GpuSubmissionStatus::Failed(failure) => {

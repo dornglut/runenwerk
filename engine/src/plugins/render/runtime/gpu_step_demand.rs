@@ -43,6 +43,26 @@ impl std::fmt::Display for RenderGpuStepDemandError {
 
 impl std::error::Error for RenderGpuStepDemandError {}
 
+/// A completed GPU submission is not a verified semantic simulation result.
+/// Rejected verification leaves the exact accepted submission and immutable
+/// inputs owned by the producer, without advancing its completed tick.
+#[derive(Debug, PartialEq, Eq)]
+pub enum RenderGpuStepCommitError<E> {
+    Submission(RenderGpuStepDemandError),
+    Verification(E),
+}
+
+impl<E: std::fmt::Display> std::fmt::Display for RenderGpuStepCommitError<E> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Submission(reason) => write!(f, "GPU step commit rejected: {reason}"),
+            Self::Verification(reason) => write!(f, "GPU step verification rejected: {reason}"),
+        }
+    }
+}
+
+impl<E: std::error::Error + 'static> std::error::Error for RenderGpuStepCommitError<E> {}
+
 #[derive(Debug)]
 struct AcceptedSteps<T> {
     submission: GpuSubmission,
@@ -178,31 +198,49 @@ impl<T> RenderGpuStepDemand<T> {
             .map_or(&[], |batch| batch.steps.as_slice())
     }
 
-    /// The semantic producer calls this only after confirming the exact
-    /// accepted submission faithfully represented its captured step batch.
-    /// On failed/unknown work or device change the whole batch remains held;
-    /// the producer must reconstruct state and deliberately create a new
-    /// demand stream instead of blindly replaying possibly executed writes.
-    pub fn commit_completed(
+    /// Verify the *exact* terminal GPU submission against the producer's
+    /// immutable authored steps as one transaction with semantic completion.
+    /// The provided callback MUST inspect the producer's required result
+    /// evidence (for example, GPU readback). A failed callback cannot consume
+    /// source inputs or advance the completed producer tick.
+    ///
+    /// This guards against accidentally committing merely because a physical
+    /// GPU submission became Completed. RunenGPU owns physical status; the
+    /// producer owns the meaning and sufficiency of verification.
+    ///
+    /// Failure or generation change keeps the original admitted history
+    /// quarantined. Reconstruction is deliberately not automatic.
+    pub fn commit_verified<E>(
         &mut self,
         current_affinity: GpuContextAffinity,
-    ) -> Result<u64, RenderGpuStepDemandError> {
+        verify: impl FnOnce(&GpuSubmission, &[RenderGpuStepIntent<T>]) -> Result<(), E>,
+    ) -> Result<u64, RenderGpuStepCommitError<E>> {
         let batch = self
             .accepted
             .as_ref()
-            .ok_or(RenderGpuStepDemandError::NoAcceptedBatch)?;
+            .ok_or(RenderGpuStepCommitError::Submission(
+                RenderGpuStepDemandError::NoAcceptedBatch,
+            ))?;
         if batch.submission.affinity() != current_affinity {
-            return Err(RenderGpuStepDemandError::DeviceGenerationChanged);
+            return Err(RenderGpuStepCommitError::Submission(
+                RenderGpuStepDemandError::DeviceGenerationChanged,
+            ));
         }
         match batch.submission.status() {
             GpuSubmissionStatus::Accepted => {
-                return Err(RenderGpuStepDemandError::SubmissionPending);
+                return Err(RenderGpuStepCommitError::Submission(
+                    RenderGpuStepDemandError::SubmissionPending,
+                ));
             }
             GpuSubmissionStatus::Failed(_) => {
-                return Err(RenderGpuStepDemandError::SubmissionFailed);
+                return Err(RenderGpuStepCommitError::Submission(
+                    RenderGpuStepDemandError::SubmissionFailed,
+                ));
             }
             GpuSubmissionStatus::Completed => {}
         }
+        verify(&batch.submission, &batch.steps)
+            .map_err(RenderGpuStepCommitError::Verification)?;
         let last_tick = batch.steps.last().expect("accepted batch nonempty").tick;
         debug_assert_eq!(batch.steps[0].tick, self.completed_tick + 1);
         self.accepted = None;
