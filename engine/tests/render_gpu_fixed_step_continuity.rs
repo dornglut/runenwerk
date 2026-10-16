@@ -9,7 +9,7 @@ use runen_gpu::{
     GpuBindingKey, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization, GpuBufferRegion,
     GpuBufferUsage, GpuCapabilityProfile, GpuComputeOperation, GpuComputePipelineDescriptor,
     GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory, GpuDispatchIntent,
-    GpuDispatchSize, GpuExecutionPreference, GpuExplicitOrder, GpuReadbackId, GpuReadbackOperation,
+    GpuDispatchSize, GpuExecutionPreference, GpuReadbackId, GpuReadbackOperation,
     GpuReadbackStatus, GpuReconstruction, GpuResourceLabel, GpuResourceLifetime,
     GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
     GpuRuntimeBufferBinding, GpuSubmission, GpuSubmissionStatus, GpuWorkFragment,
@@ -275,24 +275,16 @@ fn batch_fragment(
     builder
         .declare_resource(state.clone().into())
         .expect("declare canonical state");
-    let mut preceding = None;
+    // G3 owns WAW and RAW dependencies for this shared retained storage.
+    // Explicit duplicate edges are rejected as RedundantExplicitDataOrder.
     for step in steps {
         for ordinal in 0..step.increments {
-            let node = builder
+            builder
                 .compute(
                     format!("step.{}.increment.{ordinal}", step.tick),
                     increment_op(pipeline, state),
                 )
                 .expect("bounded semantic step compute node");
-            if let Some(prev) = preceding {
-                builder
-                    .add_explicit_order(
-                        GpuExplicitOrder::new(&prev, &node, "ordered steps within one GPU batch")
-                            .expect("valid canonical intra-batch ordering"),
-                    )
-                    .expect("no cycle in forward step sequence");
-            }
-            preceding = Some(node);
         }
     }
     let readback = GpuReadbackId::allocate().expect("unique observation readback");
@@ -301,7 +293,7 @@ fn batch_fragment(
         readback,
     )
     .expect("readback operation");
-    let tail = builder
+    builder
         .add_node(
             label("fixed.step.batch.terminal.readback"),
             GpuWorkOperation::Readback(op),
@@ -310,15 +302,7 @@ fn batch_fragment(
             GpuExecutionPreference::TransferPreferred,
             provenance(name),
         )
-        .expect("readback node");
-    if let Some(prev) = preceding {
-        builder
-            .add_explicit_order(
-                GpuExplicitOrder::new(&prev, &tail, "read after all accepted step effects")
-                    .expect("valid final ordering"),
-            )
-            .expect("valid terminal observation");
-    }
+        .expect("readback follows typed write/read graph hazards");
     (builder.finish().expect("complete GPU step graph"), readback)
 }
 
@@ -336,7 +320,7 @@ fn progress_to_terminal(context: &GpuContext, submission: &GpuSubmission) {
 }
 
 #[test]
-fn delayed_gpu_batches_consume_all_captured_steps_once_without_global_queue_lock() {
+fn delayed_gpu_batches_consume_all_captured_steps_once() {
     let Some(context) = context() else {
         return;
     };
