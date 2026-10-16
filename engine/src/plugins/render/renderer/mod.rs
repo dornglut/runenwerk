@@ -1351,7 +1351,10 @@ mod tests {
         renderer.publish_progressed_gpu_observations();
         assert_eq!(renderer.last_gpu_pass_timing_evidence.len(), 1);
         assert_eq!(renderer.last_composed_gpu_timing_evidence.len(), 1);
-        assert_eq!(renderer.last_captured_textures, vec![completed_capture.clone()]);
+        assert_eq!(
+            renderer.last_captured_textures,
+            vec![completed_capture.clone()]
+        );
         assert!(
             renderer
                 .pending_gpu_observation_output
