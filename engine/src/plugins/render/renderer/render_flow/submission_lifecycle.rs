@@ -14,7 +14,7 @@ struct AcceptedFrameSubmission {
 }
 
 #[derive(Debug, Default)]
-pub(super) struct RendererSubmissionLifecycle {
+pub(in crate::plugins::render::renderer) struct RendererSubmissionLifecycle {
     accepted: Vec<AcceptedFrameSubmission>,
 }
 
@@ -42,7 +42,7 @@ fn classify_submission(
 }
 
 impl RendererSubmissionLifecycle {
-    pub(super) fn accept(
+    pub(in crate::plugins::render::renderer) fn accept(
         &mut self,
         context: &GpuContext,
         submission: GpuSubmission,
@@ -74,7 +74,7 @@ impl RendererSubmissionLifecycle {
         });
     }
 
-    pub(super) fn reconcile(&mut self, context: &GpuContext) {
+    pub(in crate::plugins::render::renderer) fn reconcile(&mut self, context: &GpuContext) {
         let affinity = context.affinity();
         let lifecycle = context.execution_lifecycle_state();
         self.accepted.retain(|accepted| {
