@@ -37,7 +37,6 @@ pub(crate) fn test_selected_slot_operation<T>(
     slots.transact_native_app(&NativeAppMutationPermit { _sealed: () }, slot, operation)
 }
 
-
 fn revoke_game_source(world: &mut World, source: runen_input::InputSourceId) -> Result<()> {
     if let Some(mut actions) = world.remove_resource::<ActionState>() {
         let result = world.resource::<InputState>().map(|input| {
