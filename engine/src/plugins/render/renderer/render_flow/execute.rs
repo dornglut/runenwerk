@@ -332,6 +332,12 @@ impl Renderer {
         // a diagnostic string. Runenwerk policy may inspect the actual rejection
         // kind, but G5 still owns the validity and retryability distinction.
         let submission = context.submit_prepared(prepared).map_err(|rejection| {
+            self.retained_submission_trace.rejected(
+                retained_trace.as_ref(),
+                prepared_frame.context.frame_index,
+                prepared_frame.surface.render_surface_id.raw(),
+                rejection.reason(),
+            );
             let (_prepared, reason) = rejection.into_parts();
             runen_gpu::GpuWorkSubmissionError::SubmissionRejected(reason)
         })?;
