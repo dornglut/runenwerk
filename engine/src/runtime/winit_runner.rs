@@ -151,6 +151,32 @@ struct NativeUiTouchTranslator {
     touch: TouchInputState,
 }
 
+impl NativeUiTouchTranslator {
+    /// A rejected native transition does not mutate the canonical contact
+    /// table or the backend membership index. One device's duplicate/orphan
+    /// event must not retire another device's valid contact.
+    fn transition(
+        &mut self,
+        original: &Touch,
+        device: UiInputDeviceId,
+        point: LogicalPoint,
+        input_context: runenui_core::SurfaceInputContext,
+    ) -> Result<runenui_core::PointerEvent, runenui_winit::touch_input::TouchIngressDiagnostic> {
+        let event = self.touch.transition(
+            device,
+            original.id,
+            original.phase,
+            point,
+            input_context,
+        )?;
+        self.backend_devices.insert(original.device_id);
+        if self.touch.active_contact_count() == 0 {
+            self.backend_devices.clear();
+        }
+        Ok(event)
+    }
+}
+
 /// Translate with the mapping proven by the terminal completed Present, not
 /// the newest UI publication or the requested framebuffer dimensions.
 #[allow(
@@ -1914,6 +1940,9 @@ impl WinitRunner {
         let mut slots = world
             .remove_resource::<UiRuntimeSlotsResource>()
             .context("selected native touch has no pinned slot authority")?;
+        // All rejected transitions leave the pinned translator unchanged.
+        // They cannot justify cancelling foreign active contacts in this window.
+        let mut transition_rejected = false;
         // Before framework ingress a rejected observation is neutral-only;
         // after an actual M13 attempt, missing finality is a host error.
         let mut m13_submission_attempted = false;
@@ -1947,20 +1976,12 @@ impl WinitRunner {
                     backend_devices: HashSet::new(),
                     touch: TouchInputState::default(),
                 });
-            lifetime.backend_devices.insert(original.device_id);
             let event = lifetime
-                .touch
-                .transition(
-                    device,
-                    original.id,
-                    original.phase,
-                    point,
-                    displayed.input_context.clone(),
-                )
-                .map_err(|error| anyhow!("native contact translation rejected: {error:?}"))?;
-            if lifetime.touch.active_contact_count() == 0 {
-                lifetime.backend_devices.clear();
-            }
+                .transition(&original, device, point, displayed.input_context.clone())
+                .map_err(|error| {
+                    transition_rejected = true;
+                    anyhow!("native contact translation rejected: {error:?}")
+                })?;
             let pointer = event.pointer_id();
             m13_submission_attempted = true;
             let (_, submission) = host
@@ -1991,7 +2012,12 @@ impl WinitRunner {
         })();
         world.insert_resource(slots);
         if let Err(error) = operation {
-            self.cancel_native_ui_touch(window)?;
+            // Duplicate/orphan/invalid transitions did not touch the canonical
+            // contact table; preserve B instead of globally cancelling it.
+            // Genuine failures elsewhere still retire the whole stream.
+            if !transition_rejected {
+                self.cancel_native_ui_touch(window)?;
+            }
             tracing::trace!(
                 target: "engine.runtime.input",
                 ?window,
@@ -4177,6 +4203,96 @@ mod tests {
             !runner.native_ui_touches.contains_key(&secondary),
             "a touch cannot allocate a live input stream without terminal Present"
         );
+        // RunenUI's one contact translator owns both devices. A duplicate
+        // or orphan native A observation must leave B's real contact intact;
+        // no global M13 Cancel may be derived from a rejected transition.
+        let mut touch_runtime = runenui_runtime::AppRuntime::<NativeInputApp>::mount(());
+        let touch_styles = runenui_core::StyleEnvironment::default();
+        let published_touch = touch_runtime
+            .publish_surface(&runenui_runtime::SurfaceBuildContext::new(
+                &touch_styles,
+                runenui_runtime::LayoutConstraints::unbounded(),
+            ))
+            .expect("real RunenUI contact surface");
+        let touch_scope = runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("mounted M13 owner")
+            .input_ownership(slot)
+            .expect("canonical original scope")
+            .scope()
+            .clone();
+        let mut contacts = NativeUiTouchTranslator {
+            recipient: slot,
+            source: unknown_position_context.source,
+            binding_epoch: bound_epoch,
+            scope: touch_scope,
+            backend_devices: HashSet::new(),
+            touch: TouchInputState::default(),
+        };
+        let backend = winit::event::DeviceId::dummy();
+        let observed = |id, phase| Touch {
+            device_id: backend,
+            phase,
+            location: PhysicalPosition::new(18.0, 22.0),
+            force: None,
+            id,
+        };
+        let a_device = UiInputDeviceId::new(91).expect("original device A");
+        let b_device = UiInputDeviceId::new(92).expect("independent device B");
+        let point = LogicalPoint::new(18.0, 22.0).expect("finite native point");
+        let a = contacts
+            .transition(
+                &observed(7, winit::event::TouchPhase::Started),
+                a_device,
+                point,
+                published_touch.input_context().clone(),
+            )
+            .expect("original A Down");
+        let b = contacts
+            .transition(
+                &observed(7, winit::event::TouchPhase::Started),
+                b_device,
+                point,
+                published_touch.input_context().clone(),
+            )
+            .expect("original B Down with overlapping native contact ID");
+        assert_ne!(a.pointer_id(), b.pointer_id());
+        let before_membership = contacts.backend_devices.clone();
+        assert_eq!(
+            contacts.transition(
+                &observed(7, winit::event::TouchPhase::Started),
+                a_device,
+                point,
+                published_touch.input_context().clone(),
+            ),
+            Err(runenui_winit::touch_input::TouchIngressDiagnostic::DuplicateStart)
+        );
+        assert_eq!(
+            contacts.transition(
+                &observed(999, winit::event::TouchPhase::Moved),
+                a_device,
+                point,
+                published_touch.input_context().clone(),
+            ),
+            Err(runenui_winit::touch_input::TouchIngressDiagnostic::UnknownContact)
+        );
+        assert_eq!(contacts.backend_devices, before_membership);
+        assert_eq!(contacts.touch.active_contact_count(), 2);
+        let b_up = contacts
+            .transition(
+                &observed(7, winit::event::TouchPhase::Ended),
+                b_device,
+                point,
+                published_touch.input_context().clone(),
+            )
+            .expect("unrelated B Up remains admitted");
+        assert_eq!(b_up.pointer_id(), b.pointer_id());
+        assert_eq!(contacts.touch.active_contact_count(), 1);
+        assert_eq!(contacts.touch.cancel_device(a_device).len(), 1);
+        assert_eq!(contacts.touch.active_contact_count(), 0);
+
         // A removed modifier-carrying keyboard must not lend its old
         // window-global Shift/Ctrl snapshot to device B. B's translator
         // membership remains live and the next authentic modifier callback
