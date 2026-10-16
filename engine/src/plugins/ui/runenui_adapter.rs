@@ -2625,7 +2625,7 @@ mod tests {
         use runenui_runtime::{
             InputArbitrationRecord, UiInputFamily, UiInputFinality, UiInputProcessingRejection,
         };
-        use runenui_winit::TouchInputState;
+        use runenui_winit::touch_input::TouchInputState;
         use winit::event::TouchPhase;
 
         struct NativePointerApp;

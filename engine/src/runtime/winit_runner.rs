@@ -22,7 +22,8 @@ use crate::runtime::platform::{
 };
 use crate::runtime::presentation::ensure_primary_presentation_metrics;
 use crate::runtime::window::{
-    NativeWindowCreationRequest, NativeWindowId, WindowStateRegistryResource,
+    NativeWindowCreationRequest, NativeWindowId, NativeWindowLifecycleState,
+    WindowStateRegistryResource,
 };
 use crate::runtime::winit_input::{
     WinitInputAdapter, contact_input, cursor_position, keyboard_input, pointer_button_input,
@@ -423,6 +424,25 @@ impl WinitRunner {
                 if error.downcast_ref::<NativeInputRecipientError>()
                     == Some(&NativeInputRecipientError::MissingRecipient) =>
             {
+                Ok(true)
+            }
+            Err(error)
+                if error.downcast_ref::<NativeInputRecipientError>()
+                    == Some(&NativeInputRecipientError::InactiveWindow)
+                    && self
+                        .state
+                        .world
+                        .resource::<WindowStateRegistryResource>()
+                        .ok()
+                        .and_then(|windows| windows.record(native_window_id))
+                        .is_some_and(|record| {
+                            record.close_requested
+                                && record.lifecycle_state == NativeWindowLifecycleState::CloseApproved
+                        }) =>
+            {
+                // An already-approved native close is no longer Created.
+                // The original source/ActionState are now retired; this is
+                // not a gameplay recipient fallback or an M13 Cancel claim.
                 Ok(true)
             }
             Err(error) => Err(error),
@@ -3509,6 +3529,64 @@ mod tests {
                 .input_adapter
                 .window_source_context(NativeWindowId::primary()),
             None
+        );
+    }
+
+    #[test]
+    fn close_approved_window_retires_original_source_without_false_inactive_route_failure() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        // A passive UI host has an input-recipient registry but no selected
+        // game/UI fallback. The original native close approval itself moves
+        // the window out of the Created state.
+        runner
+            .state
+            .world
+            .insert_resource(UiNativeInputRecipientsResource::default());
+        let secondary = NativeWindowId::try_from_raw(2).expect("secondary window identity");
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("native window authority")
+            .register_created_window(secondary, "secondary", (800, 600), 1.0, false);
+        let context = runner
+            .input_adapter
+            .window_context(secondary, winit::event::DeviceId::dummy())
+            .expect("original native source");
+        runner
+            .apply_event_for_native_window(secondary, normalized_shift_press(context))
+            .expect("physical Down reached the neutral reducer");
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("neutral state")
+                .shift_down()
+        );
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("native window authority")
+            .record_mut(secondary)
+            .expect("created secondary")
+            .request_close();
+        assert!(
+            runner
+                .retire_window_input_source(secondary)
+                .expect("approved close must retire original source without requiring Created"),
+        );
+        assert_eq!(runner.input_adapter.window_source_context(secondary), None);
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("physical state")
+                .shift_down(),
+            "physical key must be retired before the approved close completes"
         );
     }
 
