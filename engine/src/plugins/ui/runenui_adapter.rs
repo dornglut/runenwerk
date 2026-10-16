@@ -131,6 +131,9 @@ pub enum UiRuntimeSlotOperationFailure {
     WrongAppKind,
     NativeHostClosed,
     RuntimeStopped(runenui_runtime::PumpOutcome),
+    /// A native-selected slot can mutate only inside the source-correlated
+    /// Engine World transaction, never from a bare ECS resource borrow.
+    NativeInputTransactionRequired,
 }
 
 /// An exact native keyboard observation is an immutable M13 fact, not a
@@ -912,6 +915,9 @@ struct UiRuntimeSlot {
     /// A deadline already covered by a quiescent checkpoint needs publication,
     /// not an endless sequence of identical pumps when no surface is bound.
     deadline_observed_at: Option<MonotonicInstant>,
+    /// A capability latch, not another recipient map. Once selected for
+    /// native input, raw app mutations must use the World transaction.
+    native_input_selected: bool,
 }
 
 impl UiRuntimeSlot {
@@ -983,6 +989,9 @@ pub struct UiRuntimeSlotsResource {
     native_clock: Option<NativeHostClock>,
     native_transport: Option<NativeWakeTransport>,
     native_closed: bool,
+    /// Ephemeral mutation permit scoped to exactly one selected native slot.
+    /// Actual binding, source and scope remain owned by their existing owners.
+    native_mutation_slot: Option<UiRuntimeSlotId>,
 }
 
 impl Default for UiRuntimeSlotsResource {
@@ -993,6 +1002,7 @@ impl Default for UiRuntimeSlotsResource {
             native_clock: None,
             native_transport: None,
             native_closed: false,
+            native_mutation_slot: None,
         }
     }
 }
@@ -1199,6 +1209,7 @@ impl UiRuntimeSlotsResource {
             next_deadline: None,
             native_clock: self.native_clock.clone(),
             deadline_observed_at: None,
+            native_input_selected: false,
         };
         if self.native_clock.is_some() {
             match slot.settle_pending() {
@@ -1294,6 +1305,7 @@ impl UiRuntimeSlotsResource {
             next_deadline,
             native_clock: self.native_clock.clone(),
             deadline_observed_at,
+            native_input_selected: false,
         });
         UiRuntimeSlotMountReport::accepted(screen_id, id)
     }
@@ -1309,7 +1321,7 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         let next = slot.next_ingress_epoch()?;
         let runtime = slot
             .runtime
@@ -1357,7 +1369,7 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         let next = slot.next_ingress_epoch()?;
         let runtime = slot
             .runtime
@@ -1407,7 +1419,7 @@ impl UiRuntimeSlotsResource {
         &mut self,
         slot_id: UiRuntimeSlotId,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        self.slot_mut(slot_id)?.settle_pending()
+        self.slot_mut_application(slot_id)?.settle_pending()
     }
 
     /// Admit an exact native-normalized keyboard occurrence without inventing
@@ -1621,7 +1633,7 @@ impl UiRuntimeSlotsResource {
         context: &SurfaceBuildContext<'_>,
     ) -> Result<SurfacePublication, UiRuntimeSlotOperationFailure> {
         let native = self.native_clock.is_some();
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         if slot.requires_settlement {
             return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
         }
@@ -1659,7 +1671,7 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         context: UiEvaluationContext,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         let next = slot.next_ingress_epoch()?;
         let runtime = slot.runtime.counter_mut()?;
         let artifact = runtime.state().artifact.clone();
@@ -1688,7 +1700,7 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         authored_id: &str,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         let authored_id = ElementId::new(authored_id)
             .map_err(|_| UiRuntimeSlotOperationFailure::InvalidAuthoredId)?;
         let next = slot.next_ingress_epoch()?;
@@ -1730,7 +1742,7 @@ impl UiRuntimeSlotsResource {
         request: UiRuntimePendingEventRequest,
         disposition: UiRuntimeHostRequestDisposition,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         let response = match disposition {
             UiRuntimeHostRequestDisposition::Accepted => RunenwerkUiHostResponse::Accepted,
             UiRuntimeHostRequestDisposition::Rejected => RunenwerkUiHostResponse::Rejected,
@@ -1782,6 +1794,12 @@ impl UiRuntimeSlotsResource {
         let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
             return Ok(None);
         };
+        if self.slots[index].native_input_selected
+            && !self.native_closed
+            && self.native_mutation_slot != Some(slot_id)
+        {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
         let retirement = self.slots[index].runtime.shutdown()?;
         self.slots.remove(index);
         Ok(Some(retirement))
@@ -1798,6 +1816,49 @@ impl UiRuntimeSlotsResource {
     ) -> Result<bool, UiRuntimeSlotOperationFailure> {
         self.unmount_with_retirement(slot_id)
             .map(|retirement| retirement.is_some())
+    }
+
+    /// Infallible only after a binding has already verified the existing
+    /// mounted slot/scope. Sticky until unmount: recipient retirement cannot
+    /// reopen a bare resource-mutator escape through the same runtime.
+    pub(crate) fn enroll_native_input(&mut self, slot_id: UiRuntimeSlotId) {
+        self.slots
+            .iter_mut()
+            .find(|slot| slot.id == slot_id)
+            .expect("validated RunenUI native binding references mounted slot")
+            .native_input_selected = true;
+    }
+
+    /// Only the Engine World mutation transaction calls this function after
+    /// checking the original recipient, native source and framework scope.
+    /// A plain selected-slot mutator cannot grant itself this capability.
+    pub(crate) fn transact_native_app<T>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        operation: impl FnOnce(&mut Self) -> Result<T, UiRuntimeSlotOperationFailure>,
+    ) -> Result<T, UiRuntimeSlotOperationFailure> {
+        if self.native_mutation_slot.is_some() {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        self.native_mutation_slot = Some(slot_id);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| operation(self)));
+        self.native_mutation_slot = None;
+        match outcome {
+            Ok(result) => result,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+
+    fn slot_mut_application(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<&mut UiRuntimeSlot, UiRuntimeSlotOperationFailure> {
+        let authorized = self.native_mutation_slot == Some(slot_id);
+        let slot = self.slot_mut(slot_id)?;
+        if slot.native_input_selected && !authorized {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        Ok(slot)
     }
 
     fn slot(&self, slot_id: UiRuntimeSlotId) -> Option<&UiRuntimeSlot> {
@@ -4947,6 +5008,7 @@ mod tests {
             next_deadline: None,
             native_clock: None,
             deadline_observed_at: None,
+            native_input_selected: false,
         });
         slots.next_slot_id = 2;
 

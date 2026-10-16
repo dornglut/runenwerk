@@ -269,6 +269,9 @@ impl UiNativeInputRecipientsResource {
             }),
         );
         self.next_epoch = epoch;
+        if let NativeInputRecipient::RunenUiSlot(slot) = recipient {
+            slots.enroll_native_input(slot);
+        }
         Ok(true)
     }
 
@@ -370,6 +373,23 @@ impl UiNativeInputRecipientsResource {
             }
         }
         Ok(binding.recipient)
+    }
+
+    /// Query only the already accepted live native UI binding; this is the
+    /// source/scope/epoch witness for an Engine World mutation transaction.
+    /// Never infer input ownership from paint, mount order or window focus.
+    pub(crate) fn selected_slot_binding(
+        &self,
+        slot: UiRuntimeSlotId,
+    ) -> Option<(NativeWindowId, u64, InputArbitrationScope)> {
+        self.bindings.iter().find_map(|(window, binding)| match binding {
+            WindowRecipientBinding::Bound(Binding {
+                recipient: NativeInputRecipient::RunenUiSlot(id),
+                epoch,
+                scope: Some(scope),
+            }) if *id == slot => Some((*window, *epoch, scope.clone())),
+            _ => None,
+        })
     }
 
     /// Read after authoritative `resolve` in the same invoker-thread callback.

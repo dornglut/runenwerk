@@ -178,9 +178,9 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
         }
 
         let context = publication_context(&binding, mapping)?;
-        let publication_attempt = world
-            .resource_mut::<UiRuntimeSlotsResource>()?
-            .publish_surface_for_slot(slot, &context);
+        let publication_attempt = super::transact_ui_slot(&mut world, slot, |slots| {
+            slots.publish_surface_for_slot(slot, &context)
+        });
         let publication = match publication_attempt {
             Ok(publication) => publication,
             Err(error) => {
