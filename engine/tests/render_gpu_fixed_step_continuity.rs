@@ -508,17 +508,31 @@ fn captured_producer_steps_survive_real_g5_rejection_and_fresh_reprepare() {
     assert_eq!(producer.outstanding(), 2);
     assert_eq!(producer.completed_tick(), 0);
     progress_to_terminal(&context, &accepted);
-    let readback = accepted
-        .readback(readback)
-        .expect("completed producer readback");
-    let GpuReadbackStatus::Ready(bytes) = readback.status() else {
-        panic!("completed producer readback must be ready");
-    };
-    assert_eq!(
-        u32::from_le_bytes(bytes.as_bytes()[..4].try_into().expect("counter bytes")),
-        6,
-        "one blocking increment and then historical producer increments 2+3",
-    );
-    assert_eq!(producer.commit_completed(context.affinity()), Ok(2));
+    // Neither completion nor the earlier typed G5 rejection can commit
+    // semantic state without verifying the exact producer-authored inputs
+    // against this submission's GPU readback.
+    let committed = producer.commit_verified(context.affinity(), |submission, intents| {
+        let captured = intents
+            .iter()
+            .map(|intent| (intent.tick(), intent.input().increments))
+            .collect::<Vec<_>>();
+        if captured != vec![(1, 2), (2, 3)] {
+            return Err("accepted semantic steps differ from captured history");
+        }
+        let outcome = submission
+            .readback(readback)
+            .expect("completed producer readback");
+        let GpuReadbackStatus::Ready(bytes) = outcome.status() else {
+            return Err("completed GPU producer readback is not ready");
+        };
+        let observed = u32::from_le_bytes(
+            bytes.as_bytes()[..4].try_into().expect("counter bytes"),
+        );
+        if observed != 6 {
+            return Err("GPU counter differs from historical producer inputs");
+        }
+        Ok::<(), &'static str>(())
+    });
+    assert_eq!(committed, Ok(2));
     assert_eq!(producer.outstanding(), 0);
 }
