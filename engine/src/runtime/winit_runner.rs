@@ -138,6 +138,10 @@ struct NativeUiKeyboardTranslator {
     /// exclusively inside the device-qualified RunenUI keyboard translator.
     devices: HashSet<UiInputDeviceId>,
     binding_epoch: u64,
+    /// Last actual M13 revision observed for this exact native UI keyboard
+    /// lifetime. This is only a continuity witness, never copied focus,
+    /// permission, or a second held-key store.
+    last_observed_revision: Option<u64>,
     keyboard: KeyboardInputState,
 }
 
@@ -739,6 +743,7 @@ impl WinitRunner {
                     source,
                     devices: HashSet::new(),
                     binding_epoch,
+                    last_observed_revision: None,
                     keyboard: KeyboardInputState::default(),
                 });
         lifetime.devices.insert(device);
@@ -797,9 +802,27 @@ impl WinitRunner {
             }
         };
         let composition = native_keyboard_composition(&before);
+        // A semantic/host mutation since this original keyboard lifetime's
+        // last observed M13 revision may have crossed an exclusive owner and
+        // returned to nonexclusive before this native callback. Without all
+        // intervening ordered M13 records it is not a gameplay nonclaim.
+        let prior_revision = self.native_ui_keyboards.get(&window).and_then(|lifetime| {
+            (lifetime.recipient == slot
+                && lifetime.source == context.source
+                && lifetime.binding_epoch == binding_epoch)
+                .then_some(lifetime.last_observed_revision)
+                .flatten()
+        });
+        if prior_revision.is_some_and(|prior| prior != before.revision().get()) {
+            self.revoke_native_game_keyboard_source(context.source)?;
+        }
         // Revalidate the translator's actual recipient and physical-source
         // generation BEFORE reusing cached modifier or pressed-key evidence.
         self.native_ui_keyboard_translator(window, slot, context.source, device, binding_epoch);
+        self.native_ui_keyboards
+            .get_mut(&window)
+            .expect("pinned native keyboard translator was just initialized")
+            .last_observed_revision = Some(before.revision().get());
         let modifiers = self
             .native_ui_modifiers
             .get(&window)
@@ -1133,6 +1156,20 @@ impl WinitRunner {
             matches!(evidence, Ok(UiInputFinality::Committed(_))),
             "native IME text lacked exact committed M13 settlement: {evidence:?}"
         );
+        Ok(())
+    }
+
+    /// Withdraw precisely one native source's game eligibility when an actual
+    /// M13 ownership revision gap cannot exclude an intermediate UI claim.
+    fn revoke_native_game_keyboard_source(&mut self, source: InputSourceId) -> Result<()> {
+        let world = &mut self.state.world;
+        if let Some(mut actions) = world.remove_resource::<ActionState>() {
+            let result = world.resource::<InputState>().map(|input| {
+                actions.revoke_source_keyboard_for_ui_ownership(input, source);
+            });
+            world.insert_resource(actions);
+            result?;
+        }
         Ok(())
     }
 
@@ -2344,14 +2381,39 @@ impl WinitRunner {
             } else {
                 match self.native_input_recipient(window) {
                     Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => false,
-                    Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => self
-                        .state
-                        .world
-                        .resource_mut::<UiRuntimeSlotsResource>()?
-                        .input_ownership(slot)
-                        .map_or(true, |ownership| {
-                            native_ui_blocks_preframe_keyboard_gameplay(&ownership)
-                        }),
+                    Ok((NativeInputRecipient::RunenUiSlot(slot), epoch)) => {
+                        let observed = self
+                            .state
+                            .world
+                            .resource_mut::<UiRuntimeSlotsResource>()?
+                            .input_ownership(slot);
+                        match observed {
+                            Ok(snapshot) => {
+                                let previous = self.native_ui_keyboards.get(&window).and_then(
+                                    |lifetime| {
+                                        (lifetime.recipient == slot
+                                            && lifetime.source == source
+                                            && Some(lifetime.binding_epoch) == epoch)
+                                            .then_some(lifetime.last_observed_revision)
+                                            .flatten()
+                                    },
+                                );
+                                let gap = previous.is_some_and(|revision| {
+                                    revision != snapshot.revision().get()
+                                });
+                                if let Some(lifetime) = self.native_ui_keyboards.get_mut(&window)
+                                    && lifetime.recipient == slot
+                                    && lifetime.source == source
+                                    && Some(lifetime.binding_epoch) == epoch
+                                {
+                                    lifetime.last_observed_revision =
+                                        Some(snapshot.revision().get());
+                                }
+                                gap || native_ui_blocks_preframe_keyboard_gameplay(&snapshot)
+                            }
+                            Err(_) => true,
+                        }
+                    }
                     Err(_) => true,
                 }
             };
@@ -3927,6 +3989,168 @@ mod tests {
                 .unwrap()
                 .action_down(crate::plugins::action::WORLD_MOVE_UP),
             "orphaned W must not resurrect source-erased gameplay permission"
+        );
+    }
+
+    #[test]
+    fn nonexclusive_m13_revision_gap_revokes_only_its_original_game_source() {
+        use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+        use runen_input::{
+            DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+            ObservationOrigin,
+        };
+
+        struct RevisionProbe;
+        impl runenui_core::UiApp for RevisionProbe {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::text("unfocused input owner")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        let primary = NativeWindowId::primary();
+        let legacy = NativeWindowId::try_from_raw(2).unwrap();
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .unwrap()
+            .register_created_window(legacy, "legacy", (640, 480), 1.0, false);
+        let first = runner
+            .input_adapter
+            .window_context(primary, winit::event::DeviceId::dummy())
+            .unwrap();
+        let other = runner
+            .input_adapter
+            .window_context(legacy, winit::event::DeviceId::dummy())
+            .unwrap();
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<RevisionProbe>(
+                UiTypedScreenId::new("native.revision.gap"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("genuine mounted M13 runtime");
+        let current = slots.input_ownership(slot).expect("current M13 snapshot");
+        assert!(
+            !native_ui_blocks_preframe_keyboard_gameplay(&current),
+            "genuine unfocused nonexclusive UI may not veto gameplay by focus alone"
+        );
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                primary,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap(),
+                &mut slots,
+            )
+            .unwrap();
+        recipients
+            .bind(
+                legacy,
+                NativeInputRecipient::LegacyNativeConsumer,
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap(),
+                &mut slots,
+            )
+            .unwrap();
+        let epoch = recipients.binding_epoch_for_window(primary).unwrap();
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+
+        let down = KeyboardInput {
+            physical_key: PhysicalKeyIdentity::code("KeyW"),
+            logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+            location: KeyLocation::Standard,
+            state: DigitalState::Pressed,
+            repeat: false,
+            origin: ObservationOrigin::SourceReport,
+        };
+        let input = runner.state.world.resource_mut::<InputState>().unwrap();
+        input.handle_normalized_keyboard(first, &down);
+        input.handle_normalized_keyboard(other, &down);
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+
+        // The host missed an intermediate meaningful ownership revision.
+        // M13 is now truly nonexclusive, but that final state alone cannot
+        // certify that the old physical W never belonged to UI in between.
+        runner.native_ui_keyboards.insert(
+            primary,
+            NativeUiKeyboardTranslator {
+                recipient: slot,
+                source: first.source,
+                devices: HashSet::new(),
+                binding_epoch: epoch,
+                last_observed_revision: Some(u64::MAX),
+                keyboard: KeyboardInputState::default(),
+            },
+        );
+        runner.reconcile_native_ui_keyboard_before_frame().unwrap();
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "independent real legacy source continues to drive the same action"
+        );
+        runner
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(
+                other,
+                &KeyboardInput {
+                    state: DigitalState::Released,
+                    ..down
+                },
+            );
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "missed UI revision may not leave a ghost held gameplay action"
+        );
+        assert_eq!(
+            runner
+                .native_ui_keyboards
+                .get(&primary)
+                .unwrap()
+                .last_observed_revision,
+            Some(current.revision().get()),
+            "witness reconciles to the actual framework revision"
         );
     }
 
