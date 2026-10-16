@@ -293,11 +293,18 @@ impl UiNativeInputRecipientsResource {
         }
 
         let mut has_created_window = false;
-        for window in windows
-            .records()
-            .filter(|record| record.lifecycle_state == NativeWindowLifecycleState::Created)
-        {
-            has_created_window = true;
+        for window in windows.records() {
+            match window.lifecycle_state {
+                NativeWindowLifecycleState::Created => has_created_window = true,
+                // A failed creation never had an input-capable native handle.
+                NativeWindowLifecycleState::CreationFailed => continue,
+                // An unknown/pending/closing lifetime may still have active
+                // raw device events. Raw Winit motion carries no window ID;
+                // skipping that window would falsely certify legacy gameplay.
+                NativeWindowLifecycleState::Requested
+                | NativeWindowLifecycleState::CloseIntentPending
+                | NativeWindowLifecycleState::CloseApproved => return false,
+            }
             match self.bindings.get(&window.native_window_id) {
                 Some(WindowRecipientBinding::Bound(binding))
                     if binding.recipient == NativeInputRecipient::LegacyNativeConsumer => {}
@@ -628,6 +635,45 @@ mod tests {
         let second = NativeWindowId::try_from_raw(2).expect("second window ID");
         windows.register_created_window(second, "second", (320, 240), 1.0, false);
         (windows, first, second)
+    }
+
+    #[test]
+    fn unattributed_raw_motion_cannot_treat_closing_ui_as_absent() {
+        let (mut windows, legacy, ui_window) = windows();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = mount(&mut slots, 301);
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                legacy,
+                NativeInputRecipient::LegacyNativeConsumer,
+                &windows,
+                &mut slots,
+            )
+            .expect("ordinary legacy window");
+        recipients
+            .bind(
+                ui_window,
+                NativeInputRecipient::RunenUiSlot(slot),
+                &windows,
+                &mut slots,
+            )
+            .expect("independent UI window");
+        assert!(!recipients.raw_motion_legacy_projection_allowed(&windows, false));
+
+        windows
+            .record_mut(ui_window)
+            .expect("original UI window")
+            .receive_close_intent();
+        assert!(
+            !recipients.raw_motion_legacy_projection_allowed(&windows, false),
+            "closing UI window is not proof raw motion belongs to legacy game"
+        );
+        windows
+            .record_mut(ui_window)
+            .expect("original UI window")
+            .approve_close();
+        assert!(!recipients.raw_motion_legacy_projection_allowed(&windows, false));
     }
 
     #[test]
