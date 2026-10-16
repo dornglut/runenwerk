@@ -1008,6 +1008,9 @@ impl Gfx {
         let mut timings = GfxFrameTimings::default();
         self.renderer
             .begin_frame_gpu_observation(self.ctx.context())?;
+        // Earlier terminal GPU evidence must remain publishable even when
+        // validation or surface acquisition rejects this new host frame.
+        self.renderer.publish_progressed_gpu_observations();
         let surface_contributions = deterministic_contributions_for_surface(
             deterministic_contributions,
             prepared_frame.surface.render_surface_id,
@@ -1018,11 +1021,8 @@ impl Gfx {
                 .has_in_flight_deterministic_producer(&surface_contributions),
         ) || gpu_step_streams.should_defer(prepared_frame)
         {
-            // A deferred frame still progresses earlier GPU work. Publish its
-            // terminal capture/observation output without claiming this frame
-            // was submitted; otherwise a semantic producer waiting on an
-            // exact GPU proof cannot ever release its accepted interval.
-            self.renderer.publish_progressed_gpu_observations();
+            // Progressed observations were published before deferral. This
+            // frame did not submit or acquire a surface image.
             return Ok(timings);
         }
         // Check exact producer snapshots before leasing a G7A surface image.
@@ -1048,7 +1048,7 @@ impl Gfx {
         );
         self.renderer.last_gpu_timing_capability = gpu_timing_capability;
         let context = self.ctx.context();
-        timings.renderer = self.renderer.render(
+        let render_result = self.renderer.render(
             context,
             gpu_step_streams,
             acquired.texture(),
@@ -1071,7 +1071,11 @@ impl Gfx {
             debug_config,
             gpu_timing_capability,
             composed_gpu_timing_capability,
-        )?;
+        );
+        // G5 rejection or later renderer error must not strand terminal
+        // observations from unrelated, previously accepted GPU work.
+        self.renderer.publish_progressed_gpu_observations();
+        timings.renderer = render_result?;
         if std::env::var("GROTTO_RENDER_REALIZATION_LOG").is_ok() {
             let stats = context.program_binding_realization_stats();
             eprintln!(
@@ -1084,8 +1088,6 @@ impl Gfx {
                 stats.bind_groups()
             );
         }
-        self.renderer.publish_progressed_gpu_observations();
-
         // The one terminal Present is part of the accepted RunenGPU submission above.
         timings.submitted = true;
         timings.present_ms = 0.0;
@@ -1218,7 +1220,9 @@ mod tests {
     };
     use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::render::inspect::{
-        RenderComposedFrameGpuTimingEvidence, RenderGpuTimingCapability, RenderPassTimingEvidence,
+        CaptureStage, CaptureTextureClass, RenderCaptureIdentity, RenderCapturePointIdentity,
+        RenderCaptureTerminal, RenderCapturedTexture, RenderComposedFrameGpuTimingEvidence,
+        RenderGpuTimingCapability, RenderPassTimingEvidence,
     };
 
     #[test]
@@ -1308,6 +1312,28 @@ mod tests {
                 "compute",
                 0.5,
             ));
+        let completed_capture = RenderCapturedTexture {
+            identity: RenderCaptureIdentity {
+                frame_index: 12,
+                pass_label: "pass".into(),
+                capture_point: RenderCapturePointIdentity {
+                    flow_id: "flow".into(),
+                    pass_id: "pass".into(),
+                    stage: CaptureStage::After,
+                    resource_id: "state".into(),
+                    texture_class: CaptureTextureClass::ColorTarget,
+                },
+            },
+            width: 1,
+            height: 1,
+            format: "rgba8".into(),
+            bytes_rgba8: Some(vec![6, 0, 0, 255]),
+            terminal: RenderCaptureTerminal::completed(),
+        };
+        renderer
+            .pending_gpu_observation_output
+            .captured_textures
+            .push(completed_capture.clone());
         renderer
             .pending_gpu_observation_output
             .composed_timing_evidence
@@ -1325,16 +1351,27 @@ mod tests {
         renderer.publish_progressed_gpu_observations();
         assert_eq!(renderer.last_gpu_pass_timing_evidence.len(), 1);
         assert_eq!(renderer.last_composed_gpu_timing_evidence.len(), 1);
+        assert_eq!(renderer.last_captured_textures, vec![completed_capture.clone()]);
         assert!(
             renderer
                 .pending_gpu_observation_output
                 .timing_evidence
                 .is_empty()
         );
+        assert!(
+            renderer
+                .pending_gpu_observation_output
+                .captured_textures
+                .is_empty()
+        );
+        // Idempotent publication is required when a frame subsequently
+        // errors before acquiring or submitting fresh GPU work.
         renderer.publish_progressed_gpu_observations();
         assert_eq!(renderer.last_gpu_pass_timing_evidence.len(), 1);
+        assert_eq!(renderer.last_captured_textures, vec![completed_capture]);
         renderer.clear_published_gpu_observations();
         assert!(renderer.last_gpu_pass_timing_evidence.is_empty());
         assert!(renderer.last_composed_gpu_timing_evidence.is_empty());
+        assert!(renderer.last_captured_textures.is_empty());
     }
 }

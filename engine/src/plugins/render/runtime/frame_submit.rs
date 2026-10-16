@@ -817,7 +817,11 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
         let result = match render_result {
             Ok(timings) if !timings.submitted => {
-                publish_deferred_gpu_captures(&mut world, &gfx, prepared_frame.context.frame_index);
+                publish_progressed_gpu_captures(
+                    &mut world,
+                    &gfx,
+                    prepared_frame.context.frame_index,
+                );
                 primary_contribution_state = PrimaryContributionState::Deferred;
                 deferred_deterministic_contributions
                     .extend(primary_deterministic_contributions.iter().cloned());
@@ -1118,6 +1122,13 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 Ok(())
             }
             Err(err) => {
+                // Earlier GPU work may have completed even when this new
+                // primary surface cannot acquire, prepare, or submit.
+                publish_progressed_gpu_captures(
+                    &mut world,
+                    &gfx,
+                    prepared_frame.context.frame_index,
+                );
                 if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                     match surface_error {
                         RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
@@ -1207,11 +1218,11 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     detached_result
 }
 
-/// Publish terminal observation to ECS even when accepted work defers the
-/// next surface acquisition. The renderer retains the original capture and
-/// selector-result receipts for later diagnostic retirement; copying their
-/// observational view does not advance GPU or semantic state.
-fn publish_deferred_gpu_captures(world: &mut WorldMut, gfx: &Gfx, frame_index: u64) {
+/// Publish terminal GPU evidence to ECS when a primary frame defers or
+/// errors, or when an additional surface defers. The renderer retains the
+/// original capture and selector results for later diagnostic retirement.
+/// Delivery does not advance physical or semantic state.
+fn publish_progressed_gpu_captures(world: &mut WorldMut, gfx: &Gfx, frame_index: u64) {
     let captures = gfx.renderer.last_captured_textures();
     if captures.is_empty() {
         return;
@@ -1437,7 +1448,7 @@ fn render_additional_surfaces(
         })();
         let outcome = match render_result {
             Ok(timings) if !timings.submitted => {
-                publish_deferred_gpu_captures(world, gfx, prepared_frame.context.frame_index);
+                publish_progressed_gpu_captures(world, gfx, prepared_frame.context.frame_index);
                 tracing::debug!(
                     frame = prepared_frame.context.frame_index,
                     surface = render_surface_id.raw(),
