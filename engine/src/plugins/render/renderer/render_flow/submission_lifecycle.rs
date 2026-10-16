@@ -31,13 +31,18 @@ fn classify_submission(
     context_lifecycle: GpuExecutionLifecycleState,
     status: &GpuSubmissionStatus,
 ) -> SubmissionDisposition {
-    if !current_affinity || context_lifecycle == GpuExecutionLifecycleState::Closed {
-        return SubmissionDisposition::Invalidated;
-    }
+    // A terminal receipt remains a historical fact even when its originating
+    // device generation is no longer current. It does not, by itself, establish
+    // that the old retained contents are usable in the replacement generation.
     match status {
-        GpuSubmissionStatus::Accepted => SubmissionDisposition::Pending,
         GpuSubmissionStatus::Completed => SubmissionDisposition::Completed,
         GpuSubmissionStatus::Failed(_) => SubmissionDisposition::Failed,
+        GpuSubmissionStatus::Accepted
+            if !current_affinity || context_lifecycle == GpuExecutionLifecycleState::Closed =>
+        {
+            SubmissionDisposition::Invalidated
+        }
+        GpuSubmissionStatus::Accepted => SubmissionDisposition::Pending,
     }
 }
 
@@ -172,6 +177,28 @@ mod tests {
                 &GpuSubmissionStatus::Accepted,
             ),
             SubmissionDisposition::Invalidated,
+        );
+    }
+
+    #[test]
+    fn completed_receipt_remains_historical_success_after_generation_change_or_closure() {
+        // Terminal evidence is not revoked by the next device generation.
+        // Reconstructing contents for that generation remains a separate G5 obligation.
+        assert_eq!(
+            classify_submission(
+                false,
+                GpuExecutionLifecycleState::Running,
+                &GpuSubmissionStatus::Completed,
+            ),
+            SubmissionDisposition::Completed,
+        );
+        assert_eq!(
+            classify_submission(
+                true,
+                GpuExecutionLifecycleState::Closed,
+                &GpuSubmissionStatus::Completed,
+            ),
+            SubmissionDisposition::Completed,
         );
     }
 
