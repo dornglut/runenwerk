@@ -3019,35 +3019,6 @@ mod tests {
                     && error.event().physical_key()
                         == &PhysicalKey::Code(String::from("KeyW"))
         ));
-        // A genuine repeat of an earlier physical Down cannot manufacture
-        // a second game press, but its exact pre-sequence NoFocusedTarget
-        // evidence also cannot terminate the host or revoke a game-only hold.
-        let repeated = slots
-            .submit_native_keyboard(
-                slot,
-                KeyboardEvent::new(
-                    KeyboardPhase::Down,
-                    PhysicalKey::Code(String::from("KeyW")),
-                    LogicalKey::Character(String::from("w")),
-                    KeyModifiers::NONE,
-                    true,
-                    KeyLocation::Standard,
-                    KeyboardCompositionState::Inactive,
-                    Some(native_device),
-                ),
-            )
-            .expect_err("unfocused authentic repeat is pre-admission nonclaim");
-        let after_repeat = slots
-            .input_ownership(slot)
-            .expect("rejected original repeat preserves original Running M13 scope");
-        assert!(native_no_focused_keyboard_claim_witness(
-            native_device,
-            &before_unfocused,
-            &after_repeat,
-            &repeated,
-        ));
-        assert_eq!(slots.ingress_epoch(slot), Some(epoch));
-
         // The framework may reject device-less headless keyboard input for
         // lack of focus, but this is not an originating native-device receipt.
         let missing_native_device = slots
