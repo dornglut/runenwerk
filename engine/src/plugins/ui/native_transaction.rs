@@ -1156,5 +1156,4 @@ mod tests {
             "the program/Counter mount cannot mutate native routing through a bare slot resource"
         );
     }
-
 }
