@@ -235,6 +235,54 @@ fn repeated_key_down_does_not_create_a_second_pressed_edge() {
 }
 
 #[test]
+fn native_ui_denies_generationless_repeat_or_synthetic_hold_until_authentic_up() {
+    for (source, repeat, origin) in [
+        (101, true, ObservationOrigin::SourceReport),
+        (102, false, ObservationOrigin::BackendSyntheticReconciliation),
+    ] {
+        let mut input = InputState::new();
+        let mut actions = ActionState::new();
+        let context = InputContext::new(InputSourceId::new(source), Some(InputDeviceId::new(9)));
+        let unknown_down = KeyboardInput {
+            repeat,
+            origin,
+            ..normalized_key(DigitalState::Pressed)
+        };
+        input.handle_normalized_keyboard(context, &unknown_down);
+        assert_eq!(
+            input.keyboard_down_generation_in(context, &unknown_down.physical_key),
+            None,
+            "unverified original press has no genuine Down generation"
+        );
+        // The generic legacy reducer deliberately retains neutral synthetic
+        // held observations. A selected native UI recipient must deny this
+        // very source/device/key without fabricating a real generation.
+        actions.revoke_generationless_keyboard_lifetime(
+            &input,
+            context,
+            &unknown_down.physical_key,
+        );
+        actions.project(&input);
+        assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+        assert!(!actions.action_down(action::WORLD_MOVE_UP));
+
+        // The denial is permanent for the physical lifetime. A repeat or
+        // synthetic restoration cannot turn it into a permitted game hold.
+        input.handle_normalized_keyboard(context, &unknown_down);
+        actions.project(&input);
+        assert!(!actions.action_down(action::WORLD_MOVE_UP));
+        // Only a genuine OS Up retires the blocked identity.
+        input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Released));
+        actions.project(&input);
+        assert!(!actions.action_down(action::WORLD_MOVE_UP));
+        input.handle_normalized_keyboard(context, &normalized_key(DigitalState::Pressed));
+        actions.project(&input);
+        assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+        assert!(actions.action_down(action::WORLD_MOVE_UP));
+    }
+}
+
+#[test]
 fn normalized_repeat_metadata_cannot_create_a_pressed_edge() {
     let mut input = InputState::new();
     let mut actions = ActionState::new();

@@ -1031,11 +1031,13 @@ impl WinitRunner {
             .world
             .resource::<InputState>()?
             .keyboard_down_generation_in(context, physical_key);
-        if let Some(generation) = generation
-            && let Some(mut actions) = self.state.world.remove_resource::<ActionState>()
-        {
+        if let Some(mut actions) = self.state.world.remove_resource::<ActionState>() {
             let result = self.state.world.resource::<InputState>().map(|input| {
-                actions.revoke_keyboard_lifetime(input, context, physical_key, generation);
+                if let Some(generation) = generation {
+                    actions.revoke_keyboard_lifetime(input, context, physical_key, generation);
+                } else {
+                    actions.revoke_generationless_keyboard_lifetime(input, context, physical_key);
+                }
             });
             self.state.world.insert_resource(actions);
             result?;

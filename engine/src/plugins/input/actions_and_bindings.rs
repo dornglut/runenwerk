@@ -354,9 +354,10 @@ struct PressedActionContributor {
 struct BlockedHeldKey {
     context: InputContext,
     key: PhysicalKeyIdentity,
-    /// Exact genuine Down which the UI claimed; generation ordering is
-    /// monotonic across contexts, even if synthetic reconciliation hides it.
-    generation: u64,
+    /// A genuine Down has its checked generation. None is an original
+    /// generationless synthetic/repeat observation denied by the native UI
+    /// recipient; this does not mint a fabricated genuine Down identity.
+    generation: Option<u64>,
     /// Index into this frame's genuine Up observations at denial time.
     releases_seen: usize,
 }
@@ -536,13 +537,39 @@ impl ActionState {
             self.blocked_held_keys.push(BlockedHeldKey {
                 context,
                 key: key.clone(),
-                generation,
+                generation: Some(generation),
                 releases_seen: input.keyboard_real_release_samples().len(),
             });
         }
         // The exact denied generation may also have been a modifier for
         // other physical keys pressed later. Withdraw those chord claims too
         // without replaying historic press evidence under current bindings.
+        self.retract_ineligible_pressed_contributors(input);
+        self.recompute_action_down_states(input);
+    }
+
+    /// A native UI recipient may suppress a synthetic Press or a repeat
+    /// without an authentic prior Down. RunenInput retains that physical
+    /// generationless observation for legacy consumers, but UI-owned input
+    /// must not turn it into an eligible held game chord. This is source- and
+    /// device-local denial in the existing ActionState, not a second UI state.
+    pub fn revoke_generationless_keyboard_lifetime(
+        &mut self,
+        input: &InputState,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+    ) {
+        if input.physical_key_down_in(context, key)
+            && input.keyboard_down_generation_in(context, key).is_none()
+            && !self.blocked_held_key(context, key)
+        {
+            self.blocked_held_keys.push(BlockedHeldKey {
+                context,
+                key: key.clone(),
+                generation: None,
+                releases_seen: input.keyboard_real_release_samples().len(),
+            });
+        }
         self.retract_ineligible_pressed_contributors(input);
         self.recompute_action_down_states(input);
     }
@@ -610,7 +637,9 @@ impl ActionState {
             self.blocked_held_keys.iter().any(|blocked| {
                 blocked.context == press.context
                     && blocked.key == key
-                    && blocked.generation < press.generation
+                    && blocked
+                        .generation
+                        .is_none_or(|generation| generation < press.generation)
             })
         };
         ModifiersSnapshot {
