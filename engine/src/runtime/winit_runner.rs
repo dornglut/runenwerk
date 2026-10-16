@@ -5692,6 +5692,14 @@ mod tests {
             NativeInputRecipientError::InactiveWindow.to_string()
         );
         assert!(
+            crate::plugins::ui::unmount_retired_native_ui_slot(
+                &mut runner.state.world,
+                slot
+            )
+            .is_err(),
+            "an original live native recipient must block premature M13 destruction"
+        );
+        assert!(
             runner
                 .retire_native_input_recipient(secondary)
                 .expect("native retirement")
@@ -5754,6 +5762,48 @@ mod tests {
                 .state
                 .world
                 .has_resource::<UiRuntimePresentationAssociationsResource>()
+        );
+        // The native runner has retired the only recipient and destroyed its
+        // original window identity. Now prove that the World teardown really
+        // consumes this same mounted framework scope, without interpreting
+        // recipient retirement as an implicit M13 shutdown.
+        let original_scope = runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("mounted native UI slot")
+            .input_ownership(slot)
+            .expect("real framework M13 scope still running")
+            .scope()
+            .clone();
+        let retirement = crate::plugins::ui::unmount_retired_native_ui_slot(
+            &mut runner.state.world,
+            slot,
+        )
+        .expect("retired native slot may shut down through the World")
+        .expect("exactly one runtime was still mounted");
+        assert_eq!(retirement.final_ownership().scope(), &original_scope);
+        assert_eq!(
+            retirement.final_ownership().status(),
+            runenui_runtime::RuntimeStatus::Closed
+        );
+        assert!(
+            retirement.ordered_records().iter().any(|record| {
+                matches!(
+                    record,
+                    runenui_runtime::InputArbitrationRecord::ScopeRetired(actual)
+                        if actual.scope() == &original_scope
+                )
+            }),
+            "actual original M13 scope retirement must survive runner teardown"
+        );
+        assert!(
+            crate::plugins::ui::unmount_retired_native_ui_slot(
+                &mut runner.state.world,
+                slot
+            )
+            .expect("idempotent retired slot teardown")
+            .is_none()
         );
     }
 
