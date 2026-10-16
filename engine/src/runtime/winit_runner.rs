@@ -424,8 +424,8 @@ impl WinitRunner {
     fn retire_native_input_recipient(&mut self, window: NativeWindowId) -> Result<bool> {
         // Cancel against the previous pinned M13 scope before removing the
         // recipient and its terminal displayed input authority.
-        let mouse_cancel = self.cancel_native_ui_mouse(window);
-        let touch_cancel = self.cancel_native_ui_touch(window);
+        let mouse_cancel = self.cancel_native_ui_mouse(window)?;
+        let touch_cancel = self.cancel_native_ui_touch(window)?;
         let cancellation_failure = mouse_cancel.err().or(touch_cancel.err());
         // Retire the original framework-held keyboard stream while its
         // source/recipient binding is still valid. After retirement, a
@@ -1421,7 +1421,7 @@ impl WinitRunner {
                 || old.backend_device != backend_device
                 || old.device != device
         }) {
-            self.cancel_native_ui_mouse(window);
+            self.cancel_native_ui_mouse(window)?;
         }
         let modifiers = self
             .native_ui_modifiers
@@ -1498,7 +1498,7 @@ impl WinitRunner {
         })();
         world.insert_resource(slots);
         if let Err(error) = operation {
-            self.cancel_native_ui_mouse(window);
+            self.cancel_native_ui_mouse(window)?;
             tracing::trace!(
                 target: "engine.runtime.input",
                 ?window,
@@ -1537,7 +1537,7 @@ impl WinitRunner {
             || lifetime.device != device
         {
             self.native_ui_mice.insert(window, lifetime);
-            self.cancel_native_ui_mouse(window);
+            self.cancel_native_ui_mouse(window)?;
             return Ok(());
         }
         let modifiers = self
@@ -1612,7 +1612,7 @@ impl WinitRunner {
         world.insert_resource(slots);
         self.native_ui_mice.insert(window, lifetime);
         if let Err(error) = operation {
-            self.cancel_native_ui_mouse(window);
+            self.cancel_native_ui_mouse(window)?;
             tracing::trace!(
                 target: "engine.runtime.input",
                 ?window,
@@ -1658,7 +1658,7 @@ impl WinitRunner {
             || lifetime.device != device
         {
             self.native_ui_mice.insert(window, lifetime);
-            self.cancel_native_ui_mouse(window);
+            self.cancel_native_ui_mouse(window)?;
             return Ok(());
         }
         let modifiers = self
@@ -1735,7 +1735,7 @@ impl WinitRunner {
         world.insert_resource(slots);
         self.native_ui_mice.insert(window, lifetime);
         if let Err(error) = operation {
-            self.cancel_native_ui_mouse(window);
+            self.cancel_native_ui_mouse(window)?;
             tracing::trace!(
                 target: "engine.runtime.input",
                 ?window,
@@ -1766,7 +1766,7 @@ impl WinitRunner {
                 || old.binding_epoch != binding_epoch
                 || old.source != context.source
         }) {
-            self.cancel_native_ui_touch(window);
+            self.cancel_native_ui_touch(window)?;
         }
         let world = &mut self.state.world;
         let mut slots = world
@@ -1849,7 +1849,7 @@ impl WinitRunner {
         })();
         world.insert_resource(slots);
         if let Err(error) = operation {
-            self.cancel_native_ui_touch(window);
+            self.cancel_native_ui_touch(window)?;
             tracing::trace!(
                 target: "engine.runtime.input",
                 ?window,
@@ -2569,10 +2569,13 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 // UI cancellation is best-effort only for ordering: even a
                 // terminal/stale M13 target cannot intercept the operating
                 // system's original focus-loss and physical-key revocation.
-                if !focused {
-                    self.cancel_native_ui_mouse(native_window_id);
-                    self.cancel_native_ui_touch(native_window_id);
-                }
+                let pointer_cancellation = if !focused {
+                    let mouse = self.cancel_native_ui_mouse(native_window_id);
+                    let touch = self.cancel_native_ui_touch(native_window_id);
+                    mouse.and(touch)
+                } else {
+                    Ok(())
+                };
                 let cancellation = if !focused {
                     match self.native_input_recipient(native_window_id) {
                         Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
@@ -2596,22 +2599,23 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     Ok(())
                 };
                 self.apply_window_focus_event(native_window_id, focused)?;
-                cancellation
+                pointer_cancellation.and(cancellation)
             }
             WindowEvent::Resized(size) => {
-                self.cancel_native_ui_mouse(native_window_id);
-                self.cancel_native_ui_touch(native_window_id);
+                let mouse = self.cancel_native_ui_mouse(native_window_id);
+                let touch = self.cancel_native_ui_touch(native_window_id);
                 self.apply_event_for_native_window(
                     native_window_id,
                     PlatformEvent::Resized {
                         width: size.width,
                         height: size.height,
                     },
-                )
+                )?;
+                mouse.and(touch)
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                self.cancel_native_ui_mouse(native_window_id);
-                self.cancel_native_ui_touch(native_window_id);
+                let mouse = self.cancel_native_ui_mouse(native_window_id);
+                let touch = self.cancel_native_ui_touch(native_window_id);
                 let size = window.inner_size();
                 self.apply_event_for_native_window(
                     native_window_id,
@@ -2620,7 +2624,8 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                         width: size.width,
                         height: size.height,
                     },
-                )
+                )?;
+                mouse.and(touch)
             }
             WindowEvent::KeyboardInput {
                 device_id,
@@ -2850,8 +2855,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 Ok(())
             }
             WindowEvent::CursorLeft { .. } => {
-                self.cancel_native_ui_mouse(native_window_id);
-                Ok(())
+                self.cancel_native_ui_mouse(native_window_id)
             }
             WindowEvent::MouseInput {
                 device_id,
