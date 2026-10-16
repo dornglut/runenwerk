@@ -95,6 +95,7 @@ pub fn transact_ui_slot<T>(
     }));
     let after = world
         .resource_mut::<UiRuntimeSlotsResource>()
+        .map_err(|err| anyhow!("native RunenUI slots unavailable: {err}"))
         .and_then(|slots| {
             slots
                 .input_ownership(slot)
