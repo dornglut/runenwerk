@@ -5142,7 +5142,10 @@ mod tests {
         runner
             .realize_declared_primary_input()
             .expect("idempotent startup must keep the first recipient epoch");
-        assert_eq!(runner.native_input_recipient(primary).unwrap().1, first_epoch);
+        assert_eq!(
+            runner.native_input_recipient(primary).unwrap().1,
+            first_epoch
+        );
         assert!(
             !runner
                 .state
