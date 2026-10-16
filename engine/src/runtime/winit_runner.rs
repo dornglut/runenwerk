@@ -934,9 +934,9 @@ impl WinitRunner {
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("native IME recipient has no pinned runtime slot")?;
-        let before = slots.input_ownership(slot).map_err(|error| {
-            anyhow!("native IME M13 text ownership unavailable: {error:?}")
-        })?;
+        let before = slots
+            .input_ownership(slot)
+            .map_err(|error| anyhow!("native IME M13 text ownership unavailable: {error:?}"))?;
         let submission = match slots.submit_native_text(slot, event) {
             Ok(receipt) => receipt,
             Err(UiRuntimeNativeTextAdmissionError::Slot { failure, event }) => {
