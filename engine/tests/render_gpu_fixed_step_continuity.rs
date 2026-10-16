@@ -525,9 +525,7 @@ fn captured_producer_steps_survive_real_g5_rejection_and_fresh_reprepare() {
         let GpuReadbackStatus::Ready(bytes) = outcome.status() else {
             return Err("completed GPU producer readback is not ready");
         };
-        let observed = u32::from_le_bytes(
-            bytes.as_bytes()[..4].try_into().expect("counter bytes"),
-        );
+        let observed = u32::from_le_bytes(bytes.as_bytes()[..4].try_into().expect("counter bytes"));
         if observed != 6 {
             return Err("GPU counter differs from historical producer inputs");
         }
