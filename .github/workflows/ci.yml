@@ -147,6 +147,16 @@ jobs:
             --test runenrender_ordinary_public_api \
             --locked -- --nocapture --test-threads=1
 
+      - name: Prove downstream retained cross-frame G5 submission semantics
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            --test render_gpu_retained_cross_frame \
+            --locked -- --nocapture --test-threads=1
+
       - name: Run Render Lab founding-direct artifact proof
         env:
           RUST_BACKTRACE: '1'
