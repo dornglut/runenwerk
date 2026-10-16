@@ -817,11 +817,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
         let result = match render_result {
             Ok(timings) if !timings.submitted => {
-                publish_deferred_gpu_captures(
-                    &mut world,
-                    &gfx,
-                    prepared_frame.context.frame_index,
-                );
+                publish_deferred_gpu_captures(&mut world, &gfx, prepared_frame.context.frame_index);
                 primary_contribution_state = PrimaryContributionState::Deferred;
                 deferred_deterministic_contributions
                     .extend(primary_deterministic_contributions.iter().cloned());
@@ -1441,11 +1437,7 @@ fn render_additional_surfaces(
         })();
         let outcome = match render_result {
             Ok(timings) if !timings.submitted => {
-                publish_deferred_gpu_captures(
-                    world,
-                    gfx,
-                    prepared_frame.context.frame_index,
-                );
+                publish_deferred_gpu_captures(world, gfx, prepared_frame.context.frame_index);
                 tracing::debug!(
                     frame = prepared_frame.context.frame_index,
                     surface = render_surface_id.raw(),
