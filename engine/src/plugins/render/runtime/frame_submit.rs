@@ -351,6 +351,54 @@ mod contribution_deferral_tests {
     }
 
     #[test]
+    fn accepted_primary_failure_never_requeues_accepted_work() {
+        let primary = RenderSurfaceId::primary();
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let tertiary = RenderSurfaceId::try_from_raw(3).expect("tertiary surface id");
+        let frames = vec![
+            prepared_frame(primary, 0),
+            prepared_frame(secondary, 1),
+            prepared_frame(tertiary, 2),
+        ];
+        let contributions = vec![
+            contribution(11, primary),
+            contribution(12, secondary),
+            contribution(13, tertiary),
+        ];
+        let mut deferred = Vec::new();
+        super::defer_unsubmitted_after_error(
+            &mut deferred,
+            &contributions,
+            &frames,
+            super::PrimaryContributionState::Submitted,
+        );
+        assert_eq!(
+            deferred
+                .iter()
+                .map(|contribution| contribution.producer_id.raw())
+                .collect::<Vec<_>>(),
+            vec![12, 13],
+            "an accepted primary must never be restored on post-accept error"
+        );
+
+        let mut pre_accept_deferred = Vec::new();
+        super::defer_unsubmitted_after_error(
+            &mut pre_accept_deferred,
+            &contributions,
+            &frames,
+            super::PrimaryContributionState::Unprocessed,
+        );
+        assert_eq!(
+            pre_accept_deferred
+                .iter()
+                .map(|contribution| contribution.producer_id.raw())
+                .collect::<Vec<_>>(),
+            vec![11, 12, 13],
+            "a failed pre-admission primary must retain its producer input"
+        );
+    }
+
+    #[test]
     fn post_accept_secondary_failure_preserves_only_not_yet_submitted_work() {
         let primary = RenderSurfaceId::primary();
         let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
@@ -1122,20 +1170,12 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     })();
 
     if detached_result.is_err() && !additional_failure_preserved_deferred {
-        match primary_contribution_state {
-            PrimaryContributionState::Unprocessed => {
-                deferred_deterministic_contributions
-                    .extend(deterministic_contributions.iter().cloned());
-            }
-            PrimaryContributionState::Deferred | PrimaryContributionState::Submitted => {
-                defer_contributions_for_remaining_surfaces(
-                    &mut deferred_deterministic_contributions,
-                    &deterministic_contributions,
-                    &additional_prepared_frames,
-                    0,
-                );
-            }
-        }
+        defer_unsubmitted_after_error(
+            &mut deferred_deterministic_contributions,
+            &deterministic_contributions,
+            &additional_prepared_frames,
+            primary_contribution_state,
+        );
     }
 
     if restore_contributions {
@@ -1156,6 +1196,27 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     }
     world.insert_resource(gfx);
     detached_result
+}
+
+fn defer_unsubmitted_after_error(
+    deferred: &mut Vec<RenderDeterministicFrameContribution>,
+    contributions: &[RenderDeterministicFrameContribution],
+    additional_frames: &[PreparedRenderFrame],
+    primary_state: PrimaryContributionState,
+) {
+    match primary_state {
+        PrimaryContributionState::Unprocessed => {
+            deferred.extend(contributions.iter().cloned());
+        }
+        PrimaryContributionState::Deferred | PrimaryContributionState::Submitted => {
+            defer_contributions_for_remaining_surfaces(
+                deferred,
+                contributions,
+                additional_frames,
+                0,
+            );
+        }
+    }
 }
 
 fn restore_deterministic_contributions(
