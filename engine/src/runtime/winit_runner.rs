@@ -2404,8 +2404,12 @@ impl WinitRunner {
                                             .then_some(lifetime.last_observed_revision)
                                             .flatten()
                                     });
+                                // No matching pinned translator is also a continuity
+                                // gap: a game-held key can predate this UI binding.
+                                // Only a genuinely correlated native UI keyboard
+                                // occurrence can establish the initial witness.
                                 let gap = previous
-                                    .is_some_and(|revision| revision != snapshot.revision().get());
+                                    .is_none_or(|revision| revision != snapshot.revision().get());
                                 if let Some(lifetime) = self.native_ui_keyboards.get_mut(&window)
                                     && lifetime.recipient == slot
                                     && lifetime.source == source
@@ -4156,6 +4160,158 @@ mod tests {
                 .last_observed_revision,
             Some(current.revision().get()),
             "witness reconciles to the actual framework revision"
+        );
+    }
+
+    #[test]
+    fn unobserved_ui_binding_cannot_inherit_previously_held_game_key() {
+        use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+        use runen_input::{
+            DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+            ObservationOrigin,
+        };
+
+        struct UnobservedRecipient;
+        impl runenui_core::UiApp for UnobservedRecipient {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::text("unfocused recipient")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        let ui_window = NativeWindowId::primary();
+        let game_window = NativeWindowId::try_from_raw(2).unwrap();
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .unwrap()
+            .register_created_window(game_window, "independent game", (640, 480), 1.0, false);
+        let first = runner
+            .input_adapter
+            .window_context(ui_window, winit::event::DeviceId::dummy())
+            .unwrap();
+        let other = runner
+            .input_adapter
+            .window_context(game_window, winit::event::DeviceId::dummy())
+            .unwrap();
+        let down = KeyboardInput {
+            physical_key: PhysicalKeyIdentity::code("KeyW"),
+            logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+            location: KeyLocation::Standard,
+            state: DigitalState::Pressed,
+            repeat: false,
+            origin: ObservationOrigin::SourceReport,
+        };
+        {
+            let input = runner.state.world.resource_mut::<InputState>().unwrap();
+            input.handle_normalized_keyboard(first, &down);
+            input.handle_normalized_keyboard(other, &down);
+        }
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+
+        // Application-side UI selection happened after the game's original W,
+        // with no genuine native keyboard translation in the new UI scope.
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<UnobservedRecipient>(
+                UiTypedScreenId::new("native.unobserved.binding"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        let before = slots.input_ownership(slot).unwrap();
+        assert!(!native_ui_blocks_preframe_keyboard_gameplay(&before));
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                ui_window,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap(),
+                &mut slots,
+            )
+            .unwrap();
+        recipients
+            .bind(
+                game_window,
+                NativeInputRecipient::LegacyNativeConsumer,
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap(),
+                &mut slots,
+            )
+            .unwrap();
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+        assert!(
+            !runner.native_ui_keyboards.contains_key(&ui_window),
+            "an unrelated UI mount must not invent a pinned keyboard translator"
+        );
+
+        runner.reconcile_native_ui_keyboard_before_frame().unwrap();
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "independent legacy game source is still eligible"
+        );
+        runner
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(
+                other,
+                &KeyboardInput {
+                    state: DigitalState::Released,
+                    ..down
+                },
+            );
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "unobserved selected UI binding cannot inherit the old W hold"
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(first, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some(),
+            "the UI source's original physical truth remains intact"
         );
     }
 
