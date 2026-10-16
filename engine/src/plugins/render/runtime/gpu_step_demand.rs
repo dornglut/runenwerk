@@ -29,9 +29,6 @@ impl<T> RenderGpuStepIntent<T> {
 pub enum RenderGpuStepDemandError {
     CapacityExceeded,
     TickIdentityExhausted,
-    EmptyBatch,
-    BatchExceedsPending,
-    PredecessorInFlight,
     NoAcceptedBatch,
     SubmissionPending,
     SubmissionFailed,
@@ -140,30 +137,33 @@ impl<T> RenderGpuStepDemand<T> {
         self.pending.iter().take(max_steps).collect()
     }
 
-    /// Caller MUST invoke this only with the exact accepted submission whose
-    /// graph includes all and only the selected candidate's semantic steps.
-    /// No implicit G5 rejection retry and no graph/resource participation
-    /// inference are performed here.
-    pub fn accept(
+    /// Atomically lower a freshly borrowed immutable prefix through the
+    /// producer's normal RunenGPU admission path. A rejected submission leaves
+    /// every input pending, with its original order and identity intact.
+    ///
+    /// The closure MUST submit GPU work faithfully representing precisely the
+    /// supplied inputs and return its actual accepted GpuSubmission handle.
+    /// Upon success the matching prefix moves to in-flight *infallibly*: a
+    /// caller cannot accidentally submit first and then reject the count.
+    /// This is producer backpressure, not a RunenGPU G5 hazard shadow.
+    pub fn submit_with<R, E>(
         &mut self,
-        submission: GpuSubmission,
-        selected_steps: usize,
-    ) -> Result<(), RenderGpuStepDemandError> {
-        if self.accepted.is_some() {
-            return Err(RenderGpuStepDemandError::PredecessorInFlight);
+        max_steps: usize,
+        submit: impl FnOnce(&[&RenderGpuStepIntent<T>]) -> Result<(GpuSubmission, R), E>,
+    ) -> Result<Option<R>, E> {
+        let candidate = self.candidate(max_steps);
+        if candidate.is_empty() {
+            return Ok(None);
         }
-        if selected_steps == 0 {
-            return Err(RenderGpuStepDemandError::EmptyBatch);
-        }
-        if selected_steps > self.pending.len() {
-            return Err(RenderGpuStepDemandError::BatchExceedsPending);
-        }
-        // A public handle can become terminally failed immediately after G5
-        // accepts it. Even then its write may have partly executed: retain
-        // the historical batch and require producer-owned reconstruction.
-        let steps = self.pending.drain(..selected_steps).collect();
+        let count = candidate.len();
+        let (submission, result) = submit(&candidate)?;
+        drop(candidate);
+        // An accepted submission may have failed before the returned handle
+        // is observed. Even then writes can be partially executed; holding
+        // the exact historical input batch forces explicit reconstruction.
+        let steps = self.pending.drain(..count).collect();
         self.accepted = Some(AcceptedSteps { submission, steps });
-        Ok(())
+        Ok(Some(result))
     }
 
     pub fn accepted_submission(&self) -> Option<&GpuSubmission> {

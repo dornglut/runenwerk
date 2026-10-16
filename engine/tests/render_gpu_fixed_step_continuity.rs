@@ -178,42 +178,45 @@ impl StepLedger {
         state: &GpuBufferHandle,
         pipeline: &GpuComputePipelineDescriptor,
     ) -> bool {
-        let snapshots = self
-            .history
-            .candidate(3)
-            .iter()
-            .map(|entry| *entry.input())
-            .collect::<Vec<_>>();
-        if snapshots.is_empty() {
+        let completed_tick = self.history.completed_tick();
+        let completed_counter = self.completed_counter;
+        let proof = self.history
+            .submit_with(3, |candidate| {
+                let snapshots = candidate.iter().map(|entry| *entry.input()).collect::<Vec<_>>();
+                assert_eq!(snapshots[0].tick, completed_tick + 1);
+                for (intent, snapshot) in candidate.iter().zip(&snapshots) {
+                    assert_eq!(
+                        intent.tick(),
+                        snapshot.tick,
+                        "captured and authored step identity agree"
+                    );
+                }
+                for window in snapshots.windows(2) {
+                    assert_eq!(window[1].tick, window[0].tick + 1);
+                }
+                let (fragment, readback) = batch_fragment(state, pipeline, &snapshots);
+                let submission = pollster::block_on(
+                    context.submit_work("runenwerk.fixed-step.fresh-batch", [fragment]),
+                )
+                .expect("uncontended test producer re-prepares after terminal");
+                let expected_counter = completed_counter
+                    + snapshots
+                        .iter()
+                        .map(|step| u32::from(step.increments))
+                        .sum::<u32>();
+                Ok::<_, &'static str>((
+                    submission,
+                    AcceptedBatch {
+                        expected_counter,
+                        readback,
+                    },
+                ))
+            })
+            .expect("the test's fresh graph must be accepted");
+        let Some(accepted) = proof else {
             return false;
-        }
-        assert_eq!(snapshots[0].tick, self.history.completed_tick() + 1);
-        for (intent, snapshot) in self.history.candidate(3).iter().zip(&snapshots) {
-            assert_eq!(
-                intent.tick(),
-                snapshot.tick,
-                "captured and authored step identity agree"
-            );
-        }
-        for window in snapshots.windows(2) {
-            assert_eq!(window[1].tick, window[0].tick + 1);
-        }
-        let (fragment, readback) = batch_fragment(state, pipeline, &snapshots);
-        let submission =
-            pollster::block_on(context.submit_work("runenwerk.fixed-step.fresh-batch", [fragment]))
-                .expect("test producer is uncontended and re-prepares after terminal completion");
-        let expected_counter = self.completed_counter
-            + snapshots
-                .iter()
-                .map(|step| u32::from(step.increments))
-                .sum::<u32>();
-        self.history
-            .accept(submission, snapshots.len())
-            .expect("accepted exact producer batch");
-        self.accepted = Some(AcceptedBatch {
-            expected_counter,
-            readback,
-        });
+        };
+        self.accepted = Some(accepted);
         true
     }
 
