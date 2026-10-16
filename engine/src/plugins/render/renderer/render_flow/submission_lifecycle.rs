@@ -29,7 +29,7 @@ pub struct RenderGpuFrameInvocationReceipt {
 }
 
 impl RenderGpuFrameInvocationReceipt {
-    pub fn new(flow_id: RenderFlowId, invocation_id: PreparedFlowInvocationId) -> Self {
+    pub(super) fn new(flow_id: RenderFlowId, invocation_id: PreparedFlowInvocationId) -> Self {
         Self {
             flow_id,
             invocation_id,
@@ -53,7 +53,7 @@ const MAX_TERMINAL_OUTCOMES: usize = 1024;
 /// Terminal outcome of a previously accepted ordinary composed frame.
 /// Completion establishes GPU execution, not domain-state publication,
 /// reconstructed contents in a later generation, or visible presentation.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum RenderGpuFrameTerminalDisposition {
     Completed,
     Failed(GpuSubmissionFailure),
