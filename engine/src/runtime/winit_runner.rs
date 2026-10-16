@@ -2389,18 +2389,16 @@ impl WinitRunner {
                             .input_ownership(slot);
                         match observed {
                             Ok(snapshot) => {
-                                let previous = self.native_ui_keyboards.get(&window).and_then(
-                                    |lifetime| {
+                                let previous =
+                                    self.native_ui_keyboards.get(&window).and_then(|lifetime| {
                                         (lifetime.recipient == slot
                                             && lifetime.source == source
                                             && Some(lifetime.binding_epoch) == epoch)
                                             .then_some(lifetime.last_observed_revision)
                                             .flatten()
-                                    },
-                                );
-                                let gap = previous.is_some_and(|revision| {
-                                    revision != snapshot.revision().get()
-                                });
+                                    });
+                                let gap = previous
+                                    .is_some_and(|revision| revision != snapshot.revision().get());
                                 if let Some(lifetime) = self.native_ui_keyboards.get_mut(&window)
                                     && lifetime.recipient == slot
                                     && lifetime.source == source
