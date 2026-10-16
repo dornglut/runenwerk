@@ -11,9 +11,7 @@ use runenui_runtime::RuntimeStatus;
 
 use crate::plugins::input::{ActionState, InputState};
 use crate::runtime::winit_input::WinitInputAdapter;
-use crate::runtime::{
-    NativeWindowId, NativeWindowLifecycleState, WindowStateRegistryResource,
-};
+use crate::runtime::{NativeWindowId, NativeWindowLifecycleState, WindowStateRegistryResource};
 
 use super::{
     NativeInputRecipient, NativeInputRecipientError, UiNativeInputRecipientsResource,
@@ -151,7 +149,9 @@ pub fn retire_native_input_recipient(world: &mut World, window: NativeWindowId) 
         world.remove_resource::<UiRuntimePresentationAssociationsResource>()
     else {
         world.insert_resource(recipients);
-        return Err(anyhow!("native completed-Present associations are unavailable"));
+        return Err(anyhow!(
+            "native completed-Present associations are unavailable"
+        ));
     };
     let retired = recipients.retire_window(window, &mut presentations);
     world.insert_resource(presentations);
