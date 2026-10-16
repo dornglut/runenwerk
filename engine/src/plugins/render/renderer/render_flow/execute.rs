@@ -425,10 +425,9 @@ impl Renderer {
             .runenui_rejected
             .extend(runenui_rejected);
 
-        // Association failure cannot discard accepted timing/capture lifecycle handles. The
-        // affected continuity is quarantined by the session owner and this frame fails closed.
-        association_result?;
-
+        // G5 has accepted these uploads, independent of later retained-session
+        // association and optional provenance. Record their generation now;
+        // a post-accept failure cannot roll back the physical work.
         let accepted_upload_report = self
             .dynamic_texture_targets
             .record_accepted_uploads(&accepted_dynamic_uploads);
@@ -440,6 +439,11 @@ impl Renderer {
                 "accepted dynamic texture upload bookkeeping rejected"
             );
         }
+
+        // Association failure cannot discard accepted timing/capture lifecycle
+        // handles or accepted upload generations. The affected continuity is
+        // quarantined by the session owner; the frame still fails closed.
+        association_result?;
 
         if debug_control.provenance_enabled {
             // G5 has already accepted this frame, including its terminal Present.
