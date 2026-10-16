@@ -298,7 +298,12 @@ RunenGPU has already G5-accepted the entire composed submission, including
 Present. In that case the renderer preserves the exact accepted lifecycle
 handle and explicitly identifies its accepted submission ID in the error.
 It is not safe to infer that GPU work was never submitted, or to use an
-error from `Gfx::render` as an automatic retry signal. A producer using
+error from `Gfx::render` as an automatic retry signal. The error chain contains
+a typed `RenderGpuFramePostAcceptAssociationFailure`, exposing the accepted
+submission ID, originating context affinity, frame and surface for an exact
+comparison with the mandatory `Gfx::pending_gpu_frame_submissions()` handles.
+The typed error is *evidence of acceptance*, not proof of GPU completion,
+usable state, or a successful Present. A producer using
 `submit_with` must pass an actual accepted handle as the successful callback
 return without any later fallible host work; the ordinary RenderFlow integration
 will need an explicit admitted-work handoff and recovery policy before it can
