@@ -197,6 +197,25 @@ pub fn transact_ui_slot<T>(
         &mut UiRuntimeSlotsResource,
     ) -> std::result::Result<T, UiRuntimeSlotOperationFailure>,
 ) -> Result<T> {
+    transact_ui_slot_inner(world, slot, false, operation)
+}
+
+/// The only native-selected recovery lane for an incomplete RunenUI pump.
+/// A pending M13 snapshot cannot certify old gameplay permission: withdraw
+/// the exact source *before* attempting bounded framework-owned settlement,
+/// then validate the current binding/scope again before success.
+pub fn settle_native_ui_slot(world: &mut World, slot: UiRuntimeSlotId) -> Result<()> {
+    transact_ui_slot_inner(world, slot, true, |slots| slots.settle_slot(slot))
+}
+
+fn transact_ui_slot_inner<T>(
+    world: &mut World,
+    slot: UiRuntimeSlotId,
+    allow_pending_settlement: bool,
+    operation: impl FnOnce(
+        &mut UiRuntimeSlotsResource,
+    ) -> std::result::Result<T, UiRuntimeSlotOperationFailure>,
+) -> Result<T> {
     let selected = world
         .resource::<UiNativeInputRecipientsResource>()
         .ok()
@@ -221,10 +240,14 @@ pub fn transact_ui_slot<T>(
     let before = world
         .resource_mut::<UiRuntimeSlotsResource>()?
         .input_ownership(slot);
+    let pending = matches!(
+        &before,
+        Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+    );
     let valid_before = created
-        && before.as_ref().is_ok_and(|snapshot| {
+        && (before.as_ref().is_ok_and(|snapshot| {
             snapshot.scope() == &scope && snapshot.status() == RuntimeStatus::Running
-        });
+        }) || (allow_pending_settlement && pending));
     if !valid_before {
         if let Some(source) = source {
             revoke_game_source(world, source)?;
@@ -232,6 +255,13 @@ pub fn transact_ui_slot<T>(
         return Err(anyhow!(
             "native RunenUI app mutation denied: original window/scope/ownership not current (slot {slot:?}, epoch {epoch})"
         ));
+    }
+    if pending && allow_pending_settlement {
+        // The last RunenUI snapshot was not observable. Revoke before any
+        // partial pump could run and before this ECS invocation returns.
+        if let Some(source) = source {
+            revoke_game_source(world, source)?;
+        }
     }
     // A panic in user-authored UiApp code must not leave a mutation permit
     // installed. The slot owner resets the permit on unwind; this World
@@ -521,6 +551,75 @@ mod tests {
             )
             .unwrap();
         runtime.run_schedule::<Update>(&mut world).unwrap();
+    }
+
+    #[test]
+    fn selected_native_incomplete_prestate_has_one_fail_closed_settlement_lane() {
+        let mut world = setup();
+        let (slot, ui, game) = {
+            let probe = world.resource::<Probe>().unwrap();
+            (probe.slot, probe.ui, probe.game)
+        };
+        world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .test_mark_native_pending(slot)
+            .unwrap();
+        assert!(matches!(
+            world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .unwrap()
+                .input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        ));
+
+        let mut called = false;
+        let rejected = transact_ui_slot(&mut world, slot, |_slots| {
+            called = true;
+            Ok(())
+        });
+        assert!(rejected.is_err());
+        assert!(!called, "ordinary mutation may not bypass missing M13 prestate");
+
+        // Unlike normal ingress, a bounded real RunenUI settlement must
+        // remain possible; it revokes the exact physical game lifetime
+        // BEFORE running or observing the incomplete native slot.
+        settle_native_ui_slot(&mut world, slot).unwrap();
+        let final_ownership = world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .input_ownership(slot)
+            .unwrap();
+        assert_eq!(final_ownership.status(), RuntimeStatus::Running);
+        assert!(
+            world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "independent game source must remain eligible"
+        );
+        assert!(
+            world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(ui, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some(),
+            "no fake original source Up during settlement"
+        );
+        world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(game, &key(DigitalState::Released));
+        let mut actions = world.remove_resource::<ActionState>().unwrap();
+        actions.project(world.resource::<InputState>().unwrap());
+        world.insert_resource(actions);
+        assert!(
+            !world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "missing prestate revoked the original UI-bound game generation"
+        );
     }
 
     #[test]

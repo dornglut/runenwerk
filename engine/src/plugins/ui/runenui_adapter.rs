@@ -1868,6 +1868,18 @@ impl UiRuntimeSlotsResource {
         slot.accepted_ingress(next)
     }
 
+    /// A test-only pending-pump fixture. The real native transaction still
+    /// invokes RunenUI's ordinary settlement and requires a fresh final M13
+    /// observation; this only establishes the unavailable *prestate*.
+    #[cfg(test)]
+    pub(crate) fn test_mark_native_pending(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        self.slot_mut(slot_id)?.requires_settlement = true;
+        Ok(())
+    }
+
     /// Only the Engine World mutation transaction calls this function after
     /// checking the original recipient, native source and framework scope.
     /// A plain selected-slot mutator cannot grant itself this capability.
