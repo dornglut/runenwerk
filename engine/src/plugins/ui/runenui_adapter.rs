@@ -1599,7 +1599,7 @@ impl UiRuntimeSlotsResource {
     /// Return one actual canonical pump result with ALL ordered M13 records.
     /// Paused and terminal batches remain inspectable, never silently equated
     /// to successful input settlement. There is no additional input queue.
-    pub fn pump_native_input_records(
+    pub(crate) fn pump_native_input_records(
         &mut self,
         slot_id: UiRuntimeSlotId,
     ) -> Result<

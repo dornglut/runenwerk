@@ -523,6 +523,7 @@ impl UiNativeInputRecipientsResource {
     /// Retire a mounted runtime's recipient and its old displayed input.
     /// Preserve an explicit unbound marker until the surviving native window
     /// has a newly validated recipient or has itself been destroyed.
+    #[cfg(test)]
     pub(crate) fn retire_slot(
         &mut self,
         slot: UiRuntimeSlotId,

@@ -89,12 +89,18 @@ fn change_native_recipient(
     world.insert_resource(recipients);
     let changed = match outcome {
         Ok(result) => result?,
-        Err(panic) => std::panic::resume_unwind(panic),
-    };
-    if changed {
-        if let Some(source) = source {
-            revoke_game_source(world, source)?;
+        Err(panic) => {
+            // The bind callback may have committed before unwinding. Restore
+            // the exact original sources first, then deny any previously
+            // projected gameplay key before propagating the panic.
+            if let Some(source) = source {
+                let _ = revoke_game_source(world, source);
+            }
+            std::panic::resume_unwind(panic)
         }
+    };
+    if changed && let Some(source) = source {
+        revoke_game_source(world, source)?;
     }
     Ok(changed)
 }
@@ -156,10 +162,8 @@ pub fn retire_native_input_recipient(world: &mut World, window: NativeWindowId) 
     let retired = recipients.retire_window(window, &mut presentations);
     world.insert_resource(presentations);
     world.insert_resource(recipients);
-    if retired {
-        if let Some(source) = source {
-            revoke_game_source(world, source)?;
-        }
+    if retired && let Some(source) = source {
+        revoke_game_source(world, source)?;
     }
     Ok(retired)
 }
@@ -662,6 +666,50 @@ mod tests {
                 .unwrap()
                 .action_down(action::WORLD_MOVE_UP),
             "retired native UI source cannot keep game W held"
+        );
+    }
+
+    #[test]
+    fn native_binding_panic_restores_world_owners_and_denies_old_source() {
+        let mut world = setup();
+        let original = world.resource::<Probe>().unwrap().ui;
+        let game = world.resource::<Probe>().unwrap().game;
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _ = change_native_recipient(
+                &mut world,
+                NativeWindowId::primary(),
+                |_recipients, _windows, _slots| -> std::result::Result<
+                    bool,
+                    NativeInputRecipientError,
+                > {
+                    panic!("injected native recipient callback failure");
+                },
+            );
+        }));
+        assert!(caught.is_err());
+        assert!(world.resource::<UiNativeInputRecipientsResource>().is_ok());
+        assert!(world.resource::<UiRuntimeSlotsResource>().is_ok());
+        assert!(
+            world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(original, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some(),
+            "panic recovery must not fabricate original hardware Up"
+        );
+        world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(game, &key(DigitalState::Released));
+        let mut actions = world.remove_resource::<ActionState>().unwrap();
+        actions.project(world.resource::<InputState>().unwrap());
+        world.insert_resource(actions);
+        assert!(
+            !world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "a failed native binding cannot leave the old UI-source game W eligible"
         );
     }
 
