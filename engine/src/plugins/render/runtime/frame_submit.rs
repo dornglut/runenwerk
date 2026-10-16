@@ -11,6 +11,7 @@ use crate::plugins::render::host::RenderSurfaceAcquireError;
 use crate::plugins::render::host::{
     RenderSurfaceDiagnostic, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
+use crate::plugins::render::renderer::RenderGpuFramePostAcceptAssociationFailure;
 use crate::plugins::render::runtime::{
     CompletedRenderFrameDiagnostics, RenderFrameDiagnosticsSnapshot,
     RenderFrameDiagnosticsTransactionState,
@@ -45,7 +46,13 @@ enum AdditionalSurfaceRenderOutcome {
     Submitted,
     Deferred,
     Retry,
-    Fatal(anyhow::Error),
+    Fatal {
+        error: anyhow::Error,
+        // RunenGPU already accepted the composed submission. Retrying this
+        // surface would duplicate producer work, even though a later renderer
+        // association failed. Other unsubmitted surfaces remain deferrable.
+        submission_accepted: bool,
+    },
 }
 
 fn render_timing_logging_enabled() -> bool {
@@ -295,7 +302,10 @@ mod contribution_deferral_tests {
             &contributions,
             &prepared_frames,
             1,
-            AdditionalSurfaceRenderOutcome::Fatal(anyhow::anyhow!("surface B failed")),
+            AdditionalSurfaceRenderOutcome::Fatal {
+                error: anyhow::anyhow!("surface B failed"),
+                submission_accepted: false,
+            },
         )
         .expect_err("fatal surface should return a retryable deferred set");
         for (retained, source) in failure.deferred.iter().zip(&contributions[1..]) {
@@ -338,6 +348,48 @@ mod contribution_deferral_tests {
         )
         .expect("surface C should be retryable");
         assert!(retry_deferred.is_empty());
+    }
+
+    #[test]
+    fn post_accept_secondary_failure_preserves_only_not_yet_submitted_work() {
+        let primary = RenderSurfaceId::primary();
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let tertiary = RenderSurfaceId::try_from_raw(3).expect("tertiary surface id");
+        let prepared_frames = vec![
+            prepared_frame(primary, 0),
+            prepared_frame(secondary, 1),
+            prepared_frame(tertiary, 2),
+        ];
+        let contributions = vec![
+            contribution(11, primary),
+            contribution(12, secondary),
+            contribution(13, tertiary),
+        ];
+        let already_deferred = contribution(14, secondary);
+        let mut deferred = vec![already_deferred.clone()];
+
+        let failure = apply_additional_surface_render_outcome(
+            &mut deferred,
+            &contributions,
+            &prepared_frames,
+            1,
+            AdditionalSurfaceRenderOutcome::Fatal {
+                error: anyhow::anyhow!("post-accept association failed"),
+                submission_accepted: true,
+            },
+        )
+        .expect_err("post-accept error must be propagated without replay");
+        assert_eq!(
+            failure
+                .deferred
+                .iter()
+                .map(|contribution| contribution.producer_id.raw())
+                .collect::<Vec<_>>(),
+            vec![14, 13],
+            "retain previously deferred work and later unsubmitted surfaces, never replay the accepted surface"
+        );
+        assert_eq!(failure.deferred[0].output, already_deferred.output);
+        assert_eq!(failure.deferred[1].output, contributions[2].output);
     }
 
     #[test]
@@ -411,7 +463,10 @@ mod contribution_deferral_tests {
             &contributions,
             &prepared_frames,
             1,
-            AdditionalSurfaceRenderOutcome::Fatal(anyhow::anyhow!("surface C failed")),
+            AdditionalSurfaceRenderOutcome::Fatal {
+                error: anyhow::anyhow!("surface C failed"),
+                submission_accepted: false,
+            },
         )
         .expect_err("surface C failure should be returned with deferred work");
 
@@ -1026,6 +1081,16 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                         }
                     }
                 } else {
+                    // The renderer can fail during retained-session association
+                    // *after* G5 accepted the frame. Its typed failure proves
+                    // this primary producer was already submitted. Do not
+                    // republish it through the generic error restoration path.
+                    if err
+                        .downcast_ref::<RenderGpuFramePostAcceptAssociationFailure>()
+                        .is_some()
+                    {
+                        primary_contribution_state = PrimaryContributionState::Submitted;
+                    }
                     Err(err.context("render backend execution failed"))
                 }
             }
@@ -1155,12 +1220,18 @@ fn apply_additional_surface_render_outcome(
             );
             Ok(())
         }
-        AdditionalSurfaceRenderOutcome::Fatal(error) => {
+        AdditionalSurfaceRenderOutcome::Fatal {
+            error,
+            submission_accepted,
+        } => {
+            // Pre-admission failures may be retried by the owning producer.
+            // A post-accept failure may not: the exact GPU mutation can
+            // already be running, although later renderer bookkeeping failed.
             defer_contributions_for_remaining_surfaces(
                 deferred,
                 deterministic_contributions,
                 prepared_frames,
-                prepared_frame_index,
+                prepared_frame_index + usize::from(submission_accepted),
             );
             Err(AdditionalSurfaceRenderFailure {
                 deferred: std::mem::take(deferred),
@@ -1315,10 +1386,16 @@ fn render_additional_surfaces(
                         }
                     }
                 } else {
-                    AdditionalSurfaceRenderOutcome::Fatal(err.context(format!(
-                        "render backend execution failed for surface {}",
-                        render_surface_id.raw()
-                    )))
+                    let submission_accepted = err
+                        .downcast_ref::<RenderGpuFramePostAcceptAssociationFailure>()
+                        .is_some();
+                    AdditionalSurfaceRenderOutcome::Fatal {
+                        error: err.context(format!(
+                            "render backend execution failed for surface {}",
+                            render_surface_id.raw()
+                        )),
+                        submission_accepted,
+                    }
                 }
             }
         };
