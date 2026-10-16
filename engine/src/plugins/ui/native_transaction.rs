@@ -216,6 +216,31 @@ pub fn mount_native_ui_app<A>(
 where
     A: runenui_core::UiApp + 'static,
 {
+    transact_native_ui_mount(world, |slots, permit| {
+        slots.mount_native_app::<A>(permit, screen_id, state, fonts)
+    })
+}
+
+/// Mount a legacy UiProgram through the same native World transaction as
+/// typed UiApp mounting. Selection remains independent from presentation.
+pub fn mount_native_ui_program(
+    world: &mut World,
+    source: super::UiTypedSource,
+    registry: &ui_controls::ControlPackageRegistrySnapshot,
+    fonts: &super::UiRuntimeFontConfiguration,
+) -> Result<super::UiRuntimeSlotMountReport> {
+    transact_native_ui_mount(world, |slots, permit| {
+        slots.mount_native_program(permit, source, registry, fonts)
+    })
+}
+
+fn transact_native_ui_mount(
+    world: &mut World,
+    operation: impl FnOnce(
+        &mut UiRuntimeSlotsResource,
+        &NativeAppMutationPermit,
+    ) -> super::UiRuntimeSlotMountReport,
+) -> Result<super::UiRuntimeSlotMountReport> {
     let sources = world
         .resource::<WinitInputAdapter>()?
         .window_source_ids()
@@ -233,28 +258,25 @@ where
     }
 
     let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        world
-            .resource_mut::<UiRuntimeSlotsResource>()
-            .expect("native slot registry verified before mutable mounting")
-            .mount_native_app::<A>(
-                &NativeAppMutationPermit { _sealed: () },
-                screen_id,
-                state,
-                fonts,
-            )
+        operation(
+            world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .expect("native slot registry verified before mutable mounting"),
+            &NativeAppMutationPermit { _sealed: () },
+        )
     }));
     // The caller may catch a panic from user-authored UiApp mount code.
     // Reconcile even then: partial native runtime changes cannot preserve
     // previously projected gameplay eligibility on an unknown route.
-    if !matches!(&outcome, Ok(report) if !report.accepted_mount()) {
-        if let Err(error) = reconcile_game_after_native_mount(world, &sources) {
-            for (_, source) in sources {
-                let _ = revoke_game_source(world, source);
-            }
-            match outcome {
-                Ok(_) => return Err(error),
-                Err(panic) => std::panic::resume_unwind(panic),
-            }
+    if !matches!(&outcome, Ok(report) if !report.accepted_mount())
+        && let Err(error) = reconcile_game_after_native_mount(world, &sources)
+    {
+        for (_, source) in sources {
+            let _ = revoke_game_source(world, source);
+        }
+        match outcome {
+            Ok(_) => return Err(error),
+            Err(panic) => std::panic::resume_unwind(panic),
         }
     }
     match outcome {
@@ -1109,4 +1131,30 @@ mod tests {
             "selected UI source must remain denied after independent legacy Up"
         );
     }
+    #[test]
+    fn selected_native_program_mount_cannot_bypass_world_input_consistency() {
+        let mut world = setup();
+        let source = super::super::UiTypedSource::new(
+            UiTypedScreenId::new("native.program.direct"),
+            ui_program::UiProgramSourceId::new("native.program.source"),
+            ui_definition::UiNodeDefinition::Column {
+                id: ui_definition::AuthoredId::new("native.program.root"),
+                children: Vec::new(),
+            },
+        );
+        let snapshot = ui_controls::ControlPackageRegistry::new()
+            .with_package(ui_controls::runenwerk_control_package())
+            .unwrap()
+            .snapshot();
+        let rejected = world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .mount_with_fonts(source, &snapshot, &UiRuntimeFontConfiguration::default());
+        assert_eq!(
+            rejected.failure(),
+            Some(super::super::UiRuntimeSlotMountFailure::NativeInputTransactionRequired),
+            "the program/Counter mount cannot mutate native routing through a bare slot resource"
+        );
+    }
+
 }

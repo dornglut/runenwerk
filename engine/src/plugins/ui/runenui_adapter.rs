@@ -1168,6 +1168,15 @@ impl UiRuntimeSlotsResource {
                 UiRuntimeSlotMountFailure::RuntimeInitialization,
             );
         }
+        if (self.native_transport.is_some()
+            || self.slots.iter().any(|slot| slot.native_input_selected))
+            && !self.native_mount_permitted
+        {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::NativeInputTransactionRequired,
+            );
+        }
         let lowering = source.lower_with_registry_snapshot(registry);
         if !lowering.passed() {
             return UiRuntimeSlotMountReport::rejected(
@@ -1338,12 +1347,28 @@ impl UiRuntimeSlotsResource {
         UiRuntimeSlotMountReport::accepted(screen_id, id)
     }
 
-    /// The sealed Engine World boundary alone may mount new UI during native
-    /// execution. Mounting is a route-affecting mutation even without a
-    /// selected slot: implicit legacy gameplay must be reconciled immediately.
-    pub(crate) fn mount_native_app<A>(
+    /// One sealed mount capability for either Engine UI representation.
+    /// Only the World transaction may reconcile route changes with game input.
+    fn transact_native_mount(
         &mut self,
         _permit: &super::native_transaction::NativeAppMutationPermit,
+        operation: impl FnOnce(&mut Self) -> UiRuntimeSlotMountReport,
+    ) -> Result<UiRuntimeSlotMountReport, UiRuntimeSlotMountFailure> {
+        if self.native_mount_permitted || self.native_mutation_slot.is_some() {
+            return Err(UiRuntimeSlotMountFailure::NativeInputTransactionRequired);
+        }
+        self.native_mount_permitted = true;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| operation(self)));
+        self.native_mount_permitted = false;
+        match outcome {
+            Ok(report) => Ok(report),
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    }
+
+    pub(crate) fn mount_native_app<A>(
+        &mut self,
+        permit: &super::native_transaction::NativeAppMutationPermit,
         screen_id: UiTypedScreenId,
         state: A::State,
         fonts: &UiRuntimeFontConfiguration,
@@ -1351,21 +1376,25 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
-        if self.native_mount_permitted || self.native_mutation_slot.is_some() {
-            return UiRuntimeSlotMountReport::rejected(
-                screen_id,
-                UiRuntimeSlotMountFailure::NativeInputTransactionRequired,
-            );
-        }
-        self.native_mount_permitted = true;
-        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            self.mount_app::<A>(screen_id, state, fonts)
-        }));
-        self.native_mount_permitted = false;
-        match outcome {
-            Ok(report) => report,
-            Err(panic) => std::panic::resume_unwind(panic),
-        }
+        let rejected_screen = screen_id.clone();
+        self.transact_native_mount(permit, |slots| {
+            slots.mount_app::<A>(screen_id, state, fonts)
+        })
+        .unwrap_or_else(|failure| UiRuntimeSlotMountReport::rejected(rejected_screen, failure))
+    }
+
+    pub(crate) fn mount_native_program(
+        &mut self,
+        permit: &super::native_transaction::NativeAppMutationPermit,
+        source: UiTypedSource,
+        registry: &ControlPackageRegistrySnapshot,
+        fonts: &UiRuntimeFontConfiguration,
+    ) -> UiRuntimeSlotMountReport {
+        let rejected_screen = source.screen_id().clone();
+        self.transact_native_mount(permit, |slots| {
+            slots.mount_with_fonts(source, registry, fonts)
+        })
+        .unwrap_or_else(|failure| UiRuntimeSlotMountReport::rejected(rejected_screen, failure))
     }
 
     /// Typed action ingress increments the Engine epoch immediately upon RunenUI
