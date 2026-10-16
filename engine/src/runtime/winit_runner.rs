@@ -619,6 +619,21 @@ impl WinitRunner {
         &mut self,
         window: NativeWindowId,
     ) -> Result<(NativeInputRecipient, Option<u64>)> {
+        self.native_input_recipient_with_close_policy(window, false)
+    }
+
+    fn native_input_recipient_for_cancellation(
+        &mut self,
+        window: NativeWindowId,
+    ) -> Result<(NativeInputRecipient, Option<u64>)> {
+        self.native_input_recipient_with_close_policy(window, true)
+    }
+
+    fn native_input_recipient_with_close_policy(
+        &mut self,
+        window: NativeWindowId,
+        allow_approved_close: bool,
+    ) -> Result<(NativeInputRecipient, Option<u64>)> {
         let world = &mut self.state.world;
         let Some(mut slots) = world.remove_resource::<UiRuntimeSlotsResource>() else {
             if world.has_resource::<UiNativeInputRecipientsResource>() {
@@ -634,7 +649,11 @@ impl WinitRunner {
                 let windows = world
                     .resource::<WindowStateRegistryResource>()
                     .context("missing native window registry")?;
-                let recipient = recipients.resolve(window, windows, &mut slots)?;
+                let recipient = if allow_approved_close {
+                    recipients.resolve_for_cancellation(window, windows, &mut slots)?
+                } else {
+                    recipients.resolve(window, windows, &mut slots)?
+                };
                 let epoch = recipients.binding_epoch_for_window(window);
                 if matches!(recipient, NativeInputRecipient::RunenUiSlot(_)) && epoch.is_none() {
                     return Err(anyhow!(
@@ -1097,7 +1116,7 @@ impl WinitRunner {
         // recipient lifetime. Rebind/unmount/scope changes must not receive
         // held keys from a previous native binding.
         if !matches!(
-            self.native_input_recipient(window),
+            self.native_input_recipient_for_cancellation(window),
             Ok((NativeInputRecipient::RunenUiSlot(active), Some(epoch)))
                 if active == slot && epoch == lifetime.binding_epoch
         ) {
@@ -1151,7 +1170,7 @@ impl WinitRunner {
             return Ok(());
         };
         if !matches!(
-            self.native_input_recipient(window),
+            self.native_input_recipient_for_cancellation(window),
             Ok((NativeInputRecipient::RunenUiSlot(slot), Some(current)))
                 if slot == recipient && current == epoch
         ) {
@@ -1231,7 +1250,7 @@ impl WinitRunner {
             return Ok(());
         };
         if !matches!(
-            self.native_input_recipient(window),
+            self.native_input_recipient_for_cancellation(window),
             Ok((NativeInputRecipient::RunenUiSlot(slot), Some(current)))
                 if slot == recipient && current == epoch
         ) {
@@ -1408,7 +1427,7 @@ impl WinitRunner {
         // A remount/rebind cannot receive a Cancel from the previous native
         // window binding, even when the same runtime scope remains mounted.
         if !matches!(
-            self.native_input_recipient(window),
+            self.native_input_recipient_for_cancellation(window),
             Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch)))
                 if slot == lifetime.recipient && epoch == lifetime.binding_epoch
         ) {
@@ -1466,7 +1485,7 @@ impl WinitRunner {
             return Ok(());
         };
         if !matches!(
-            self.native_input_recipient(window),
+            self.native_input_recipient_for_cancellation(window),
             Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch)))
                 if slot == lifetime.recipient && epoch == lifetime.binding_epoch
         ) {

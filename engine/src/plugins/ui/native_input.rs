@@ -281,7 +281,37 @@ impl UiNativeInputRecipientsResource {
         windows: &WindowStateRegistryResource,
         slots: &mut UiRuntimeSlotsResource,
     ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
-        Self::require_created(window, windows)?;
+        self.resolve_with_close_policy(window, windows, slots, false)
+    }
+
+    /// Cancellation during an approved close retains the original binding,
+    /// epoch and RunenUI scope without reopening ordinary input admission.
+    pub(crate) fn resolve_for_cancellation(
+        &self,
+        window: NativeWindowId,
+        windows: &WindowStateRegistryResource,
+        slots: &mut UiRuntimeSlotsResource,
+    ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
+        self.resolve_with_close_policy(window, windows, slots, true)
+    }
+
+    fn resolve_with_close_policy(
+        &self,
+        window: NativeWindowId,
+        windows: &WindowStateRegistryResource,
+        slots: &mut UiRuntimeSlotsResource,
+        allow_approved_close: bool,
+    ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
+        let record = windows
+            .record(window)
+            .ok_or(NativeInputRecipientError::MissingWindow)?;
+        if record.lifecycle_state != NativeWindowLifecycleState::Created
+            && !(allow_approved_close
+                && record.close_requested
+                && record.lifecycle_state == NativeWindowLifecycleState::CloseApproved)
+        {
+            return Err(NativeInputRecipientError::InactiveWindow);
+        }
         let binding = match self.bindings.get(&window) {
             Some(WindowRecipientBinding::Bound(binding)) => binding,
             Some(WindowRecipientBinding::Retired) => {
@@ -562,6 +592,70 @@ mod tests {
         let second = NativeWindowId::try_from_raw(2).expect("second window ID");
         windows.register_created_window(second, "second", (320, 240), 1.0, false);
         (windows, first, second)
+    }
+
+    #[test]
+    fn approved_close_allows_only_original_scope_cancellation() {
+        let (mut windows, primary, secondary) = windows();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = mount(&mut slots, 205);
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                primary,
+                NativeInputRecipient::RunenUiSlot(slot),
+                &windows,
+                &mut slots,
+            )
+            .expect("original live M13 binding");
+        let original_epoch = recipients
+            .binding_epoch_for_window(primary)
+            .expect("original binding epoch");
+        windows
+            .record_mut(primary)
+            .expect("created window")
+            .request_close();
+        assert_eq!(
+            recipients.resolve(primary, &windows, &mut slots),
+            Err(NativeInputRecipientError::InactiveWindow),
+            "approved close must deny normal input"
+        );
+        assert_eq!(
+            recipients.resolve_for_cancellation(primary, &windows, &mut slots),
+            Ok(NativeInputRecipient::RunenUiSlot(slot)),
+            "original M13 scope remains available for terminal cancellation"
+        );
+        assert_eq!(
+            recipients.binding_epoch_for_window(primary),
+            Some(original_epoch)
+        );
+        assert_eq!(
+            recipients.resolve_for_cancellation(secondary, &windows, &mut slots),
+            Err(NativeInputRecipientError::MissingRecipient),
+            "a foreign window cannot borrow the closing recipient"
+        );
+        windows
+            .record_mut(primary)
+            .expect("closing window")
+            .receive_close_intent();
+        assert_eq!(
+            recipients.resolve_for_cancellation(primary, &windows, &mut slots),
+            Err(NativeInputRecipientError::InactiveWindow),
+            "unapproved close intent cannot widen cancellation"
+        );
+        windows
+            .record_mut(primary)
+            .expect("pending window")
+            .approve_close();
+        slots
+            .unmount_with_retirement(slot)
+            .expect("retire original framework scope");
+        assert!(matches!(
+            recipients.resolve_for_cancellation(primary, &windows, &mut slots),
+            Err(NativeInputRecipientError::OwnershipUnavailable(
+                UiRuntimeSlotOperationFailure::MissingSlot
+            ))
+        ));
     }
 
     #[test]
