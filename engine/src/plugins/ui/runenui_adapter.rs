@@ -1071,6 +1071,10 @@ impl UiRuntimeSlotsResource {
     }
 
     pub(crate) fn settle_native_slots(&mut self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.native_mutation_slot.is_none(),
+            "native slot-wide settlement cannot run inside one selected-slot transaction"
+        );
         self.native_readiness()?;
         if self.native_clock.is_none() || self.native_closed {
             return Ok(());
@@ -1111,6 +1115,10 @@ impl UiRuntimeSlotsResource {
     }
 
     pub(crate) fn shutdown_native_slots(&mut self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.native_mutation_slot.is_none(),
+            "native all-slot shutdown cannot run inside one selected-slot transaction"
+        );
         self.native_closed = true;
         if let Some(transport) = &self.native_transport {
             transport.close();

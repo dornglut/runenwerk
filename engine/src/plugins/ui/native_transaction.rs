@@ -343,11 +343,16 @@ mod tests {
             (probe.slot, probe.ui, probe.game)
         };
         let result = transact_ui_slot(&mut world, slot, |slots| {
-            // Real framework runtime shutdown destroys the old M13 scope
-            // after the initial valid selected native ownership observation.
-            slots
-                .shutdown_native_slots()
-                .map_err(|_| UiRuntimeSlotOperationFailure::NativeHostClosed)?;
+            // A transaction for one native-selected slot may not pump or
+            // shut down ALL mounted runtimes while sibling sources have
+            // already projected game input in the same ECS schedule.
+            assert!(slots.settle_native_slots().is_err());
+            assert!(slots.shutdown_native_slots().is_err());
+            assert!(slots.contains(slot), "rejected global shutdown was inert");
+
+            // Exact selected-slot retirement is a real M13 scope loss, not
+            // a fabricated success or synthetic keyboard release.
+            slots.unmount_with_retirement(slot)?;
             Ok(())
         });
         assert!(
