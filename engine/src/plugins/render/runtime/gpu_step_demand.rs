@@ -4,8 +4,9 @@
 //! GPU resource reservation system, or a replacement for RunenGPU's G3/G5.
 //! Only the producer can certify that a prepared GPU graph faithfully lowers
 //! every captured step. An accepted submission is not a completed simulation.
-use runen_gpu::{GpuContextAffinity, GpuSubmission, GpuSubmissionStatus};
-use std::collections::VecDeque;
+use crate::plugins::render::{PreparedRenderFrame, RenderFlowId};
+use runen_gpu::{GpuContextAffinity, GpuSubmission, GpuSubmissionStatus, GpuWorkResourceId};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// A copied or otherwise producer-owned immutable step input with its sequence
 /// identity. Do not retain references to mutable ECS state in the payload.
@@ -262,6 +263,16 @@ impl<T> RenderGpuStepDemand<T> {
         Ok(())
     }
 
+    // The renderer calls this only immediately after a successful G5 admission.
+    // All source snapshots were compared to the pending prefix *before* G5;
+    // no code able to change this producer runs between that check and here.
+    fn accept_prevalidated(&mut self, count: usize, submission: GpuSubmission) {
+        debug_assert!(self.accepted.is_none());
+        debug_assert!(count > 0 && count <= self.pending.len());
+        let steps = self.pending.drain(..count).collect();
+        self.accepted = Some(AcceptedSteps { submission, steps });
+    }
+
     pub fn accepted_submission(&self) -> Option<&GpuSubmission> {
         self.accepted.as_ref().map(|batch| &batch.submission)
     }
@@ -412,5 +423,137 @@ mod tests {
         );
         assert_eq!(steps.outstanding(), 0);
         assert_eq!(steps.requested_tick(), u64::MAX);
+    }
+}
+
+/// Immutable bytes authored at each semantic tick for uniforms used by one
+/// fixed-step RenderFlow region. The producer owns what these values mean.
+/// Runenwerk only transports them into the selected pass's actual GPU upload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderGpuFixedStepInput {
+    pub uniforms: BTreeMap<GpuWorkResourceId, Vec<u8>>,
+}
+
+/// An opt-in, producer-owned set of streams, one per ordinary RenderFlow.
+/// Existing CPU-driven flows never consult this registry. Producers capture
+/// snapshots before irreversibly advancing their own domain state and verify
+/// GPU results using the exact accepted submission retained in each stream.
+#[derive(Debug, Default, runen_ecs::Resource)]
+pub struct RenderGpuFlowStepStreams {
+    streams: BTreeMap<RenderFlowId, RenderGpuStepDemand<RenderGpuFixedStepInput>>,
+}
+
+impl RenderGpuFlowStepStreams {
+    pub fn register(
+        &mut self,
+        flow: RenderFlowId,
+        verified_tick: u64,
+        maximum_outstanding: usize,
+    ) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            maximum_outstanding > 0 && !self.streams.contains_key(&flow),
+            "GPU step stream must have positive capacity and unique flow identity"
+        );
+        self.streams.insert(
+            flow,
+            RenderGpuStepDemand::new(verified_tick, maximum_outstanding),
+        );
+        Ok(())
+    }
+
+    pub fn stream_mut(
+        &mut self,
+        flow: RenderFlowId,
+    ) -> Option<&mut RenderGpuStepDemand<RenderGpuFixedStepInput>> {
+        self.streams.get_mut(&flow)
+    }
+
+    pub fn stream(
+        &self,
+        flow: RenderFlowId,
+    ) -> Option<&RenderGpuStepDemand<RenderGpuFixedStepInput>> {
+        self.streams.get(&flow)
+    }
+
+    /// Called before surface acquisition. One accepted semantic producer
+    /// interval forbids a second frame using its retained flow, even if its
+    /// earlier GPU receipt is physically terminal but unverified. This is
+    /// source-owned pacing, not a duplicate G5 resource reservation table.
+    pub(crate) fn should_defer(&self, frame: &PreparedRenderFrame) -> bool {
+        frame.flow_invocations.iter().any(|invocation| {
+            self.streams
+                .get(&invocation.flow_id)
+                .is_some_and(|stream| stream.accepted_submission().is_some())
+        })
+    }
+
+    /// Exact source/history comparison before composing the G5 submission.
+    /// Reject stale prepared snapshots rather than falling back to latest ECS.
+    pub(crate) fn validate_prepared(&self, frame: &PreparedRenderFrame) -> anyhow::Result<()> {
+        let mut seen = BTreeSet::new();
+        for invocation in &frame.flow_invocations {
+            let Some(stream) = self.streams.get(&invocation.flow_id) else {
+                anyhow::ensure!(
+                    invocation.inputs.fixed_step_history.is_none(),
+                    "prepared GPU history has no live semantic producer for flow {:?}",
+                    invocation.flow_id
+                );
+                continue;
+            };
+            anyhow::ensure!(
+                seen.insert(invocation.flow_id),
+                "GPU step stream for flow {:?} is invoked more than once in a composed submission",
+                invocation.flow_id
+            );
+            anyhow::ensure!(
+                stream.accepted_submission().is_none(),
+                "GPU step stream for flow {:?} still has unverified accepted work",
+                invocation.flow_id
+            );
+            let history = invocation.inputs.fixed_step_history.as_ref().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "GPU step stream for flow {:?} lacks source-authored history",
+                    invocation.flow_id
+                )
+            })?;
+            anyhow::ensure!(
+                !history.steps.is_empty() || stream.pending_len() == 0,
+                "prepared GPU step history predates new producer work for flow {:?}",
+                invocation.flow_id
+            );
+            let pending = stream.candidate(history.steps.len());
+            anyhow::ensure!(
+                history.steps.len() == pending.len()
+                    && history
+                        .steps
+                        .iter()
+                        .zip(pending)
+                        .all(|(prepared, original)| {
+                            prepared.tick == original.tick()
+                                && prepared.input == *original.input()
+                        }),
+                "prepared GPU step history is stale for flow {:?}; fresh frame preparation required",
+                invocation.flow_id
+            );
+        }
+        Ok(())
+    }
+
+    /// Only called after validate_prepared and an actual G5 success, before
+    /// any fallible retained-session association, observation or provenance.
+    pub(crate) fn accepted(&mut self, frame: &PreparedRenderFrame, submission: &GpuSubmission) {
+        for invocation in &frame.flow_invocations {
+            let Some(stream) = self.streams.get_mut(&invocation.flow_id) else {
+                continue;
+            };
+            let history = invocation
+                .inputs
+                .fixed_step_history
+                .as_ref()
+                .expect("prevalidated producer history");
+            if !history.steps.is_empty() {
+                stream.accept_prevalidated(history.steps.len(), submission.clone());
+            }
+        }
     }
 }

@@ -70,7 +70,7 @@ struct RealizedFlowInvocation<'a> {
 struct RealizedScheduledPass<'a> {
     occurrence: RenderGpuWorkOccurrenceId,
     control_order_after: Vec<RenderGpuWorkOccurrenceId>,
-    fixed_step_upload: Option<RealizedLogicalBufferUpload>,
+    fixed_step_uploads: Vec<RealizedLogicalBufferUpload>,
     execution: RealizedPassExecution<'a>,
 }
 
@@ -90,6 +90,7 @@ impl Renderer {
     pub(crate) fn render_packet(
         &mut self,
         context: &GpuContext,
+        gpu_step_streams: &mut crate::plugins::render::RenderGpuFlowStepStreams,
         surface_texture: &GpuTextureHandle,
         surface_view: &GpuTextureViewHandle,
         acquired_surface_extent: (u32, u32),
@@ -328,6 +329,8 @@ impl Renderer {
             prepared_frame.context.frame_index,
             prepared_frame.surface.render_surface_id.raw(),
         );
+        // Reject stale producer work before G5 rather than using latest ECS.
+        gpu_step_streams.validate_prepared(prepared_frame)?;
         let prepared = pollster::block_on(context.prepare_submission(graph))?;
         // Preserve RunenGPU's typed public rejection rather than flattening it into
         // a diagnostic string. Runenwerk policy may inspect the actual rejection
@@ -342,6 +345,9 @@ impl Renderer {
             let (_prepared, reason) = rejection.into_parts();
             runen_gpu::GpuWorkSubmissionError::SubmissionRejected(reason)
         })?;
+        // Infallibly bind the exact historical source interval immediately at
+        // the real G5 admission boundary, before later renderer bookkeeping.
+        gpu_step_streams.accepted(prepared_frame, &submission);
         self.retained_submission_trace.accepted(
             submission.clone(),
             retained_trace,
@@ -638,6 +644,23 @@ impl Renderer {
                             Ok(true)
                         },
                     )?;
+                    if let Some(history) = invocation.inputs.fixed_step_history.as_ref() {
+                        anyhow::ensure!(
+                            flow.execution.fixed_step_regions.len() == 1,
+                            "producer-owned GPU history requires one fixed-step region"
+                        );
+                        let region = &flow.execution.fixed_step_regions[0];
+                        let actual = occurrences
+                            .iter()
+                            .filter(|entry| entry.fixed_step_iteration.is_some())
+                            .count();
+                        let required = history.steps.len() * region.pass_ids.len();
+                        anyhow::ensure!(
+                            actual == required,
+                            "GPU producer work for flow {:?} skipped a historical fixed-step pass ({} of {})",
+                            flow.flow_id, actual, required
+                        );
+                    }
                     scheduled_invocations.push_back((
                         flow.flow_id.to_string(),
                         invocation.invocation_id.0.clone(),
@@ -790,22 +813,63 @@ impl Renderer {
                         };
                         let mut realized_passes = Vec::new();
                         for (ordinal, occurrence) in occurrences.into_iter().enumerate() {
-                            let fixed_step_upload = occurrence
-                                .fixed_step_iteration
-                                .map(|iteration| {
-                                    self.realize_fixed_step_iteration_upload(
-                                        context,
-                                        invocation.invocation_id.0.as_str(),
-                                        runtime_resources,
-                                        iteration.region,
-                                        iteration
-                                            .schedule
-                                            .with_substep_index(iteration.substep_index),
-                                        &mut maximum_occurrence,
-                                        occurrence.control_order_after.clone(),
-                                    )
-                                })
-                                .transpose()?;
+                            let mut fixed_step_uploads = Vec::new();
+                            if let Some(iteration) = occurrence.fixed_step_iteration {
+                                fixed_step_uploads.push(self.realize_fixed_step_iteration_upload(
+                                    context,
+                                    invocation.invocation_id.0.as_str(),
+                                    runtime_resources,
+                                    iteration.region,
+                                    iteration
+                                        .schedule
+                                        .with_substep_index(iteration.substep_index),
+                                    &mut maximum_occurrence,
+                                    occurrence.control_order_after.clone(),
+                                )?);
+                                if let Some(history) = invocation.inputs.fixed_step_history.as_ref() {
+                                    let snapshot = history
+                                        .steps
+                                        .get(iteration.substep_index as usize)
+                                        .ok_or_else(|| anyhow::anyhow!("GPU historical step missing"))?;
+                                    let pass_id = execution_pass_id(occurrence.pass);
+                                    let pass_node = flow
+                                        .render_passes
+                                        .iter()
+                                        .find(|pass| pass.pass_id() == pass_id)
+                                        .ok_or_else(|| anyhow::anyhow!("compiled GPU step pass lacks authored bindings"))?;
+                                    for binding in &pass_node.node().uniform_bindings {
+                                        let uniform_id = *binding.uniform_id();
+                                        let bytes = snapshot
+                                            .input
+                                            .uniforms
+                                            .get(&uniform_id)
+                                            .ok_or_else(|| anyhow::anyhow!("producer step {} omits authored GPU uniform", snapshot.tick))?;
+                                        let preceding = fixed_step_uploads
+                                            .last()
+                                            .expect("iteration upload exists")
+                                            .occurrence;
+                                        let prepared = runtime_resources
+                                            .prepare_uniform_upload(uniform_id, bytes)?;
+                                        let runtime_buffer = runtime_resources.realize_invocation_uniform_buffer(
+                                            invocation.invocation_id.0.as_str(),
+                                            uniform_id,
+                                            prepared.layout().byte_len(),
+                                        )?;
+                                        anyhow::ensure!(
+                                            prepared.layout().byte_len() <= runtime_buffer.size,
+                                            "historical GPU uniform exceeds realized buffer capacity"
+                                        );
+                                        fixed_step_uploads.push(RealizedLogicalBufferUpload {
+                                            occurrence: allocate_aux_occurrence(&mut maximum_occurrence)?,
+                                            operation: project_buffer_upload(
+                                                &runtime_buffer.handle,
+                                                prepared.as_bytes(),
+                                            )?,
+                                            control_order_after: vec![preceding],
+                                        });
+                                    }
+                                }
+                            }
                             let pass = occurrence.pass;
                             let mut before_captures = Vec::new();
                             if capture_runtime.should_attempt_stage(CaptureStage::Before) {
@@ -876,7 +940,7 @@ impl Renderer {
                             realized_passes.push(RealizedScheduledPass {
                                 occurrence: occurrence.occurrence_id,
                                 control_order_after: occurrence.control_order_after,
-                                fixed_step_upload,
+                                fixed_step_uploads,
                                 execution: RealizedPassExecution {
                                     pass,
                                     timestamp_indices,
@@ -894,7 +958,7 @@ impl Renderer {
                                 pass: scheduled.execution.pass,
                                 pipeline: scheduled.execution.pipeline.as_ref(),
                                 timestamp_indices: scheduled.execution.timestamp_indices,
-                                fixed_step_upload: scheduled.fixed_step_upload.as_ref(),
+                                fixed_step_uploads: &scheduled.fixed_step_uploads,
                                 before_captures: &scheduled.execution.before_captures,
                                 after_captures: &scheduled.execution.after_captures,
                             })
@@ -1067,6 +1131,7 @@ impl Renderer {
     pub fn render(
         &mut self,
         context: &GpuContext,
+        gpu_step_streams: &mut crate::plugins::render::RenderGpuFlowStepStreams,
         surface_texture: &GpuTextureHandle,
         surface_view: &GpuTextureViewHandle,
         acquired_surface_extent: (u32, u32),
@@ -1096,6 +1161,7 @@ impl Renderer {
         )?;
         self.render_packet(
             context,
+            gpu_step_streams,
             surface_texture,
             surface_view,
             acquired_surface_extent,
@@ -1124,6 +1190,25 @@ impl Renderer {
     ) -> Result<Vec<RealizedLogicalBufferUpload>> {
         let mut uploads = Vec::new();
         for (buffer_id, bytes) in &flow_inputs.projected_uniform_bytes {
+            if flow_inputs.fixed_step_history.is_some()
+                && flow
+                    .render_passes
+                    .iter()
+                    .any(|pass| {
+                        flow.execution.fixed_step_regions.iter().any(|region| {
+                            region.pass_ids.contains(&pass.pass_id())
+                                && pass
+                                    .node()
+                                    .uniform_bindings
+                                    .iter()
+                                    .any(|binding| binding.uniform_id() == buffer_id)
+                        })
+                    })
+            {
+                // Each historical value is uploaded immediately ahead of its
+                // actual selected occurrence; latest ECS bytes are not replayed.
+                continue;
+            }
             if flow
                 .execution
                 .fixed_step_regions

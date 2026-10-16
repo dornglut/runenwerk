@@ -983,6 +983,7 @@ impl Gfx {
     pub fn render(
         &mut self,
         prepared_frame: &PreparedRenderFrame,
+        gpu_step_streams: &mut crate::plugins::render::RenderGpuFlowStepStreams,
         deterministic_contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
         target_requests: &crate::plugins::render::RenderDynamicTextureTargetRequestRegistryResource,
         shader_registry: &mut ShaderRegistryResource,
@@ -1015,9 +1016,12 @@ impl Gfx {
             !surface_contributions.is_empty(),
             self.renderer
                 .has_in_flight_deterministic_producer(&surface_contributions),
-        ) {
+        ) || gpu_step_streams.should_defer(prepared_frame)
+        {
             return Ok(timings);
         }
+        // Check exact producer snapshots before leasing a G7A surface image.
+        gpu_step_streams.validate_prepared(prepared_frame)?;
         let render_surface_id = prepared_frame.surface.render_surface_id;
         let acquire_start = Instant::now();
         let acquired = self.ctx.acquire_surface_image(render_surface_id)?;
@@ -1041,6 +1045,7 @@ impl Gfx {
         let context = self.ctx.context();
         timings.renderer = self.renderer.render(
             context,
+            gpu_step_streams,
             acquired.texture(),
             acquired.default_view(),
             (acquired_extent.width(), acquired_extent.height()),

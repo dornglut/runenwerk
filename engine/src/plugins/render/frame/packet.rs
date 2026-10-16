@@ -412,11 +412,25 @@ impl PreparedSurfaceInfo {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedGpuFixedStepSnapshot {
+    pub tick: u64,
+    pub input: crate::plugins::render::runtime::RenderGpuFixedStepInput,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PreparedGpuFixedStepHistory {
+    pub steps: Vec<PreparedGpuFixedStepSnapshot>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct PreparedFlowInputs {
     pub projected_uniform_bytes: BTreeMap<GpuWorkResourceId, Vec<u8>>,
     pub projected_dispatch_workgroups: BTreeMap<RenderPassId, [u32; 3]>,
     pub required_state_types: Vec<PreparedStateTypeInfo>,
+    /// Producer-captured heterogeneous per-tick source inputs. None keeps the
+    /// historical CPU-driven projection unchanged for existing flows.
+    pub fixed_step_history: Option<PreparedGpuFixedStepHistory>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]

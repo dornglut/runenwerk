@@ -705,6 +705,11 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     let mut primary_contribution_state = PrimaryContributionState::Unprocessed;
     let mut restore_contributions = true;
     let mut additional_failure_preserved_deferred = false;
+    // Producer-owned immutable step history lives across host frames even
+    // when rendering fails after physical G5 acceptance.
+    let mut gpu_step_streams = world
+        .remove_resource::<RenderGpuFlowStepStreams>()
+        .unwrap_or_default();
 
     let detached_result = (|| -> anyhow::Result<()> {
         // A producer publishing to two surfaces is an invalid frame contribution, not deferred
@@ -795,6 +800,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
             gfx.render(
                 &prepared_frame,
+                &mut gpu_step_streams,
                 &deterministic_contributions,
                 world.resource::<RenderDynamicTextureTargetRequestRegistryResource>()?,
                 &mut shader_registry,
@@ -1151,6 +1157,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             &additional_prepared_frames,
             &deterministic_contributions,
             &mut gfx,
+            &mut gpu_step_streams,
             &mut shader_registry,
             &ui_font_atlas,
             preflight_config,
@@ -1195,6 +1202,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
         }
     }
     world.insert_resource(gfx);
+    world.insert_resource(gpu_step_streams);
     detached_result
 }
 
@@ -1308,6 +1316,7 @@ fn render_additional_surfaces(
     prepared_frames: &[PreparedRenderFrame],
     deterministic_contributions: &[RenderDeterministicFrameContribution],
     gfx: &mut Gfx,
+    gpu_step_streams: &mut RenderGpuFlowStepStreams,
     shader_registry: &mut ShaderRegistryResource,
     ui_font_atlas: &UiFontAtlasResource,
     preflight_config: RenderPreflightValidationConfigResource,
@@ -1394,6 +1403,7 @@ fn render_additional_surfaces(
             let targets = world.resource::<RenderDynamicTextureTargetRequestRegistryResource>()?;
             gfx.render(
                 prepared_frame,
+                gpu_step_streams,
                 deterministic_contributions,
                 targets,
                 shader_registry,

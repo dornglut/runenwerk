@@ -69,6 +69,7 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         };
         let compiled_flows = flow_registry.compiled_flows();
         let execution_feature_ids = collect_execution_feature_ids(compiled_flows);
+        let gpu_step_streams = world.resource::<RenderGpuFlowStepStreams>().ok();
         let extracted = collect_flow_declared_state_resources(&world, compiled_flows);
         let frame_requests = world
             .resource::<PreparedRenderFrameRequestResource>()
@@ -78,7 +79,14 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         let mut surface_packets = Vec::with_capacity(surface_infos.len());
         for surface in surface_infos {
             let target_size = surface.target_size_px();
-            let flows = build_prepared_flow_inputs(compiled_flows, &extracted, target_size)?;
+            let mut flows = build_prepared_flow_inputs(compiled_flows, &extracted, target_size)?;
+            if let Some(streams) = gpu_step_streams {
+                for flow in compiled_flows {
+                    if let Some(inputs) = flows.get_mut(&flow.flow_id) {
+                        apply_historical_step_inputs(flow, inputs, streams)?;
+                    }
+                }
+            }
             let views =
                 build_prepared_views(surface.render_surface_id, target_size, &frame_requests)?;
             let flow_invocations = build_prepared_flow_invocations(
@@ -88,6 +96,7 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
                 &flows,
                 &views,
                 &frame_requests,
+                gpu_step_streams,
             )?;
             surface_packets.push((surface, flows, views, flow_invocations));
         }
@@ -256,6 +265,7 @@ fn build_prepared_flow_invocations(
     main_inputs_by_flow: &BTreeMap<RenderFlowId, PreparedFlowInputs>,
     views: &[PreparedViewFrame],
     requests: &PreparedRenderFrameRequestResource,
+    gpu_step_streams: Option<&RenderGpuFlowStepStreams>,
 ) -> anyhow::Result<Vec<PreparedFlowInvocation>> {
     let mut invocations = Vec::<PreparedFlowInvocation>::new();
     let views_by_id = views
@@ -314,7 +324,12 @@ fn build_prepared_flow_invocations(
                     anyhow::anyhow!("missing prepared inputs for flow '{:?}'", request.flow_id)
                 })?;
             apply_invocation_uniform_overrides(flow, request, &mut inputs)?;
-            validate_invoked_fixed_step_projection(flow, &inputs, extracted_state)?;
+            if let Some(streams) = gpu_step_streams {
+                apply_historical_step_inputs(flow, &mut inputs, streams)?;
+            }
+            if gpu_step_streams.is_none_or(|streams| streams.stream(flow.flow_id).is_none()) {
+                validate_invoked_fixed_step_projection(flow, &inputs, extracted_state)?;
+            }
             invocations.push(PreparedFlowInvocation {
                 invocation_id: request.invocation_id.clone(),
                 flow_id: request.flow_id,
@@ -339,7 +354,9 @@ fn build_prepared_flow_invocations(
                 .ok_or_else(|| {
                     anyhow::anyhow!("missing main prepared inputs for flow '{:?}'", flow.flow_id)
                 })?;
-            validate_invoked_fixed_step_projection(flow, &inputs, extracted_state)?;
+            if gpu_step_streams.is_none_or(|streams| streams.stream(flow.flow_id).is_none()) {
+                validate_invoked_fixed_step_projection(flow, &inputs, extracted_state)?;
+            }
             invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
         }
     }
@@ -357,6 +374,79 @@ fn should_emit_automatic_main(
         .iter()
         .any(|request| request.flow_id == flow_id && request.view_id == "main");
     !has_requested_main && !requests.replaces_automatic_main_flow(render_surface_id, flow_id)
+}
+
+/// Override only explicitly producer-owned stateful steps. Historical
+/// per-tick inputs are never reconstructed from the latest mutable ECS value.
+fn apply_historical_step_inputs(
+    flow: &CompiledRenderFlowPlan,
+    inputs: &mut PreparedFlowInputs,
+    streams: &RenderGpuFlowStepStreams,
+) -> anyhow::Result<()> {
+    let Some(stream) = streams.stream(flow.flow_id) else {
+        return Ok(());
+    };
+    anyhow::ensure!(
+        flow.execution.fixed_step_regions.len() == 1,
+        "GPU step stream flow {:?} requires exactly one fixed-step region",
+        flow.flow_id
+    );
+    let region = &flow.execution.fixed_step_regions[0];
+    let required = flow
+        .render_passes
+        .iter()
+        .filter(|pass| region.pass_ids.contains(&pass.pass_id()))
+        .flat_map(|pass| pass.node().uniform_bindings.iter().map(|binding| *binding.uniform_id()))
+        .collect::<BTreeSet<_>>();
+    anyhow::ensure!(
+        !required.contains(&region.iteration_uniform),
+        "flow {:?} reuses its iteration-control uniform as producer state",
+        flow.flow_id
+    );
+    let history = stream
+        .candidate(region.max_substeps as usize)
+        .into_iter()
+        .map(|intent| {
+            let provided = intent.input().uniforms.keys().copied().collect::<BTreeSet<_>>();
+            anyhow::ensure!(
+                provided == required,
+                "flow {:?} step {} does not capture exactly the region's projected uniform inputs",
+                flow.flow_id,
+                intent.tick()
+            );
+            for (id, bytes) in &intent.input().uniforms {
+                let expected = inputs.projected_uniform_bytes.get(id).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "flow {:?} step {} references an unprojected GPU uniform",
+                        flow.flow_id,
+                        intent.tick()
+                    )
+                })?;
+                anyhow::ensure!(
+                    !bytes.is_empty() && bytes.len() == expected.len(),
+                    "flow {:?} step {} has an invalid GPU uniform byte length",
+                    flow.flow_id,
+                    intent.tick()
+                );
+            }
+            Ok(PreparedGpuFixedStepSnapshot {
+                tick: intent.tick(),
+                input: intent.input().clone(),
+            })
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let mut iteration = inputs
+        .projected_uniform_bytes
+        .get(&region.iteration_uniform)
+        .and_then(|bytes| RenderFixedStepIterationUniform::from_uniform_bytes(bytes))
+        .ok_or_else(|| anyhow::anyhow!("flow {:?} lacks fixed-step iteration input", flow.flow_id))?;
+    iteration.submitted_substeps =
+        u32::try_from(history.len()).expect("bounded by authored u32 max_substeps");
+    inputs
+        .projected_uniform_bytes
+        .insert(region.iteration_uniform, iteration.to_uniform_bytes());
+    inputs.fixed_step_history = Some(PreparedGpuFixedStepHistory { steps: history });
+    Ok(())
 }
 
 /// Require each selected flow invocation to represent the CPU ticks it claims
@@ -514,6 +604,7 @@ mod automatic_main_replacement_tests {
             &main_inputs,
             &views,
             &requests,
+            None,
         )
         .expect("invocations should prepare");
 
@@ -610,6 +701,7 @@ mod automatic_main_replacement_tests {
             &main_inputs,
             &views,
             &requests,
+            None,
         )
         .expect("native fallback invocation should prepare");
 
@@ -710,6 +802,7 @@ mod automatic_main_replacement_tests {
             &main_inputs,
             &views,
             &requests,
+            None,
         )
         .expect("invocations should prepare");
 
@@ -1105,6 +1198,7 @@ fn build_prepared_flow_inputs(
                 projected_uniform_bytes,
                 projected_dispatch_workgroups,
                 required_state_types,
+                fixed_step_history: None,
             },
         );
     }
@@ -1354,6 +1448,7 @@ mod tests {
             &main_inputs,
             &[],
             &requests,
+            None,
         )
         .expect_err("selected simulation cannot omit CPU-completed ticks");
         assert!(
@@ -1374,6 +1469,7 @@ mod tests {
             &inactive_inputs,
             &[],
             &requests,
+            None,
         )
         .expect("an inactive explicit-only flow must not fail unrelated rendering");
         assert!(idle.is_empty());
@@ -1398,6 +1494,7 @@ mod tests {
             &main_inputs,
             &[],
             &requests,
+            None,
         )
         .expect("exact bounded GPU region");
         assert_eq!(selected.len(), 1);
@@ -1406,6 +1503,133 @@ mod tests {
         let iteration = RenderFixedStepIterationUniform::from_uniform_bytes(bytes)
             .expect("typed fixed-step projection");
         assert_eq!(iteration.submitted_substeps, 2);
+    }
+
+    #[derive(Clone, Copy, runen_ecs::Resource)]
+    struct HistoricalProducerState {
+        latest_value: u32,
+    }
+
+    #[derive(Clone, Copy, GpuUniform)]
+    struct HistoricalUniform {
+        value: u32,
+    }
+
+    #[test]
+    fn real_frame_preparation_uses_captured_heterogeneous_gpu_step_uniforms() {
+        let flow = RenderFlow::new("historical.fixed.flow")
+            .with_state::<HistoricalProducerState>()
+            .compute_pass("historical.step")
+            .uniform_from_state(
+                runen_gpu::GpuBindingKey::try_new(0, 0).unwrap(),
+                |state: &HistoricalProducerState| HistoricalUniform {
+                    value: state.latest_value,
+                },
+            )
+            .expect("projected stateful shader uniform")
+            .dispatch([1, 1, 1])
+            .finish()
+            .fixed_step_region(
+                "historical.simulation",
+                4,
+                [(
+                    "historical.step",
+                    runen_gpu::GpuBindingKey::try_new(0, 1).unwrap(),
+                )],
+            )
+            .expect("fixed-step region");
+        let compiled = compile_flow_plan(&flow.validate().expect("valid RenderFlow"))
+            .expect("compiled GPU flow");
+        let uniform_id = *compiled.render_passes[0].node().uniform_bindings[0].uniform_id();
+        let input = |value| RenderGpuFixedStepInput {
+            uniforms: BTreeMap::from([(
+                uniform_id,
+                bytemuck::bytes_of(&HistoricalUniform { value }.to_gpu()).to_vec(),
+            )]),
+        };
+        let mut streams = RenderGpuFlowStepStreams::default();
+        streams.register(compiled.flow_id, 5, 4).expect("producer registered");
+        streams
+            .stream_mut(compiled.flow_id)
+            .unwrap()
+            .capture_batch(vec![input(11), input(27), input(8)])
+            .expect("immutable historical snapshots");
+
+        // The latest ECS source says 999, and the CPU clock ran zero ticks
+        // this frame: neither is permitted to replace captured GPU history.
+        let latest = HistoricalProducerState { latest_value: 999 };
+        let fixed_config = FixedTimeConfig::default();
+        let budget = CatchupBudget::default();
+        let fixed_state = FixedTimeState::default();
+        let extracted: ExtractedRenderStateMap<'_> = BTreeMap::from([
+            (TypeId::of::<HistoricalProducerState>(), &latest as &dyn Any),
+            (TypeId::of::<FixedTimeConfig>(), &fixed_config as &dyn Any),
+            (TypeId::of::<FixedTimeState>(), &fixed_state as &dyn Any),
+            (TypeId::of::<CatchupBudget>(), &budget as &dyn Any),
+        ]);
+        let mut projected = build_prepared_flow_inputs(
+            std::slice::from_ref(&compiled),
+            &extracted,
+            (640, 480),
+        )
+        .expect("projected latest-value baseline");
+        apply_historical_step_inputs(
+            &compiled,
+            projected.get_mut(&compiled.flow_id).unwrap(),
+            &streams,
+        )
+        .expect("history becomes selected GPU work");
+        let invocations = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
+            std::slice::from_ref(&compiled),
+            &extracted,
+            &projected,
+            &[],
+            &PreparedRenderFrameRequestResource::default(),
+            Some(&streams),
+        )
+        .expect("latest CPU clock does not suppress captured GPU steps");
+        assert_eq!(invocations.len(), 1);
+        let prepared = &invocations[0].inputs;
+        let history = prepared.fixed_step_history.as_ref().expect("producer history");
+        assert_eq!(history.steps.iter().map(|step| step.tick).collect::<Vec<_>>(), vec![6, 7, 8]);
+        assert_eq!(
+            history
+                .steps
+                .iter()
+                .map(|step| step.input.uniforms.get(&uniform_id).unwrap().clone())
+                .collect::<Vec<_>>(),
+            vec![input(11), input(27), input(8)]
+                .into_iter()
+                .map(|sample| sample.uniforms[&uniform_id].clone())
+                .collect::<Vec<_>>()
+        );
+        let region = &compiled.execution.fixed_step_regions[0];
+        let schedule = RenderFixedStepIterationUniform::from_uniform_bytes(
+            &prepared.projected_uniform_bytes[&region.iteration_uniform],
+        )
+        .expect("valid GPU iteration schedule");
+        assert_eq!(schedule.submitted_substeps, 3);
+        assert_eq!(streams.stream(compiled.flow_id).unwrap().requested_tick(), 8);
+        assert_eq!(streams.stream(compiled.flow_id).unwrap().completed_tick(), 5);
+
+        let incomplete = RenderGpuFixedStepInput { uniforms: BTreeMap::new() };
+        let mut bad = RenderGpuFlowStepStreams::default();
+        bad.register(compiled.flow_id, 0, 4).unwrap();
+        bad.stream_mut(compiled.flow_id).unwrap().capture(incomplete).unwrap();
+        let mut projected_bad = build_prepared_flow_inputs(
+            std::slice::from_ref(&compiled),
+            &extracted,
+            (640, 480),
+        )
+        .unwrap();
+        let error = apply_historical_step_inputs(
+            &compiled,
+            projected_bad.get_mut(&compiled.flow_id).unwrap(),
+            &bad,
+        )
+        .expect_err("a GPU step without exact authored uniforms is invalid");
+        assert!(error.to_string().contains("does not capture exactly"));
     }
 
     #[test]
@@ -1493,6 +1717,7 @@ mod tests {
             &main_inputs,
             &views,
             &requests,
+            None,
         )
         .expect("invocations should prepare");
 
