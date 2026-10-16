@@ -799,6 +799,9 @@ impl WinitRunner {
         // missing finality is not merely a gameplay nonclaim: continuing the
         // host could preserve an unresolved framework keyboard lifetime.
         let mut m13_failure: Option<anyhow::Error> = None;
+        // Authentic repeats cannot grant a new game Down or revoke a
+        // previously authorized held one merely for lacking UI focus.
+        let mut preserve_prior_held_permission = false;
         let permit = match translated {
             KeyboardInputOutcome::Submit(event) => {
                 let slots = self
@@ -853,6 +856,23 @@ impl WinitRunner {
                         }
                         Ok(after)
                             if !is_synthetic
+                                && original.repeat
+                                && matches!(
+                                    original.state,
+                                    winit::event::ElementState::Pressed
+                                )
+                                && native_no_focused_keyboard_claim_witness(
+                                    device, &before, &after, &error,
+                                ) =>
+                        {
+                            // A genuine repeat comes only from a translator
+                            // with a prior Down. No new game press is granted;
+                            // retain whatever permission that real Down had.
+                            preserve_prior_held_permission = true;
+                            false
+                        }
+                        Ok(after)
+                            if !is_synthetic
                                 && matches!(
                                     original.state,
                                     winit::event::ElementState::Released
@@ -886,7 +906,10 @@ impl WinitRunner {
         // Missing or ambiguous M13 evidence, runtime failure, UI exclusivity,
         // and translator suppression NEVER produce positive gameplay evidence.
         // Revocation happens before PreUpdate/CoreSet::Input.
-        if !permit && matches!(original.state, winit::event::ElementState::Pressed) {
+        if !permit
+            && !preserve_prior_held_permission
+            && matches!(original.state, winit::event::ElementState::Pressed)
+        {
             self.deny_native_keyboard_lifetime(context, &physical_key)?;
         }
         // The genuine physical Down remains denied before returning the
