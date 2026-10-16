@@ -11,9 +11,9 @@ use runen_gpu::{
     GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory, GpuDispatchIntent,
     GpuDispatchSize, GpuExecutionPreference, GpuExplicitOrder, GpuReadbackId, GpuReadbackOperation,
     GpuReadbackStatus, GpuReconstruction, GpuResourceLabel, GpuResourceLifetime,
-    GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingSet,
-    GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuSubmission, GpuSubmissionStatus,
-    GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
+    GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
+    GpuRuntimeBufferBinding, GpuSubmission, GpuSubmissionStatus, GpuWorkFragment,
+    GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
     admit_static_wgsl_sources,
 };
 use std::collections::VecDeque;
@@ -146,16 +146,20 @@ impl StepLedger {
     }
 
     fn outstanding(&self) -> usize {
-        self.backlog.len() + self.accepted.as_ref().map_or(0, |batch| {
-            usize::try_from(batch.last_tick - self.completed_tick)
-                .expect("bounded GPU step interval")
-        })
+        self.backlog.len()
+            + self.accepted.as_ref().map_or(0, |batch| {
+                usize::try_from(batch.last_tick - self.completed_tick)
+                    .expect("bounded GPU step interval")
+            })
     }
 
     /// Reject excess demand *atomically*. A real producer must choose and
     /// document its domain-specific wait, backpressure, or resync policy.
     fn request(&mut self, increments: &[u8]) -> Result<(), &'static str> {
-        if increments.iter().any(|increment| *increment == 0 || *increment > 16) {
+        if increments
+            .iter()
+            .any(|increment| *increment == 0 || *increment > 16)
+        {
             return Err("invalid captured step increment");
         }
         let next_outstanding = self
@@ -171,7 +175,10 @@ impl StepLedger {
             .ok_or("step identity exhausted")?;
         for (index, increment) in increments.iter().copied().enumerate() {
             let tick = self.next_tick + u64::try_from(index).expect("within checked count");
-            self.backlog.push_back(Step { tick, increments: increment });
+            self.backlog.push_back(Step {
+                tick,
+                increments: increment,
+            });
         }
         self.next_tick = next_tick;
         Ok(())
@@ -197,14 +204,15 @@ impl StepLedger {
             assert_eq!(window[1].tick, window[0].tick + 1);
         }
         let (fragment, readback) = batch_fragment(state, pipeline, &snapshot);
-        let submission = pollster::block_on(context.submit_work(
-            "runenwerk.fixed-step.fresh-batch",
-            [fragment],
-        ))
-        .expect("test producer is uncontended and re-prepares after terminal completion");
+        let submission =
+            pollster::block_on(context.submit_work("runenwerk.fixed-step.fresh-batch", [fragment]))
+                .expect("test producer is uncontended and re-prepares after terminal completion");
         assert_eq!(submission.status(), GpuSubmissionStatus::Accepted);
         let expected_counter = self.completed_counter
-            + snapshot.iter().map(|step| u32::from(step.increments)).sum::<u32>();
+            + snapshot
+                .iter()
+                .map(|step| u32::from(step.increments))
+                .sum::<u32>();
         let last_tick = snapshot.last().expect("nonempty").tick;
         for expected in &snapshot {
             assert_eq!(self.backlog.pop_front(), Some(*expected));
@@ -230,13 +238,18 @@ impl StepLedger {
         match accepted.submission.status() {
             GpuSubmissionStatus::Accepted => {}
             GpuSubmissionStatus::Completed => {
-                let result = accepted.submission.readback(accepted.readback)
-                    .expect("required proof readback").status();
+                let result = accepted
+                    .submission
+                    .readback(accepted.readback)
+                    .expect("required proof readback")
+                    .status();
                 let GpuReadbackStatus::Ready(bytes) = result else {
                     panic!("completed GPU step batch must have ready readback: {result:?}");
                 };
                 let observed = u32::from_le_bytes(
-                    bytes.as_bytes()[0..4].try_into().expect("four-byte readback")
+                    bytes.as_bytes()[0..4]
+                        .try_into()
+                        .expect("four-byte readback"),
                 );
                 assert_eq!(observed, accepted.expected_counter);
                 self.completed_counter = observed;
@@ -244,7 +257,9 @@ impl StepLedger {
                 self.accepted = None;
             }
             GpuSubmissionStatus::Failed(failure) => {
-                panic!("accepted state mutation failed; content needs explicit reconstruction: {failure:?}")
+                panic!(
+                    "accepted state mutation failed; content needs explicit reconstruction: {failure:?}"
+                )
             }
         }
     }
@@ -310,7 +325,10 @@ fn batch_fragment(
 fn progress_to_terminal(context: &GpuContext, submission: &GpuSubmission) {
     let deadline = Instant::now() + Duration::from_secs(30);
     while submission.status() == GpuSubmissionStatus::Accepted {
-        assert!(Instant::now() < deadline, "GPU submission did not become terminal");
+        assert!(
+            Instant::now() < deadline,
+            "GPU submission did not become terminal"
+        );
         // Separate native *test harness* progress; not an Engine Gfx progress point.
         context.progress();
         std::thread::yield_now();
@@ -349,7 +367,12 @@ fn delayed_gpu_batches_consume_all_captured_steps_once_without_global_queue_lock
     assert_eq!(ledger.requested_tick(), 4);
     assert_eq!(ledger.outstanding(), 4);
 
-    let first = ledger.accepted.as_ref().expect("first submission").submission.clone();
+    let first = ledger
+        .accepted
+        .as_ref()
+        .expect("first submission")
+        .submission
+        .clone();
     progress_to_terminal(&context, &first);
     ledger.reconcile(&context);
     assert_eq!((ledger.completed_tick, ledger.completed_counter), (1, 1));
@@ -357,7 +380,12 @@ fn delayed_gpu_batches_consume_all_captured_steps_once_without_global_queue_lock
     // Freshly formed graph batches *captured* steps 2..4, including their
     // differing work weights, not a replacement latest-frame step count.
     assert!(ledger.admit(&context, &buffer, &pipeline));
-    let second = ledger.accepted.as_ref().expect("second submission").submission.clone();
+    let second = ledger
+        .accepted
+        .as_ref()
+        .expect("second submission")
+        .submission
+        .clone();
     assert_eq!(ledger.completed_tick, 1);
     progress_to_terminal(&context, &second);
     ledger.reconcile(&context);
