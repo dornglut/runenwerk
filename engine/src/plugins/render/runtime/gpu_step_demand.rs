@@ -173,7 +173,9 @@ impl<T> RenderGpuStepDemand<T> {
     /// Preserve the admitted historical payloads until their producer has
     /// explicitly checked its desired completion evidence.
     pub fn accepted_steps(&self) -> &[RenderGpuStepIntent<T>] {
-        self.accepted.as_ref().map_or(&[], |batch| batch.steps.as_slice())
+        self.accepted
+            .as_ref()
+            .map_or(&[], |batch| batch.steps.as_slice())
     }
 
     /// The semantic producer calls this only after confirming the exact
@@ -193,7 +195,9 @@ impl<T> RenderGpuStepDemand<T> {
             return Err(RenderGpuStepDemandError::DeviceGenerationChanged);
         }
         match batch.submission.status() {
-            GpuSubmissionStatus::Accepted => return Err(RenderGpuStepDemandError::SubmissionPending),
+            GpuSubmissionStatus::Accepted => {
+                return Err(RenderGpuStepDemandError::SubmissionPending);
+            }
             GpuSubmissionStatus::Failed(_) => {
                 return Err(RenderGpuStepDemandError::SubmissionFailed);
             }
@@ -219,10 +223,27 @@ mod tests {
         assert_eq!(steps.capture(String::from("at-10")), Ok(10));
         assert_eq!(
             steps.capture(String::from("lost")),
-            Err((RenderGpuStepDemandError::CapacityExceeded, String::from("lost")))
+            Err((
+                RenderGpuStepDemandError::CapacityExceeded,
+                String::from("lost")
+            ))
         );
-        assert_eq!((steps.requested_tick(), steps.completed_tick(), steps.outstanding()), (10, 7, 3));
-        assert_eq!(steps.candidate(2).iter().map(|v| v.input().as_str()).collect::<Vec<_>>(), vec!["at-8", "at-9"]);
+        assert_eq!(
+            (
+                steps.requested_tick(),
+                steps.completed_tick(),
+                steps.outstanding()
+            ),
+            (10, 7, 3)
+        );
+        assert_eq!(
+            steps
+                .candidate(2)
+                .iter()
+                .map(|v| v.input().as_str())
+                .collect::<Vec<_>>(),
+            vec!["at-8", "at-9"]
+        );
         assert!(steps.accepted_submission().is_none());
         assert!(steps.accepted_steps().is_empty());
     }
