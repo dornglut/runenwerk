@@ -860,8 +860,8 @@ pub struct Renderer {
 }
 
 pub use render_flow::{
-    RenderGpuFrameSubmissionReceipt, RenderGpuFrameTerminalBatch, RenderGpuFrameTerminalDisposition,
-    RenderGpuFrameTerminalOutcome,
+    RenderGpuFrameInvocationReceipt, RenderGpuFrameSubmissionReceipt, RenderGpuFrameTerminalBatch,
+    RenderGpuFrameTerminalDisposition, RenderGpuFrameTerminalOutcome,
 };
 
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]

@@ -354,6 +354,16 @@ impl Renderer {
             submission.clone(),
             prepared_frame.context.frame_index,
             prepared_frame.surface.render_surface_id.raw(),
+            batch
+                .invocations
+                .iter()
+                .map(|invocation| {
+                    super::RenderGpuFrameInvocationReceipt::new(
+                        invocation.flow.flow_id,
+                        invocation.invocation.invocation_id.clone(),
+                    )
+                })
+                .collect(),
         );
         let association_result = self
             .render_sessions
