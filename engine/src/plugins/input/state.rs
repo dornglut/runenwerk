@@ -6,6 +6,7 @@ use runen_input::{
     PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput, RelativeMotionUnit,
     ScrollDelta, ScrollDomain, ScrollInput, Vector2,
 };
+use std::collections::HashSet;
 use winit::event::{ElementState, MouseButton};
 use winit::keyboard::KeyCode;
 
@@ -109,20 +110,68 @@ pub struct TouchInputSample {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct KeyboardPressSample {
+    // The exact physical source which originated this Down transition.
+    pub(super) context: InputContext,
     pub(super) physical_key: PhysicalKeyIdentity,
+    /// Non-repeating identity of this exact physical Down generation.
+    pub(super) generation: u64,
     pub(super) modifiers: ModifiersSnapshot,
+    /// Exact source-local modifier identities visible at this Down's prefix.
+    /// The held-state index may change before delayed M13 disposition arrives.
+    pub(super) modifier_lifetimes: Vec<KeyboardModifierLifetime>,
+    /// Source/device continuity loss invalidates even an already-released
+    /// Down's pending frame press, without fabricating an Up.
+    pub(super) retired_by_continuity: bool,
+}
+
+/// One press-time physical modifier, carrying its exact genuine Down
+/// generation when known. Synthetic restoration never mints a generation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct KeyboardModifierLifetime {
+    pub(super) physical_key: PhysicalKeyIdentity,
+    pub(super) generation: Option<u64>,
+    pub(super) generationless_game_eligible: bool,
+}
+
+/// An authentic physical Up report, recorded for ActionState's same-source
+/// denial retirement. Reconciliation/continuity-loss are never release proof.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct KeyboardRealReleaseSample {
+    pub(super) context: InputContext,
+    pub(super) physical_key: PhysicalKeyIdentity,
+}
+
+/// A derived index of held keyboard contributors, never a replacement for
+/// RunenInput's authoritative source/device-scoped physical state.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct KeyboardHeldContributor {
+    context: InputContext,
+    physical_key: PhysicalKeyIdentity,
+    generation: Option<u64>,
+    /// An identity-less synthetic held state is eligible only if admitted
+    /// before genuine physical Down generation exhaustion.
+    generationless_game_eligible: bool,
 }
 
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct InputState {
     neutral: NeutralInputState,
     keyboard_press_samples: Vec<KeyboardPressSample>,
+    keyboard_real_release_samples: Vec<KeyboardRealReleaseSample>,
+    keyboard_held_contributors: Vec<KeyboardHeldContributor>,
+    /// Exhaustion disables new game press identities instead of wrapping.
+    next_keyboard_generation: Option<u64>,
     pub typed_text: String,
     pub overlay_consumed: bool,
     pub mouse_delta: (f32, f32),
     pub mouse_position: (f32, f32),
     mouse_motion_samples: Vec<MouseMotionSample>,
     mouse_button_transitions: Vec<MouseButtonTransitionSample>,
+    /// Derived legacy/gameplay eligibility, not physical authority. The
+    /// canonical held button truth stays in RunenInput per source/device.
+    /// Only original legacy-routed button Down contributes here; UI-routed
+    /// button lifetimes never affect a source-erased gameplay read.
+    legacy_mouse_buttons_down: HashSet<(InputContext, PointerButton)>,
     touch_samples: Vec<TouchInputSample>,
     device_observation_groups: Vec<InputObservationGroup>,
     admitted_input_capture_active: bool,
@@ -142,12 +191,16 @@ impl Default for InputState {
         Self {
             neutral: NeutralInputState::default(),
             keyboard_press_samples: Vec::new(),
+            keyboard_real_release_samples: Vec::new(),
+            keyboard_held_contributors: Vec::new(),
+            next_keyboard_generation: Some(1),
             typed_text: String::new(),
             overlay_consumed: false,
             mouse_delta: (0.0, 0.0),
             mouse_position: (0.0, 0.0),
             mouse_motion_samples: Vec::new(),
             mouse_button_transitions: Vec::new(),
+            legacy_mouse_buttons_down: HashSet::new(),
             touch_samples: Vec::new(),
             device_observation_groups: Vec::new(),
             admitted_input_capture_active: false,
@@ -170,11 +223,141 @@ impl InputState {
     }
 
     fn admit_group(&mut self, group: &InputObservationGroup) -> Result<(), InputError> {
+        // The neutral reducer remains the sole physical-state authority. Its
+        // atomic validation/admission must succeed before any product projection.
         self.neutral.admit(group)?;
+        for observation in &group.observations {
+            match observation {
+                InputObservation::Keyboard(input) => {
+                    self.observe_keyboard_contributor(group.context, input);
+                }
+                InputObservation::ContinuityLoss(loss) => {
+                    self.legacy_mouse_buttons_down.retain(|(context, _)| {
+                        !continuity_loss_contains_context(group.context, *loss, *context)
+                    });
+                    self.keyboard_held_contributors.retain(|contributor| {
+                        !continuity_loss_contains_context(group.context, *loss, contributor.context)
+                    });
+                    for press in &mut self.keyboard_press_samples {
+                        if continuity_loss_contains_context(group.context, *loss, press.context) {
+                            press.retired_by_continuity = true;
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
         if self.admitted_input_capture_active {
             self.captured_admitted_groups.push(group.clone());
         }
         Ok(())
+    }
+
+    fn observe_keyboard_contributor(&mut self, context: InputContext, input: &KeyboardInput) {
+        let held_index = self
+            .keyboard_held_contributors
+            .iter()
+            .position(|contributor| {
+                contributor.context == context && contributor.physical_key == input.physical_key
+            });
+        match (input.state, held_index) {
+            (DigitalState::Pressed, None) => {
+                // Synthetic/repeated restoration may update neutral physical
+                // truth but MUST NOT mint a fresh gameplay press generation.
+                let genuine = input.origin == ObservationOrigin::SourceReport && !input.repeat;
+                let generation = if genuine {
+                    let issued = self.next_keyboard_generation;
+                    self.next_keyboard_generation =
+                        issued.and_then(|current| current.checked_add(1));
+                    issued
+                } else {
+                    None
+                };
+                self.keyboard_held_contributors
+                    .push(KeyboardHeldContributor {
+                        context,
+                        physical_key: input.physical_key.clone(),
+                        generation,
+                        generationless_game_eligible: !genuine
+                            && self.next_keyboard_generation.is_some(),
+                    });
+                if let Some(generation) = generation {
+                    self.keyboard_press_samples.push(KeyboardPressSample {
+                        context,
+                        physical_key: input.physical_key.clone(),
+                        generation,
+                        modifiers: self.source_modifiers_from_held_index(context),
+                        modifier_lifetimes: self.source_modifier_lifetimes(context),
+                        retired_by_continuity: false,
+                    });
+                }
+            }
+            (DigitalState::Released, Some(index)) => {
+                self.keyboard_held_contributors.remove(index);
+                if input.origin == ObservationOrigin::SourceReport {
+                    self.keyboard_real_release_samples
+                        .push(KeyboardRealReleaseSample {
+                            context,
+                            physical_key: input.physical_key.clone(),
+                        });
+                }
+            }
+            (DigitalState::Released, None) if input.origin == ObservationOrigin::SourceReport => {
+                // A genuine Up may follow an OS synthetic cancellation. That
+                // is the first authentic release proof for a revoked lifetime.
+                self.keyboard_real_release_samples
+                    .push(KeyboardRealReleaseSample {
+                        context,
+                        physical_key: input.physical_key.clone(),
+                    });
+            }
+            _ => {}
+        }
+    }
+
+    fn source_modifiers_from_held_index(&self, context: InputContext) -> ModifiersSnapshot {
+        // The admission group may have several chronological keyboard edges.
+        // The neutral reducer has already committed the whole group, so use
+        // the derived prefix index for exact press-time modifier snapshots.
+        let down = |key| {
+            let key = physical_identity_for_key_code(key);
+            self.keyboard_held_contributors.iter().any(|contributor| {
+                contributor.context == context && contributor.physical_key == key
+            })
+        };
+        ModifiersSnapshot {
+            shift: down(KeyCode::ShiftLeft) || down(KeyCode::ShiftRight),
+            ctrl: down(KeyCode::ControlLeft) || down(KeyCode::ControlRight),
+            alt: down(KeyCode::AltLeft) || down(KeyCode::AltRight),
+            super_key: down(KeyCode::SuperLeft) || down(KeyCode::SuperRight),
+        }
+    }
+
+    fn source_modifier_lifetimes(&self, context: InputContext) -> Vec<KeyboardModifierLifetime> {
+        let keys = [
+            KeyCode::ShiftLeft,
+            KeyCode::ShiftRight,
+            KeyCode::ControlLeft,
+            KeyCode::ControlRight,
+            KeyCode::AltLeft,
+            KeyCode::AltRight,
+            KeyCode::SuperLeft,
+            KeyCode::SuperRight,
+        ];
+        self.keyboard_held_contributors
+            .iter()
+            .filter(|held| {
+                held.context == context
+                    && keys
+                        .iter()
+                        .any(|code| held.physical_key == physical_identity_for_key_code(*code))
+            })
+            .map(|held| KeyboardModifierLifetime {
+                physical_key: held.physical_key.clone(),
+                generation: held.generation,
+                generationless_game_eligible: held.generationless_game_eligible,
+            })
+            .collect()
     }
 
     pub fn start_admitted_input_capture(&mut self) {
@@ -199,6 +382,7 @@ impl InputState {
 
     pub(crate) fn frame_projection_is_quiescent(&self) -> bool {
         self.keyboard_press_samples.is_empty()
+            && self.keyboard_real_release_samples.is_empty()
             && self.typed_text.is_empty()
             && !self.overlay_consumed
             && self.mouse_delta == (0.0, 0.0)
@@ -255,30 +439,27 @@ impl InputState {
         }
     }
 
+    /// Native UI and unresolved recipients admit original pointer truth only.
+    /// Legacy mouse/touch/text projections are opt-in at the one native host
+    /// recipient boundary; this does not change RunenInput's physical state.
+    pub(crate) fn handle_nonlegacy_native_pointer_observation(
+        &mut self,
+        context: InputContext,
+        observation: InputObservation,
+    ) {
+        let _ = self.admit_group(&InputObservationGroup::single(context, observation));
+    }
+
     pub(crate) fn handle_normalized_keyboard(
         &mut self,
         context: InputContext,
         input: &KeyboardInput,
     ) {
-        let was_down_anywhere = self.neutral.key_down_anywhere(&input.physical_key);
         self.admit_group(&InputObservationGroup::single(
             context,
             InputObservation::Keyboard(input.clone()),
         ))
         .expect("digital keyboard observation should always be valid");
-        let is_down_anywhere = self.neutral.key_down_anywhere(&input.physical_key);
-
-        if input.origin == ObservationOrigin::SourceReport
-            && input.state == DigitalState::Pressed
-            && !input.repeat
-            && !was_down_anywhere
-            && is_down_anywhere
-        {
-            self.keyboard_press_samples.push(KeyboardPressSample {
-                physical_key: input.physical_key.clone(),
-                modifiers: self.modifiers_snapshot(),
-            });
-        }
     }
 
     pub(crate) fn handle_text_input(&mut self, text: &str) {
@@ -391,12 +572,28 @@ impl InputState {
         context: InputContext,
         input: PointerButtonInput,
     ) -> Result<(), InputError> {
-        let was_down_anywhere = self.neutral.pointer_button_down_anywhere(input.button);
+        let was_down_anywhere = self
+            .legacy_mouse_buttons_down
+            .iter()
+            .any(|(_, button)| *button == input.button);
         self.admit_group(&InputObservationGroup::single(
             context,
             InputObservation::PointerButton(input),
         ))?;
-        let is_down_anywhere = self.neutral.pointer_button_down_anywhere(input.button);
+        match input.state {
+            DigitalState::Pressed => {
+                self.legacy_mouse_buttons_down
+                    .insert((context, input.button));
+            }
+            DigitalState::Released => {
+                self.legacy_mouse_buttons_down
+                    .remove(&(context, input.button));
+            }
+        }
+        let is_down_anywhere = self
+            .legacy_mouse_buttons_down
+            .iter()
+            .any(|(_, button)| *button == input.button);
 
         let changed = match input.state {
             DigitalState::Pressed => !was_down_anywhere && is_down_anywhere,
@@ -467,13 +664,43 @@ impl InputState {
         delta: Vector2,
         unit: RelativeMotionUnit,
     ) -> Result<(), InputError> {
+        self.admit_relative_motion_with_legacy_projection(context, delta, unit, true)
+    }
+
+    fn admit_relative_motion_with_legacy_projection(
+        &mut self,
+        context: InputContext,
+        delta: Vector2,
+        unit: RelativeMotionUnit,
+        project_legacy: bool,
+    ) -> Result<(), InputError> {
+        // Raw device observations are physical truth even when the native host
+        // cannot attribute them to a permitted gameplay window. Do not turn
+        // an unattributed observation into a source-erased camera command.
         self.admit_group(&InputObservationGroup::single(
             context,
             InputObservation::RelativeMotion { delta, unit },
         ))?;
-        self.mouse_delta.0 += delta.x;
-        self.mouse_delta.1 += delta.y;
+        if project_legacy {
+            self.mouse_delta.0 += delta.x;
+            self.mouse_delta.1 += delta.y;
+        }
         Ok(())
+    }
+
+    pub(crate) fn handle_unattributed_relative_motion(
+        &mut self,
+        context: InputContext,
+        dx: f32,
+        dy: f32,
+        project_legacy: bool,
+    ) {
+        let _ = self.admit_relative_motion_with_legacy_projection(
+            context,
+            Vector2::new(dx, dy),
+            RelativeMotionUnit::BackendDeviceUnits,
+            project_legacy,
+        );
     }
 
     pub(crate) fn handle_relative_motion(&mut self, context: InputContext, dx: f32, dy: f32) {
@@ -586,6 +813,7 @@ impl InputState {
 
     pub fn clear_frame(&mut self) {
         self.keyboard_press_samples.clear();
+        self.keyboard_real_release_samples.clear();
         self.typed_text.clear();
         self.overlay_consumed = false;
         self.mouse_delta = (0.0, 0.0);
@@ -669,42 +897,80 @@ impl InputState {
         self.key_down(KeyCode::ShiftLeft) || self.key_down(KeyCode::ShiftRight)
     }
 
-    fn ctrl_down(&self) -> bool {
-        self.key_down(KeyCode::ControlLeft) || self.key_down(KeyCode::ControlRight)
-    }
-
-    fn alt_down(&self) -> bool {
-        self.key_down(KeyCode::AltLeft) || self.key_down(KeyCode::AltRight)
-    }
-
-    fn super_down(&self) -> bool {
-        self.key_down(KeyCode::SuperLeft) || self.key_down(KeyCode::SuperRight)
-    }
-
-    pub(super) fn modifiers_snapshot(&self) -> ModifiersSnapshot {
-        ModifiersSnapshot {
-            shift: self.shift_down(),
-            ctrl: self.ctrl_down(),
-            alt: self.alt_down(),
-            super_key: self.super_down(),
-        }
-    }
-
     fn key_down(&self, key: KeyCode) -> bool {
         self.neutral
             .key_down_anywhere(&physical_identity_for_key_code(key))
     }
 
+    #[cfg(test)]
     pub(super) fn physical_key_down(&self, key: &PhysicalKeyIdentity) -> bool {
         self.neutral.key_down_anywhere(key)
+    }
+
+    pub(super) fn physical_key_down_in(
+        &self,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+    ) -> bool {
+        self.neutral.key_down_in(context, key)
+    }
+
+    pub(super) fn keyboard_held_contexts(&self) -> impl Iterator<Item = InputContext> + '_ {
+        self.keyboard_held_contributors
+            .iter()
+            .map(|contributor| contributor.context)
+    }
+
+    /// Existing source-qualified derived physical held keys. Only ActionState
+    /// can change their gameplay eligibility after a native M13 decision.
+    pub(super) fn keyboard_held_lifetimes_for_source(
+        &self,
+        source: InputSourceId,
+    ) -> impl Iterator<Item = (InputContext, &PhysicalKeyIdentity, Option<u64>)> + '_ {
+        self.keyboard_held_contributors
+            .iter()
+            .filter(move |held| held.context.source == source)
+            .map(|held| (held.context, &held.physical_key, held.generation))
     }
 
     pub(super) fn keyboard_press_samples(&self) -> &[KeyboardPressSample] {
         &self.keyboard_press_samples
     }
 
+    pub(super) fn keyboard_real_release_samples(&self) -> &[KeyboardRealReleaseSample] {
+        &self.keyboard_real_release_samples
+    }
+
+    /// Neutral physical state does not confer eligibility on a genuine Down
+    /// for which the Engine's non-wrapping generation space is exhausted.
+    pub(super) fn keyboard_held_contributor_game_eligible_in(
+        &self,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+    ) -> bool {
+        self.keyboard_held_contributors
+            .iter()
+            .find(|held| held.context == context && &held.physical_key == key)
+            .is_some_and(|held| held.generation.is_some() || held.generationless_game_eligible)
+    }
+
+    /// Return the exact physical Down generation, never an inferred key press
+    /// from RunenUI focus, another device or a synthetic reconciliation event.
+    pub fn keyboard_down_generation_in(
+        &self,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+    ) -> Option<u64> {
+        self.keyboard_held_contributors
+            .iter()
+            .find(|held| held.context == context && &held.physical_key == key)
+            .and_then(|held| held.generation)
+    }
+
     fn button_down(&self, button: PointerButton) -> bool {
-        self.neutral.pointer_button_down_anywhere(button)
+        self.legacy_mouse_buttons_down
+            .iter()
+            .any(|(_, held)| *held == button)
     }
 
     #[cfg(test)]
@@ -758,4 +1024,64 @@ pub struct ModifiersSnapshot {
     pub(crate) ctrl: bool,
     pub(crate) alt: bool,
     pub(crate) super_key: bool,
+}
+
+#[cfg(test)]
+mod generation_exhaustion_tests {
+    use super::*;
+    use crate::plugins::{ActionState, action};
+    use winit::event::ElementState;
+    use winit::keyboard::KeyCode;
+
+    #[test]
+    fn exhausted_genuine_down_and_synthetic_restoration_cannot_create_game_held_state() {
+        let mut input = InputState::new();
+        let mut actions = ActionState::new();
+        input.next_keyboard_generation = Some(u64::MAX);
+
+        // The final issued identity remains a legitimate physical Down.
+        input.handle_keyboard_input(KeyCode::KeyW, ElementState::Pressed, None);
+        actions.project(&input);
+        assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+        assert!(actions.action_down(action::WORLD_MOVE_UP));
+        assert!(input.next_keyboard_generation.is_none());
+
+        // The neutral reducer keeps physical truth, but exhausted identity
+        // cannot be mistaken for a held or pressed game permission.
+        input.handle_keyboard_input(KeyCode::KeyA, ElementState::Pressed, None);
+        actions.project(&input);
+        assert!(input.physical_key_down(&physical_identity_for_key_code(KeyCode::KeyA)));
+        assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+        assert!(!actions.action_down(action::WORLD_MOVE_LEFT));
+        assert!(actions.action_down(action::WORLD_MOVE_UP));
+
+        input.handle_keyboard_reconciliation(KeyCode::KeyA, ElementState::Released);
+        input.handle_keyboard_reconciliation(KeyCode::KeyA, ElementState::Pressed);
+        actions.project(&input);
+        assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+        assert!(!actions.action_down(action::WORLD_MOVE_LEFT));
+
+        input.handle_keyboard_input(KeyCode::KeyA, ElementState::Released, None);
+        input.handle_keyboard_input(KeyCode::KeyA, ElementState::Pressed, None);
+        actions.project(&input);
+        assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+        assert!(!actions.action_down(action::WORLD_MOVE_LEFT));
+    }
+
+    #[test]
+    fn pre_exhaustion_synthetic_legacy_hold_remains_held_without_new_press() {
+        let mut input = InputState::new();
+        let mut actions = ActionState::new();
+        input.next_keyboard_generation = Some(u64::MAX);
+        input.handle_keyboard_reconciliation(KeyCode::KeyA, ElementState::Pressed);
+        actions.project(&input);
+        assert!(actions.action_down(action::WORLD_MOVE_LEFT));
+        assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+
+        input.handle_keyboard_input(KeyCode::KeyW, ElementState::Pressed, None);
+        actions.project(&input);
+        assert!(input.next_keyboard_generation.is_none());
+        assert!(actions.action_down(action::WORLD_MOVE_LEFT));
+        assert!(!actions.action_pressed(action::WORLD_MOVE_LEFT));
+    }
 }

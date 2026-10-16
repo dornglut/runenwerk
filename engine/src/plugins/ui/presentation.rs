@@ -535,6 +535,22 @@ impl UiRuntimePresentationAssociationsResource {
         true
     }
 
+    /// Only the existing terminal completed-Present state at this exact
+    /// window and current mapping is eligible for native pointer translation.
+    /// Neither visual order nor a queued publication selects a recipient.
+    #[must_use]
+    pub fn displayed_for_native_recipient(
+        &self,
+        slot: UiRuntimeSlotId,
+        window: NativeWindowId,
+    ) -> Option<&UiRuntimeDisplayedPresentation> {
+        let current = *self.current_mappings.get(&slot)?;
+        if current.native_window_id() != window {
+            return None;
+        }
+        self.displayed_for_mapping(slot, current)
+    }
+
     /// Hides input authority immediately when the native mapping changes.
     #[must_use]
     pub fn displayed_for_mapping(

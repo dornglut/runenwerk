@@ -10,6 +10,8 @@ pub mod diagnostics;
 pub mod events;
 pub mod host;
 pub mod mount;
+pub mod native_input;
+pub mod native_transaction;
 pub mod plugin;
 pub mod presentation;
 pub mod publish;
@@ -30,15 +32,29 @@ pub use diagnostics::*;
 pub use events::*;
 pub use host::*;
 pub use mount::*;
+pub use native_input::*;
+pub use native_transaction::{
+    bind_native_input_recipient, mount_native_ui_app, mount_native_ui_program,
+    realize_requested_native_primary, retire_native_input_recipient, settle_native_ui_slot,
+    transact_ui_slot, unmount_retired_native_ui_slot,
+};
 pub use plugin::UiPlugin;
 pub use presentation::*;
 pub use publish::*;
 pub use report::*;
 pub use resources::*;
 pub use runenui_adapter::{
-    UiRuntimeFontConfiguration, UiRuntimeHostRequestDisposition, UiRuntimePendingEventRequest,
-    UiRuntimeSlotId, UiRuntimeSlotMountFailure, UiRuntimeSlotMountReport,
-    UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
+    UiRuntimeFontConfiguration, UiRuntimeHostRequestDisposition,
+    UiRuntimeNativeKeyboardAdmissionError, UiRuntimeNativeKeyboardEvidenceFailure,
+    UiRuntimeNativePointerAdmissionError, UiRuntimeNativePointerEvidenceFailure,
+    UiRuntimePendingEventRequest, UiRuntimeSlotId, UiRuntimeSlotMountFailure,
+    UiRuntimeSlotMountReport, UiRuntimeSlotOperationFailure, UiRuntimeSlotsResource,
+    native_keyboard_finality, native_no_focused_keyboard_claim_witness, native_pointer_finality,
+};
+pub(crate) use runenui_adapter::{
+    UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeTextAdmissionError,
+    native_composition_finality, native_original_keyboard_release_nonclaim,
+    native_original_keyboard_repeat_nonclaim, native_text_finality,
 };
 pub use schedule::*;
 pub use screen::*;

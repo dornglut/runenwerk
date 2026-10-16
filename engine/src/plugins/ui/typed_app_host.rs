@@ -3,10 +3,16 @@
 
 use std::any::Any;
 
-use runenui_core::UiApp;
+use runenui_core::{
+    CommittedTextEvent, CompositionGeneration, CompositionRange, InputDeviceId, KeyboardEvent,
+    PointerEvent, UiApp,
+};
 use runenui_runtime::{
-    AppRuntime, InputObservationError, InputPumpBatch, InputShutdownBatch, PumpBudget,
-    SurfaceBuildContext, SurfacePublication,
+    AppRuntime, CompositionStartSubmission, CompositionSubmission, InputObservationError,
+    InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch, KeyboardSubmission,
+    PointerSubmission, PumpBudget, SubmitCompositionError, SubmitCompositionStartError,
+    SubmitKeyboardError, SubmitPointerError, SubmitTextError, SurfaceBuildContext,
+    SurfacePublication, TextSubmission,
 };
 
 /// Typed application observations without access to host clock or wake wiring.
@@ -50,6 +56,35 @@ impl<A: UiApp> UiAppObservation<'_, A> {
 /// actions, state and host responses never cross this interface.
 pub(super) trait TypedRuntimeOps {
     fn pump(&mut self, budget: PumpBudget) -> Result<InputPumpBatch, InputObservationError>;
+    fn input_ownership(&mut self) -> Result<InputOwnershipSnapshot, InputObservationError>;
+    fn submit_keyboard(
+        &mut self,
+        event: KeyboardEvent,
+    ) -> Result<KeyboardSubmission, SubmitKeyboardError>;
+    fn submit_pointer(
+        &mut self,
+        event: PointerEvent,
+    ) -> Result<PointerSubmission, SubmitPointerError>;
+    fn submit_text(&mut self, event: CommittedTextEvent)
+    -> Result<TextSubmission, SubmitTextError>;
+    fn start_composition(
+        &mut self,
+        device: Option<InputDeviceId>,
+    ) -> Result<CompositionStartSubmission, SubmitCompositionStartError>;
+    fn update_composition(
+        &mut self,
+        generation: CompositionGeneration,
+        preedit: String,
+        range: Option<CompositionRange>,
+    ) -> Result<CompositionSubmission, SubmitCompositionError>;
+    fn end_composition(
+        &mut self,
+        generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, SubmitCompositionError>;
+    fn cancel_composition(
+        &mut self,
+        generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, SubmitCompositionError>;
     fn set_native_wake_transport(&self, transport: crate::runtime::NativeWakeTransport);
     fn pending_redraw(&mut self) -> bool;
     fn publish_surface(
@@ -72,6 +107,62 @@ impl<A: UiApp + 'static> TypedRuntimeOps for TypedRuntime<A> {
 
     fn pump(&mut self, budget: PumpBudget) -> Result<InputPumpBatch, InputObservationError> {
         self.runtime.pump(budget)
+    }
+
+    fn input_ownership(&mut self) -> Result<InputOwnershipSnapshot, InputObservationError> {
+        self.runtime.input_ownership()
+    }
+
+    fn submit_keyboard(
+        &mut self,
+        event: KeyboardEvent,
+    ) -> Result<KeyboardSubmission, SubmitKeyboardError> {
+        self.runtime.submit_keyboard(event)
+    }
+
+    fn submit_pointer(
+        &mut self,
+        event: PointerEvent,
+    ) -> Result<PointerSubmission, SubmitPointerError> {
+        self.runtime.submit_pointer(event)
+    }
+
+    fn submit_text(
+        &mut self,
+        event: CommittedTextEvent,
+    ) -> Result<TextSubmission, SubmitTextError> {
+        self.runtime.submit_text(event)
+    }
+
+    fn start_composition(
+        &mut self,
+        device: Option<InputDeviceId>,
+    ) -> Result<CompositionStartSubmission, SubmitCompositionStartError> {
+        self.runtime.start_composition(device)
+    }
+
+    fn update_composition(
+        &mut self,
+        generation: CompositionGeneration,
+        preedit: String,
+        range: Option<CompositionRange>,
+    ) -> Result<CompositionSubmission, SubmitCompositionError> {
+        self.runtime
+            .submit_composition_update(generation, preedit, range)
+    }
+
+    fn end_composition(
+        &mut self,
+        generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, SubmitCompositionError> {
+        self.runtime.submit_composition_end(generation)
+    }
+
+    fn cancel_composition(
+        &mut self,
+        generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, SubmitCompositionError> {
+        self.runtime.cancel_composition(generation)
     }
 
     fn pending_redraw(&mut self) -> bool {
