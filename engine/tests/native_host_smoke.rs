@@ -11,7 +11,6 @@ use engine::plugins::render::{
     RenderFlowId, RenderFrameProducerId, RenderGpuFixedStepInput, RenderGpuFlowStepStreams,
     SurfaceFrameSubmissionOrder,
 };
-use runen_gpu::{GpuBindingKey, GpuSubmissionStatus};
 use engine::plugins::ui::{
     AppUiExt, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
     UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
@@ -23,6 +22,7 @@ use engine::runtime::{
     NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, NativeWindowLifecycleState,
     WindowStateRegistryResource,
 };
+use runen_gpu::{GpuBindingKey, GpuSubmissionStatus};
 use runenui_core::{FontFamilyName, GenericFontFamily, StyleEnvironment};
 use ui_controls::BUTTON_CONTROL_KIND_ID;
 use ui_definition::{
@@ -110,9 +110,14 @@ fn native_counter_fonts() -> UiRuntimeFontConfiguration {
 fn main() {
     if let Ok(mode) = std::env::var("RUNENWERK_NATIVE_UI_READINESS_SMOKE") {
         assert!(
-            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV, HISTORICAL_GPU_ENV]
-                .iter()
-                .all(|flag| std::env::var_os(flag).is_none()),
+            [
+                NO_RENDER_ENV,
+                RENDER_HOST_ENV,
+                RENDER_UI_HOST_ENV,
+                HISTORICAL_GPU_ENV
+            ]
+            .iter()
+            .all(|flag| std::env::var_os(flag).is_none()),
             "native Host smoke modes are mutually exclusive"
         );
         native_readiness::run(&mode).expect("native UI readiness smoke must succeed");
@@ -1185,7 +1190,11 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     self.first_submission = Some(gpu_id);
                 }
                 anyhow::ensure!(
-                    producer.accepted_steps().iter().map(|step| step.tick()).collect::<Vec<_>>()
+                    producer
+                        .accepted_steps()
+                        .iter()
+                        .map(|step| step.tick())
+                        .collect::<Vec<_>>()
                         == vec![1, 2, 3],
                     "accepted native RenderFlow did not retain its precise historical interval"
                 );
@@ -1242,8 +1251,8 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         .with_state::<NativeHistoricalSource>()
         .with_surface_color()?
         .uniform_buffer::<NativeHistoricalUniform>("native.historical.uniform")?;
-    let (flow, counter) = flow
-        .storage_array::<NativeHistoricalCounter>("native.historical.counter", 1)?;
+    let (flow, counter) =
+        flow.storage_array::<NativeHistoricalCounter>("native.historical.counter", 1)?;
     let flow = flow
         .compute_pass("native.historical.step")
         .shader_asset("assets/shaders/native_historical_gpu_step_smoke.wgsl")
@@ -1279,19 +1288,27 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         uniforms: BTreeMap::from([(
             uniform.diagnostic_identity(),
             engine::plugins::render::bytemuck::bytes_of(
-                &NativeHistoricalUniform { meta: [value, 0, 0, 0] }.to_gpu(),
+                &NativeHistoricalUniform {
+                    meta: [value, 0, 0, 0],
+                }
+                .to_gpu(),
             )
             .to_vec(),
         )]),
         iteration: RenderFixedStepIterationUniform::new(
-            0, 1, 4, value as u64, 1.0 / (value as f32), 0.0,
+            0,
+            1,
+            4,
+            value as u64,
+            1.0 / (value as f32),
+            0.0,
         ),
     };
-    sources.stream_mut(flow_id).unwrap().capture_batch(vec![
-        input(1),
-        input(2),
-        input(3),
-    ]).map_err(|(reason, _)| anyhow::anyhow!("producer refused input history: {reason}"))?;
+    sources
+        .stream_mut(flow_id)
+        .unwrap()
+        .capture_batch(vec![input(1), input(2), input(3)])
+        .map_err(|(reason, _)| anyhow::anyhow!("producer refused input history: {reason}"))?;
     app.insert_resource(NativeHistoricalSource {
         latest: [999, 0, 0, 0],
     });
