@@ -200,7 +200,6 @@ pub fn transact_ui_slot<T>(
     transact_ui_slot_inner(world, slot, false, operation)
 }
 
-
 /// Mount a new typed RunenUI app while a native World is running.
 ///
 /// Merely adding the first mounted UI runtime changes unbound native windows
@@ -982,9 +981,11 @@ mod tests {
     struct FirstMountInput(InputContext);
 
     fn mount_first_ui_in_update(mut world: WorldMut) -> Result<()> {
-        assert!(world
-            .resource::<ActionState>()?
-            .action_down(action::WORLD_MOVE_UP));
+        assert!(
+            world
+                .resource::<ActionState>()?
+                .action_down(action::WORLD_MOVE_UP)
+        );
         let report = mount_native_ui_app::<ProbeApp>(
             &mut world,
             UiTypedScreenId::new("native.dynamic.first"),
@@ -997,10 +998,12 @@ mod tests {
 
     fn read_after_first_ui_mount(mut world: WorldMut) -> Result<()> {
         let original = world.resource::<FirstMountInput>()?.0;
-        assert!(world
-            .resource::<InputState>()?
-            .keyboard_down_generation_in(original, &PhysicalKeyIdentity::code("KeyW"))
-            .is_some());
+        assert!(
+            world
+                .resource::<InputState>()?
+                .keyboard_down_generation_in(original, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some()
+        );
         assert!(
             !world
                 .resource::<ActionState>()?
@@ -1106,5 +1109,4 @@ mod tests {
             "selected UI source must remain denied after independent legacy Up"
         );
     }
-
 }
