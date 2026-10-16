@@ -437,7 +437,8 @@ impl WinitRunner {
                         .and_then(|windows| windows.record(native_window_id))
                         .is_some_and(|record| {
                             record.close_requested
-                                && record.lifecycle_state == NativeWindowLifecycleState::CloseApproved
+                                && record.lifecycle_state
+                                    == NativeWindowLifecycleState::CloseApproved
                         }) =>
             {
                 // An already-approved native close is no longer Created.
