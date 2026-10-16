@@ -576,11 +576,12 @@ impl ActionState {
                     && denied.key == press.physical_key
                     && denied.generation == press.generation
             }) {
-                self.revoked_keyboard_lifetimes.push(RevokedKeyboardLifetime {
-                    context: press.context,
-                    key: press.physical_key.clone(),
-                    generation: press.generation,
-                });
+                self.revoked_keyboard_lifetimes
+                    .push(RevokedKeyboardLifetime {
+                        context: press.context,
+                        key: press.physical_key.clone(),
+                        generation: press.generation,
+                    });
             }
         }
 
@@ -592,11 +593,12 @@ impl ActionState {
                         && denied.key == *key
                         && denied.generation == generation
                 }) {
-                    self.revoked_keyboard_lifetimes.push(RevokedKeyboardLifetime {
-                        context,
-                        key: key.clone(),
-                        generation,
-                    });
+                    self.revoked_keyboard_lifetimes
+                        .push(RevokedKeyboardLifetime {
+                            context,
+                            key: key.clone(),
+                            generation,
+                        });
                 }
             }
             if !self.blocked_held_key(context, key) {

@@ -2328,26 +2328,35 @@ impl WinitRunner {
         };
         let windows = registry
             .records()
-            .filter(|record| record.lifecycle_state == NativeWindowLifecycleState::Created)
-            .map(|record| record.native_window_id)
+            .map(|record| (record.native_window_id, record.lifecycle_state))
             .collect::<Vec<_>>();
-        for window in windows {
+        for (window, lifecycle) in windows {
             let Some(context) = self.input_adapter.window_source_context(window) else {
                 continue;
             };
-            let incompatible = match self.native_input_recipient(window) {
-                Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => false,
-                Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => self
-                    .state
-                    .world
-                    .resource_mut::<UiRuntimeSlotsResource>()?
-                    .input_ownership(slot)
-                    .map_or(true, |ownership| native_ui_blocks_preframe_keyboard_gameplay(&ownership)),
-                Err(_) => true,
+            let incompatible = if lifecycle != NativeWindowLifecycleState::Created {
+                // Native close/retirement may precede physical-source cleanup.
+                // An old held game action cannot be authorized in that gap.
+                true
+            } else {
+                match self.native_input_recipient(window) {
+                    Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => false,
+                    Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => self
+                        .state
+                        .world
+                        .resource_mut::<UiRuntimeSlotsResource>()?
+                        .input_ownership(slot)
+                        .map_or(true, |ownership| {
+                            native_ui_blocks_preframe_keyboard_gameplay(&ownership)
+                        }),
+                    Err(_) => true,
+                }
             };
             if incompatible {
                 let world = &mut self.state.world;
-                let mut actions = world.remove_resource::<ActionState>().context("gameplay actions vanished during native M13 reconciliation")?;
+                let mut actions = world
+                    .remove_resource::<ActionState>()
+                    .context("gameplay actions vanished during native M13 reconciliation")?;
                 let update = world
                     .resource::<InputState>()
                     .map(|input| {
@@ -3736,6 +3745,69 @@ mod tests {
                 group.observations.as_slice(),
                 [InputObservation::RelativeMotion { .. }]
             )));
+    }
+
+    #[test]
+    fn closing_native_window_retracts_previous_game_hold_at_frame_entry() {
+        use runen_input::{
+            DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+            ObservationOrigin,
+        };
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        let window = NativeWindowId::primary();
+        let context = runner
+            .input_adapter
+            .window_context(window, winit::event::DeviceId::dummy())
+            .unwrap();
+        runner
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(
+                context,
+                &KeyboardInput {
+                    physical_key: PhysicalKeyIdentity::code("KeyW"),
+                    logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                    location: KeyLocation::Standard,
+                    state: DigitalState::Pressed,
+                    repeat: false,
+                    origin: ObservationOrigin::SourceReport,
+                },
+            );
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP)
+        );
+
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .unwrap()
+            .record_mut(window)
+            .unwrap()
+            .receive_close_intent();
+        runner.reconcile_native_ui_keyboard_before_frame().unwrap();
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "closing native recipient cannot leave old gameplay input held"
+        );
     }
 
     fn set_frame_delta(mut time: ResMut<crate::plugins::time::domain::Time>) {
