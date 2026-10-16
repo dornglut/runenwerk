@@ -627,13 +627,43 @@ impl InputState {
         delta: Vector2,
         unit: RelativeMotionUnit,
     ) -> Result<(), InputError> {
+        self.admit_relative_motion_with_legacy_projection(context, delta, unit, true)
+    }
+
+    fn admit_relative_motion_with_legacy_projection(
+        &mut self,
+        context: InputContext,
+        delta: Vector2,
+        unit: RelativeMotionUnit,
+        project_legacy: bool,
+    ) -> Result<(), InputError> {
+        // Raw device observations are physical truth even when the native host
+        // cannot attribute them to a permitted gameplay window. Do not turn
+        // an unattributed observation into a source-erased camera command.
         self.admit_group(&InputObservationGroup::single(
             context,
             InputObservation::RelativeMotion { delta, unit },
         ))?;
-        self.mouse_delta.0 += delta.x;
-        self.mouse_delta.1 += delta.y;
+        if project_legacy {
+            self.mouse_delta.0 += delta.x;
+            self.mouse_delta.1 += delta.y;
+        }
         Ok(())
+    }
+
+    pub(crate) fn handle_unattributed_relative_motion(
+        &mut self,
+        context: InputContext,
+        dx: f32,
+        dy: f32,
+        project_legacy: bool,
+    ) {
+        let _ = self.admit_relative_motion_with_legacy_projection(
+            context,
+            Vector2::new(dx, dy),
+            RelativeMotionUnit::BackendDeviceUnits,
+            project_legacy,
+        );
     }
 
     pub(crate) fn handle_relative_motion(&mut self, context: InputContext, dx: f32, dy: f32) {

@@ -2240,13 +2240,38 @@ impl WinitRunner {
         projection
     }
 
+    /// Winit DeviceEvent::MouseMotion has a raw device identity, but no native
+    /// window, UI recipient, focus, or capture association. Preserve the
+    /// existing legacy projection only when *every* active native window has
+    /// an independently resolved legacy input recipient. Any UI or unknown
+    /// recipient prevents a global gameplay/camera motion projection; it
+    /// never prevents neutral RunenInput observation.
+    fn raw_motion_has_legacy_route(&mut self) -> bool {
+        let windows = match self.state.world.resource::<WindowStateRegistryResource>() {
+            Ok(registry) => registry
+                .records()
+                .filter(|window| window.lifecycle_state == NativeWindowLifecycleState::Created)
+                .map(|window| window.native_window_id)
+                .collect::<Vec<_>>(),
+            Err(_) => return false,
+        };
+        !windows.is_empty()
+            && windows.into_iter().all(|window| {
+                matches!(
+                    self.native_input_recipient(window),
+                    Ok((NativeInputRecipient::LegacyNativeConsumer, _))
+                )
+            })
+    }
+
     fn apply_raw_mouse_motion(&mut self, context: InputContext, dx: f32, dy: f32) -> Result<()> {
+        let project_legacy = self.raw_motion_has_legacy_route();
         let input = self
             .state
             .world
             .resource_mut::<InputState>()
             .context("missing InputState resource")?;
-        input.handle_relative_motion(context, dx, dy);
+        input.handle_unattributed_relative_motion(context, dx, dy, project_legacy);
         Ok(())
     }
 
@@ -3486,6 +3511,113 @@ mod tests {
             owned_redraws: HashSet::new(),
             shutdown_done: false,
         }
+    }
+
+    #[test]
+    fn unattributed_raw_motion_preserves_physical_truth_without_ui_gameplay_fallback() {
+        use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+        use runen_input::{InputDeviceId, InputObservation};
+
+        struct RawUi;
+        impl runenui_core::UiApp for RawUi {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::text("raw input owner")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        let raw = InputContext::new(InputSourceId::new(729), Some(InputDeviceId::new(41)));
+
+        // With only a genuine game/legacy host, retain its existing raw camera
+        // projection. Physical input remains independently observable.
+        runner
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .start_admitted_input_capture();
+        runner.apply_raw_mouse_motion(raw, 3.0, -2.0).unwrap();
+        assert_eq!(
+            runner.state.world.resource::<InputState>().unwrap().mouse_delta,
+            (3.0, -2.0)
+        );
+
+        // Mounting UI with no selected input recipient is NOT game permission.
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<RawUi>(
+                UiTypedScreenId::new("raw.motion.owner"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("real M13 slot");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(UiNativeInputRecipientsResource::default());
+        runner
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .clear_frame();
+        runner.apply_raw_mouse_motion(raw, 5.0, 7.0).unwrap();
+        assert_eq!(
+            runner.state.world.resource::<InputState>().unwrap().mouse_delta,
+            (0.0, 0.0),
+            "an unresolved UI recipient must not move the gameplay camera"
+        );
+
+        // An explicitly mounted and bound UI window is equally not a window
+        // attribution witness for raw DeviceEvent::MouseMotion.
+        let mut slots = runner
+            .state
+            .world
+            .remove_resource::<UiRuntimeSlotsResource>()
+            .unwrap();
+        let mut recipients = runner
+            .state
+            .world
+            .remove_resource::<UiNativeInputRecipientsResource>()
+            .unwrap();
+        recipients
+            .bind(
+                NativeWindowId::primary(),
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner.state.world.resource::<WindowStateRegistryResource>().unwrap(),
+                &mut slots,
+            )
+            .expect("one explicit active UI recipient");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+        runner.apply_raw_mouse_motion(raw, 11.0, 13.0).unwrap();
+        assert_eq!(
+            runner.state.world.resource::<InputState>().unwrap().mouse_delta,
+            (0.0, 0.0)
+        );
+
+        let captured = runner
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .stop_admitted_input_capture();
+        assert_eq!(captured.len(), 3, "all genuine raw observations are neutral");
+        assert!(captured.iter().all(|group| group.context == raw
+            && matches!(
+                group.observations.as_slice(),
+                [InputObservation::RelativeMotion { .. }]
+            )));
     }
 
     fn set_frame_delta(mut time: ResMut<crate::plugins::time::domain::Time>) {
