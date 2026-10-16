@@ -105,9 +105,16 @@ impl RenderGpuFrameTerminalOutcome {
 pub struct RenderGpuFrameTerminalBatch {
     outcomes: Vec<RenderGpuFrameTerminalOutcome>,
     lost_outcomes: u64,
+    delivery_enabled: bool,
 }
 
 impl RenderGpuFrameTerminalBatch {
+    /// A disabled delivery stream cannot make a completeness claim, even
+    /// when its batch contains no events.
+    pub const fn delivery_enabled(&self) -> bool {
+        self.delivery_enabled
+    }
+
     pub fn outcomes(&self) -> &[RenderGpuFrameTerminalOutcome] {
         &self.outcomes
     }
@@ -155,6 +162,9 @@ impl RenderGpuFrameSubmissionReceipt {
 #[derive(Debug, Default)]
 pub(in crate::plugins::render::renderer) struct RendererSubmissionLifecycle {
     accepted: Vec<AcceptedFrameSubmission>,
+    // Optional transport for consumers that explicitly opt into terminal
+    // events. Mandatory accepted-work tracking never depends on this flag.
+    terminal_delivery_enabled: bool,
     terminal: VecDeque<RenderGpuFrameTerminalOutcome>,
     lost_terminal: u64,
 }
@@ -198,6 +208,14 @@ fn classify_submission(
 }
 
 impl RendererSubmissionLifecycle {
+    pub(in crate::plugins::render::renderer) fn set_terminal_delivery(&mut self, enabled: bool) {
+        self.terminal_delivery_enabled = enabled;
+        if !enabled {
+            self.terminal.clear();
+            self.lost_terminal = 0;
+        }
+    }
+
     pub(in crate::plugins::render::renderer) fn accept(
         &mut self,
         context: &GpuContext,
@@ -254,6 +272,7 @@ impl RendererSubmissionLifecycle {
         RenderGpuFrameTerminalBatch {
             outcomes: self.terminal.drain(..).collect(),
             lost_outcomes: std::mem::take(&mut self.lost_terminal),
+            delivery_enabled: self.terminal_delivery_enabled,
         }
     }
 
@@ -262,6 +281,7 @@ impl RendererSubmissionLifecycle {
         let lifecycle = context.execution_lifecycle_state();
         let terminal = &mut self.terminal;
         let lost = &mut self.lost_terminal;
+        let terminal_delivery_enabled = self.terminal_delivery_enabled;
         let previously_lost = *lost;
         self.accepted.retain(|accepted| {
             let status = accepted.submission.status();
@@ -311,19 +331,21 @@ impl RendererSubmissionLifecycle {
                     RenderGpuFrameTerminalDisposition::Invalidated
                 }
             };
-            push_bounded(
-                terminal,
-                lost,
-                MAX_TERMINAL_OUTCOMES,
-                RenderGpuFrameTerminalOutcome {
-                    frame: accepted.frame,
-                    surface: accepted.surface,
-                    submission: accepted.submission.id(),
-                    affinity: accepted.submission.affinity(),
-                    disposition: outcome,
-                    invocations: accepted.invocations.clone(),
-                },
-            );
+            if terminal_delivery_enabled {
+                push_bounded(
+                    terminal,
+                    lost,
+                    MAX_TERMINAL_OUTCOMES,
+                    RenderGpuFrameTerminalOutcome {
+                        frame: accepted.frame,
+                        surface: accepted.surface,
+                        submission: accepted.submission.id(),
+                        affinity: accepted.submission.affinity(),
+                        disposition: outcome,
+                        invocations: accepted.invocations.clone(),
+                    },
+                );
+            }
             false
         });
         if *lost > previously_lost {
@@ -345,8 +367,11 @@ mod tests {
     #[test]
     fn terminal_delivery_gap_is_drained_once_without_inventing_gpu_completion() {
         let mut state = RendererSubmissionLifecycle::default();
+        assert!(!state.take_terminal().delivery_enabled());
+        state.set_terminal_delivery(true);
         state.lost_terminal = 3;
         let first = state.take_terminal();
+        assert!(first.delivery_enabled());
         assert_eq!(first.lost_outcomes(), 3);
         assert!(first.has_delivery_gap());
         assert!(first.outcomes().is_empty());
@@ -354,6 +379,8 @@ mod tests {
         assert!(!next.has_delivery_gap());
         assert!(next.outcomes().is_empty());
         assert!(state.pending_receipts().is_empty());
+        state.set_terminal_delivery(false);
+        assert!(!state.take_terminal().delivery_enabled());
     }
 
     #[test]
