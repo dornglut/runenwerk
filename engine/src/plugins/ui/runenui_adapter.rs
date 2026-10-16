@@ -471,6 +471,7 @@ fn native_unfocused_keyboard_rejection_witness(
     };
     if framework.kind() != SubmitKeyboardErrorKind::NoFocusedTarget
         || framework.event().phase() != expected_phase
+        || framework.event().is_repeat()
         || framework.event().device_id() != Some(expected_device)
         || before != after
         || before.status() != runenui_runtime::RuntimeStatus::Running
@@ -3033,6 +3034,34 @@ mod tests {
             &after_unfocused,
             &rejected,
         ));
+        let repeated_down = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Down,
+                    PhysicalKey::Code(String::from("KeyW")),
+                    LogicalKey::Character(String::from("w")),
+                    KeyModifiers::NONE,
+                    true,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(native_device),
+                ),
+            )
+            .expect_err("repeat without focus is not a newly admitted original Down");
+        let after_repeat = slots
+            .input_ownership(slot)
+            .expect("rejected repeat must leave M13 ownership observable");
+        assert_eq!(after_repeat, after_unfocused);
+        assert!(
+            !native_no_focused_keyboard_claim_witness(
+                native_device,
+                &before_unfocused,
+                &after_repeat,
+                &repeated_down,
+            ),
+            "repeat rejection may not authorize a fresh game press"
+        );
         assert!(!native_no_focused_keyboard_claim_witness(
             native_device,
             &before_unfocused,

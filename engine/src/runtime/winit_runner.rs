@@ -816,9 +816,12 @@ impl WinitRunner {
                     },
                     Err(error) => match slots.input_ownership(slot) {
                         Ok(after)
-                            if native_no_focused_keyboard_claim_witness(
-                                device, &before, &after, &error,
-                            ) =>
+                            if !is_synthetic
+                                && !original.repeat
+                                && matches!(original.state, winit::event::ElementState::Pressed)
+                                && native_no_focused_keyboard_claim_witness(
+                                    device, &before, &after, &error,
+                                ) =>
                         {
                             true
                         }
