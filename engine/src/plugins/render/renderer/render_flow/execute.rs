@@ -448,17 +448,12 @@ impl Renderer {
             // Borrow independent renderer fields directly instead of taking the
             // entire flow runtime cache out of the renderer.
             for invocation in &batch.invocations {
-                let Some(runtime_resources) = self
-                    .flow_runtime_cache
-                    .get_mut(&invocation.flow.flow_id)
-                else {
-                    tracing::error!(
-                        target: "runenwerk.render.provenance",
-                        frame = prepared_frame.context.frame_index,
-                        flow = %invocation.flow.flow_id,
-                        invocation = %invocation.invocation.invocation_id,
-                        "accepted frame lacks optional pass-provenance runtime resource context"
-                    );
+                let Some(runtime_resources) = optional_accepted_provenance_resources(
+                    &mut self.flow_runtime_cache,
+                    invocation.flow.flow_id,
+                    prepared_frame.context.frame_index,
+                    &invocation.invocation.invocation_id,
+                ) else {
                     continue;
                 };
                 runtime_resources.target_alias_bindings =
@@ -1596,6 +1591,28 @@ fn resolve_terminal_present_controls(
     ))
 }
 
+/// Optional post-G5 provenance is not an admission or completion authority.
+/// Missing diagnostic cache entries are visible, but cannot roll back the
+/// already accepted submission or consume unrelated runtime cache entries.
+fn optional_accepted_provenance_resources(
+    cache: &mut BTreeMap<RenderFlowId, FlowRuntimeResources>,
+    flow: RenderFlowId,
+    frame: u64,
+    invocation: &crate::plugins::render::PreparedFlowInvocationId,
+) -> Option<&mut FlowRuntimeResources> {
+    let Some(resources) = cache.get_mut(&flow) else {
+        tracing::error!(
+            target: "runenwerk.render.provenance",
+            frame,
+            flow = %flow,
+            invocation = %invocation,
+            "accepted frame lacks optional pass-provenance runtime resource context"
+        );
+        return None;
+    };
+    Some(resources)
+}
+
 fn accepted_pass_provenance(
     frame_index: u64,
     flow: &CompiledRenderFlowPlan,
@@ -1845,6 +1862,31 @@ mod tests {
             renderer.temporal_execution_evidence[&0][0].evaluation_extent,
             (2, 2)
         );
+    }
+
+    #[test]
+    fn missing_post_accept_diagnostic_context_cannot_consume_unrelated_runtime_cache() {
+        let present_flow = RenderFlowId::try_from_raw(17).expect("valid test flow");
+        let missing_flow = RenderFlowId::try_from_raw(18).expect("valid test flow");
+        let invocation = crate::plugins::render::PreparedFlowInvocationId::new("absent");
+        let mut runtime_cache = BTreeMap::new();
+        runtime_cache.insert(present_flow, FlowRuntimeResources::default());
+
+        assert!(optional_accepted_provenance_resources(
+            &mut runtime_cache,
+            missing_flow,
+            42,
+            &invocation,
+        )
+        .is_none());
+        assert_eq!(runtime_cache.len(), 1);
+        assert!(optional_accepted_provenance_resources(
+            &mut runtime_cache,
+            present_flow,
+            42,
+            &invocation,
+        )
+        .is_some());
     }
 
     #[test]
