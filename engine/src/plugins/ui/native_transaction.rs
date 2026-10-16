@@ -678,10 +678,10 @@ mod tests {
             let _ = change_native_recipient(
                 &mut world,
                 NativeWindowId::primary(),
-                |_recipients, _windows, _slots| -> std::result::Result<
-                    bool,
-                    NativeInputRecipientError,
-                > {
+                |_recipients,
+                 _windows,
+                 _slots|
+                 -> std::result::Result<bool, NativeInputRecipientError> {
                     panic!("injected native recipient callback failure");
                 },
             );
