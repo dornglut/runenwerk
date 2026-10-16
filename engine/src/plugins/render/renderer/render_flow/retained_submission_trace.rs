@@ -196,7 +196,7 @@ fn observed_retained_candidates(graph: &GpuPreparedWorkGraph) -> PublicRetainedO
                         | GpuResourceRef::Texture(_)
                         | GpuResourceRef::QuerySet(_)
                 ))
-            .then(|| resource.diagnostic_identity())
+            .then_some(resource.diagnostic_identity())
         })
         .collect::<BTreeSet<_>>();
     partition_public_candidates(accessed, retained_descriptors)
