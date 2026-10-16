@@ -2584,7 +2584,9 @@ mod tests {
     #[test]
     fn native_pointer_admission_keeps_exact_device_stream_surface_and_m13_sequence() {
         use runenui_core::{LogicalPoint, NoHostProtocol, PointerDeviceKind, PointerPhase};
-        use runenui_runtime::{InputArbitrationRecord, UiInputFamily};
+        use runenui_runtime::{
+            InputArbitrationRecord, UiInputFamily, UiInputFinality, UiInputProcessingRejection,
+        };
 
         struct NativePointerApp;
         impl UiApp for NativePointerApp {
@@ -2727,6 +2729,46 @@ mod tests {
             ),
             Err(UiRuntimeNativePointerEvidenceFailure::WrongPointer),
         );
+        // A correctly scoped, sequenced, and device-qualified original
+        // pointer can still reach an exact ProcessingRejected receipt. That
+        // is NOT a committed native pointer stream or gameplay permission.
+        let wrong_stream_device = PointerEvent::new(
+            pointer,
+            PointerDeviceKind::Mouse,
+            PointerPhase::Move,
+            LogicalPoint::new(12.0, 8.0).expect("finite"),
+            published.input_context().clone(),
+        )
+        .with_device_id(other_device)
+        .with_buttons(runenui_core::PointerButtons::new([
+            runenui_core::PointerButton::Primary,
+        ]));
+        let rejected_submission = slots
+            .submit_native_pointer(slot, wrong_stream_device)
+            .expect("framework queue admits original foreign-device pointer for processing");
+        let (rejected_batch, rejected_status) = slots
+            .pump_native_input_records(slot)
+            .expect("foreign-device pointer obtains canonical terminal M13 receipt");
+        assert_eq!(rejected_status, Ok(()));
+        let refused = native_pointer_finality(
+            before.scope(),
+            other_device,
+            pointer,
+            published.input_context().surface_id(),
+            rejected_submission,
+            &rejected_batch,
+            &rejected_status,
+        );
+        assert!(
+            matches!(
+                refused,
+                Ok(UiInputFinality::ProcessingRejected(
+                    UiInputProcessingRejection::InvalidPointerStream
+                ))
+            ),
+            "a reached invalid foreign-device stream must be expressly rejected, not committed: {refused:?}"
+        );
+
         let later = slots
             .submit_native_pointer(slot, event())
             .expect("second independently sequenced original pointer event");
