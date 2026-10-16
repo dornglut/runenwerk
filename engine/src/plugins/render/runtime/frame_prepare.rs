@@ -79,14 +79,7 @@ pub(crate) fn frame_render_prepare_system(mut world: WorldMut) -> anyhow::Result
         let mut surface_packets = Vec::with_capacity(surface_infos.len());
         for surface in surface_infos {
             let target_size = surface.target_size_px();
-            let mut flows = build_prepared_flow_inputs(compiled_flows, &extracted, target_size)?;
-            if let Some(streams) = gpu_step_streams {
-                for flow in compiled_flows {
-                    if let Some(inputs) = flows.get_mut(&flow.flow_id) {
-                        apply_historical_step_inputs(flow, inputs, streams)?;
-                    }
-                }
-            }
+            let flows = build_prepared_flow_inputs(compiled_flows, &extracted, target_size)?;
             let views =
                 build_prepared_views(surface.render_surface_id, target_size, &frame_requests)?;
             let flow_invocations = build_prepared_flow_invocations(
@@ -354,6 +347,10 @@ fn build_prepared_flow_invocations(
                 .ok_or_else(|| {
                     anyhow::anyhow!("missing main prepared inputs for flow '{:?}'", flow.flow_id)
                 })?;
+            let mut inputs = inputs;
+            if let Some(streams) = gpu_step_streams {
+                apply_historical_step_inputs(flow, &mut inputs, streams)?;
+            }
             if gpu_step_streams.is_none_or(|streams| streams.stream(flow.flow_id).is_none()) {
                 validate_invoked_fixed_step_projection(flow, &inputs, extracted_state)?;
             }
@@ -1597,15 +1594,9 @@ mod tests {
             (TypeId::of::<FixedTimeState>(), &fixed_state as &dyn Any),
             (TypeId::of::<CatchupBudget>(), &budget as &dyn Any),
         ]);
-        let mut projected =
+        let projected =
             build_prepared_flow_inputs(std::slice::from_ref(&compiled), &extracted, (640, 480))
                 .expect("projected latest-value baseline");
-        apply_historical_step_inputs(
-            &compiled,
-            projected.get_mut(&compiled.flow_id).unwrap(),
-            &streams,
-        )
-        .expect("history becomes selected GPU work");
         let invocations = build_prepared_flow_invocations(
             RenderSurfaceId::primary(),
             std::slice::from_ref(&compiled),
@@ -1674,15 +1665,19 @@ mod tests {
             .unwrap()
             .capture(incomplete)
             .unwrap();
-        let mut projected_bad =
+        let projected_bad =
             build_prepared_flow_inputs(std::slice::from_ref(&compiled), &extracted, (640, 480))
                 .unwrap();
-        let error = apply_historical_step_inputs(
-            &compiled,
-            projected_bad.get_mut(&compiled.flow_id).unwrap(),
-            &bad,
+        let error = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
+            std::slice::from_ref(&compiled),
+            &extracted,
+            &projected_bad,
+            &[],
+            &PreparedRenderFrameRequestResource::default(),
+            Some(&bad),
         )
-        .expect_err("a GPU step without exact authored uniforms is invalid");
+        .expect_err("selected GPU step with missing source input must fail before G5");
         assert!(error.to_string().contains("does not capture exactly"));
     }
 

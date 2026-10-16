@@ -1233,7 +1233,11 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
             );
             // The renderer may already have retired its observation receipt at
             // terminal; source-owned G5 handles remain the execution truth.
-            window.request_close();
+            world
+                .resource_mut::<WindowStateRegistryResource>()?
+                .record_mut(NativeWindowId::primary())
+                .ok_or_else(|| anyhow::anyhow!("native primary window record is missing"))?
+                .request_close();
         } else {
             window.request_redraw();
         }
