@@ -13,9 +13,8 @@ use runen_gpu::{
     GpuReadbackStatus, GpuReconstruction, GpuResourceLabel, GpuResourceLifetime,
     GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
     GpuRuntimeBufferBinding, GpuSubmission, GpuSubmissionRejectionKind, GpuSubmissionStatus,
-    GpuWorkFragment, GpuWorkSubmissionError,
-    GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
-    admit_static_wgsl_sources,
+    GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
+    GpuWorkSubmissionError, admit_static_wgsl_sources,
 };
 use std::num::NonZeroU64;
 use std::time::{Duration, Instant};
@@ -399,10 +398,9 @@ fn captured_producer_steps_survive_real_g5_rejection_and_fresh_reprepare() {
             increments: 1,
         }],
     );
-    let blocker = pollster::block_on(
-        context.submit_work("fixed.step.g5.blocker", [blocking_fragment]),
-    )
-    .expect("first retained GPU admission");
+    let blocker =
+        pollster::block_on(context.submit_work("fixed.step.g5.blocker", [blocking_fragment]))
+            .expect("first retained GPU admission");
     assert_eq!(blocker.status(), GpuSubmissionStatus::Accepted);
 
     let mut producer = engine::plugins::render::RenderGpuStepDemand::new(0, 3);
@@ -421,7 +419,10 @@ fn captured_producer_steps_survive_real_g5_rejection_and_fresh_reprepare() {
         .expect("capture both producer-authored historical inputs");
 
     let rejected = producer.submit_with(2, |candidate| {
-        let captured = candidate.iter().map(|entry| *entry.input()).collect::<Vec<_>>();
+        let captured = candidate
+            .iter()
+            .map(|entry| *entry.input())
+            .collect::<Vec<_>>();
         let (graph, _) = batch_fragment(&buffer, &pipeline, &captured);
         pollster::block_on(context.submit_work("fixed.step.g5.conflict", [graph]))
             .map(|submission| (submission, ()))
@@ -455,12 +456,14 @@ fn captured_producer_steps_survive_real_g5_rejection_and_fresh_reprepare() {
     progress_to_terminal(&context, &blocker);
     let readback = producer
         .submit_with(2, |candidate| {
-            let captured = candidate.iter().map(|entry| *entry.input()).collect::<Vec<_>>();
+            let captured = candidate
+            .iter()
+            .map(|entry| *entry.input())
+            .collect::<Vec<_>>();
             let (fresh_graph, readback) = batch_fragment(&buffer, &pipeline, &captured);
-            pollster::block_on(context.submit_work(
-                "fixed.step.g5.fresh-after-terminal",
-                [fresh_graph],
-            ))
+            pollster::block_on(
+                context.submit_work("fixed.step.g5.fresh-after-terminal", [fresh_graph]),
+            )
             .map(|submission| (submission, readback))
         })
         .expect("fresh graph after exact predecessor termination")
@@ -473,7 +476,9 @@ fn captured_producer_steps_survive_real_g5_rejection_and_fresh_reprepare() {
     assert_eq!(producer.outstanding(), 2);
     assert_eq!(producer.completed_tick(), 0);
     progress_to_terminal(&context, &accepted);
-    let readback = accepted.readback(readback).expect("completed producer readback");
+    let readback = accepted
+        .readback(readback)
+        .expect("completed producer readback");
     let GpuReadbackStatus::Ready(bytes) = readback.status() else {
         panic!("completed producer readback must be ready");
     };
