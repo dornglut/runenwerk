@@ -412,8 +412,8 @@ fn apply_historical_step_inputs(
         .candidate(region.max_substeps as usize)
         .into_iter()
         .map(|intent| {
-            let provided = intent
-                .input()
+            let input = intent.input();
+            let provided = input
                 .uniforms
                 .keys()
                 .copied()
@@ -424,7 +424,19 @@ fn apply_historical_step_inputs(
                 flow.flow_id,
                 intent.tick()
             );
-            for (id, bytes) in &intent.input().uniforms {
+            let source_iteration = input.iteration;
+            anyhow::ensure!(
+                source_iteration.max_substeps == region.max_substeps
+                    && source_iteration.submitted_substeps == 1
+                    && source_iteration.substep_index == 0
+                    && source_iteration.fixed_dt_seconds.is_finite()
+                    && source_iteration.fixed_dt_seconds > 0.0
+                    && source_iteration.accumulator_seconds.is_finite(),
+                "flow {:?} step {} has invalid immutable fixed-time control",
+                flow.flow_id,
+                intent.tick()
+            );
+            for (id, bytes) in &input.uniforms {
                 let expected = inputs.projected_uniform_bytes.get(id).ok_or_else(|| {
                     anyhow::anyhow!(
                         "flow {:?} step {} references an unprojected GPU uniform",
@@ -1558,6 +1570,14 @@ mod tests {
                 uniform_id,
                 bytemuck::bytes_of(&HistoricalUniform { value }.to_gpu()).to_vec(),
             )]),
+            iteration: RenderFixedStepIterationUniform::new(
+                0,
+                1,
+                4,
+                value as u64,
+                1.0 / (value as f32),
+                0.0,
+            ),
         };
         let mut streams = RenderGpuFlowStepStreams::default();
         streams
@@ -1632,6 +1652,14 @@ mod tests {
         .expect("valid GPU iteration schedule");
         assert_eq!(schedule.submitted_substeps, 3);
         assert_eq!(
+            history
+                .steps
+                .iter()
+                .map(|step| step.input.iteration.fixed_dt_seconds)
+                .collect::<Vec<_>>(),
+            vec![1.0 / 11.0, 1.0 / 27.0, 1.0 / 8.0]
+        );
+        assert_eq!(
             streams.stream(compiled.flow_id).unwrap().requested_tick(),
             8
         );
@@ -1642,6 +1670,7 @@ mod tests {
 
         let incomplete = RenderGpuFixedStepInput {
             uniforms: BTreeMap::new(),
+            iteration: RenderFixedStepIterationUniform::new(0, 1, 4, 0, 1.0 / 60.0, 0.0),
         };
         let mut bad = RenderGpuFlowStepStreams::default();
         bad.register(compiled.flow_id, 0, 4).unwrap();

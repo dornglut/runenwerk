@@ -412,13 +412,13 @@ impl PreparedSurfaceInfo {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PreparedGpuFixedStepSnapshot {
     pub tick: u64,
     pub input: crate::plugins::render::runtime::RenderGpuFixedStepInput,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct PreparedGpuFixedStepHistory {
     pub steps: Vec<PreparedGpuFixedStepSnapshot>,
 }

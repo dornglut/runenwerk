@@ -4,7 +4,7 @@
 //! GPU resource reservation system, or a replacement for RunenGPU's G3/G5.
 //! Only the producer can certify that a prepared GPU graph faithfully lowers
 //! every captured step. An accepted submission is not a completed simulation.
-use crate::plugins::render::{PreparedRenderFrame, RenderFlowId};
+use crate::plugins::render::{PreparedRenderFrame, RenderFixedStepIterationUniform, RenderFlowId};
 use runen_gpu::{GpuContextAffinity, GpuSubmission, GpuSubmissionStatus, GpuWorkResourceId};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -429,9 +429,12 @@ mod tests {
 /// Immutable bytes authored at each semantic tick for uniforms used by one
 /// fixed-step RenderFlow region. The producer owns what these values mean.
 /// Runenwerk only transports them into the selected pass's actual GPU upload.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RenderGpuFixedStepInput {
     pub uniforms: BTreeMap<GpuWorkResourceId, Vec<u8>>,
+    /// Immutable source-time control. The renderer supplies only the actual
+    /// selected batch count/index, never a replacement latest-frame CPU time.
+    pub iteration: RenderFixedStepIterationUniform,
 }
 
 /// An opt-in, producer-owned set of streams, one per ordinary RenderFlow.
