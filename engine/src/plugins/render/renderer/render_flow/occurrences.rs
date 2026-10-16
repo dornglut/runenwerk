@@ -340,8 +340,10 @@ mod tests {
     fn fixed_step_expansion_rejects_steps_beyond_authored_region_capacity() {
         let plan = fixed_step_test_plan(false);
         let inputs = inputs_for_substeps(&plan, 99);
-        let err = expand_render_pass_occurrences(&plan, &inputs, |_| Ok(true))
-            .expect_err("stateful GPU steps may not be silently clipped");
+        let err = match expand_render_pass_occurrences(&plan, &inputs, |_| Ok(true)) {
+            Ok(_) => panic!("stateful GPU steps may not be silently clipped"),
+            Err(error) => error,
+        };
         assert!(err.to_string().contains("refusing silent GPU-step truncation"));
     }
 
