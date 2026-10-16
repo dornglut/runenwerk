@@ -155,10 +155,15 @@ impl StepLedger {
             .enumerate()
             .map(|(index, increment)| {
                 let offset = u64::try_from(index).map_err(|_| "step count overflow")?;
-                let tick = self.history.requested_tick()
+                let tick = self
+                    .history
+                    .requested_tick()
                     .checked_add(offset + 1)
                     .ok_or("tick identity exhausted")?;
-                Ok(Step { tick, increments: *increment })
+                Ok(Step {
+                    tick,
+                    increments: *increment,
+                })
             })
             .collect::<Result<Vec<_>, &'static str>>()?;
         self.history
@@ -173,7 +178,9 @@ impl StepLedger {
         state: &GpuBufferHandle,
         pipeline: &GpuComputePipelineDescriptor,
     ) -> bool {
-        let snapshots = self.history.candidate(3)
+        let snapshots = self
+            .history
+            .candidate(3)
             .iter()
             .map(|entry| *entry.input())
             .collect::<Vec<_>>();
@@ -182,7 +189,11 @@ impl StepLedger {
         }
         assert_eq!(snapshots[0].tick, self.history.completed_tick() + 1);
         for (intent, snapshot) in self.history.candidate(3).iter().zip(&snapshots) {
-            assert_eq!(intent.tick(), snapshot.tick, "captured and authored step identity agree");
+            assert_eq!(
+                intent.tick(),
+                snapshot.tick,
+                "captured and authored step identity agree"
+            );
         }
         for window in snapshots.windows(2) {
             assert_eq!(window[1].tick, window[0].tick + 1);
@@ -192,11 +203,17 @@ impl StepLedger {
             pollster::block_on(context.submit_work("runenwerk.fixed-step.fresh-batch", [fragment]))
                 .expect("test producer is uncontended and re-prepares after terminal completion");
         let expected_counter = self.completed_counter
-            + snapshots.iter().map(|step| u32::from(step.increments)).sum::<u32>();
+            + snapshots
+                .iter()
+                .map(|step| u32::from(step.increments))
+                .sum::<u32>();
         self.history
             .accept(submission, snapshots.len())
             .expect("accepted exact producer batch");
-        self.accepted = Some(AcceptedBatch { expected_counter, readback });
+        self.accepted = Some(AcceptedBatch {
+            expected_counter,
+            readback,
+        });
         true
     }
 
@@ -204,7 +221,10 @@ impl StepLedger {
         let Some(accepted) = self.accepted.as_ref() else {
             return;
         };
-        let submission = self.history.accepted_submission().expect("accepted GPU batch");
+        let submission = self
+            .history
+            .accepted_submission()
+            .expect("accepted GPU batch");
         assert_eq!(
             submission.affinity(),
             context.affinity(),
@@ -226,7 +246,8 @@ impl StepLedger {
                         .expect("four-byte readback"),
                 );
                 assert_eq!(observed, accepted.expected_counter);
-                self.history.commit_completed(context.affinity())
+                self.history
+                    .commit_completed(context.affinity())
                     .expect("producer verified exact completed batch");
                 self.completed_counter = observed;
                 self.accepted = None;
@@ -326,7 +347,11 @@ fn delayed_gpu_batches_consume_all_captured_steps_once() {
     assert_eq!(ledger.requested_tick(), 4);
     assert_eq!(ledger.outstanding(), 4);
 
-    let first = ledger.history.accepted_submission().expect("first submission").clone();
+    let first = ledger
+        .history
+        .accepted_submission()
+        .expect("first submission")
+        .clone();
     progress_to_terminal(&context, &first);
     ledger.reconcile(&context);
     assert_eq!((ledger.completed_tick(), ledger.completed_counter), (1, 1));
@@ -334,7 +359,11 @@ fn delayed_gpu_batches_consume_all_captured_steps_once() {
     // Freshly formed graph batches *captured* steps 2..4, including their
     // differing work weights, not a replacement latest-frame step count.
     assert!(ledger.admit(&context, &buffer, &pipeline));
-    let second = ledger.history.accepted_submission().expect("second submission").clone();
+    let second = ledger
+        .history
+        .accepted_submission()
+        .expect("second submission")
+        .clone();
     assert_eq!(ledger.completed_tick(), 1);
     progress_to_terminal(&context, &second);
     ledger.reconcile(&context);

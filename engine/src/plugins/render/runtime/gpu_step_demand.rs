@@ -245,7 +245,10 @@ mod tests {
     #[test]
     fn tick_identity_exhaustion_does_not_consume_any_input() {
         let mut steps = RenderGpuStepDemand::<u8>::new(u64::MAX, 2);
-        assert_eq!(steps.capture(1), Err((RenderGpuStepDemandError::TickIdentityExhausted, 1)));
+        assert_eq!(
+            steps.capture(1),
+            Err((RenderGpuStepDemandError::TickIdentityExhausted, 1))
+        );
         assert_eq!(steps.outstanding(), 0);
         assert_eq!(steps.requested_tick(), u64::MAX);
     }

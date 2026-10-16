@@ -2,9 +2,9 @@ pub mod debug_eval;
 pub mod dynamic_targets;
 pub mod dynamic_texture_uploads;
 mod frame_diagnostics;
-pub mod gpu_step_demand;
 pub mod frame_prepare;
 pub mod frame_submit;
+pub mod gpu_step_demand;
 
 use runen_ecs::SystemSet;
 
