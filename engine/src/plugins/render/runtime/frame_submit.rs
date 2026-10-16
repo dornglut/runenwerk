@@ -369,7 +369,7 @@ mod contribution_deferral_tests {
         super::defer_unsubmitted_after_error(
             &mut deferred,
             &contributions,
-            &frames,
+            &frames[1..],
             super::PrimaryContributionState::Submitted,
         );
         assert_eq!(
@@ -385,7 +385,7 @@ mod contribution_deferral_tests {
         super::defer_unsubmitted_after_error(
             &mut pre_accept_deferred,
             &contributions,
-            &frames,
+            &frames[1..],
             super::PrimaryContributionState::Unprocessed,
         );
         assert_eq!(
