@@ -207,6 +207,12 @@ impl Renderer {
         self.submission_lifecycle.pending_receipts()
     }
 
+    /// Enable terminal event delivery only for a consumer that needs it.
+    /// Exact accepted submission handles remain tracked either way.
+    pub fn set_gpu_frame_terminal_delivery(&mut self, enabled: bool) {
+        self.submission_lifecycle.set_terminal_delivery(enabled);
+    }
+
     /// Returns terminal outcomes once, preserving a nonzero loss counter when
     /// the bounded delivery buffer overflowed before consumption.
     pub fn take_gpu_frame_terminal_outcomes(&mut self) -> super::RenderGpuFrameTerminalBatch {

@@ -266,8 +266,15 @@ surface, selected flow/invocation identities, and the exact RunenGPU handle.
 The handle's `status()` belongs to RunenGPU, not a renderer-maintained
 completion estimate.
 
-`Gfx::take_gpu_frame_terminal_outcomes()` drains renderer-observed outcomes
-**once** after normal, nonblocking GPU progress. Every outcome identifies the
+Consumers that require delivered terminal events MUST opt in with
+`Gfx::set_gpu_frame_terminal_delivery(true)` **before** the relevant accepted
+work. Event buffering is disabled by default so normal windowed rendering
+does not accumulate unconsumed terminal history. This setting never controls
+mandatory in-flight accepted-submission tracking, RunenGPU progress or actual
+GPU admission. `Gfx::take_gpu_frame_terminal_outcomes()` drains the enabled
+renderer-observed delivery stream **once** after normal, nonblocking GPU
+progress. The returned `delivery_enabled()` distinguishes disabled delivery
+from an enabled stream with zero observed completions. Every outcome identifies the
 accepted submission, originating context affinity, frame/surface, selected
 invocations, and one of `Completed`, `Failed`, or `Invalidated`.
 The bounded delivery window reports `lost_outcomes()` and

@@ -917,6 +917,13 @@ impl Gfx {
         self.renderer.pending_gpu_frame_submissions()
     }
 
+    /// Opt into bounded terminal-outcome delivery before the relevant GPU
+    /// submission. Default is off to avoid accumulating unused per-frame
+    /// diagnostic history; mandatory pending submission tracking stays on.
+    pub fn set_gpu_frame_terminal_delivery(&mut self, enabled: bool) {
+        self.renderer.set_gpu_frame_terminal_delivery(enabled);
+    }
+
     /// Consume terminal GPU outcomes without mistaking them for published
     /// domain simulation steps or visible presentation.
     pub fn take_gpu_frame_terminal_outcomes(&mut self) -> RenderGpuFrameTerminalBatch {
