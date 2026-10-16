@@ -5,13 +5,13 @@
 //! reserved; an unrelated resource may still make progress; a fresh graph is
 //! prepared only after its predecessor terminalizes. No rendering window required.
 use runen_gpu::{
-    GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization,
-    GpuBufferRegion, GpuBufferUsage, GpuCapabilityProfile, GpuCapabilityRequirements,
-    GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory, GpuExecutionPreference,
-    GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction, GpuResourceLabel,
-    GpuResourceLifetime, GpuResourceProvenance, GpuSubmission,
-    GpuSubmissionRejectionKind, GpuSubmissionStatus, GpuWorkFragment, GpuWorkFragmentBuilder,
-    GpuWorkOperation, GpuWorkResourceIdAllocator, GpuWorkSubmissionError,
+    GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization, GpuBufferRegion, GpuBufferUsage,
+    GpuCapabilityProfile, GpuCapabilityRequirements, GpuContext, GpuContextDescriptor,
+    GpuContextRequestErrorCategory, GpuExecutionPreference, GpuReadbackId, GpuReadbackOperation,
+    GpuReadbackStatus, GpuReconstruction, GpuResourceLabel, GpuResourceLifetime,
+    GpuResourceProvenance, GpuSubmission, GpuSubmissionRejectionKind, GpuSubmissionStatus,
+    GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
+    GpuWorkSubmissionError,
 };
 use std::time::{Duration, Instant};
 
@@ -42,7 +42,9 @@ fn retained_buffer(allocator: &mut GpuWorkResourceIdAllocator, name: &str) -> Gp
 fn read_only_fragment(buffer: &GpuBufferHandle, name: &str) -> (GpuWorkFragment, GpuReadbackId) {
     let readback_id = GpuReadbackId::allocate().expect("fresh readback identity");
     let operation = GpuReadbackOperation::new(
-        GpuBufferRegion::whole(buffer).expect("whole retained buffer").into(),
+        GpuBufferRegion::whole(buffer)
+            .expect("whole retained buffer")
+            .into(),
         readback_id,
     )
     .expect("valid readback operation");
@@ -60,7 +62,10 @@ fn read_only_fragment(buffer: &GpuBufferHandle, name: &str) -> (GpuWorkFragment,
             provenance(name),
         )
         .expect("read-only G5 work node");
-    (builder.finish().expect("valid read-only fragment"), readback_id)
+    (
+        builder.finish().expect("valid read-only fragment"),
+        readback_id,
+    )
 }
 
 fn gpu_context() -> Option<GpuContext> {
@@ -135,14 +140,22 @@ fn retained_read_only_reservation_is_not_an_implicit_ordered_continuation() {
     );
     assert_eq!(first.status(), GpuSubmissionStatus::Accepted);
 
-    let (independent, independent_readback) = submit(&context, &unrelated, "cross.frame.independent")
-        .expect("unrelated retained resource can submit without globally waiting");
+    let (independent, independent_readback) =
+        submit(&context, &unrelated, "cross.frame.independent")
+            .expect("unrelated retained resource can submit without globally waiting");
     assert_eq!(independent.status(), GpuSubmissionStatus::Accepted);
 
     complete(&context, &first);
     complete(&context, &independent);
-    for (submission, readback) in [(&first, first_readback), (&independent, independent_readback)] {
-        match submission.readback(readback).expect("readback exists").status() {
+    for (submission, readback) in [
+        (&first, first_readback),
+        (&independent, independent_readback),
+    ] {
+        match submission
+            .readback(readback)
+            .expect("readback exists")
+            .status()
+        {
             GpuReadbackStatus::Ready(bytes) => {
                 assert_eq!(bytes.as_bytes(), &[0_u8; 64]);
             }
@@ -156,7 +169,10 @@ fn retained_read_only_reservation_is_not_an_implicit_ordered_continuation() {
         submit(&context, &shared, "cross.frame.fresh").expect("fresh post-terminal admission");
     complete(&context, &fresh);
     assert!(matches!(
-        fresh.readback(fresh_readback).expect("fresh readback").status(),
+        fresh
+            .readback(fresh_readback)
+            .expect("fresh readback")
+            .status(),
         GpuReadbackStatus::Ready(_)
     ));
 }
