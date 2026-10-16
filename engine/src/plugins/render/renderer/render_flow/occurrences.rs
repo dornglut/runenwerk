@@ -344,7 +344,10 @@ mod tests {
             Ok(_) => panic!("stateful GPU steps may not be silently clipped"),
             Err(error) => error,
         };
-        assert!(err.to_string().contains("refusing silent GPU-step truncation"));
+        assert!(
+            err.to_string()
+                .contains("refusing silent GPU-step truncation")
+        );
     }
 
     #[test]
