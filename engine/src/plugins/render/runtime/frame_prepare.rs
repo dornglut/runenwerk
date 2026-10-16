@@ -413,11 +413,7 @@ fn apply_historical_step_inputs(
         .into_iter()
         .map(|intent| {
             let input = intent.input();
-            let provided = input
-                .uniforms
-                .keys()
-                .copied()
-                .collect::<BTreeSet<_>>();
+            let provided = input.uniforms.keys().copied().collect::<BTreeSet<_>>();
             anyhow::ensure!(
                 provided == required,
                 "flow {:?} step {} does not capture exactly the region's projected uniform inputs",

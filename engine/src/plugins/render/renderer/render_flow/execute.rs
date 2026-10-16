@@ -823,29 +823,30 @@ impl Renderer {
                                     let snapshot = history
                                         .steps
                                         .get(iteration.substep_index as usize)
-                                        .ok_or_else(|| anyhow::anyhow!("GPU historical step missing"))?;
+                                        .ok_or_else(|| {
+                                            anyhow::anyhow!("GPU historical step missing")
+                                        })?;
                                     let mut control = snapshot
                                         .input
                                         .iteration
                                         .with_substep_index(iteration.substep_index);
-                                    control.submitted_substeps = iteration.schedule.submitted_substeps;
+                                    control.submitted_substeps =
+                                        iteration.schedule.submitted_substeps;
                                     control
                                 } else {
                                     iteration
                                         .schedule
                                         .with_substep_index(iteration.substep_index)
                                 };
-                                fixed_step_uploads.push(
-                                    self.realize_fixed_step_iteration_upload(
-                                        context,
-                                        invocation.invocation_id.0.as_str(),
-                                        runtime_resources,
-                                        iteration.region,
-                                        source_control,
-                                        &mut maximum_occurrence,
-                                        occurrence.control_order_after.clone(),
-                                    )?,
-                                );
+                                fixed_step_uploads.push(self.realize_fixed_step_iteration_upload(
+                                    context,
+                                    invocation.invocation_id.0.as_str(),
+                                    runtime_resources,
+                                    iteration.region,
+                                    source_control,
+                                    &mut maximum_occurrence,
+                                    occurrence.control_order_after.clone(),
+                                )?);
                                 if let Some(history) = invocation.inputs.fixed_step_history.as_ref()
                                 {
                                     let snapshot = history

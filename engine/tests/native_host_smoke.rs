@@ -7,8 +7,11 @@ use engine::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
 use engine::plugins::render::{
-    Gfx, RenderFlow, RenderFrameProducerId, SurfaceFrameSubmissionOrder,
+    Gfx, GpuParams, GpuStorage, GpuUniform, RenderFixedStepIterationUniform, RenderFlow,
+    RenderFlowId, RenderFrameProducerId, RenderGpuFixedStepInput, RenderGpuFlowStepStreams,
+    SurfaceFrameSubmissionOrder,
 };
+use runen_gpu::{GpuBindingKey, GpuSubmissionStatus};
 use engine::plugins::ui::{
     AppUiExt, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
     UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
@@ -33,6 +36,7 @@ use winit::window::Window;
 const NO_RENDER_ENV: &str = "RUNENWERK_NATIVE_NO_RENDER_SMOKE";
 const RENDER_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_HOST_SMOKE";
 const RENDER_UI_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_UI_HOST_SMOKE";
+const HISTORICAL_GPU_ENV: &str = "RUNENWERK_NATIVE_HISTORICAL_GPU_SMOKE";
 
 const COUNTER_FONT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -106,7 +110,7 @@ fn native_counter_fonts() -> UiRuntimeFontConfiguration {
 fn main() {
     if let Ok(mode) = std::env::var("RUNENWERK_NATIVE_UI_READINESS_SMOKE") {
         assert!(
-            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV]
+            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV, HISTORICAL_GPU_ENV]
                 .iter()
                 .all(|flag| std::env::var_os(flag).is_none()),
             "native Host smoke modes are mutually exclusive"
@@ -118,18 +122,22 @@ fn main() {
         std::env::var_os(NO_RENDER_ENV).is_some(),
         std::env::var_os(RENDER_HOST_ENV).is_some(),
         std::env::var_os(RENDER_UI_HOST_ENV).is_some(),
+        std::env::var_os(HISTORICAL_GPU_ENV).is_some(),
     ) {
-        (false, false, false) => {}
-        (true, false, false) => {
+        (false, false, false, false) => {}
+        (true, false, false, false) => {
             native_no_render_host_smoke().expect("native no-Render Host smoke should succeed")
         }
-        (false, true, false) => {
+        (false, true, false, false) => {
             native_render_host_smoke(false).expect("bare native Render Host smoke should succeed");
             run_native_render_ui_child_smoke()
                 .expect("native Render + UI Host child smoke should succeed");
         }
-        (false, false, true) => {
+        (false, false, true, false) => {
             native_render_host_smoke(true).expect("native Render + UI Host smoke should succeed")
+        }
+        (false, false, false, true) => {
+            native_historical_gpu_smoke().expect("native historical GPU RenderFlow must succeed")
         }
         _ => panic!("native Host smoke modes are mutually exclusive"),
     }
@@ -1121,5 +1129,185 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
         "native_render_host_smoke=pass ui_plugin={}",
         if with_ui { "selected" } else { "absent" }
     );
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy, runen_ecs::Resource)]
+struct NativeHistoricalSource {
+    latest: [u32; 4],
+}
+
+#[derive(Debug, Clone, Copy, GpuUniform)]
+struct NativeHistoricalUniform {
+    meta: [u32; 4],
+}
+
+#[derive(Debug, Clone, Copy, GpuStorage)]
+struct NativeHistoricalCounter {
+    value: u32,
+}
+
+struct NativeHistoricalGpuHook {
+    flow: RenderFlowId,
+    frames: u32,
+    first_submission: Option<runen_gpu::GpuSubmissionId>,
+    saw_terminal: bool,
+    saw_gpu_frame: bool,
+}
+
+impl NativeWindowHook for NativeHistoricalGpuHook {
+    fn name(&self) -> &'static str {
+        "native_historical_gpu_render_flow"
+    }
+
+    fn frame(&mut self, window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+        self.frames += 1;
+        if let Ok(streams) = world.resource::<RenderGpuFlowStepStreams>() {
+            let producer = streams
+                .stream(self.flow)
+                .ok_or_else(|| anyhow::anyhow!("historical GPU producer disappeared"))?;
+            anyhow::ensure!(
+                producer.requested_tick() == 3 && producer.completed_tick() == 0,
+                "native GPU execution must not invent verified semantic steps"
+            );
+            anyhow::ensure!(
+                producer.outstanding() == 3,
+                "native GPU step history was lost or duplicated"
+            );
+            if let Some(gpu) = producer.accepted_submission() {
+                let gpu_id = gpu.id();
+                if let Some(earlier) = self.first_submission {
+                    anyhow::ensure!(
+                        earlier == gpu_id,
+                        "a deferred GPU producer was submitted more than once"
+                    );
+                } else {
+                    self.first_submission = Some(gpu_id);
+                }
+                anyhow::ensure!(
+                    producer.accepted_steps().iter().map(|step| step.tick()).collect::<Vec<_>>()
+                        == vec![1, 2, 3],
+                    "accepted native RenderFlow did not retain its precise historical interval"
+                );
+                match gpu.status() {
+                    GpuSubmissionStatus::Accepted => {}
+                    GpuSubmissionStatus::Completed => self.saw_terminal = true,
+                    GpuSubmissionStatus::Failed(failure) => {
+                        anyhow::bail!("native RenderFlow G5 execution failed: {failure:?}");
+                    }
+                }
+            }
+        }
+        if let Ok(gfx) = world.resource::<Gfx>() {
+            for receipt in gfx.pending_gpu_frame_submissions() {
+                if receipt
+                    .invocations()
+                    .iter()
+                    .any(|invocation| invocation.flow_id() == self.flow)
+                {
+                    let source_id = self.first_submission.ok_or_else(|| {
+                        anyhow::anyhow!("G5 frame receipt exists without source step acceptance")
+                    })?;
+                    anyhow::ensure!(
+                        receipt.submission().id() == source_id,
+                        "composed RenderFlow receipt did not identify the exact producer work"
+                    );
+                    self.saw_gpu_frame = true;
+                }
+            }
+        }
+
+        if self.frames >= 40 {
+            anyhow::ensure!(
+                self.first_submission.is_some() && self.saw_terminal && self.saw_gpu_frame,
+                "native historical RenderFlow must preserve exact renderer/G5 acceptance and terminal work"
+            );
+            // The renderer may already have retired its observation receipt at
+            // terminal; source-owned G5 handles remain the execution truth.
+            window.request_close();
+        } else {
+            window.request_redraw();
+        }
+        Ok(())
+    }
+}
+
+fn native_historical_gpu_smoke() -> anyhow::Result<()> {
+    let mut app = App::new();
+    app.set_title("Native historical RenderFlow GPU continuity");
+    app.add_plugins(default_plugins());
+    app.add_plugin(RenderPlugin);
+
+    let (flow, uniform) = RenderFlow::new("native.historical.gpu")
+        .with_state::<NativeHistoricalSource>()
+        .with_surface_color()?
+        .uniform_buffer::<NativeHistoricalUniform>("native.historical.uniform")?;
+    let (flow, counter) = flow
+        .storage_array::<NativeHistoricalCounter>("native.historical.counter", 1)?;
+    let flow = flow
+        .compute_pass("native.historical.step")
+        .shader_asset("assets/shaders/native_historical_gpu_step_smoke.wgsl")
+        .uniform_from_state_to(
+            GpuBindingKey::try_new(0, 0)?,
+            uniform.clone(),
+            |source: &NativeHistoricalSource| NativeHistoricalUniform {
+                meta: source.latest,
+            },
+        )
+        .bind_storage(GpuBindingKey::try_new(0, 1)?, counter)
+        .dispatch([1, 1, 1])
+        .finish()
+        .fixed_step_region(
+            "native.historical.region",
+            4,
+            [("native.historical.step", GpuBindingKey::try_new(0, 2)?)],
+        )?
+        .fullscreen_pass("native.historical.surface")
+        .main_surface_only()
+        .clear_color([0.0, 0.0, 0.0, 1.0])
+        .write_surface_color()?
+        .finish()
+        .present_pass("native.historical.present")?
+        .main_surface_only()
+        .surface_color()?
+        .finish()
+        .validate()?;
+    let flow_id = flow.id();
+    let mut sources = RenderGpuFlowStepStreams::default();
+    sources.register(flow_id, 0, 4)?;
+    let input = |value: u32| RenderGpuFixedStepInput {
+        uniforms: BTreeMap::from([(
+            uniform.diagnostic_identity(),
+            engine::plugins::render::bytemuck::bytes_of(
+                &NativeHistoricalUniform { meta: [value, 0, 0, 0] }.to_gpu(),
+            )
+            .to_vec(),
+        )]),
+        iteration: RenderFixedStepIterationUniform::new(
+            0, 1, 4, value as u64, 1.0 / (value as f32), 0.0,
+        ),
+    };
+    sources.stream_mut(flow_id).unwrap().capture_batch(vec![
+        input(1),
+        input(2),
+        input(3),
+    ]).map_err(|(reason, _)| anyhow::anyhow!("producer refused input history: {reason}"))?;
+    app.insert_resource(NativeHistoricalSource {
+        latest: [999, 0, 0, 0],
+    });
+    app.insert_resource(sources);
+    app.add_render_flow(flow);
+    app.init_resource::<NativeWindowHookRegistryResource>();
+    app.world_mut()
+        .resource_mut::<NativeWindowHookRegistryResource>()?
+        .register_hook(NativeHistoricalGpuHook {
+            flow: flow_id,
+            frames: 0,
+            first_submission: None,
+            saw_terminal: false,
+            saw_gpu_frame: false,
+        });
+    app.run()?;
+    println!("native_historical_gpu_render_flow=pass");
     Ok(())
 }
