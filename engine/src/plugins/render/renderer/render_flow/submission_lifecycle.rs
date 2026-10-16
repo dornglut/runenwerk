@@ -94,10 +94,7 @@ impl std::fmt::Display for RenderGpuFramePostAcceptAssociationFailure {
         write!(
             f,
             "GPU submission {} for frame {} surface {} was already G5-accepted (affinity {:?}) before retained-session association failed; do not retry as unsubmitted work",
-            self.submission,
-            self.frame,
-            self.surface,
-            self.affinity
+            self.submission, self.frame, self.surface, self.affinity
         )
     }
 }
