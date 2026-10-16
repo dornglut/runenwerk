@@ -245,10 +245,10 @@ impl StepLedger {
                 // semantic completed-tick increment. A negative verification
                 // must retain the exact accepted GPU work and input prefix.
                 use engine::plugins::render::RenderGpuStepCommitError;
-                let deliberately_unverified = self.history.commit_verified(
-                    context.affinity(),
-                    |_, _| Err::<(), &'static str>("semantic proof unavailable"),
-                );
+                let deliberately_unverified =
+                    self.history.commit_verified(context.affinity(), |_, _| {
+                        Err::<(), &'static str>("semantic proof unavailable")
+                    });
                 assert_eq!(
                     deliberately_unverified,
                     Err(RenderGpuStepCommitError::Verification(

@@ -239,8 +239,7 @@ impl<T> RenderGpuStepDemand<T> {
             }
             GpuSubmissionStatus::Completed => {}
         }
-        verify(&batch.submission, &batch.steps)
-            .map_err(RenderGpuStepCommitError::Verification)?;
+        verify(&batch.submission, &batch.steps).map_err(RenderGpuStepCommitError::Verification)?;
         let last_tick = batch.steps.last().expect("accepted batch nonempty").tick;
         debug_assert_eq!(batch.steps[0].tick, self.completed_tick + 1);
         self.accepted = None;
