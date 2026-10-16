@@ -999,7 +999,10 @@ mod tests {
             "an active original recipient must never be removed before cancellation"
         );
         assert!(world.resource::<UiRuntimeSlotsResource>()?.contains(slot));
-        assert!(retire_native_input_recipient(&mut world, NativeWindowId::primary())?);
+        assert!(retire_native_input_recipient(
+            &mut world,
+            NativeWindowId::primary()
+        )?);
         assert!(matches!(
             world
                 .resource_mut::<UiRuntimeSlotsResource>()?
