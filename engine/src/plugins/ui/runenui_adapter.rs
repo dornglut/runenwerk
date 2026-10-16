@@ -457,11 +457,11 @@ pub enum UiRuntimeNativeKeyboardAdmissionError {
     Framework(SubmitKeyboardError),
 }
 
-/// The exact M13 pre-sequence `NoFocusedTarget` evidence, not a gameplay
-/// permission result. The native owner MUST separately prove original window,
-/// source/device, slot binding and unrevoked physical Down lifetime.
-pub fn native_no_focused_keyboard_claim_witness(
+/// One canonical existing M13 no-focus observation predicate. The caller
+/// selects the exact *original* keyboard phase and its separate game policy.
+fn native_unfocused_keyboard_rejection_witness(
     expected_device: InputDeviceId,
+    expected_phase: KeyboardPhase,
     before: &InputOwnershipSnapshot,
     after: &InputOwnershipSnapshot,
     error: &UiRuntimeNativeKeyboardAdmissionError,
@@ -470,7 +470,7 @@ pub fn native_no_focused_keyboard_claim_witness(
         return false;
     };
     if framework.kind() != SubmitKeyboardErrorKind::NoFocusedTarget
-        || framework.event().phase() != KeyboardPhase::Down
+        || framework.event().phase() != expected_phase
         || framework.event().device_id() != Some(expected_device)
         || before != after
         || before.status() != runenui_runtime::RuntimeStatus::Running
@@ -491,6 +491,44 @@ pub fn native_no_focused_keyboard_claim_witness(
             .pointers()
             .iter()
             .all(|pointer| pointer.capture_owner().is_none() && pointer.pressed_owner().is_none())
+}
+
+/// The exact M13 pre-sequence `NoFocusedTarget` original-Down evidence.
+/// Gameplay permission still requires source-specific ActionState eligibility.
+pub fn native_no_focused_keyboard_claim_witness(
+    expected_device: InputDeviceId,
+    before: &InputOwnershipSnapshot,
+    after: &InputOwnershipSnapshot,
+    error: &UiRuntimeNativeKeyboardAdmissionError,
+) -> bool {
+    native_unfocused_keyboard_rejection_witness(
+        expected_device,
+        KeyboardPhase::Down,
+        before,
+        after,
+        error,
+    )
+}
+
+/// Only an authentic original release may retire neutral physical state
+/// without M13 admission. This is NEVER positive gameplay press permission.
+pub(crate) fn native_original_keyboard_release_nonclaim(
+    expected_device: InputDeviceId,
+    before: &InputOwnershipSnapshot,
+    after: &InputOwnershipSnapshot,
+    error: &UiRuntimeNativeKeyboardAdmissionError,
+) -> bool {
+    native_unfocused_keyboard_rejection_witness(
+        expected_device,
+        KeyboardPhase::Up,
+        before,
+        after,
+        error,
+    ) && matches!(
+        error,
+        UiRuntimeNativeKeyboardAdmissionError::Framework(framework)
+            if !framework.event().is_repeat()
+    )
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -2916,6 +2954,45 @@ mod tests {
             &after_unfocused,
             &rejected,
         ));
+        // The authentic original Up closes physical held truth even when
+        // the focused framework target is absent. It must never be mistaken
+        // for a new positively permitted gameplay Down.
+        let original_up = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Up,
+                    PhysicalKey::Code(String::from("KeyW")),
+                    LogicalKey::Character(String::from("w")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(native_device),
+                ),
+            )
+            .expect_err("unfocused original Up has no framework target");
+        let after_original_up = slots
+            .input_ownership(slot)
+            .expect("no-focus physical Up does not mutate M13 ownership");
+        assert!(native_original_keyboard_release_nonclaim(
+            native_device,
+            &after_unfocused,
+            &after_original_up,
+            &original_up,
+        ));
+        assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
+            &after_unfocused,
+            &after_original_up,
+            &original_up,
+        ));
+        assert!(!native_original_keyboard_release_nonclaim(
+            another_device,
+            &after_unfocused,
+            &after_original_up,
+            &original_up,
+        ));
         // A synthesized cancellation is not the original keyboard Down
         // occurrence for which the owner authorized NoFocusedTarget nonclaim.
         let cancel = slots
@@ -2937,6 +3014,12 @@ mod tests {
             .input_ownership(slot)
             .expect("synthetic rejection cannot mutate M13 ownership");
         assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
+            &after_unfocused,
+            &after_cancel,
+            &cancel,
+        ));
+        assert!(!native_original_keyboard_release_nonclaim(
             native_device,
             &after_unfocused,
             &after_cancel,

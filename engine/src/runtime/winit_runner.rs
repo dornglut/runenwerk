@@ -6,7 +6,8 @@ use crate::plugins::ui::{
     UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeTextAdmissionError,
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
     native_composition_finality, native_keyboard_finality,
-    native_no_focused_keyboard_claim_witness, native_pointer_finality, native_text_finality,
+    native_no_focused_keyboard_claim_witness, native_original_keyboard_release_nonclaim,
+    native_pointer_finality, native_text_finality,
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
@@ -699,6 +700,20 @@ impl WinitRunner {
                             ) =>
                         {
                             true
+                        }
+                        Ok(after)
+                            if !is_synthetic
+                                && matches!(
+                                    original.state,
+                                    winit::event::ElementState::Released
+                                )
+                                && native_original_keyboard_release_nonclaim(
+                                    device, &before, &after, &error,
+                                ) =>
+                        {
+                            // Genuine physical Up remains neutral-only. A
+                            // release never supplies gameplay press authority.
+                            false
                         }
                         Ok(_) => {
                             m13_failure = Some(anyhow!(
