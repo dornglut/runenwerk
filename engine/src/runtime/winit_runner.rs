@@ -1442,7 +1442,8 @@ impl WinitRunner {
         // Preflight both identity namespaces and retire them atomically BEFORE
         // mutating a UI translator. A fallible allocation or missing raw source
         // must not leave RunenUI cancelled while neutral held keys remain live.
-        let (window_contexts, raw_context) = self.native_input_mut().retire_backend_device(device_id)?;
+        let (window_contexts, raw_context) =
+            self.native_input_mut().retire_backend_device(device_id)?;
         // UI Cancels still use the original pinned M13 recipient and scope;
         // the removed physical IDs remain preserved in window_contexts.
         let windows: Vec<_> = self
@@ -3674,7 +3675,7 @@ mod tests {
         WinitRunner {
             state: app.into_windowed_state(),
             window_realizer: WinitWindowRealizer::default(),
-                native_ui_keyboards: HashMap::new(),
+            native_ui_keyboards: HashMap::new(),
             native_ui_mice: HashMap::new(),
             native_ui_touches: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
@@ -3929,14 +3930,20 @@ mod tests {
             .expect("one original source authority owns retirement");
         assert_eq!(retired.source, identity.source);
         assert!(
-            runner.native_input().window_source_context(window).is_none(),
+            runner
+                .native_input()
+                .window_source_context(window)
+                .is_none(),
             "the runner must observe World retirement without copying a map"
         );
         let next = runner
             .native_input_mut()
             .window_context(window, device)
             .unwrap();
-        assert_ne!(next.source, identity.source, "retired identity cannot be reused");
+        assert_ne!(
+            next.source, identity.source,
+            "retired identity cannot be reused"
+        );
     }
 
     #[test]
@@ -4440,7 +4447,10 @@ mod tests {
                 .expect("recipient retirement must preserve a real source")
         );
         assert!(
-            runner.native_input().window_source_context(window).is_some(),
+            runner
+                .native_input()
+                .window_source_context(window)
+                .is_some(),
             "recipient retirement must not counterfeit physical device loss"
         );
         assert!(
@@ -4531,7 +4541,7 @@ mod tests {
         let mut runner = WinitRunner {
             state: windowed.into_windowed_state(),
             window_realizer: WinitWindowRealizer::default(),
-                native_ui_keyboards: HashMap::new(),
+            native_ui_keyboards: HashMap::new(),
             native_ui_mice: HashMap::new(),
             native_ui_touches: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
