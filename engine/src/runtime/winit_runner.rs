@@ -426,7 +426,7 @@ impl WinitRunner {
         // recipient and its terminal displayed input authority.
         let mouse_cancel = self.cancel_native_ui_mouse(window);
         let touch_cancel = self.cancel_native_ui_touch(window);
-        let cancellation_failure = mouse_cancel.err().or(touch_cancel.err());
+        let mut cancellation_failure = mouse_cancel.err().or(touch_cancel.err());
         // Retire the original framework-held keyboard stream while its
         // source/recipient binding is still valid. After retirement, a
         // synthetic Cancel cannot safely cross into a replacement M13 scope.
@@ -444,6 +444,9 @@ impl WinitRunner {
                 ?error,
                 "native keyboard cancellation failed during recipient retirement"
             );
+            if cancellation_failure.is_none() {
+                cancellation_failure = Some(error);
+            }
         }
         let world = &mut self.state.world;
         if !world.has_resource::<UiNativeInputRecipientsResource>() {
