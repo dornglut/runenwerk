@@ -10,7 +10,7 @@ use engine::plugins::render::inspect::{RenderCaptureSelector, RenderCapturedText
 use engine::plugins::render::{
     Gfx, GpuParams, GpuStorage, GpuUniform, RenderFixedStepIterationUniform, RenderFlow,
     RenderFlowId, RenderFrameProducerId, RenderGpuFixedStepInput, RenderGpuFlowStepStreams,
-    ShaderRegistryResource, SurfaceFrameSubmissionOrder,
+    RenderGpuStepDemandError, ShaderRegistryResource, SurfaceFrameSubmissionOrder,
 };
 use engine::plugins::ui::{
     AppUiExt, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
@@ -1167,6 +1167,8 @@ struct NativeHistoricalGpuHook {
     verified_pixel: bool,
     verified_second_pixel: bool,
     first_capture_frame: Option<u64>,
+    queued_while_in_flight: bool,
+    overflow_rejected_without_loss: bool,
     semantic_committed: bool,
     second_committed: bool,
 }
@@ -1183,7 +1185,8 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                 .stream(self.flow)
                 .ok_or_else(|| anyhow::anyhow!("historical GPU producer disappeared"))?;
             anyhow::ensure!(
-                producer.requested_tick() == if self.semantic_committed { 4 } else { 3 }
+                producer.requested_tick()
+                    == if self.queued_while_in_flight { 4 } else { 3 }
                     && producer.completed_tick()
                         == if self.second_committed {
                             4
@@ -1200,6 +1203,8 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                         0
                     } else if self.semantic_committed {
                         1
+                    } else if self.queued_while_in_flight {
+                        4
                     } else {
                         3
                     },
@@ -1274,6 +1279,59 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     }
                 }
             }
+        }
+
+        // Queue additional *immutable* work while the predecessor is still
+        // G5-admitted but semantically unverified. The total bound includes
+        // both accepted (3) and pending (1) steps. A fifth input must be
+        // returned unchanged rather than lost, overwritten or submitted.
+        if self.first_submission.is_some() && !self.queued_while_in_flight {
+            let producer = world
+                .resource_mut::<RenderGpuFlowStepStreams>()?
+                .stream_mut(self.flow)
+                .ok_or_else(|| anyhow::anyhow!("native GPU history stream disappeared"))?;
+            anyhow::ensure!(
+                producer.accepted_steps().len() == 3 && producer.pending_len() == 0,
+                "first G5 interval changed before in-flight backlog capture"
+            );
+            let input = |value: u32| RenderGpuFixedStepInput {
+                uniforms: BTreeMap::from([(
+                    self.uniform_id,
+                    engine::plugins::render::bytemuck::bytes_of(
+                        &NativeHistoricalUniform {
+                            meta: [value, 0, 0, 0],
+                        }
+                        .to_gpu(),
+                    )
+                    .to_vec(),
+                )]),
+                iteration: RenderFixedStepIterationUniform::new(
+                    0,
+                    1,
+                    4,
+                    value as u64,
+                    1.0 / (value as f32),
+                    0.0,
+                ),
+            };
+            producer
+                .capture(input(4))
+                .map_err(|(err, _)| anyhow::anyhow!("backlogged native step capture failed: {err}"))?;
+            let overflow = input(99);
+            let (failure, returned) = producer
+                .capture(overflow.clone())
+                .expect_err("fifth native input must exceed the four-step total capacity");
+            anyhow::ensure!(
+                failure == RenderGpuStepDemandError::CapacityExceeded
+                    && returned == overflow
+                    && producer.requested_tick() == 4
+                    && producer.completed_tick() == 0
+                    && producer.pending_len() == 1
+                    && producer.accepted_steps().len() == 3,
+                "capacity rejection changed immutable pending or accepted native GPU history"
+            );
+            self.queued_while_in_flight = true;
+            self.overflow_rejected_without_loss = true;
         }
 
         // A real debug capture (not CPU prediction or mere Completed status)
@@ -1375,22 +1433,17 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     anyhow::anyhow!("native producer GPU verification failed: {error}")
                 })?;
             anyhow::ensure!(completed == 3, "native source committed wrong GPU tick");
-            // Author one *new* semantic step only after the prior GPU result is
-            // verified. This must enter a distinct G5 submission and retain the
-            // original GPU counter from the previous terminal generation.
-            let step = RenderGpuFixedStepInput {
-                uniforms: BTreeMap::from([(
-                    self.uniform_id,
-                    engine::plugins::render::bytemuck::bytes_of(
-                        &NativeHistoricalUniform { meta: [4, 0, 0, 0] }.to_gpu(),
-                    )
-                    .to_vec(),
-                )]),
-                iteration: RenderFixedStepIterationUniform::new(0, 1, 4, 4, 1.0 / 4.0, 0.0),
-            };
-            producer.capture(step).map_err(|(err, _)| {
-                anyhow::anyhow!("second native producer capture failed: {err}")
-            })?;
+            // The already captured tick-4 input is still pending, without a
+            // second G5 admission or any recreation from latest ECS data.
+            anyhow::ensure!(
+                self.queued_while_in_flight
+                    && self.overflow_rejected_without_loss
+                    && producer.requested_tick() == 4
+                    && producer.completed_tick() == 3
+                    && producer.pending_len() == 1
+                    && producer.outstanding() == 1,
+                "first verification must expose the unchanged queued historical successor"
+            );
             self.semantic_committed = true;
         }
 
@@ -1431,7 +1484,9 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     && self.saw_second_terminal
                     && self.saw_second_gpu_frame
                     && self.verified_second_pixel
-                    && self.second_committed,
+                    && self.second_committed
+                    && self.queued_while_in_flight
+                    && self.overflow_rejected_without_loss,
                 "native RenderFlow must verify two distinct G5 batches, historical retained state and exact semantic commits"
             );
             // The renderer may already have retired its observation receipt at
@@ -1585,6 +1640,8 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             verified_pixel: false,
             verified_second_pixel: false,
             first_capture_frame: None,
+            queued_while_in_flight: false,
+            overflow_rejected_without_loss: false,
             semantic_committed: false,
             second_committed: false,
         });
