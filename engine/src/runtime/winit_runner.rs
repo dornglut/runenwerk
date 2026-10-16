@@ -818,7 +818,10 @@ impl WinitRunner {
                         Ok(after)
                             if !is_synthetic
                                 && !original.repeat
-                                && matches!(original.state, winit::event::ElementState::Pressed)
+                                && matches!(
+                                    original.state,
+                                    winit::event::ElementState::Pressed
+                                )
                                 && native_no_focused_keyboard_claim_witness(
                                     device, &before, &after, &error,
                                 ) =>
