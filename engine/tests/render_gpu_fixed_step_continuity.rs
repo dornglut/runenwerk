@@ -8,14 +8,13 @@
 use runen_gpu::{
     GpuBindingKey, GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization, GpuBufferRegion,
     GpuBufferUsage, GpuCapabilityProfile, GpuCapabilityRequirements, GpuClearOperation,
-    GpuComputeOperation, GpuComputePipelineDescriptor,
-    GpuContext, GpuContextDescriptor, GpuContextRequestErrorCategory, GpuDispatchIntent,
-    GpuDispatchSize, GpuExecutionPreference, GpuReadbackId, GpuReadbackOperation,
-    GpuReadbackStatus, GpuReconstruction, GpuResourceLabel, GpuResourceLifetime,
-    GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
-    GpuRuntimeBufferBinding, GpuSubmission, GpuSubmissionRejectionKind, GpuSubmissionStatus,
-    GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
-    GpuWorkSubmissionError, admit_static_wgsl_sources,
+    GpuComputeOperation, GpuComputePipelineDescriptor, GpuContext, GpuContextDescriptor,
+    GpuContextRequestErrorCategory, GpuDispatchIntent, GpuDispatchSize, GpuExecutionPreference,
+    GpuReadbackId, GpuReadbackOperation, GpuReadbackStatus, GpuReconstruction, GpuResourceLabel,
+    GpuResourceLifetime, GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingSet,
+    GpuRuntimeBindingValue, GpuRuntimeBufferBinding, GpuSubmission, GpuSubmissionRejectionKind,
+    GpuSubmissionStatus, GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkOperation,
+    GpuWorkResourceIdAllocator, GpuWorkSubmissionError, admit_static_wgsl_sources,
 };
 use std::num::NonZeroU64;
 use std::time::{Duration, Instant};
@@ -585,7 +584,9 @@ fn verified_reconstruction_requeues_exact_accepted_steps_without_reissuing_cpu_t
         producer.commit_verified(context.affinity(), |_, _| {
             Err::<(), &'static str>("semantic proof rejected")
         }),
-        Err(RenderGpuStepCommitError::Verification("semantic proof rejected"))
+        Err(RenderGpuStepCommitError::Verification(
+            "semantic proof rejected"
+        ))
     );
     assert_eq!(
         producer.requeue_verified_after_reconstruction(
@@ -632,7 +633,9 @@ fn verified_reconstruction_requeues_exact_accepted_steps_without_reissuing_cpu_t
             label("fixed.step.recovery.verify"),
             GpuWorkOperation::Readback(
                 GpuReadbackOperation::new(
-                    GpuBufferRegion::whole(&buffer).expect("whole buffer").into(),
+                    GpuBufferRegion::whole(&buffer)
+                        .expect("whole buffer")
+                        .into(),
                     restore_readback,
                 )
                 .expect("restore readback"),
@@ -688,7 +691,10 @@ fn verified_reconstruction_requeues_exact_accepted_steps_without_reissuing_cpu_t
         Ok(())
     );
     assert!(producer.accepted_submission().is_none());
-    assert_eq!((producer.requested_tick(), producer.completed_tick()), (2, 0));
+    assert_eq!(
+        (producer.requested_tick(), producer.completed_tick()),
+        (2, 0)
+    );
     assert_eq!(
         producer
             .candidate(2)

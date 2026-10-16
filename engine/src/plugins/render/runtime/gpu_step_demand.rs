@@ -211,11 +211,7 @@ impl<T> RenderGpuStepDemand<T> {
         &mut self,
         current_affinity: GpuContextAffinity,
         reconstruction: &GpuSubmission,
-        verify: impl FnOnce(
-            &GpuSubmission,
-            &GpuSubmission,
-            &[RenderGpuStepIntent<T>],
-        ) -> Result<(), E>,
+        verify: impl FnOnce(&GpuSubmission, &GpuSubmission, &[RenderGpuStepIntent<T>]) -> Result<(), E>,
     ) -> Result<(), RenderGpuStepCommitError<E>> {
         let batch = self
             .accepted
