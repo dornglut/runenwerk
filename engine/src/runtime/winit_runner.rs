@@ -1328,6 +1328,13 @@ impl WinitRunner {
                     }
                 }
             }
+        } else if !touch_windows.is_empty() {
+            // A tracked original touch stream cannot outlive its checked
+            // window-device identity. Missing that identity makes an exact
+            // M13 device Cancel impossible: success would strand contacts.
+            cancellation_failure = Some(anyhow!(
+                "native touch device loss lacks its original window-device identity"
+            ));
         }
         if window_contexts.is_empty() && raw_context.is_none() {
             if let Some(error) = cancellation_failure {
@@ -4235,6 +4242,48 @@ mod tests {
         assert!(
             runner.state.world.has_resource::<UiRuntimeSlotsResource>(),
             "retirement rejection cannot discard the native UI runtime"
+        );
+        // A retained UI touch backend with no original window-device mapping
+        // must never be silently reported as a successfully retired contact.
+        let stale_backend = winit::event::DeviceId::dummy();
+        let retired = runner
+            .input_adapter
+            .retire_window_device(stale_backend)
+            .expect("checked physical identity retires");
+        assert!(!retired.is_empty());
+        let stale_scope = runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("mounted UI source remains")
+            .input_ownership(slot)
+            .expect("original framework scope")
+            .scope()
+            .clone();
+        runner.native_ui_touches.insert(
+            secondary,
+            NativeUiTouchTranslator {
+                recipient: slot,
+                source: actual_context.source,
+                binding_epoch: new_epoch,
+                scope: stale_scope,
+                backend_devices: HashSet::from([stale_backend]),
+                touch: TouchInputState::default(),
+            },
+        );
+        let missing = runner
+            .apply_raw_device_removal(stale_backend)
+            .expect_err("missing original touch device ID must fail closed");
+        assert!(
+            format!("{missing:#}").contains("lacks its original window-device identity"),
+            "diagnostic retains the missing original identity: {missing:#}"
+        );
+        assert!(
+            runner
+                .native_ui_touches
+                .get(&secondary)
+                .is_some_and(|state| state.backend_devices.contains(&stale_backend)),
+            "a missing identity must not be reported as a settled M13 Cancel"
         );
     }
 
