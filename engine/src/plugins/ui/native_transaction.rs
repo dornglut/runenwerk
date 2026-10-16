@@ -1009,6 +1009,12 @@ mod tests {
             "an active original recipient must never be removed before cancellation"
         );
         assert!(world.resource::<UiRuntimeSlotsResource>()?.contains(slot));
+        let original_scope = world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .input_ownership(slot)
+            .map_err(|error| anyhow!("original native M13 scope unavailable: {error:?}"))?
+            .scope()
+            .clone();
         assert!(retire_native_input_recipient(
             &mut world,
             NativeWindowId::primary()
@@ -1019,9 +1025,19 @@ mod tests {
                 .unmount_with_retirement(slot),
             Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired)
         ));
+        let shutdown = unmount_retired_native_ui_slot(&mut world, slot)?
+            .expect("retired M13 scope must shut down through the World");
+        assert_eq!(shutdown.final_ownership().scope(), &original_scope);
+        assert_eq!(shutdown.final_ownership().status(), RuntimeStatus::Closed);
         assert!(
-            unmount_retired_native_ui_slot(&mut world, slot)?.is_some(),
-            "retired M13 scope must shut down through the World"
+            shutdown.ordered_records().iter().any(|record| {
+                matches!(
+                    record,
+                    runenui_runtime::InputArbitrationRecord::ScopeRetired(retirement)
+                        if retirement.scope() == &original_scope
+                )
+            }),
+            "native teardown must return the actual original framework scope retirement"
         );
         assert!(!world.resource::<UiRuntimeSlotsResource>()?.contains(slot));
         assert!(
@@ -1085,6 +1101,37 @@ mod tests {
             "a retired slot cannot be shut down twice"
         );
         Ok(())
+    }
+
+    #[test]
+    fn retired_native_slot_missing_display_authority_preserves_runtime_for_recovery() {
+        let mut world = setup();
+        let slot = world.resource::<Probe>().unwrap().slot;
+        world.insert_resource(UiRuntimePresentationAssociationsResource::default());
+        let retired = retire_native_input_recipient(&mut world, NativeWindowId::primary())
+            .unwrap();
+        assert!(retired);
+        let presentation = world
+            .remove_resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap();
+        assert!(
+            unmount_retired_native_ui_slot(&mut world, slot).is_err(),
+            "missing native presentation owner must reject before framework shutdown"
+        );
+        assert!(
+            world
+                .resource::<UiRuntimeSlotsResource>()
+                .unwrap()
+                .contains(slot),
+            "failure must preserve the original framework scope for recovery"
+        );
+        world.insert_resource(presentation);
+        assert!(
+            unmount_retired_native_ui_slot(&mut world, slot)
+                .unwrap()
+                .is_some(),
+            "restored authoritative presentation enables exactly one real shutdown"
+        );
     }
 
     #[test]
