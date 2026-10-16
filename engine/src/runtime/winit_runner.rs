@@ -1287,9 +1287,9 @@ impl WinitRunner {
 
     /// Retire only the pinned M13 mouse stream in its original live scope.
     /// A cancellation is never interpreted as an original physical Up.
-    fn cancel_native_ui_mouse(&mut self, window: NativeWindowId) {
+    fn cancel_native_ui_mouse(&mut self, window: NativeWindowId) -> Result<()> {
         let Some(mut lifetime) = self.native_ui_mice.remove(&window) else {
-            return;
+            return Ok(());
         };
         let modifiers = self
             .native_ui_modifiers
@@ -1297,50 +1297,94 @@ impl WinitRunner {
             .copied()
             .unwrap_or(KeyModifiers::NONE);
         let Some(cancel) = lifetime.mouse.invalidate_point_authority(modifiers) else {
-            return;
+            return Ok(());
         };
-        let Ok(slots) = self.state.world.resource_mut::<UiRuntimeSlotsResource>() else {
-            return;
-        };
-        if !slots
-            .input_ownership(lifetime.recipient)
-            .is_ok_and(|observed| observed.scope() == &lifetime.scope)
-        {
-            return;
+        let slots = self
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .context("native mouse Cancel lost its pinned framework runtime")?;
+        let before = slots.input_ownership(lifetime.recipient).map_err(|error| {
+            anyhow!("native mouse Cancel M13 pre-state unavailable: {error:?}")
+        })?;
+        if before.scope() != &lifetime.scope {
+            // A stale stream must not be submitted to a replacement scope.
+            return Ok(());
         }
-        if slots
+        let pointer = cancel.pointer_id();
+        let surface = cancel.surface_context().surface_id().clone();
+        let submission = slots
             .submit_native_pointer(lifetime.recipient, cancel)
-            .is_ok()
-        {
-            let _ = slots.pump_native_input_records(lifetime.recipient);
-        }
+            .map_err(|error| anyhow!("native mouse Cancel M13 admission rejected: {error:?}"))?;
+        let (batch, status) = slots
+            .pump_native_input_records(lifetime.recipient)
+            .map_err(|error| anyhow!("native mouse Cancel M13 pump failed: {error:?}"))?;
+        let evidence = native_pointer_finality(
+            before.scope(),
+            lifetime.device,
+            pointer,
+            &surface,
+            submission,
+            &batch,
+            &status,
+        );
+        anyhow::ensure!(
+            matches!(evidence, Ok(UiInputFinality::Committed(_))),
+            "native mouse Cancel lacked committed M13 settlement: {evidence:?}"
+        );
+        Ok(())
     }
 
     /// Retire every pinned touch contact from its exact original M13 scope.
     /// These are framework Cancels, never fabricated physical releases or
     /// positive gameplay permissions. Do not transplant them to a new scope.
-    fn cancel_native_ui_touch(&mut self, window: NativeWindowId) {
+    fn cancel_native_ui_touch(&mut self, window: NativeWindowId) -> Result<()> {
         let Some(mut lifetime) = self.native_ui_touches.remove(&window) else {
-            return;
+            return Ok(());
         };
         let events = lifetime.touch.cancel_all();
-        let Ok(slots) = self.state.world.resource_mut::<UiRuntimeSlotsResource>() else {
-            return;
-        };
-        if !slots
-            .input_ownership(lifetime.recipient)
-            .is_ok_and(|snapshot| snapshot.scope() == &lifetime.scope)
-        {
-            return;
+        if events.is_empty() {
+            return Ok(());
+        }
+        let slots = self
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .context("native touch Cancel lost its pinned framework runtime")?;
+        let before = slots.input_ownership(lifetime.recipient).map_err(|error| {
+            anyhow!("native touch Cancel M13 pre-state unavailable: {error:?}")
+        })?;
+        if before.scope() != &lifetime.scope {
+            // A retired generation must not cancel a newly mounted UI owner.
+            return Ok(());
         }
         for event in events {
-            if slots
+            let device = event
+                .device_id()
+                .context("native touch Cancel lost its original hardware device identity")?;
+            let pointer = event.pointer_id();
+            let surface = event.surface_context().surface_id().clone();
+            let submission = slots
                 .submit_native_pointer(lifetime.recipient, event)
-                .is_ok()
-            {
-                let _ = slots.pump_native_input_records(lifetime.recipient);
-            }
+                .map_err(|error| anyhow!("native touch Cancel M13 admission rejected: {error:?}"))?;
+            let (batch, status) = slots
+                .pump_native_input_records(lifetime.recipient)
+                .map_err(|error| anyhow!("native touch Cancel M13 pump failed: {error:?}"))?;
+            let evidence = native_pointer_finality(
+                before.scope(),
+                device,
+                pointer,
+                &surface,
+                submission,
+                &batch,
+                &status,
+            );
+            anyhow::ensure!(
+                matches!(evidence, Ok(UiInputFinality::Committed(_))),
+                "native touch Cancel lacked committed M13 settlement: {evidence:?}"
+            );
         }
+        Ok(())
     }
 
     /// Only original neutral-admitted cursor movement and a current terminal
