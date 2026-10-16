@@ -256,6 +256,35 @@ The benchmark suite includes `render_population/prefix_scan_plan_4096`,
 Spatial hash and chunked unbounded populations are later milestones. They
 should not be treated as a fallback for the bounded-grid boids proof.
 
+## Stateful GPU Submission Lifecycle Evidence
+
+The ordinary renderer retains the exact public RunenGPU submission handles even
+when timing, capture and UI observation are disabled. Consumers with access to
+the `Gfx` runtime resource can inspect pending receipts through
+`Gfx::pending_gpu_frame_submissions()`; each receipt includes the frame,
+surface, selected flow/invocation identities, and the exact RunenGPU handle.
+The handle's `status()` belongs to RunenGPU, not a renderer-maintained
+completion estimate.
+
+`Gfx::take_gpu_frame_terminal_outcomes()` drains renderer-observed outcomes
+**once** after normal, nonblocking GPU progress. Every outcome identifies the
+accepted submission, originating context affinity, frame/surface, selected
+invocations, and one of `Completed`, `Failed`, or `Invalidated`.
+The bounded delivery window reports `lost_outcomes()` and
+`has_delivery_gap()` explicitly; any loss invalidates claims of complete
+historical notification delivery. It does not invalidate or mutate RunenGPU
+submission truth. An application must arrange to consume this evidence while
+the renderer progresses; there is no separate background GPU progress loop.
+
+These receipts establish only GPU **submission/execution** facts for a composed
+frame. They do **not** prove a particular producer-owned fixed tick, semantic
+state recovery, successful visual publication, usable retained contents after a
+device-generation change, or safe retry of a `RetainedContinuityChanged`
+rejection. Producer-owned immutable step inputs, requested/accepted/completed
+semantic cursors, recovery and nonblocking ordinary RenderFlow admission
+remain the separate, open [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291)
+correctness boundary.
+
 ## Scale Working-Set Residency Evidence
 
 Renderer scale evidence starts with finite working sets, not with unbounded

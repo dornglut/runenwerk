@@ -343,6 +343,29 @@ mod tests {
     use super::*;
 
     #[test]
+    fn terminal_delivery_gap_is_drained_once_without_inventing_gpu_completion() {
+        let mut state = RendererSubmissionLifecycle::default();
+        state.lost_terminal = 3;
+        let first = state.take_terminal();
+        assert_eq!(first.lost_outcomes(), 3);
+        assert!(first.has_delivery_gap());
+        assert!(first.outcomes().is_empty());
+        let next = state.take_terminal();
+        assert!(!next.has_delivery_gap());
+        assert!(next.outcomes().is_empty());
+        assert!(state.pending_receipts().is_empty());
+    }
+
+    #[test]
+    fn frame_receipts_preserve_flow_and_invocation_identity() {
+        let flow_id = RenderFlowId::try_from_raw(12).expect("nonzero flow id");
+        let invocation = PreparedFlowInvocationId::new("main.scene");
+        let receipt = RenderGpuFrameInvocationReceipt::new(flow_id, invocation.clone());
+        assert_eq!(receipt.flow_id(), flow_id);
+        assert_eq!(receipt.invocation_id(), &invocation);
+    }
+
+    #[test]
     fn terminal_delivery_bounds_memory_and_exposes_sequence_gaps() {
         let mut queue = VecDeque::new();
         let mut lost = 0;
