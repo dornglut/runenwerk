@@ -1,6 +1,6 @@
 // Native RenderFlow #1291: actual per-step uniforms and retained mutation.
 struct HistoricalParams {
-    meta: vec4<u32>,
+    values: vec4<u32>,
 };
 
 struct HistoricalIteration {
@@ -23,6 +23,6 @@ fn cs_main() {
     // A specific captured input and source-time fixed-step control affect
     // the actual GPU result; the current ECS uniform must never substitute.
     if (iteration.substep_index < iteration.submitted_substeps) {
-        counter[0] = counter[0] + params.meta.x;
+        counter[0] = counter[0] + params.values.x;
     }
 }
