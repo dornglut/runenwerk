@@ -135,10 +135,10 @@ pub fn transact_ui_slot<T>(
         (Ok(previous), Ok(current)) => previous.revision() != current.revision(),
         _ => true,
     };
-    if !valid_after || changed || !matches!(&outcome, Ok(Ok(_))) {
-        if let Some(source) = source {
-            revoke_game_source(world, source)?;
-        }
+    if let Some(source) = source
+        && (!valid_after || changed || !matches!(&outcome, Ok(Ok(_))))
+    {
+        revoke_game_source(world, source)?;
     }
     match outcome {
         Ok(result) => result,
