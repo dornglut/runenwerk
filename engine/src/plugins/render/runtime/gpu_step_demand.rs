@@ -94,19 +94,42 @@ impl<T> RenderGpuStepDemand<T> {
         self.pending.len()
     }
 
-    /// Atomic capture: no tick or payload is dropped on capacity rejection.
-    /// The producer MUST capture input before irreversible CPU advancement.
-    pub fn capture(&mut self, input: T) -> Result<u64, RenderGpuStepDemandError> {
-        if self.outstanding() >= self.maximum_outstanding {
-            return Err(RenderGpuStepDemandError::CapacityExceeded);
+    /// Atomically capture a producer-owned immutable historical interval.
+    /// Rejected inputs are returned to the producer, not silently destroyed;
+    /// the producer MUST decide whether to pause, retry or resynchronize.
+    pub fn capture_batch(
+        &mut self,
+        inputs: Vec<T>,
+    ) -> Result<(u64, u64), (RenderGpuStepDemandError, Vec<T>)> {
+        let Ok(requested) = self.outstanding().checked_add(inputs.len()) else {
+            return Err((RenderGpuStepDemandError::CapacityExceeded, inputs));
+        };
+        if requested > self.maximum_outstanding {
+            return Err((RenderGpuStepDemandError::CapacityExceeded, inputs));
         }
-        let tick = self
-            .next_tick
-            .checked_add(1)
-            .ok_or(RenderGpuStepDemandError::TickIdentityExhausted)?;
-        self.pending.push_back(RenderGpuStepIntent { tick, input });
-        self.next_tick = tick;
-        Ok(tick)
+        let Ok(count) = u64::try_from(inputs.len()) else {
+            return Err((RenderGpuStepDemandError::TickIdentityExhausted, inputs));
+        };
+        let Some(last_tick) = self.next_tick.checked_add(count) else {
+            return Err((RenderGpuStepDemandError::TickIdentityExhausted, inputs));
+        };
+        let start_tick = self.next_tick;
+        for (offset, input) in (1..=count).zip(inputs) {
+            self.pending.push_back(RenderGpuStepIntent {
+                tick: start_tick + offset,
+                input,
+            });
+        }
+        self.next_tick = last_tick;
+        Ok((start_tick, last_tick))
+    }
+
+    /// Capture one producer-owned step. On rejection the unconsumed input
+    /// is returned in the error alongside its reason.
+    pub fn capture(&mut self, input: T) -> Result<u64, (RenderGpuStepDemandError, T)> {
+        self.capture_batch(vec![input])
+            .map(|(_, last_tick)| last_tick)
+            .map_err(|(reason, mut inputs)| (reason, inputs.remove(0)))
     }
 
     /// Returns only the captured historical prefix for a *fresh* GPU graph.
@@ -195,7 +218,10 @@ mod tests {
         assert_eq!(steps.capture(String::from("at-8")), Ok(8));
         assert_eq!(steps.capture(String::from("at-9")), Ok(9));
         assert_eq!(steps.capture(String::from("at-10")), Ok(10));
-        assert_eq!(steps.capture(String::from("lost")), Err(RenderGpuStepDemandError::CapacityExceeded));
+        assert_eq!(
+            steps.capture(String::from("lost")),
+            Err((RenderGpuStepDemandError::CapacityExceeded, String::from("lost")))
+        );
         assert_eq!((steps.requested_tick(), steps.completed_tick(), steps.outstanding()), (10, 7, 3));
         assert_eq!(steps.candidate(2).iter().map(|v| v.input().as_str()).collect::<Vec<_>>(), vec!["at-8", "at-9"]);
         assert!(steps.accepted_submission().is_none());
@@ -203,9 +229,24 @@ mod tests {
     }
 
     #[test]
+    fn rejected_bulk_capture_is_atomic_and_returns_immutable_inputs() {
+        let mut steps = RenderGpuStepDemand::new(0, 3);
+        assert_eq!(steps.capture(7u8), Ok(1));
+        assert_eq!(
+            steps.capture_batch(vec![8, 9, 10]),
+            Err((RenderGpuStepDemandError::CapacityExceeded, vec![8, 9, 10]))
+        );
+        assert_eq!(steps.requested_tick(), 1);
+        assert_eq!(steps.outstanding(), 1);
+        assert_eq!(steps.capture_batch(vec![8, 9]), Ok((1, 3)));
+        assert_eq!(steps.requested_tick(), 3);
+        assert_eq!(steps.pending_len(), 3);
+    }
+
+    #[test]
     fn tick_identity_exhaustion_does_not_consume_any_input() {
         let mut steps = RenderGpuStepDemand::<u8>::new(u64::MAX, 2);
-        assert_eq!(steps.capture(1), Err(RenderGpuStepDemandError::TickIdentityExhausted));
+        assert_eq!(steps.capture(1), Err((RenderGpuStepDemandError::TickIdentityExhausted, 1)));
         assert_eq!(steps.outstanding(), 0);
         assert_eq!(steps.requested_tick(), u64::MAX);
     }
