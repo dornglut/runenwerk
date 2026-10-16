@@ -1275,6 +1275,72 @@ mod tests {
     }
 
     #[test]
+    fn prepared_flow_rejects_completed_cpu_steps_exceeding_gpu_region_capacity() {
+        let flow = RenderFlow::new("test.fixed.region.capacity")
+            .compute_pass("simulate")
+            .dispatch([1, 1, 1])
+            .finish()
+            .fixed_step_region(
+                "simulation",
+                2,
+                [(
+                    "simulate",
+                    runen_gpu::GpuBindingKey::try_new(0, 0).expect("valid test binding"),
+                )],
+            )
+            .expect("fixed step authoring")
+            .validate()
+            .expect("fixed step graph validation");
+        let compiled = compile_flow_plan(&flow).expect("test flow compiles");
+        let region = &compiled.execution.fixed_step_regions[0];
+        let config = FixedTimeConfig::default();
+        let budget = CatchupBudget {
+            max_steps_per_frame: 4,
+        };
+        let cpu_advanced = FixedTimeState {
+            steps_ran_last_frame: 3,
+            total_completed_steps: 3,
+            ..FixedTimeState::default()
+        };
+        let extracted: ExtractedRenderStateMap<'_> = BTreeMap::from([
+            (TypeId::of::<FixedTimeConfig>(), &config as &dyn Any),
+            (TypeId::of::<FixedTimeState>(), &cpu_advanced as &dyn Any),
+            (TypeId::of::<CatchupBudget>(), &budget as &dyn Any),
+        ]);
+        let err = build_prepared_flow_inputs(
+            std::slice::from_ref(&compiled),
+            &extracted,
+            (640, 480),
+        )
+        .expect_err("GPU region may not silently truncate CPU-completed ticks");
+        assert!(
+            err.to_string()
+                .contains("refusing silent GPU-step truncation")
+        );
+
+        let cpu_advanced = FixedTimeState {
+            steps_ran_last_frame: 2,
+            total_completed_steps: 2,
+            ..FixedTimeState::default()
+        };
+        let extracted: ExtractedRenderStateMap<'_> = BTreeMap::from([
+            (TypeId::of::<FixedTimeConfig>(), &config as &dyn Any),
+            (TypeId::of::<FixedTimeState>(), &cpu_advanced as &dyn Any),
+            (TypeId::of::<CatchupBudget>(), &budget as &dyn Any),
+        ]);
+        let input = build_prepared_flow_inputs(
+            std::slice::from_ref(&compiled),
+            &extracted,
+            (640, 480),
+        )
+        .expect("exact bounded GPU step projection");
+        let bytes = &input[&compiled.flow_id].projected_uniform_bytes[&region.iteration_uniform];
+        let iteration = RenderFixedStepIterationUniform::from_uniform_bytes(bytes)
+            .expect("typed fixed-step projection");
+        assert_eq!(iteration.submitted_substeps, 2);
+    }
+
+    #[test]
     fn surface_preparation_keeps_explicit_headless_primary_unbound() {
         let registry = RenderSurfaceRegistryResource::default();
         let prepared = prepared_surface_infos_from_registry(
