@@ -462,6 +462,7 @@ pub enum UiRuntimeNativeKeyboardAdmissionError {
 fn native_unfocused_keyboard_rejection_witness(
     expected_device: InputDeviceId,
     expected_phase: KeyboardPhase,
+    expected_repeat: bool,
     before: &InputOwnershipSnapshot,
     after: &InputOwnershipSnapshot,
     error: &UiRuntimeNativeKeyboardAdmissionError,
@@ -471,7 +472,7 @@ fn native_unfocused_keyboard_rejection_witness(
     };
     if framework.kind() != SubmitKeyboardErrorKind::NoFocusedTarget
         || framework.event().phase() != expected_phase
-        || framework.event().is_repeat()
+        || framework.event().is_repeat() != expected_repeat
         || framework.event().device_id() != Some(expected_device)
         || before != after
         || before.status() != runenui_runtime::RuntimeStatus::Running
@@ -505,6 +506,28 @@ pub fn native_no_focused_keyboard_claim_witness(
     native_unfocused_keyboard_rejection_witness(
         expected_device,
         KeyboardPhase::Down,
+        false,
+        before,
+        after,
+        error,
+    )
+}
+
+/// Exact *original repeat* nonclaim is not a new gameplay Down grant.
+/// The native translator has already established the prior pressed lifetime;
+/// this only avoids revoking that preexisting source-local permission when
+/// a genuine repeat is rejected before M13 sequence reservation. Revocation
+/// and permission remain authoritative in Engine ActionState.
+pub(crate) fn native_original_keyboard_repeat_nonclaim(
+    expected_device: InputDeviceId,
+    before: &InputOwnershipSnapshot,
+    after: &InputOwnershipSnapshot,
+    error: &UiRuntimeNativeKeyboardAdmissionError,
+) -> bool {
+    native_unfocused_keyboard_rejection_witness(
+        expected_device,
+        KeyboardPhase::Down,
+        true,
         before,
         after,
         error,
@@ -522,6 +545,7 @@ pub(crate) fn native_original_keyboard_release_nonclaim(
     native_unfocused_keyboard_rejection_witness(
         expected_device,
         KeyboardPhase::Up,
+        false,
         before,
         after,
         error,
@@ -3053,6 +3077,12 @@ mod tests {
             .input_ownership(slot)
             .expect("rejected repeat must leave M13 ownership observable");
         assert_eq!(after_repeat, after_unfocused);
+        assert!(native_original_keyboard_repeat_nonclaim(
+            native_device,
+            &before_unfocused,
+            &after_repeat,
+            &repeated_down,
+        ));
         assert!(
             !native_no_focused_keyboard_claim_witness(
                 native_device,
@@ -3062,6 +3092,24 @@ mod tests {
             ),
             "repeat rejection may not authorize a fresh game press"
         );
+        assert!(!native_original_keyboard_repeat_nonclaim(
+            InputDeviceId::new(17).expect("another valid device"),
+            &before_unfocused,
+            &after_repeat,
+            &repeated_down,
+        ));
+        assert!(!native_original_keyboard_repeat_nonclaim(
+            native_device,
+            &before_unfocused,
+            &after_unfocused,
+            &rejected,
+        ));
+        assert!(!native_original_keyboard_repeat_nonclaim(
+            native_device,
+            &before_unfocused,
+            &after_repeat,
+            &missing,
+        ));
         assert!(!native_no_focused_keyboard_claim_witness(
             native_device,
             &before_unfocused,
@@ -3191,6 +3239,12 @@ mod tests {
             &before_unfocused,
             &focused,
             &rejected,
+        ));
+        assert!(!native_original_keyboard_repeat_nonclaim(
+            native_device,
+            &before_unfocused,
+            &focused,
+            &repeated_down,
         ));
 
         let receipt = slots

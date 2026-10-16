@@ -7,7 +7,7 @@ use crate::plugins::ui::{
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
     native_composition_finality, native_keyboard_finality,
     native_no_focused_keyboard_claim_witness, native_original_keyboard_release_nonclaim,
-    native_pointer_finality, native_text_finality,
+    native_original_keyboard_repeat_nonclaim, native_pointer_finality, native_text_finality,
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
@@ -799,6 +799,10 @@ impl WinitRunner {
         // missing finality is not merely a gameplay nonclaim: continuing the
         // host could preserve an unresolved framework keyboard lifetime.
         let mut m13_failure: Option<anyhow::Error> = None;
+        // A genuine repeat retains its prior physical lifetime. This never
+        // grants a new game Down, restores a revoked held action, or manufactures
+        // an M13 sequence; ActionState remains the only gameplay permission owner.
+        let mut preserve_prior_held_permission = false;
         let permit = match translated {
             KeyboardInputOutcome::Submit(event) => {
                 let slots = self
@@ -853,6 +857,20 @@ impl WinitRunner {
                         }
                         Ok(after)
                             if !is_synthetic
+                                && original.repeat
+                                && matches!(
+                                    original.state,
+                                    winit::event::ElementState::Pressed
+                                )
+                                && native_original_keyboard_repeat_nonclaim(
+                                    device, &before, &after, &error,
+                                ) =>
+                        {
+                            preserve_prior_held_permission = true;
+                            false
+                        }
+                        Ok(after)
+                            if !is_synthetic
                                 && matches!(
                                     original.state,
                                     winit::event::ElementState::Released
@@ -886,7 +904,10 @@ impl WinitRunner {
         // Missing or ambiguous M13 evidence, runtime failure, UI exclusivity,
         // and translator suppression NEVER produce positive gameplay evidence.
         // Revocation happens before PreUpdate/CoreSet::Input.
-        if !permit && matches!(original.state, winit::event::ElementState::Pressed) {
+        if !permit
+            && !preserve_prior_held_permission
+            && matches!(original.state, winit::event::ElementState::Pressed)
+        {
             self.deny_native_keyboard_lifetime(context, &physical_key)?;
         }
         // The genuine physical Down remains denied before returning the
