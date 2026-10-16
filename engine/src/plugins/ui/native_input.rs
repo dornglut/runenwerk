@@ -209,7 +209,7 @@ impl UiNativeInputRecipientsResource {
     /// Admit the declared selection against the real created primary window,
     /// actual mounted slot and current M13 Running scope. Idempotent if native
     /// startup is re-entered, and never silently chooses a visible slot.
-    pub fn realize_requested_primary(
+    pub(crate) fn realize_requested_primary(
         &mut self,
         windows: &WindowStateRegistryResource,
         slots: &mut UiRuntimeSlotsResource,
@@ -222,7 +222,7 @@ impl UiNativeInputRecipientsResource {
 
     /// An identical live binding is idempotent; changing target requires retire.
     /// All UI registrations obtain the actual runtime scope synchronously.
-    pub fn bind(
+    pub(crate) fn bind(
         &mut self,
         window: NativeWindowId,
         recipient: NativeInputRecipient,
@@ -499,7 +499,7 @@ impl UiNativeInputRecipientsResource {
     /// The *existing* completed-Present ledger also loses that slot's mapping;
     /// rebind must wait for a fresh terminal display rather than reviving an
     /// obsolete context from the previous window/source lifetime.
-    pub fn retire_window(
+    pub(crate) fn retire_window(
         &mut self,
         window: NativeWindowId,
         presentations: &mut UiRuntimePresentationAssociationsResource,
@@ -523,7 +523,7 @@ impl UiNativeInputRecipientsResource {
     /// Retire a mounted runtime's recipient and its old displayed input.
     /// Preserve an explicit unbound marker until the surviving native window
     /// has a newly validated recipient or has itself been destroyed.
-    pub fn retire_slot(
+    pub(crate) fn retire_slot(
         &mut self,
         slot: UiRuntimeSlotId,
         presentations: &mut UiRuntimePresentationAssociationsResource,
@@ -551,7 +551,7 @@ impl UiNativeInputRecipientsResource {
     /// Release a retired window's identity only after its native record is
     /// actually gone. This bounds registry state to real window lifetimes;
     /// retiring a still-live input source never silently grants gameplay.
-    pub fn forget_destroyed_window(
+    pub(crate) fn forget_destroyed_window(
         &mut self,
         window: NativeWindowId,
         windows: &WindowStateRegistryResource,

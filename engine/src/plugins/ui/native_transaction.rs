@@ -11,10 +11,13 @@ use runenui_runtime::RuntimeStatus;
 
 use crate::plugins::input::{ActionState, InputState};
 use crate::runtime::winit_input::WinitInputAdapter;
-use crate::runtime::{NativeWindowLifecycleState, WindowStateRegistryResource};
+use crate::runtime::{
+    NativeWindowId, NativeWindowLifecycleState, WindowStateRegistryResource,
+};
 
 use super::{
-    UiNativeInputRecipientsResource, UiRuntimeSlotId, UiRuntimeSlotOperationFailure,
+    NativeInputRecipient, NativeInputRecipientError, UiNativeInputRecipientsResource,
+    UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotOperationFailure,
     UiRuntimeSlotsResource,
 };
 
@@ -35,6 +38,130 @@ pub(crate) fn test_selected_slot_operation<T>(
     // Lower-level recipient/Present unit tests explicitly model an already
     // validated native World transaction; this path exists only in tests.
     slots.transact_native_app(&NativeAppMutationPermit { _sealed: () }, slot, operation)
+}
+
+/// Perform a native recipient selection inside the same exclusive World
+/// boundary as the existing original source and gameplay ActionState owners.
+/// The registry's lower-level methods are crate-private to prevent an ECS
+/// caller from bypassing revocation during the same Update.
+fn change_native_recipient(
+    world: &mut World,
+    window: NativeWindowId,
+    operation: impl FnOnce(
+        &mut UiNativeInputRecipientsResource,
+        &WindowStateRegistryResource,
+        &mut UiRuntimeSlotsResource,
+    ) -> std::result::Result<bool, NativeInputRecipientError>,
+) -> Result<bool> {
+    // Reject inconsistent gameplay resources before the binding can commit.
+    // With no original source yet, no prior Winit lifetime can be attributed
+    // to this window; the adapter remains the sole source allocator.
+    let source = world
+        .resource::<WinitInputAdapter>()
+        .ok()
+        .and_then(|adapter| adapter.window_source_context(window))
+        .map(|context| context.source);
+    if source.is_some()
+        && world.resource::<ActionState>().is_ok()
+        && world.resource::<InputState>().is_err()
+    {
+        return Err(anyhow!(
+            "cannot change native input recipient without its physical InputState"
+        ));
+    }
+    world.resource::<WindowStateRegistryResource>()?;
+    let mut recipients = world
+        .remove_resource::<UiNativeInputRecipientsResource>()
+        .ok_or_else(|| anyhow!("native recipient registry is unavailable"))?;
+    let Some(mut slots) = world.remove_resource::<UiRuntimeSlotsResource>() else {
+        world.insert_resource(recipients);
+        return Err(anyhow!("native RunenUI slot registry is unavailable"));
+    };
+    // The exclusive World has already proved the window resource exists.
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        operation(
+            &mut recipients,
+            world
+                .resource::<WindowStateRegistryResource>()
+                .expect("checked native window registry"),
+            &mut slots,
+        )
+    }));
+    world.insert_resource(slots);
+    world.insert_resource(recipients);
+    let changed = match outcome {
+        Ok(result) => result?,
+        Err(panic) => std::panic::resume_unwind(panic),
+    };
+    if changed {
+        if let Some(source) = source {
+            revoke_game_source(world, source)?;
+        }
+    }
+    Ok(changed)
+}
+
+/// Bind an explicit native input recipient, synchronously retiring prior
+/// gameplay permission from the original window source on a new binding.
+/// A failed or idempotent binding changes no game permission.
+///
+/// This World-level API is required for ECS callers. The registry cannot be
+/// mutated directly by external ECS systems.
+pub fn bind_native_input_recipient(
+    world: &mut World,
+    window: NativeWindowId,
+    recipient: NativeInputRecipient,
+) -> Result<bool> {
+    change_native_recipient(world, window, |recipients, windows, slots| {
+        recipients.bind(window, recipient, windows, slots)
+    })
+}
+
+/// Realize a prior explicit primary recipient request without bypassing the
+/// same-schedule game-input revocation boundary.
+pub fn realize_requested_native_primary(world: &mut World) -> Result<bool> {
+    change_native_recipient(
+        world,
+        NativeWindowId::primary(),
+        |recipients, windows, slots| recipients.realize_requested_primary(windows, slots),
+    )
+}
+
+/// Retire an original native window's selected recipient and its completed
+/// display mapping, then synchronously deny old gameplay held-key generations.
+/// This does not synthesize any RunenInput physical release.
+pub fn retire_native_input_recipient(world: &mut World, window: NativeWindowId) -> Result<bool> {
+    let source = world
+        .resource::<WinitInputAdapter>()
+        .ok()
+        .and_then(|adapter| adapter.window_source_context(window))
+        .map(|context| context.source);
+    if source.is_some()
+        && world.resource::<ActionState>().is_ok()
+        && world.resource::<InputState>().is_err()
+    {
+        return Err(anyhow!(
+            "cannot retire native input recipient without its physical InputState"
+        ));
+    }
+    let mut recipients = world
+        .remove_resource::<UiNativeInputRecipientsResource>()
+        .ok_or_else(|| anyhow!("native recipient registry is unavailable"))?;
+    let Some(mut presentations) =
+        world.remove_resource::<UiRuntimePresentationAssociationsResource>()
+    else {
+        world.insert_resource(recipients);
+        return Err(anyhow!("native completed-Present associations are unavailable"));
+    };
+    let retired = recipients.retire_window(window, &mut presentations);
+    world.insert_resource(presentations);
+    world.insert_resource(recipients);
+    if retired {
+        if let Some(source) = source {
+            revoke_game_source(world, source)?;
+        }
+    }
+    Ok(retired)
 }
 
 fn revoke_game_source(world: &mut World, source: runen_input::InputSourceId) -> Result<()> {
@@ -380,6 +507,122 @@ mod tests {
                 .unwrap()
                 .action_down(action::WORLD_MOVE_UP),
             "invalid final M13 scope must revoke old UI-source game permission"
+        );
+    }
+
+    #[test]
+    fn world_native_binding_revokes_prior_game_hold_without_physical_release() {
+        let mut world = World::new();
+        let mut windows = WindowStateRegistryResource::default();
+        let window = windows.register_primary_window("new UI", (640, 480), 1.0, true);
+        let mut adapter = WinitInputAdapter::default();
+        let context = adapter
+            .window_context(window, winit::event::DeviceId::dummy())
+            .unwrap();
+        let mut input = InputState::new();
+        input.handle_normalized_keyboard(context, &key(DigitalState::Pressed));
+        let mut actions = ActionState::new();
+        actions.project(&input);
+        assert!(actions.action_down(action::WORLD_MOVE_UP));
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<ProbeApp>(
+                UiTypedScreenId::new("native.world.binding"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        world.insert_resource(windows);
+        world.insert_resource(adapter);
+        world.insert_resource(slots);
+        world.insert_resource(UiNativeInputRecipientsResource::default());
+        world.insert_resource(input);
+        world.insert_resource(actions);
+
+        assert!(
+            bind_native_input_recipient(
+                &mut world,
+                window,
+                NativeInputRecipient::RunenUiSlot(slot)
+            )
+            .unwrap()
+        );
+        assert!(
+            world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(context, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some(),
+            "new native binding must not synthesize original physical Up"
+        );
+        assert!(
+            !world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "native source is revoked before the World binding call returns"
+        );
+        assert!(matches!(
+            world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .unwrap()
+                .submit_app_action::<ProbeApp>(slot, ()),
+            Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired)
+        ));
+    }
+
+    #[test]
+    fn world_native_retirement_revokes_old_source_in_one_transaction() {
+        let mut world = setup();
+        let source = world.resource::<Probe>().unwrap().ui;
+        let window = NativeWindowId::primary();
+        world.insert_resource(UiRuntimePresentationAssociationsResource::default());
+        assert!(
+            world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "an already projected original W must be invalidated"
+        );
+        assert!(retire_native_input_recipient(&mut world, window).unwrap());
+        assert!(
+            world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(source, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some()
+        );
+        assert!(
+            world
+                .resource::<UiNativeInputRecipientsResource>()
+                .unwrap()
+                .selected_slot_binding(world.resource::<Probe>().unwrap().slot)
+                .is_none(),
+            "the exact retired UI scope is no longer an active native binding"
+        );
+        // The independent other window can still contribute its own held W.
+        assert!(
+            world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP)
+        );
+        let other = world.resource::<Probe>().unwrap().game;
+        world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(other, &key(DigitalState::Released));
+        let mut actions = world.remove_resource::<ActionState>().unwrap();
+        actions.project(world.resource::<InputState>().unwrap());
+        world.insert_resource(actions);
+        assert!(
+            !world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "retired native UI source cannot keep game W held"
         );
     }
 

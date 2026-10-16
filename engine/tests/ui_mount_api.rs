@@ -125,25 +125,14 @@ fn native_primary_input_binding_is_explicit_before_window_creation() {
     let second = app.ui().mount(CounterScreen);
     let first_slot = first.slot_id().expect("first mounted UI slot");
     let second_slot = second.slot_id().expect("second mounted UI slot");
-    let mut recipients = app
-        .world_mut()
-        .remove_resource::<UiNativeInputRecipientsResource>()
-        .expect("UiPlugin owns recipient registry");
-    let mut slots = app
-        .world_mut()
-        .remove_resource::<UiRuntimeSlotsResource>()
-        .expect("UiPlugin owns slots");
     let mut windows = WindowStateRegistryResource::default();
     windows.register_primary_window("primary", (640, 480), 1.0, true);
+    app.world_mut().insert_resource(windows);
 
-    assert_eq!(
-        recipients.realize_requested_primary(&windows, &mut slots),
-        Ok(false),
+    assert!(
+        !engine::plugins::ui::realize_requested_native_primary(app.world_mut()).unwrap(),
         "UI mounting alone must not choose a semantic native input target"
     );
-
-    app.world_mut().insert_resource(slots);
-    app.world_mut().insert_resource(recipients);
     assert_eq!(app.ui().bind_native_primary_input(first_slot), Ok(()));
     assert_eq!(
         app.ui().bind_native_primary_input(first_slot),
@@ -156,7 +145,15 @@ fn native_primary_input_binding_is_explicit_before_window_creation() {
         "a displayed second UI slot must not steal the input target"
     );
 
-    let mut recipients = app
+    assert!(
+        engine::plugins::ui::realize_requested_native_primary(app.world_mut()).unwrap(),
+        "explicit application selection is bound only against the created window"
+    );
+    let windows = app
+        .world_mut()
+        .remove_resource::<WindowStateRegistryResource>()
+        .expect("created native window record");
+    let recipients = app
         .world_mut()
         .remove_resource::<UiNativeInputRecipientsResource>()
         .expect("registry remains the single native input owner");
@@ -164,11 +161,6 @@ fn native_primary_input_binding_is_explicit_before_window_creation() {
         .world_mut()
         .remove_resource::<UiRuntimeSlotsResource>()
         .expect("slot identity remains mounted");
-    assert_eq!(
-        recipients.realize_requested_primary(&windows, &mut slots),
-        Ok(true),
-        "explicit application selection is bound only against the created window"
-    );
     assert_eq!(
         recipients.resolve(
             engine::runtime::NativeWindowId::primary(),
@@ -179,6 +171,7 @@ fn native_primary_input_binding_is_explicit_before_window_creation() {
     );
     app.world_mut().insert_resource(slots);
     app.world_mut().insert_resource(recipients);
+    app.world_mut().insert_resource(windows);
 }
 
 #[test]

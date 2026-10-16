@@ -33,7 +33,10 @@ pub use events::*;
 pub use host::*;
 pub use mount::*;
 pub use native_input::*;
-pub use native_transaction::transact_ui_slot;
+pub use native_transaction::{
+    bind_native_input_recipient, realize_requested_native_primary, retire_native_input_recipient,
+    transact_ui_slot,
+};
 pub use plugin::UiPlugin;
 pub use presentation::*;
 pub use publish::*;
