@@ -1868,6 +1868,13 @@ impl UiRuntimeSlotsResource {
         publication_facts_for_runtime(runtime)
     }
 
+    /// Sticky native enrollment is a historical capability marker, not a
+    /// second binding authority. A retired native slot must still be torn
+    /// down through the owning World transaction.
+    pub(crate) fn was_native_input_selected(&self, slot: UiRuntimeSlotId) -> Option<bool> {
+        self.slot(slot).map(|entry| entry.native_input_selected)
+    }
+
     /// Returns the actual RunenUI scope-retirement facts to the owning native
     /// caller, rather than interpreting shutdown success as native-input clearance.
     /// No slot state is removed if shutdown fails.
@@ -1881,12 +1888,36 @@ impl UiRuntimeSlotsResource {
         let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
             return Ok(None);
         };
-        if self.slots[index].native_input_selected
-            && !self.native_closed
-            && self.native_mutation_slot != Some(slot_id)
-        {
+        if self.slots[index].native_input_selected && !self.native_closed {
             return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
         }
+        self.unmount_slot(index)
+    }
+
+    /// Scoped native teardown after the World has independently established
+    /// that every original recipient and pending declaration has retired.
+    /// A normal selected-slot app mutation cannot enter this path.
+    pub(crate) fn unmount_retired_native(
+        &mut self,
+        _permit: &super::native_transaction::NativeAppMutationPermit,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<Option<InputShutdownBatch>, UiRuntimeSlotOperationFailure> {
+        if self.native_mutation_slot.is_some() || self.native_mount_permitted {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
+            return Ok(None);
+        };
+        if !self.slots[index].native_input_selected {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        self.unmount_slot(index)
+    }
+
+    fn unmount_slot(
+        &mut self,
+        index: usize,
+    ) -> Result<Option<InputShutdownBatch>, UiRuntimeSlotOperationFailure> {
         let retirement = self.slots[index].runtime.shutdown()?;
         self.slots.remove(index);
         Ok(Some(retirement))

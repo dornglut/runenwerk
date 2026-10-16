@@ -375,6 +375,13 @@ impl UiNativeInputRecipientsResource {
         Ok(binding.recipient)
     }
 
+    /// Intent is not a completed binding, but a late primary realization
+    /// must not refer to a runtime which has already shut down.
+    pub(crate) fn has_native_slot_intent(&self, slot: UiRuntimeSlotId) -> bool {
+        self.requested_primary == Some(NativeInputRecipient::RunenUiSlot(slot))
+            || self.selected_slot_binding(slot).is_some()
+    }
+
     /// Query only the already accepted live native UI binding; this is the
     /// source/scope/epoch witness for an Engine World mutation transaction.
     /// Never infer input ownership from paint, mount order or window focus.

@@ -7,7 +7,7 @@
 
 use anyhow::{Result, anyhow};
 use runen_ecs::World;
-use runenui_runtime::RuntimeStatus;
+use runenui_runtime::{InputShutdownBatch, RuntimeStatus};
 
 use crate::plugins::input::{ActionState, InputState};
 use crate::runtime::winit_input::WinitInputAdapter;
@@ -177,6 +177,47 @@ fn revoke_game_source(world: &mut World, source: runen_input::InputSourceId) -> 
         result?;
     }
     Ok(())
+}
+
+/// Shut down one previously native-enrolled slot only after retiring its
+/// original recipient. OS-owned streams must first be cancelled against the
+/// existing M13 scope; unmount cannot perform those native cancellations.
+pub fn unmount_retired_native_ui_slot(
+    world: &mut World,
+    slot: UiRuntimeSlotId,
+) -> Result<Option<InputShutdownBatch>> {
+    let selected = world
+        .resource::<UiRuntimeSlotsResource>()?
+        .was_native_input_selected(slot);
+    let Some(selected) = selected else {
+        return Ok(None);
+    };
+    if !selected {
+        return Err(anyhow!(
+            "slot {slot:?} is not native-enrolled; its ordinary lifecycle owns unmount"
+        ));
+    }
+    if world
+        .resource::<UiNativeInputRecipientsResource>()?
+        .has_native_slot_intent(slot)
+    {
+        return Err(anyhow!(
+            "slot {slot:?} still has a native input recipient or pending primary intent; retire it before unmount"
+        ));
+    }
+    // Check the display authority before irreversible framework shutdown.
+    world.resource::<UiRuntimePresentationAssociationsResource>()?;
+    let retirement = world
+        .resource_mut::<UiRuntimeSlotsResource>()?
+        .unmount_retired_native(&NativeAppMutationPermit { _sealed: () }, slot)
+        .map_err(|error| anyhow!("retired native slot {slot:?} shutdown failed: {error:?}"))?;
+    if retirement.is_some() {
+        // Unbind also schedules exactly the existing renderer paint withdrawal.
+        world
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()?
+            .unbind(slot);
+    }
+    Ok(retirement)
 }
 
 /// Execute a selected-native RunenUI app mutation and withdraw incompatible
@@ -739,7 +780,7 @@ mod tests {
     }
 
     #[test]
-    fn native_transaction_reports_failure_if_final_m13_scope_disappears() {
+    fn native_transaction_rejects_active_scope_destruction() {
         let mut world = setup();
         let (slot, ui, game) = {
             let probe = world.resource::<Probe>().unwrap();
@@ -753,14 +794,21 @@ mod tests {
             assert!(slots.shutdown_native_slots().is_err());
             assert!(slots.contains(slot), "rejected global shutdown was inert");
 
-            // Exact selected-slot retirement is a real M13 scope loss, not
-            // a fabricated success or synthetic keyboard release.
+            // Ordinary app mutation may not secretly shut down the active
+            // native M13 scope, even with its transient mutation permit.
             slots.unmount_with_retirement(slot)?;
             Ok(())
         });
         assert!(
             result.is_err(),
-            "a successful callback may not certify a missing final M13 scope"
+            "the active selected native scope cannot be removed by app mutation"
+        );
+        assert!(
+            world
+                .resource::<UiRuntimeSlotsResource>()
+                .unwrap()
+                .contains(slot),
+            "rejected shutdown cannot destroy the selected runtime"
         );
         assert!(
             world
@@ -939,6 +987,91 @@ mod tests {
                 .action_down(action::WORLD_MOVE_UP),
             "retired native UI source cannot keep game W held"
         );
+    }
+
+    fn retire_then_unmount_in_update(mut world: WorldMut) -> Result<()> {
+        let (slot, ui) = {
+            let probe = world.resource::<Probe>()?;
+            (probe.slot, probe.ui)
+        };
+        assert!(
+            unmount_retired_native_ui_slot(&mut world, slot).is_err(),
+            "an active original recipient must never be removed before cancellation"
+        );
+        assert!(world.resource::<UiRuntimeSlotsResource>()?.contains(slot));
+        assert!(retire_native_input_recipient(&mut world, NativeWindowId::primary())?);
+        assert!(matches!(
+            world
+                .resource_mut::<UiRuntimeSlotsResource>()?
+                .unmount_with_retirement(slot),
+            Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired)
+        ));
+        assert!(
+            unmount_retired_native_ui_slot(&mut world, slot)?.is_some(),
+            "retired M13 scope must shut down through the World"
+        );
+        assert!(!world.resource::<UiRuntimeSlotsResource>()?.contains(slot));
+        assert!(
+            world
+                .resource::<InputState>()?
+                .keyboard_down_generation_in(ui, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some(),
+            "semantic retirement must not synthesize a physical key release"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn retired_native_slot_teardown_is_ordered_and_cannot_restore_game_input() -> Result<()> {
+        let mut world = setup();
+        let slot = world.resource::<Probe>().unwrap().slot;
+        let producer = crate::plugins::render::RenderFrameProducerId::try_from_raw(71).unwrap();
+        let surface = crate::plugins::render::host::RenderSurfaceId::primary();
+        let binding = super::super::UiRuntimePresentationBinding::new(
+            slot,
+            producer,
+            surface,
+            runenui_core::StyleEnvironment::default(),
+        );
+        let mut presentation = UiRuntimePresentationAssociationsResource::default();
+        presentation.bind(binding).unwrap();
+        world.insert_resource(presentation);
+        let mut runtime = Runtime::new();
+        runtime
+            .add_systems(
+                Update,
+                retire_then_unmount_in_update
+                    .on_invoker_thread()
+                    .in_set(NativeMutation),
+            )
+            .unwrap();
+        runtime
+            .add_systems(
+                Update,
+                observe_immediately
+                    .on_invoker_thread()
+                    .in_set(ImmediateReader)
+                    .after(NativeMutation),
+            )
+            .unwrap();
+        runtime.run_schedule::<Update>(&mut world).unwrap();
+        let presentations = world
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()
+            .unwrap();
+        assert!(
+            presentations.binding(slot).is_none(),
+            "retired runtime must not retain stale displayed-input binding"
+        );
+        assert_eq!(
+            presentations.take_withdrawals(),
+            vec![(producer, surface)],
+            "retired native presentation must withdraw its exact renderer paint"
+        );
+        assert!(
+            unmount_retired_native_ui_slot(&mut world, slot)?.is_none(),
+            "a retired slot cannot be shut down twice"
+        );
+        Ok(())
     }
 
     #[test]
