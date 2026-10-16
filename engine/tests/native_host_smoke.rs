@@ -1257,10 +1257,8 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         "/../assets/shaders/native_historical_gpu_step_smoke.wgsl"
     );
     let shader_registry = app.world_mut().resource_mut::<ShaderRegistryResource>()?;
-    let shader = shader_registry.register_shader_with_id(
-        "native.historical.gpu.compute",
-        asset_path,
-    );
+    let shader =
+        shader_registry.register_shader_with_id("native.historical.gpu.compute", asset_path);
     shader_registry.poll_updates();
     anyhow::ensure!(
         shader_registry.revision_for_handle(shader) > 0
