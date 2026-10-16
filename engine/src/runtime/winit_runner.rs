@@ -1318,6 +1318,15 @@ impl WinitRunner {
         let Some(mut lifetime) = self.native_ui_mice.remove(&window) else {
             return Ok(());
         };
+        // A remount/rebind cannot receive a Cancel from the previous native
+        // window binding, even when the same runtime scope remains mounted.
+        if !matches!(
+            self.native_input_recipient(window),
+            Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch)))
+                if slot == lifetime.recipient && epoch == lifetime.binding_epoch
+        ) {
+            return Ok(());
+        }
         let modifiers = self
             .native_ui_modifiers
             .get(&window)
@@ -1369,6 +1378,13 @@ impl WinitRunner {
         let Some(mut lifetime) = self.native_ui_touches.remove(&window) else {
             return Ok(());
         };
+        if !matches!(
+            self.native_input_recipient(window),
+            Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch)))
+                if slot == lifetime.recipient && epoch == lifetime.binding_epoch
+        ) {
+            return Ok(());
+        }
         let events = lifetime.touch.cancel_all();
         if events.is_empty() {
             return Ok(());
