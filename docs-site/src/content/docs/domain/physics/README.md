@@ -1,11 +1,11 @@
 ---
 title: Physics Domain
-description: Accepted ownership and first-slice contract for Runenwerk physics semantics over world-SDF collision truth.
+description: Accepted Physics domain ownership, first SDF-character contract, and general-purpose backend integration boundaries.
 status: accepted
 owner: physics
 layer: domain
 canonical: true
-last_reviewed: 2026-09-27
+last_reviewed: 2026-10-16
 publication: primary
 related_docs:
   - ../../design/active/editor-procedural-content-and-simulation-workflow-plan.md
@@ -27,7 +27,10 @@ for later physics capabilities only when separately activated.
 
 ## Ownership
 
-The boundary is:
+The flow below describes **the implemented P1 SDF-first character path**, not a
+mandatory WorldSDF dependency for every later Physics scene. General-purpose ordinary
+primitive Physics and its separate solver adapter are governed by the second-stage
+direction below.
 
 ```text
 world_sdf
@@ -272,8 +275,98 @@ Reference:
 - <https://rapier.rs/docs/user_guides/rust/character_controller/>
 - <https://rapier.rs/docs/user_guides/rust/scene_queries_shape_casting/>
 
-A future rigid-body or broader collider consumer may justify an Engine-owned Rapier adapter or a
-different backend. That decision is not made by this first character slice.
+The later general-purpose Physics architecture selects Rapier as its first concrete solver, with a
+backend-neutral domain contract and separate adapter. The selection is governed by the second-stage
+principles below; it does not retroactively change the accepted P1 character behavior.
+
+## General-Purpose Physics Direction
+
+The general-purpose Physics direction is **accepted architecture**, not a statement that its
+solver adapter, plugin, broader public API, or gameplay migration is already implemented. It
+preserves the first SDF-character contract above until an independently validated cutover.
+
+### Semantic authority and dependency direction
+
+`domain/physics` is the **one reusable semantic owner** of physical-scene, body/collider,
+command, physical-result, and supported-contact meaning. One selected backend session owns the
+mutable realization of a physical scene: body and joint state, contacts, solver caches, and
+backend-local handles. A second runtime/ECS/Game representation may request or observe that
+state, but must not independently advance the same authoritative body.
+
+**Rapier is the selected initial general-purpose solver.** Its concrete adapter belongs in a
+separate dependency boundary so vendor state, algorithms, precision settings, feature choices,
+and revision changes do not define the reusable Physics contract. The Engine consumes the
+Physics-owned semantic interface and receives the selected backend from explicit application
+composition; the Engine must not compile against Rapier merely to expose an ordinary Physics
+plugin. Rapier types and handles must not leak into game authoring, durable content, ECS
+public observations, or the neutral API. Exact Rust traits, registration mechanism, package
+layout, feature flags, and backend-version pin require executable qualification rather than
+being prescribed by this document.
+
+The Physics semantic API must remain usable for a **source-independent ordinary rigid-body
+scene** containing conventional primitive colliders. It must not require a WorldSDF source,
+rendering, a native window, or a separate App runtime. The currently accepted P1 evaluator
+still depends directly on `world_sdf`; this is an existing **transitive compile dependency**,
+not evidence that the intended independent dependency closure is already achieved. A clean
+P1-specific boundary cutover is required if that compilation isolation becomes an activated
+contract; a cosmetic wrapper, shadow physics authority, or permanent compatibility facade is
+not an acceptable substitute.
+
+### Execution, identity, and time
+
+Engine integrates Physics into the **existing opt-in App/plugin and fixed-step execution**
+architecture. Physics must not introduce a second global scheduler, application clock, or
+independent gameplay command source. A Physics session has explicit lifecycle and one
+backend-owned mutable solver state, with stable Physics identities mapped to private
+generation-checked backend handles. Authorable descriptions remain distinct from live solver
+state; ECS and render transformations derived from a committed Physics result are not solver
+authority.
+
+The fixed-step integration must distinguish input/attempted simulation tick from the
+**last committed Physics result**, perform required command/source preflight, advance
+free-running dynamic bodies even when no game command exists, and expose a defined
+fault/recovery state. The existing Simulation owner retains tick and profile semantics;
+Physics must not silently redefine `SimulationTick` or assert a global transaction over
+independently owned World, Game, and Physics state. A backend step that has mutated internal
+state and subsequently reports a fault must not be treated as an unperformed step. Abort,
+quarantine, reset, and restore policies require observable, tested contracts.
+
+### World collision and source validity
+
+Ordinary primitive/mesh colliders can be authoritative in a Physics scene without SDF.
+For **WorldSDF-derived** geometry, the World owner retains source identity, current revision,
+coverage, readiness, metric and approximation facts. A World-to-Physics bridge must admit an
+explicitly compatible geometry realization for the tick and retain its provenance through
+replacement and retirement. A backend ray or shape cast returning no hit among installed
+colliders does not certify continuous clearance of an incomplete, stale, or approximated
+SDF source. Missing or insufficiently qualified coverage must remain distinguishable from
+valid clear space.
+
+Physics may consume qualified World collision products but must not duplicate RunenSDF
+mathematics, WorldSDF source authority, WorldOps mutation policy, or a second numerical
+world-process solver. Source-collision correctness and radius-aware swept clearance are
+independent WorldSDF acceptance questions; selecting Rapier does not resolve them.
+
+### Capabilities, predictability, and evolution
+
+Backend-neutrality means stable **integration semantics**, not identical numerical dynamics
+between solvers. Friction, solver contacts, CCD, character motion, sleeping, constraints,
+precision, and ordering may differ. Unsupported capabilities or simulation profiles must be
+reported explicitly instead of silently emulated or relabelled as equivalent. Application
+composition selects a backend; runtime hot switching and cross-backend checkpoint transfer
+are not accepted requirements.
+
+Simulation and Replay retain their profile, history, snapshot, prediction, and rollback
+authority. A pinned backend configuration, stable identity mapping, and verified capture
+and restore path are prerequisites for corresponding Physics guarantees; the existing
+Scene replay path is not such a proof. Rendering and editor diagnostics observe accepted
+Physics facts without becoming collision or solver truth.
+
+A **bounded, headless ordinary-primitive consumer proof** is required before
+stabilizing concrete API traits, adapter/resource constraints, numerical error budgets,
+or a clean dependency cutover. A generic backend trait, broad joint/controller surface,
+general Engine Physics plugin, production WorldSDF realization bridge, and existing-game
+actor migration are **not** implementation-ratified merely by this architectural direction.
 
 ## Diagnostics
 
@@ -312,11 +405,11 @@ path before multiplayer prediction is activated.
 
 ## Deferred Physics Breadth
 
-The accepted long-term physics owner may later include the following, but none is authorized by the
-first character slice:
+Beyond the separately authorized first ordinary headless Rapier primitive qualification, the
+following capabilities remain unimplemented and require bounded consumer evidence:
 
-- general rigid-body dynamics;
-- arbitrary primitive/compound collider authoring;
+- general rigid-body breadth beyond the qualified primitive witness;
+- arbitrary primitive/compound collider authoring beyond the qualification fixture;
 - capsule character queries;
 - collision layers and masks;
 - triggers;
@@ -331,7 +424,7 @@ first character slice:
 
 Each item requires current consumer evidence and a bounded issue.
 
-## Activation Gate
+## First-Slice Activation Gate
 
 The first implementation may be opened only after:
 
