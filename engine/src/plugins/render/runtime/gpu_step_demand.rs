@@ -100,7 +100,7 @@ impl<T> RenderGpuStepDemand<T> {
         &mut self,
         inputs: Vec<T>,
     ) -> Result<(u64, u64), (RenderGpuStepDemandError, Vec<T>)> {
-        let Ok(requested) = self.outstanding().checked_add(inputs.len()) else {
+        let Some(requested) = self.outstanding().checked_add(inputs.len()) else {
             return Err((RenderGpuStepDemandError::CapacityExceeded, inputs));
         };
         if requested > self.maximum_outstanding {
