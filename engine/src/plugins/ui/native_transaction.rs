@@ -510,6 +510,44 @@ mod tests {
         );
     }
 
+    #[derive(runen_ecs::Resource)]
+    struct PendingNativeBinding {
+        window: NativeWindowId,
+        slot: UiRuntimeSlotId,
+        original: InputContext,
+    }
+
+    fn bind_native_during_update(mut world: WorldMut) -> Result<()> {
+        let (window, slot) = {
+            let pending = world.resource::<PendingNativeBinding>()?;
+            (pending.window, pending.slot)
+        };
+        assert!(bind_native_input_recipient(
+            &mut world,
+            window,
+            NativeInputRecipient::RunenUiSlot(slot)
+        )?);
+        Ok(())
+    }
+
+    fn read_game_after_native_binding(world: WorldMut) -> Result<()> {
+        let original = world.resource::<PendingNativeBinding>()?.original;
+        assert!(
+            world
+                .resource::<InputState>()?
+                .keyboard_down_generation_in(original, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some(),
+            "new binding must preserve original physical Down"
+        );
+        assert!(
+            !world
+                .resource::<ActionState>()?
+                .action_down(action::WORLD_MOVE_UP),
+            "following ECS Update system cannot observe the previous game hold"
+        );
+        Ok(())
+    }
+
     #[test]
     fn world_native_binding_revokes_prior_game_hold_without_physical_release() {
         let mut world = World::new();
@@ -541,29 +579,30 @@ mod tests {
         world.insert_resource(input);
         world.insert_resource(actions);
 
-        assert!(
-            bind_native_input_recipient(
-                &mut world,
-                window,
-                NativeInputRecipient::RunenUiSlot(slot)
+        world.insert_resource(PendingNativeBinding {
+            window,
+            slot,
+            original: context,
+        });
+        let mut runtime = Runtime::new();
+        runtime
+            .add_systems(
+                Update,
+                bind_native_during_update
+                    .on_invoker_thread()
+                    .in_set(NativeMutation),
             )
-            .unwrap()
-        );
-        assert!(
-            world
-                .resource::<InputState>()
-                .unwrap()
-                .keyboard_down_generation_in(context, &PhysicalKeyIdentity::code("KeyW"))
-                .is_some(),
-            "new native binding must not synthesize original physical Up"
-        );
-        assert!(
-            !world
-                .resource::<ActionState>()
-                .unwrap()
-                .action_down(action::WORLD_MOVE_UP),
-            "native source is revoked before the World binding call returns"
-        );
+            .unwrap();
+        runtime
+            .add_systems(
+                Update,
+                read_game_after_native_binding
+                    .on_invoker_thread()
+                    .in_set(ImmediateReader)
+                    .after(NativeMutation),
+            )
+            .unwrap();
+        runtime.run_schedule::<Update>(&mut world).unwrap();
         assert!(matches!(
             world
                 .resource_mut::<UiRuntimeSlotsResource>()
