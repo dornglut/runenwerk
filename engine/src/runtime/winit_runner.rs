@@ -3735,8 +3735,8 @@ mod tests {
         );
         assert_eq!(
             runner.input_adapter.window_source_context(secondary),
-            Some(InputContext::new(context.source, context.device)),
-            "no phantom source retirement after failed original continuity admission"
+            Some(InputContext::new(context.source, None)),
+            "a failed continuity admission must retain the original window source, not invent a window device identity"
         );
         assert!(
             runner
