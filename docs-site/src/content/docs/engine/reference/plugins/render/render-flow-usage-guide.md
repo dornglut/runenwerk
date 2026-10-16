@@ -292,6 +292,19 @@ semantic cursors, recovery and nonblocking ordinary RenderFlow admission
 remain the separate, open [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291)
 correctness boundary.
 
+**Accepted-frame error boundary.** Ordinary `Gfx::render` currently returns a
+fallible frame result, and its retained-session bookkeeping can fail *after*
+RunenGPU has already G5-accepted the entire composed submission, including
+Present. In that case the renderer preserves the exact accepted lifecycle
+handle and explicitly identifies its accepted submission ID in the error.
+It is not safe to infer that GPU work was never submitted, or to use an
+error from `Gfx::render` as an automatic retry signal. A producer using
+`submit_with` must pass an actual accepted handle as the successful callback
+return without any later fallible host work; the ordinary RenderFlow integration
+will need an explicit admitted-work handoff and recovery policy before it can
+consume this transactional demand mechanism. This remains an open
+[Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291) boundary.
+
 ### Producer-owned immutable GPU-step demand
 
 `RenderGpuStepDemand<T>` is a bounded transport for application-authored,

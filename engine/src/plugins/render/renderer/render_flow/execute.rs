@@ -365,6 +365,7 @@ impl Renderer {
                 })
                 .collect(),
         );
+        let accepted_submission_id = submission.id();
         let association_result = self
             .render_sessions
             .associate_composed_submission(deterministic.occurrences, &submission);
@@ -453,7 +454,13 @@ impl Renderer {
         // Association failure cannot discard accepted timing/capture lifecycle
         // handles or accepted upload generations. The affected continuity is
         // quarantined by the session owner; the frame still fails closed.
-        association_result?;
+        association_result.with_context(|| {
+            format!(
+                "GPU submission {accepted_submission_id} for frame {} surface {} was already G5-accepted before retained-session association failed; do not interpret this error as an unsubmitted frame or blindly retry its stateful work",
+                prepared_frame.context.frame_index,
+                prepared_frame.surface.render_surface_id.raw(),
+            )
+        })?;
 
         if debug_control.provenance_enabled {
             // G5 has already accepted this frame, including its terminal Present.
