@@ -314,6 +314,7 @@ fn build_prepared_flow_invocations(
                     anyhow::anyhow!("missing prepared inputs for flow '{:?}'", request.flow_id)
                 })?;
             apply_invocation_uniform_overrides(flow, request, &mut inputs)?;
+            validate_invoked_fixed_step_projection(flow, &inputs, extracted_state)?;
             invocations.push(PreparedFlowInvocation {
                 invocation_id: request.invocation_id.clone(),
                 flow_id: request.flow_id,
@@ -324,12 +325,6 @@ fn build_prepared_flow_invocations(
             });
         }
 
-        let inputs = main_inputs_by_flow
-            .get(&flow.flow_id)
-            .cloned()
-            .ok_or_else(|| {
-                anyhow::anyhow!("missing main prepared inputs for flow '{:?}'", flow.flow_id)
-            })?;
         if flow.invocation_policy == RenderFlowInvocationPolicy::AutomaticMain
             && should_emit_automatic_main(
                 render_surface_id,
@@ -338,6 +333,13 @@ fn build_prepared_flow_invocations(
                 requests,
             )
         {
+            let inputs = main_inputs_by_flow
+                .get(&flow.flow_id)
+                .cloned()
+                .ok_or_else(|| {
+                    anyhow::anyhow!("missing main prepared inputs for flow '{:?}'", flow.flow_id)
+                })?;
+            validate_invoked_fixed_step_projection(flow, &inputs, extracted_state)?;
             invocations.push(PreparedFlowInvocation::main(flow.flow_id, inputs));
         }
     }
@@ -355,6 +357,47 @@ fn should_emit_automatic_main(
         .iter()
         .any(|request| request.flow_id == flow_id && request.view_id == "main");
     !has_requested_main && !requests.replaces_automatic_main_flow(render_surface_id, flow_id)
+}
+
+/// Require each selected flow invocation to represent the CPU ticks it claims
+/// to simulate. An unrequested ExplicitOnly flow is inert, so its preliminary
+/// projected metadata must not prevent independent flows from rendering.
+fn validate_invoked_fixed_step_projection(
+    flow: &CompiledRenderFlowPlan,
+    inputs: &PreparedFlowInputs,
+    extracted_state: &ExtractedRenderStateMap<'_>,
+) -> anyhow::Result<()> {
+    if flow.execution.fixed_step_regions.is_empty() {
+        return Ok(());
+    }
+    let fixed_state = extracted_state
+        .get(&TypeId::of::<FixedTimeState>())
+        .and_then(|value| value.downcast_ref::<FixedTimeState>())
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "invoked flow '{:?}' lacks its fixed-step CPU state",
+                flow.flow_id
+            )
+        })?;
+    for region in &flow.execution.fixed_step_regions {
+        let submitted_substeps = inputs
+            .projected_uniform_bytes
+            .get(&region.iteration_uniform)
+            .and_then(|bytes| RenderFixedStepIterationUniform::from_uniform_bytes(bytes))
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "invoked fixed-step region '{}' has no valid iteration projection",
+                    region.region_label
+                )
+            })?
+            .submitted_substeps;
+        ensure_exact_fixed_step_projection(
+            fixed_state.steps_ran_last_frame,
+            submitted_substeps,
+            &region.region_label,
+        )?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1113,15 +1156,13 @@ fn project_fixed_step_region_uniforms(
         })?;
 
     for region in &flow.execution.fixed_step_regions {
-        // FixedUpdate has already advanced its CPU ticks. Truncating that
-        // interval here would silently discard stateful GPU simulation work
-        // without an authorized drop, replay, or resynchronization policy.
-        let submitted_substeps = checked_fixed_step_substeps(
-            fixed_state.steps_ran_last_frame,
-            catchup_budget.max_steps_per_frame,
-            region.max_substeps,
-            &region.region_label,
-        )?;
+        // Preliminary projection may be bounded for an inactive flow. Before
+        // any invocation is emitted, validate that the selected GPU execution
+        // can represent *all* CPU-completed ticks; inactive flows are inert.
+        let submitted_substeps = fixed_state
+            .steps_ran_last_frame
+            .min(catchup_budget.max_steps_per_frame)
+            .min(region.max_substeps);
         let uniform = RenderFixedStepIterationUniform::new(
             0,
             submitted_substeps,
@@ -1136,24 +1177,22 @@ fn project_fixed_step_region_uniforms(
     Ok(())
 }
 
-/// Prevent source-authority CPU ticks from being silently truncated while
-/// RenderFlow lacks a producer-owned cross-frame step replay contract.
-/// This is a fail-closed boundary, not a backlog or recovery implementation.
-fn checked_fixed_step_substeps(
+/// A selected simulation invocation cannot silently omit CPU-completed ticks,
+/// nor invent extra GPU steps. This is a fail-closed consistency boundary,
+/// not historical input replay, device-content recovery, or pacing policy.
+fn ensure_exact_fixed_step_projection(
     completed_cpu_steps: u32,
-    catchup_budget: u32,
-    region_capacity: u32,
+    projected_gpu_steps: u32,
     region_label: &str,
-) -> anyhow::Result<u32> {
+) -> anyhow::Result<()> {
     anyhow::ensure!(
-        completed_cpu_steps <= catchup_budget && completed_cpu_steps <= region_capacity,
-        "fixed-step region '{}' cannot represent {} completed CPU steps (catch-up budget {}, region capacity {}); refusing silent GPU-step truncation",
+        completed_cpu_steps == projected_gpu_steps,
+        "fixed-step region '{}' cannot represent {} completed CPU steps (projected {} GPU substeps); refusing silent GPU-step truncation or duplication",
         region_label,
         completed_cpu_steps,
-        catchup_budget,
-        region_capacity,
+        projected_gpu_steps,
     );
-    Ok(completed_cpu_steps)
+    Ok(())
 }
 
 fn project_dispatch_for_pass(
