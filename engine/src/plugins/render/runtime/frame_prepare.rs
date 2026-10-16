@@ -1113,8 +1113,15 @@ fn project_fixed_step_region_uniforms(
         })?;
 
     for region in &flow.execution.fixed_step_regions {
-        let submitted_substeps =
-            fixed_state.bounded_render_substeps(catchup_budget, region.max_substeps);
+        // FixedUpdate has already advanced its CPU ticks. Truncating that
+        // interval here would silently discard stateful GPU simulation work
+        // without an authorized drop, replay, or resynchronization policy.
+        let submitted_substeps = checked_fixed_step_substeps(
+            fixed_state.steps_ran_last_frame,
+            catchup_budget.max_steps_per_frame,
+            region.max_substeps,
+            &region.region_label,
+        )?;
         let uniform = RenderFixedStepIterationUniform::new(
             0,
             submitted_substeps,
@@ -1127,6 +1134,26 @@ fn project_fixed_step_region_uniforms(
     }
 
     Ok(())
+}
+
+/// Prevent source-authority CPU ticks from being silently truncated while
+/// RenderFlow lacks a producer-owned cross-frame step replay contract.
+/// This is a fail-closed boundary, not a backlog or recovery implementation.
+fn checked_fixed_step_substeps(
+    completed_cpu_steps: u32,
+    catchup_budget: u32,
+    region_capacity: u32,
+    region_label: &str,
+) -> anyhow::Result<u32> {
+    anyhow::ensure!(
+        completed_cpu_steps <= catchup_budget && completed_cpu_steps <= region_capacity,
+        "fixed-step region '{}' cannot represent {} completed CPU steps (catch-up budget {}, region capacity {}); refusing silent GPU-step truncation",
+        region_label,
+        completed_cpu_steps,
+        catchup_budget,
+        region_capacity,
+    );
+    Ok(completed_cpu_steps)
 }
 
 fn project_dispatch_for_pass(
@@ -1221,6 +1248,22 @@ mod tests {
         ));
         world.insert_resource(feature_registry);
         world
+    }
+
+    #[test]
+    fn fixed_step_projection_refuses_to_silently_discard_completed_cpu_ticks() {
+        for completed in [0, 1, 4] {
+            assert_eq!(
+                checked_fixed_step_substeps(completed, 4, 4, "test.simulation").unwrap(),
+                completed,
+            );
+        }
+        let region_error = checked_fixed_step_substeps(3, 4, 2, "test.simulation")
+            .expect_err("a smaller GPU region must not drop completed CPU work");
+        assert!(region_error.to_string().contains("refusing silent GPU-step truncation"));
+        let budget_error = checked_fixed_step_substeps(4, 2, 4, "test.simulation")
+            .expect_err("a changed catch-up budget must not silently truncate CPU work");
+        assert!(budget_error.to_string().contains("refusing silent GPU-step truncation"));
     }
 
     #[test]

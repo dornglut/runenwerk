@@ -849,6 +849,8 @@ pub struct Renderer {
     last_capture_selector_results: Vec<RenderCaptureSelectorResult>,
     last_captured_textures: Vec<RenderCapturedTexture>,
     gpu_observations: render_flow::RendererGpuObservationState,
+    submission_lifecycle: render_flow::RendererSubmissionLifecycle,
+    retained_submission_trace: render_flow::RetainedSubmissionTrace,
     pending_gpu_observation_output: render_flow::RendererGpuObservationOutput,
     /// Terminal GPU/Present observations retained until the Engine's UiPlugin
     /// integration explicitly drains them. A failed render may not discard them.

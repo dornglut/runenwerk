@@ -50,7 +50,14 @@ unbounded populations are intentionally out of scope for this example.
 
 The simulation region is declared as `boids.fixed_step` and derives submitted
 substeps from runtime fixed-time resources. The frame delta is kept as evidence
-input, not a hidden example-local scheduler.
+input, not a hidden example-local scheduler. Frame preparation rejects a fixed-step
+interval that exceeds the current catch-up budget or the authored region capacity,
+rather than silently dropping CPU-completed simulation steps.
+
+This safeguard does not provide cross-frame GPU replay: a deferred GPU submission
+still needs producer-owned historical step inputs and a recovery policy. Those
+production guarantees and native 120+ frame original/species qualification remain
+open under [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291).
 
 The draw pass uses a producer-owned `ProceduralCamera2d` with
 `FillViewport { fixed_axis: Vertical }`. Renderer procedural code derives the

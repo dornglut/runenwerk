@@ -38,14 +38,6 @@ pub struct FixedTimeState {
     pub total_completed_steps: u64,
 }
 
-impl FixedTimeState {
-    pub fn bounded_render_substeps(self, budget: CatchupBudget, region_max_substeps: u32) -> u32 {
-        self.steps_ran_last_frame
-            .min(budget.max_steps_per_frame)
-            .min(region_max_substeps)
-    }
-}
-
 /// Private one-frame cadence input used by bounded advancement.
 ///
 /// This is advancement-policy state, not frame-time authority. The fixed-step executor consumes
