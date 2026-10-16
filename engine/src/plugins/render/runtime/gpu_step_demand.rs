@@ -266,7 +266,9 @@ mod tests {
     #[test]
     fn rejected_gpu_admission_preserves_the_entire_prepared_candidate() {
         let mut demand = RenderGpuStepDemand::new(0, 3);
-        demand.capture_batch(vec![11_u8, 22]).expect("bounded capture");
+        demand
+            .capture_batch(vec![11_u8, 22])
+            .expect("bounded capture");
         let rejected = demand.submit_with(2, |candidate| {
             assert_eq!(candidate.len(), 2);
             assert_eq!(candidate[0].tick(), 1);
@@ -279,7 +281,11 @@ mod tests {
         assert_eq!(demand.outstanding(), 2);
         assert!(demand.accepted_submission().is_none());
         assert_eq!(
-            demand.candidate(2).iter().map(|step| *step.input()).collect::<Vec<_>>(),
+            demand
+                .candidate(2)
+                .iter()
+                .map(|step| *step.input())
+                .collect::<Vec<_>>(),
             vec![11, 22]
         );
     }

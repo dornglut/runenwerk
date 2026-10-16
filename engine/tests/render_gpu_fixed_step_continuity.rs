@@ -180,9 +180,13 @@ impl StepLedger {
     ) -> bool {
         let completed_tick = self.history.completed_tick();
         let completed_counter = self.completed_counter;
-        let proof = self.history
+        let proof = self
+            .history
             .submit_with(3, |candidate| {
-                let snapshots = candidate.iter().map(|entry| *entry.input()).collect::<Vec<_>>();
+                let snapshots = candidate
+                    .iter()
+                    .map(|entry| *entry.input())
+                    .collect::<Vec<_>>();
                 assert_eq!(snapshots[0].tick, completed_tick + 1);
                 for (intent, snapshot) in candidate.iter().zip(&snapshots) {
                     assert_eq!(
