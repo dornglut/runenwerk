@@ -3542,6 +3542,10 @@ mod tests {
         runner
             .state
             .world
+            .insert_resource(UiRuntimeSlotsResource::default());
+        runner
+            .state
+            .world
             .insert_resource(UiNativeInputRecipientsResource::default());
         let secondary = NativeWindowId::try_from_raw(2).expect("secondary window identity");
         runner
