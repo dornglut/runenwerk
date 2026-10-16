@@ -382,14 +382,16 @@ impl UiNativeInputRecipientsResource {
         &self,
         slot: UiRuntimeSlotId,
     ) -> Option<(NativeWindowId, u64, InputArbitrationScope)> {
-        self.bindings.iter().find_map(|(window, binding)| match binding {
-            WindowRecipientBinding::Bound(Binding {
-                recipient: NativeInputRecipient::RunenUiSlot(id),
-                epoch,
-                scope: Some(scope),
-            }) if *id == slot => Some((*window, *epoch, scope.clone())),
-            _ => None,
-        })
+        self.bindings
+            .iter()
+            .find_map(|(window, binding)| match binding {
+                WindowRecipientBinding::Bound(Binding {
+                    recipient: NativeInputRecipient::RunenUiSlot(id),
+                    epoch,
+                    scope: Some(scope),
+                }) if *id == slot => Some((*window, *epoch, scope.clone())),
+                _ => None,
+            })
     }
 
     /// Read after authoritative `resolve` in the same invoker-thread callback.

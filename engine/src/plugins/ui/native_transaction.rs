@@ -43,7 +43,9 @@ fn revoke_game_source(world: &mut World, source: runen_input::InputSourceId) -> 
 pub fn transact_ui_slot<T>(
     world: &mut World,
     slot: UiRuntimeSlotId,
-    operation: impl FnOnce(&mut UiRuntimeSlotsResource) -> std::result::Result<T, UiRuntimeSlotOperationFailure>,
+    operation: impl FnOnce(
+        &mut UiRuntimeSlotsResource,
+    ) -> std::result::Result<T, UiRuntimeSlotOperationFailure>,
 ) -> Result<T> {
     let selected = world
         .resource::<UiNativeInputRecipientsResource>()
@@ -65,9 +67,7 @@ pub fn transact_ui_slot<T>(
         .resource::<WindowStateRegistryResource>()
         .ok()
         .and_then(|windows| windows.record(window))
-        .is_some_and(|record| {
-            record.lifecycle_state == NativeWindowLifecycleState::Created
-        });
+        .is_some_and(|record| record.lifecycle_state == NativeWindowLifecycleState::Created);
     let before = world
         .resource_mut::<UiRuntimeSlotsResource>()?
         .input_ownership(slot);
@@ -130,16 +130,12 @@ pub fn transact_ui_slot<T>(
 mod tests {
     use super::*;
     use crate::plugins::action;
-    use crate::plugins::ui::{
-        NativeInputRecipient, UiRuntimeFontConfiguration, UiTypedScreenId,
-    };
-    use crate::runtime::{
-        NativeWindowId, SystemConfigExt, SystemMobilityExt, Update, WorldMut,
-    };
+    use crate::plugins::ui::{NativeInputRecipient, UiRuntimeFontConfiguration, UiTypedScreenId};
+    use crate::runtime::{NativeWindowId, SystemConfigExt, SystemMobilityExt, Update, WorldMut};
     use runen_ecs::{Runtime, SystemSet};
     use runen_input::{
-        DigitalState, InputContext, KeyLocation, KeyboardInput, LogicalKey,
-        NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity,
+        DigitalState, InputContext, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+        ObservationOrigin, PhysicalKeyIdentity,
     };
     use runenui_core::{NoHostProtocol, UiApp, View};
 
@@ -283,10 +279,7 @@ mod tests {
         assert!(
             world
                 .resource::<InputState>()?
-                .keyboard_down_generation_in(
-                    ui,
-                    &PhysicalKeyIdentity::code("KeyW"),
-                )
+                .keyboard_down_generation_in(ui, &PhysicalKeyIdentity::code("KeyW"),)
                 .is_some(),
             "RunenInput alone still owns the real UI-window physical W"
         );
@@ -304,12 +297,7 @@ mod tests {
         let mut world = setup();
         let mut runtime = Runtime::new();
         runtime
-            .add_systems(
-                Update,
-                mutate
-                    .on_invoker_thread()
-                    .in_set(NativeMutation),
-            )
+            .add_systems(Update, mutate.on_invoker_thread().in_set(NativeMutation))
             .unwrap();
         runtime
             .add_systems(
