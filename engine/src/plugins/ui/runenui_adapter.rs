@@ -2364,7 +2364,8 @@ mod tests {
     #[test]
     fn native_committed_text_from_focused_typed_field_has_exact_m13_receipt() {
         use runenui_core::{
-            CommandOrigin, EditIntent, EditResolution, IntoUpdateOutput, NoHostProtocol,
+            CommandOrigin, EditIntent, EditResolution, IntoUpdateOutput, KeyLocation, KeyModifiers,
+            KeyboardCompositionState, KeyboardPhase, LogicalKey, NoHostProtocol, PhysicalKey,
             SemanticCommand, SemanticEditableMode, TextAffinity, TextDocumentId,
             TextDocumentRevision, TextDocumentSnapshot, TextPosition, TextSelection, UpdateOutput,
         };
@@ -2463,6 +2464,54 @@ mod tests {
         assert!(
             before.keyboard().focused_node().is_some(),
             "text ingress requires actual focused RunenUI ownership"
+        );
+
+        // Winit reports a physical KeyEvent and may separately report an
+        // Ime::Commit. The RunenUI-bound host routes the former as keyboard
+        // only, never as a second CommittedTextEvent. A focused M10 editor
+        // must not insert printable characters through keyboard defaults
+        // before the independent original native IME text arrives.
+        let key_device = InputDeviceId::new(11).expect("checked original keyboard device");
+        let key_receipt = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Down,
+                    PhysicalKey::Code(String::from("KeyE")),
+                    LogicalKey::Character(String::from("é")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(key_device),
+                ),
+            )
+            .expect("focused TextField accepts a real M13 keyboard occurrence");
+        let (key_batch, key_status) = slots
+            .pump_native_input_records(slot)
+            .expect("original keyboard occurrence settles through canonical M13");
+        assert_eq!(key_status, Ok(()));
+        assert!(matches!(
+            native_keyboard_finality(
+                before.scope(),
+                key_device,
+                key_receipt,
+                &key_batch,
+                &key_status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("focused text owner survives keyboard")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("original typed TextField remains live")
+                .state()
+                .text,
+            "",
+            "printable KeyEvent cannot duplicate a subsequent IME Commit"
         );
 
         let original = CommittedTextEvent::new("漢字é", None)
