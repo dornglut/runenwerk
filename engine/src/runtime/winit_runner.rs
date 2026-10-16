@@ -85,6 +85,21 @@ fn native_keyboard_composition(
     }
 }
 
+/// A derived OS permission, never a second focus or text-input authority.
+/// The selected native recipient and actual focused window are checked by
+/// WinitRunner before consulting this canonical M13 ownership snapshot.
+fn native_ime_allowed_for_m13(
+    native_window_focused: bool,
+    ownership: &runenui_runtime::InputOwnershipSnapshot,
+) -> bool {
+    let keyboard = ownership.keyboard();
+    let capability = keyboard.text_input_capability();
+    native_window_focused
+        && ownership.status() == runenui_runtime::RuntimeStatus::Running
+        && keyboard.focused_node().is_some()
+        && (capability.accepts_committed_text() || capability.accepts_composition())
+}
+
 /// A pinned winit translator must NEVER cross its native window, physical
 /// source or selected M13 recipient lifetime. No UI focus or gameplay owner
 /// is replicated here; only the adapter's transient pressed-key state.
@@ -236,6 +251,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         native_ui_mice: HashMap::new(),
         native_ui_touches: HashMap::new(),
         native_ui_modifiers: HashMap::new(),
+        native_ime_applied: HashSet::new(),
         last_primary_redraw_at: None,
         frame_pacing_schedule: FramePacingSchedule::default(),
         fatal_error: None,
@@ -293,6 +309,10 @@ struct WinitRunner {
     native_ui_mice: HashMap<NativeWindowId, NativeUiMouseTranslator>,
     native_ui_touches: HashMap<NativeWindowId, NativeUiTouchTranslator>,
     native_ui_modifiers: HashMap<NativeWindowId, KeyModifiers>,
+    /// Applied native OS effect only, not a focus/IME generation authority.
+    /// Winit offers no getter for this permission; avoid repeatedly toggling
+    /// OS IME on each mouse/wake event, and use M13 for every recalculation.
+    native_ime_applied: HashSet<NativeWindowId>,
     last_primary_redraw_at: Option<Instant>,
     frame_pacing_schedule: FramePacingSchedule,
     fatal_error: Option<anyhow::Error>,
@@ -2372,6 +2392,7 @@ impl WinitRunner {
                 }
                 self.forget_destroyed_native_input_recipient(native_window_id)?;
                 self.window_realizer.remove_window(window_id);
+                self.native_ime_applied.remove(&native_window_id);
                 self.owned_redraws.remove(&native_window_id);
                 continue;
             }
@@ -2525,8 +2546,68 @@ impl WinitRunner {
         Ok(())
     }
 
+    /// Project the selected native slot's *current* M13 text capability to
+    /// Winit's per-window OS IME switch. Absent/legacy/unfocused recipients
+    /// are disabled; a temporarily unsettled framework is never granted.
+    /// This runs after original input callbacks and UI frame settlement.
+    fn project_native_ime(&mut self) -> Result<()> {
+        for (_window_id, native_window_id, window) in self.window_realizer.realized_windows() {
+            let enabled = if !window.has_focus() {
+                false
+            } else {
+                match self.native_input_recipient(native_window_id) {
+                    Ok((NativeInputRecipient::RunenUiSlot(slot), Some(_epoch))) => {
+                        let slots = self
+                            .state
+                            .world
+                            .resource_mut::<UiRuntimeSlotsResource>()
+                            .context("native IME recipient lost its canonical RunenUI runtime")?;
+                        match slots.input_ownership(slot) {
+                            Ok(snapshot) => native_ime_allowed_for_m13(true, &snapshot),
+                            Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {
+                                // Re-evaluate on the runtime's next genuine
+                                // wake/pump, never reuse an earlier focus.
+                                false
+                            }
+                            Err(error) => {
+                                return Err(anyhow!(
+                                    "native OS IME capability ownership unavailable: {error:?}"
+                                ));
+                            }
+                        }
+                    }
+                    Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => false,
+                    Err(error)
+                        if matches!(
+                            error.downcast_ref::<NativeInputRecipientError>(),
+                            Some(NativeInputRecipientError::MissingRecipient | NativeInputRecipientError::InactiveWindow)
+                        ) =>
+                    {
+                        false
+                    }
+                    Err(error) => return Err(error),
+                    Ok((NativeInputRecipient::RunenUiSlot(_), None)) => {
+                        return Err(anyhow!("native IME slot selected without binding epoch"));
+                    }
+                }
+            };
+            if enabled != self.native_ime_applied.contains(&native_window_id) {
+                window.set_ime_allowed(enabled);
+                if enabled {
+                    self.native_ime_applied.insert(native_window_id);
+                } else {
+                    self.native_ime_applied.remove(&native_window_id);
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn pace_or_exit(&mut self, event_loop: &ActiveEventLoop) {
-        if let Err(error) = self.apply_frame_pacing(event_loop) {
+        if let Err(error) = self
+            .project_native_ime()
+            .and_then(|_| self.apply_frame_pacing(event_loop))
+        {
             self.exit_with_error(event_loop, error);
         }
     }
@@ -3209,6 +3290,13 @@ mod tests {
         runtime
             .pump(budget)
             .expect("initial mounted reconciliation");
+        let initially_unfocused = runtime
+            .input_ownership()
+            .expect("initial RunenUI ownership");
+        assert!(
+            !native_ime_allowed_for_m13(true, &initially_unfocused),
+            "a mounted text field without semantic focus cannot enable native OS IME"
+        );
         let field = runtime
             .index()
             .nodes()
@@ -3227,6 +3315,14 @@ mod tests {
             .pump(budget)
             .expect("focus has canonical settlement");
         let before = runtime.input_ownership().expect("real M13 focus snapshot");
+        assert!(
+            native_ime_allowed_for_m13(true, &before),
+            "a text-capable focused M13 owner enables its selected native window's OS IME"
+        );
+        assert!(
+            !native_ime_allowed_for_m13(false, &before),
+            "losing native OS focus must disable IME despite retained semantic text focus"
+        );
         assert_eq!(
             native_keyboard_composition(&before),
             KeyboardCompositionState::Inactive
@@ -3275,6 +3371,7 @@ mod tests {
             native_ui_mice: HashMap::new(),
             native_ui_touches: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
+            native_ime_applied: HashSet::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
             fatal_error: None,
@@ -3341,6 +3438,7 @@ mod tests {
             native_ui_mice: HashMap::new(),
             native_ui_touches: HashMap::new(),
             native_ui_modifiers: HashMap::new(),
+            native_ime_applied: HashSet::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
             fatal_error: None,
