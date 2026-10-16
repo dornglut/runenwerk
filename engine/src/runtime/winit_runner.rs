@@ -4238,10 +4238,7 @@ mod tests {
                 .world
                 .resource::<InputState>()
                 .unwrap()
-                .keyboard_down_generation_in(
-                    source,
-                    &PhysicalKeyIdentity::code("KeyW")
-                )
+                .keyboard_down_generation_in(source, &PhysicalKeyIdentity::code("KeyW"))
                 .is_some(),
             "canonical physical W remains genuinely held"
         );
