@@ -1344,12 +1344,9 @@ mod tests {
         ]);
         let requests = PreparedRenderFrameRequestResource::default();
         let flow = make_flow(false);
-        let main_inputs = build_prepared_flow_inputs(
-            std::slice::from_ref(&flow),
-            &extracted,
-            (640, 480),
-        )
-        .expect("preliminary metadata may be bounded");
+        let main_inputs =
+            build_prepared_flow_inputs(std::slice::from_ref(&flow), &extracted, (640, 480))
+                .expect("preliminary metadata may be bounded");
         let err = build_prepared_flow_invocations(
             RenderSurfaceId::primary(),
             std::slice::from_ref(&flow),
@@ -1359,17 +1356,17 @@ mod tests {
             &requests,
         )
         .expect_err("selected simulation cannot omit CPU-completed ticks");
-        assert!(err.to_string().contains("refusing silent GPU-step truncation"));
+        assert!(
+            err.to_string()
+                .contains("refusing silent GPU-step truncation")
+        );
 
         // An unrequested explicit flow is inert. Its preliminary metadata must
         // not prevent independent main-surface content from proceeding.
         let inactive = make_flow(true);
-        let inactive_inputs = build_prepared_flow_inputs(
-            std::slice::from_ref(&inactive),
-            &extracted,
-            (640, 480),
-        )
-        .expect("unrequested flow may prepare metadata");
+        let inactive_inputs =
+            build_prepared_flow_inputs(std::slice::from_ref(&inactive), &extracted, (640, 480))
+                .expect("unrequested flow may prepare metadata");
         let idle = build_prepared_flow_invocations(
             RenderSurfaceId::primary(),
             std::slice::from_ref(&inactive),
@@ -1391,12 +1388,9 @@ mod tests {
             (TypeId::of::<FixedTimeState>(), &cpu_advanced as &dyn Any),
             (TypeId::of::<CatchupBudget>(), &budget as &dyn Any),
         ]);
-        let main_inputs = build_prepared_flow_inputs(
-            std::slice::from_ref(&flow),
-            &extracted,
-            (640, 480),
-        )
-        .expect("bounded metadata");
+        let main_inputs =
+            build_prepared_flow_inputs(std::slice::from_ref(&flow), &extracted, (640, 480))
+                .expect("bounded metadata");
         let selected = build_prepared_flow_invocations(
             RenderSurfaceId::primary(),
             std::slice::from_ref(&flow),
