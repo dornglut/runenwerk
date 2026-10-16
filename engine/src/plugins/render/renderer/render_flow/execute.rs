@@ -442,16 +442,25 @@ impl Renderer {
         }
 
         if debug_control.provenance_enabled {
-            let mut runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
+            // G5 has already accepted this frame, including its terminal Present.
+            // Optional diagnostics cannot retroactively turn acceptance into an
+            // error or cause a temporary ownership transfer to drop the cache.
+            // Borrow independent renderer fields directly instead of taking the
+            // entire flow runtime cache out of the renderer.
             for invocation in &batch.invocations {
-                let runtime_resources = runtime_cache
+                let Some(runtime_resources) = self
+                    .flow_runtime_cache
                     .get_mut(&invocation.flow.flow_id)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "flow '{}' lost runtime resources before accepted provenance publication",
-                            invocation.flow.flow_id
-                        )
-                    })?;
+                else {
+                    tracing::error!(
+                        target: "runenwerk.render.provenance",
+                        frame = prepared_frame.context.frame_index,
+                        flow = %invocation.flow.flow_id,
+                        invocation = %invocation.invocation.invocation_id,
+                        "accepted frame lacks optional pass-provenance runtime resource context"
+                    );
+                    continue;
+                };
                 runtime_resources.target_alias_bindings =
                     invocation.invocation.target_alias_bindings.clone();
                 runtime_resources.set_active_invocation_uniform_scope(
@@ -486,7 +495,6 @@ impl Renderer {
                 }
                 runtime_resources.clear_active_invocation_uniform_scope();
             }
-            self.flow_runtime_cache = runtime_cache;
         }
 
         timings.flow_encode_ms = flow_encode_start.elapsed().as_secs_f32() * 1000.0;
