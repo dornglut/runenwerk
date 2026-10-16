@@ -407,7 +407,12 @@ fn apply_historical_step_inputs(
         .candidate(region.max_substeps as usize)
         .into_iter()
         .map(|intent| {
-            let provided = intent.input().uniforms.keys().copied().collect::<BTreeSet<_>>();
+            let provided = intent
+                .input()
+                .uniforms
+                .keys()
+                .copied()
+                .collect::<BTreeSet<_>>();
             anyhow::ensure!(
                 provided == required,
                 "flow {:?} step {} does not capture exactly the region's projected uniform inputs",
@@ -439,7 +444,9 @@ fn apply_historical_step_inputs(
         .projected_uniform_bytes
         .get(&region.iteration_uniform)
         .and_then(|bytes| RenderFixedStepIterationUniform::from_uniform_bytes(bytes))
-        .ok_or_else(|| anyhow::anyhow!("flow {:?} lacks fixed-step iteration input", flow.flow_id))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("flow {:?} lacks fixed-step iteration input", flow.flow_id)
+        })?;
     iteration.submitted_substeps =
         u32::try_from(history.len()).expect("bounded by authored u32 max_substeps");
     inputs
@@ -1548,7 +1555,9 @@ mod tests {
             )]),
         };
         let mut streams = RenderGpuFlowStepStreams::default();
-        streams.register(compiled.flow_id, 5, 4).expect("producer registered");
+        streams
+            .register(compiled.flow_id, 5, 4)
+            .expect("producer registered");
         streams
             .stream_mut(compiled.flow_id)
             .unwrap()
@@ -1567,12 +1576,9 @@ mod tests {
             (TypeId::of::<FixedTimeState>(), &fixed_state as &dyn Any),
             (TypeId::of::<CatchupBudget>(), &budget as &dyn Any),
         ]);
-        let mut projected = build_prepared_flow_inputs(
-            std::slice::from_ref(&compiled),
-            &extracted,
-            (640, 480),
-        )
-        .expect("projected latest-value baseline");
+        let mut projected =
+            build_prepared_flow_inputs(std::slice::from_ref(&compiled), &extracted, (640, 480))
+                .expect("projected latest-value baseline");
         apply_historical_step_inputs(
             &compiled,
             projected.get_mut(&compiled.flow_id).unwrap(),
@@ -1591,8 +1597,18 @@ mod tests {
         .expect("latest CPU clock does not suppress captured GPU steps");
         assert_eq!(invocations.len(), 1);
         let prepared = &invocations[0].inputs;
-        let history = prepared.fixed_step_history.as_ref().expect("producer history");
-        assert_eq!(history.steps.iter().map(|step| step.tick).collect::<Vec<_>>(), vec![6, 7, 8]);
+        let history = prepared
+            .fixed_step_history
+            .as_ref()
+            .expect("producer history");
+        assert_eq!(
+            history
+                .steps
+                .iter()
+                .map(|step| step.tick)
+                .collect::<Vec<_>>(),
+            vec![6, 7, 8]
+        );
         assert_eq!(
             history
                 .steps
@@ -1610,19 +1626,27 @@ mod tests {
         )
         .expect("valid GPU iteration schedule");
         assert_eq!(schedule.submitted_substeps, 3);
-        assert_eq!(streams.stream(compiled.flow_id).unwrap().requested_tick(), 8);
-        assert_eq!(streams.stream(compiled.flow_id).unwrap().completed_tick(), 5);
+        assert_eq!(
+            streams.stream(compiled.flow_id).unwrap().requested_tick(),
+            8
+        );
+        assert_eq!(
+            streams.stream(compiled.flow_id).unwrap().completed_tick(),
+            5
+        );
 
-        let incomplete = RenderGpuFixedStepInput { uniforms: BTreeMap::new() };
+        let incomplete = RenderGpuFixedStepInput {
+            uniforms: BTreeMap::new(),
+        };
         let mut bad = RenderGpuFlowStepStreams::default();
         bad.register(compiled.flow_id, 0, 4).unwrap();
-        bad.stream_mut(compiled.flow_id).unwrap().capture(incomplete).unwrap();
-        let mut projected_bad = build_prepared_flow_inputs(
-            std::slice::from_ref(&compiled),
-            &extracted,
-            (640, 480),
-        )
-        .unwrap();
+        bad.stream_mut(compiled.flow_id)
+            .unwrap()
+            .capture(incomplete)
+            .unwrap();
+        let mut projected_bad =
+            build_prepared_flow_inputs(std::slice::from_ref(&compiled), &extracted, (640, 480))
+                .unwrap();
         let error = apply_historical_step_inputs(
             &compiled,
             projected_bad.get_mut(&compiled.flow_id).unwrap(),

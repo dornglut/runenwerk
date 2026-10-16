@@ -510,12 +510,16 @@ impl RenderGpuFlowStepStreams {
                 "GPU step stream for flow {:?} still has unverified accepted work",
                 invocation.flow_id
             );
-            let history = invocation.inputs.fixed_step_history.as_ref().ok_or_else(|| {
-                anyhow::anyhow!(
-                    "GPU step stream for flow {:?} lacks source-authored history",
-                    invocation.flow_id
-                )
-            })?;
+            let history = invocation
+                .inputs
+                .fixed_step_history
+                .as_ref()
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "GPU step stream for flow {:?} lacks source-authored history",
+                        invocation.flow_id
+                    )
+                })?;
             anyhow::ensure!(
                 !history.steps.is_empty() || stream.pending_len() == 0,
                 "prepared GPU step history predates new producer work for flow {:?}",
@@ -529,8 +533,7 @@ impl RenderGpuFlowStepStreams {
                         .iter()
                         .zip(pending)
                         .all(|(prepared, original)| {
-                            prepared.tick == original.tick()
-                                && prepared.input == *original.input()
+                            prepared.tick == original.tick() && prepared.input == *original.input()
                         }),
                 "prepared GPU step history is stale for flow {:?}; fresh frame preparation required",
                 invocation.flow_id
