@@ -292,6 +292,44 @@ semantic cursors, recovery and nonblocking ordinary RenderFlow admission
 remain the separate, open [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291)
 correctness boundary.
 
+### Producer-owned immutable GPU-step demand
+
+`RenderGpuStepDemand<T>` is a bounded transport for application-authored,
+immutable per-step inputs. Producers choose what `T` means; Runenwerk does not
+synthesize past ECS snapshots or assign domain authority. A producer calls
+`capture_batch(inputs)` **before** advancing any irreversible domain state.
+If the bounded queue cannot admit the whole interval, the original inputs
+are returned unchanged with a typed capacity/identity error. A zero-step
+interval changes nothing.
+
+`candidate(max_steps)` borrows the oldest not-yet-submitted inputs for a
+freshly built GPU graph. It never dequeues them. **Only after RunenGPU has
+actually accepted the matching submission** may the producer call
+`accept(submission, selected_steps)`. This moves the exact selected prefix
+from pending into a single accepted, immutable interval. Additional demand
+can be captured within the configured total bound, but no second interval
+is issued by this producer until its predecessor is resolved. This is
+*semantic producer backpressure*, not a shadow table of GPU resource locks.
+
+`commit_completed(current_affinity)` requires the producer to have checked
+that the exact accepted submission faithfully implemented its selected
+steps, and verifies both RunenGPU `Completed` status and matching device
+generation before advancing the producer's completed-tick cursor.
+`Accepted`, `Failed`, and generation mismatch are **not** completion.
+An immediately failed accepted submission is retained, not retried as if
+no work had happened. After an unknown write or device change, the producer
+MUST reconstruct its domain-owned state and deliberately establish a new
+stream; no automatic rollback or replay is implied.
+
+This reusable producer transport is exercised by the native public-G5
+fixed-step continuity test with independently captured historical inputs.
+It is **not yet connected** to the ordinary composed RenderFlow preparation,
+surface acquisition, terminal receipt association or windowed boids example.
+The current RenderFlow fixed-step uniform ABI cannot be assumed to encode
+arbitrarily varying per-step source data merely because the demand queue
+exists. Those product integration requirements remain with
+[Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291).
+
 ## Scale Working-Set Residency Evidence
 
 Renderer scale evidence starts with finite working sets, not with unbounded

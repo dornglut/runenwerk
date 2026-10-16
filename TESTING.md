@@ -69,9 +69,9 @@ RUNENWERK_G5_REQUIRE_GPU=1 cargo +stable test -p engine --test render_gpu_fixed_
 
 The first proves conservative read-only retained-resource exclusion, independent
 retained-resource admission, terminal readback, and fresh post-terminal
-submission. The second is an isolated, test-owned reference producer that
-captures bounded fixed-step demand across deferred host frames and checks the
-terminal GPU result. Both use RunenGPU's public G3/G5 contracts; neither
+submission. The second exercises the production `RenderGpuStepDemand<T>` immutable-input
+transport using a test-owned producer that captures bounded fixed-step demand
+across deferred host frames and checks the terminal GPU result. Both use RunenGPU's public G3/G5 contracts; neither
 implements production RenderFlow scheduling or proves native windowed boids
 `--species` continuity, accepted GPU-write recovery, or user-visible Present.
 An exact-head green Vulkan lane is therefore a *scoped* integration result,
