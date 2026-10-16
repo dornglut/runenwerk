@@ -1436,7 +1436,7 @@ impl UiRuntimeSlotsResource {
     ///
     /// The host MUST pump/correlate the exact M13 record before allowing a
     /// competing gameplay transition.
-    pub fn submit_native_keyboard(
+    pub(crate) fn submit_native_keyboard(
         &mut self,
         slot_id: UiRuntimeSlotId,
         event: KeyboardEvent,
@@ -1835,6 +1835,37 @@ impl UiRuntimeSlotsResource {
             .find(|slot| slot.id == slot_id)
             .expect("validated RunenUI native binding references mounted slot")
             .native_input_selected = true;
+    }
+
+    /// Test-only ingress into the real mounted typed framework semantic path.
+    /// Uses the selected-slot mutation guard; no production focus control or
+    /// additional M13 authority is introduced by the regression harness.
+    #[cfg(test)]
+    pub(crate) fn test_request_first_typed_focus<A: UiApp + 'static>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        let slot = self.slot_mut_application(slot_id)?;
+        let next = slot.next_ingress_epoch()?;
+        let runtime = slot
+            .runtime
+            .typed_mut::<A>()
+            .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
+        let target = runtime
+            .index()
+            .nodes()
+            .first()
+            .ok_or(UiRuntimeSlotOperationFailure::AutomationRejected)?
+            .id()
+            .clone();
+        runtime
+            .submit_command(
+                target,
+                SemanticCommand::RequestFocus,
+                runenui_core::CommandOrigin::programmatic(),
+            )
+            .map_err(|_| UiRuntimeSlotOperationFailure::AutomationRejected)?;
+        slot.accepted_ingress(next)
     }
 
     /// Only the Engine World mutation transaction calls this function after

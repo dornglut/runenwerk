@@ -301,7 +301,7 @@ mod tests {
         type HostProtocol = NoHostProtocol;
 
         fn root(_: &Self::State) -> impl View<Self::Action> {
-            runenui_core::text("an ordinary native selected app")
+            runenui_core::button("native focus probe").on_activate(|| ())
         }
 
         fn update(
@@ -420,6 +420,39 @@ mod tests {
         Ok(())
     }
 
+    fn mutate_real_m13_focus(mut world: WorldMut) -> Result<()> {
+        let slot = world.resource::<Probe>()?.slot;
+        let before = world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .input_ownership(slot)
+            .map_err(|error| anyhow!("before M13 observation failed: {error:?}"))?;
+        assert!(before.keyboard().focused_node().is_none());
+        transact_ui_slot(&mut world, slot, |slots| {
+            slots.test_request_first_typed_focus::<ProbeApp>(slot)
+        })?;
+        let after = world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .input_ownership(slot)
+            .map_err(|error| anyhow!("after M13 observation failed: {error:?}"))?;
+        assert_eq!(before.scope(), after.scope());
+        assert_ne!(
+            before.revision(),
+            after.revision(),
+            "real RunenUI semantic focus must advance M13 ownership"
+        );
+        assert!(
+            after.keyboard().focused_node().is_some(),
+            "framework M13 must have actually accepted focus"
+        );
+        assert!(
+            world
+                .resource::<ActionState>()?
+                .action_down(action::WORLD_MOVE_UP),
+            "the independent legacy physical source retains its held W"
+        );
+        Ok(())
+    }
+
     fn observe_immediately(mut world: WorldMut) -> Result<()> {
         let (ui, game) = {
             let probe = world.resource::<Probe>()?;
@@ -453,6 +486,30 @@ mod tests {
         let mut runtime = Runtime::new();
         runtime
             .add_systems(Update, mutate.on_invoker_thread().in_set(NativeMutation))
+            .unwrap();
+        runtime
+            .add_systems(
+                Update,
+                observe_immediately
+                    .on_invoker_thread()
+                    .in_set(ImmediateReader)
+                    .after(NativeMutation),
+            )
+            .unwrap();
+        runtime.run_schedule::<Update>(&mut world).unwrap();
+    }
+
+    #[test]
+    fn real_m13_focus_mutation_revokes_before_next_ecs_update_reader() {
+        let mut world = setup();
+        let mut runtime = Runtime::new();
+        runtime
+            .add_systems(
+                Update,
+                mutate_real_m13_focus
+                    .on_invoker_thread()
+                    .in_set(NativeMutation),
+            )
             .unwrap();
         runtime
             .add_systems(
