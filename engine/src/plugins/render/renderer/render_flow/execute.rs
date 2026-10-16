@@ -320,6 +320,13 @@ impl Renderer {
                 .collect::<Vec<_>>();
             (authored.graph, witnesses)
         };
+        // Diagnostic-only, opt-in observation. RunenGPU remains the only retained
+        // continuity and actual submission-admission authority. No gating here.
+        let retained_trace = self.retained_submission_trace.before_submission(
+            &graph,
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
+        );
         let prepared = pollster::block_on(context.prepare_submission(graph))?;
         let submission = context.submit_prepared(prepared).map_err(|rejection| {
             anyhow::anyhow!(
@@ -328,6 +335,20 @@ impl Renderer {
                 rejection.reason().detail()
             )
         })?;
+        self.retained_submission_trace.accepted(
+            submission.clone(),
+            retained_trace,
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
+        );
+        // Mandatory accepted-work lifecycle is independent of timing/capture/UI
+        // observation. RunenGPU alone owns retained participation and admission.
+        self.submission_lifecycle.accept(
+            context,
+            submission.clone(),
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
+        );
         let association_result = self
             .render_sessions
             .associate_composed_submission(deterministic.occurrences, &submission);
