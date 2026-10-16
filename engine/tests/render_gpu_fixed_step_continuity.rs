@@ -232,6 +232,7 @@ impl StepLedger {
             .history
             .accepted_submission()
             .expect("accepted GPU batch");
+        let submission_id = submission.id();
         assert_eq!(
             submission.affinity(),
             context.affinity(),
@@ -256,7 +257,7 @@ impl StepLedger {
                 );
                 assert_eq!(
                     self.history.accepted_submission().map(|s| s.id()),
-                    Some(submission.id())
+                    Some(submission_id)
                 );
                 let readback = accepted.readback;
                 let expected_counter = accepted.expected_counter;
