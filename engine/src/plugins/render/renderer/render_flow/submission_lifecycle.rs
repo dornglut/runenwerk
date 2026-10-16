@@ -173,7 +173,7 @@ pub(in crate::plugins::render::renderer) struct RendererSubmissionLifecycle {
 /// semantic producer to advance a completed-step cursor across a delivery gap.
 fn push_bounded<T>(queue: &mut VecDeque<T>, lost: &mut u64, limit: usize, item: T) {
     if queue.len() >= limit {
-        queue.pop_front();
+        let _ = queue.pop_front();
         *lost = lost.saturating_add(1);
     }
     queue.push_back(item);
