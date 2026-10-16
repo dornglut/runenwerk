@@ -1260,10 +1260,18 @@ mod tests {
         }
         let region_error = checked_fixed_step_substeps(3, 4, 2, "test.simulation")
             .expect_err("a smaller GPU region must not drop completed CPU work");
-        assert!(region_error.to_string().contains("refusing silent GPU-step truncation"));
+        assert!(
+            region_error
+                .to_string()
+                .contains("refusing silent GPU-step truncation")
+        );
         let budget_error = checked_fixed_step_substeps(4, 2, 4, "test.simulation")
             .expect_err("a changed catch-up budget must not silently truncate CPU work");
-        assert!(budget_error.to_string().contains("refusing silent GPU-step truncation"));
+        assert!(
+            budget_error
+                .to_string()
+                .contains("refusing silent GPU-step truncation")
+        );
     }
 
     #[test]
