@@ -751,9 +751,10 @@ mod tests {
             .record_mut(primary)
             .expect("pending window")
             .approve_close();
-        slots
-            .unmount_with_retirement(slot)
-            .expect("retire original framework scope");
+        crate::plugins::ui::native_transaction::test_selected_slot_operation(&mut slots, slot, |slots| {
+            slots.unmount_with_retirement(slot)
+        })
+        .expect("retire original framework scope");
         assert!(matches!(
             recipients.resolve_for_cancellation(primary, &windows, &mut slots),
             Err(NativeInputRecipientError::OwnershipUnavailable(
@@ -981,9 +982,10 @@ mod tests {
                 &mut slots,
             )
             .expect("bind first");
-        slots
-            .unmount_with_retirement(a)
-            .expect("runtime retirement");
+        crate::plugins::ui::native_transaction::test_selected_slot_operation(&mut slots, a, |slots| {
+            slots.unmount_with_retirement(a)
+        })
+        .expect("runtime retirement");
         assert!(matches!(
             recipients.resolve(first, &windows, &mut slots),
             Err(NativeInputRecipientError::OwnershipUnavailable(
@@ -1042,7 +1044,10 @@ mod tests {
             Err(NativeInputRecipientError::MissingRecipient)
         );
         // Even with zero UI mounts, retirement cannot auto-promote game input.
-        slots.unmount_with_retirement(slot).expect("retire slot");
+        crate::plugins::ui::native_transaction::test_selected_slot_operation(&mut slots, slot, |slots| {
+            slots.unmount_with_retirement(slot)
+        })
+        .expect("retire slot");
         assert_eq!(
             recipients.resolve(first, &windows, &mut slots),
             Err(NativeInputRecipientError::MissingRecipient)
@@ -1178,8 +1183,10 @@ mod tests {
             &style,
             LogicalSize::new(LogicalLength::from(640_u16), LogicalLength::from(480_u16)),
         );
-        let publication = slots
-            .publish_surface_for_slot(slot, &context)
+        let publication =
+            crate::plugins::ui::native_transaction::test_selected_slot_operation(&mut slots, slot, |slots| {
+                slots.publish_surface_for_slot(slot, &context)
+            })
             .expect("real RunenUI runtime publication");
         let expected = publication.input_context().clone();
         let device = InputDeviceId::new(7).expect("actual checked native device");
@@ -1384,8 +1391,10 @@ mod tests {
             LogicalSize::new(LogicalLength::from(400_u16), LogicalLength::from(300_u16)),
         )
         .with_raster_scale(RasterScale::new(2.0).expect("valid native raster scale"));
-        let next = slots
-            .publish_surface_for_slot(slot, &changed_context)
+        let next =
+            crate::plugins::ui::native_transaction::test_selected_slot_operation(&mut slots, slot, |slots| {
+                slots.publish_surface_for_slot(slot, &changed_context)
+            })
             .expect("new RunenUI publication");
         let new_context = next.input_context().clone();
         assert_ne!(

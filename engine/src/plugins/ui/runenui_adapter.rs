@@ -1834,6 +1834,7 @@ impl UiRuntimeSlotsResource {
     /// A plain selected-slot mutator cannot grant itself this capability.
     pub(crate) fn transact_native_app<T>(
         &mut self,
+        _permit: &super::native_transaction::NativeAppMutationPermit,
         slot_id: UiRuntimeSlotId,
         operation: impl FnOnce(&mut Self) -> Result<T, UiRuntimeSlotOperationFailure>,
     ) -> Result<T, UiRuntimeSlotOperationFailure> {

@@ -18,6 +18,26 @@ use super::{
     UiRuntimeSlotsResource,
 };
 
+/// This construction right is confined to the one World mutation module.
+/// Merely holding a mutable `UiRuntimeSlotsResource` cannot manufacture it.
+pub(crate) struct NativeAppMutationPermit {
+    _sealed: (),
+}
+
+#[cfg(test)]
+pub(crate) fn test_selected_slot_operation<T>(
+    slots: &mut UiRuntimeSlotsResource,
+    slot: UiRuntimeSlotId,
+    operation: impl FnOnce(
+        &mut UiRuntimeSlotsResource,
+    ) -> std::result::Result<T, UiRuntimeSlotOperationFailure>,
+) -> std::result::Result<T, UiRuntimeSlotOperationFailure> {
+    // Lower-level recipient/Present unit tests explicitly model an already
+    // validated native World transaction; this path exists only in tests.
+    slots.transact_native_app(&NativeAppMutationPermit { _sealed: () }, slot, operation)
+}
+
+
 fn revoke_game_source(world: &mut World, source: runen_input::InputSourceId) -> Result<()> {
     if let Some(mut actions) = world.remove_resource::<ActionState>() {
         let result = world.resource::<InputState>().map(|input| {
@@ -90,7 +110,7 @@ pub fn transact_ui_slot<T>(
         world
             .resource_mut::<UiRuntimeSlotsResource>()
             .map_err(|err| anyhow!("native RunenUI slots unavailable: {err}"))?
-            .transact_native_app(slot, operation)
+            .transact_native_app(&NativeAppMutationPermit { _sealed: () }, slot, operation)
             .map_err(|err| anyhow!("native RunenUI app mutation failed: {err:?}"))
     }));
     let after = world
