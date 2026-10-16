@@ -369,6 +369,8 @@ impl Renderer {
         let mut observation_output = self.gpu_observations.accept(
             context,
             submission,
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
             super::observation::AcceptedFrameObservations {
                 timings: timing_frames,
                 composed_timing: composed_gpu_timing.map(PreparedComposedGpuTiming::into_frame),

@@ -29,6 +29,9 @@ pub(in crate::plugins::render::renderer) struct RendererGpuObservationState {
 #[derive(Debug)]
 struct AcceptedRendererObservation {
     submission: GpuSubmission,
+    frame_index: u64,
+    surface: u64,
+    terminal_reported: bool,
     timings: Vec<GpuPassTimingFrame>,
     composed_timing: Option<GpuComposedFrameTimingFrame>,
     captures: Vec<CaptureObservation>,
@@ -159,17 +162,22 @@ pub(super) struct AcceptedFrameObservations {
 }
 
 impl RendererGpuObservationState {
-    /// Retains the exact accepted submission for timing/capture obligations
-    /// and the single-use RunenRender F2 presentation witnesses.
+    /// Retains every accepted GPU submission until its terminal lifecycle fact,
+    /// independently of timing/capture/UI requests. Optional observations are
+    /// obligations on top of this mandatory submission lifetime.
     pub(super) fn accept(
         &mut self,
         context: &GpuContext,
         submission: GpuSubmission,
+        frame_index: u64,
+        surface: u64,
         frame: AcceptedFrameObservations,
         capture_runtime: &mut FrameCaptureRuntime,
     ) -> RendererGpuObservationOutput {
         self.accept_with_bound(
             submission,
+            frame_index,
+            surface,
             frame,
             capture_runtime,
             context.execution_policy().max_in_flight_submissions().get(),
@@ -179,6 +187,8 @@ impl RendererGpuObservationState {
     fn accept_with_bound(
         &mut self,
         submission: GpuSubmission,
+        frame_index: u64,
+        surface: u64,
         frame: AcceptedFrameObservations,
         capture_runtime: &mut FrameCaptureRuntime,
         bound: usize,
@@ -230,14 +240,6 @@ impl RendererGpuObservationState {
             }
         }
 
-        if accepted_timings.is_empty()
-            && accepted_composed_timing.is_none()
-            && accepted_captures.is_empty()
-            && runenui.is_empty()
-        {
-            return output;
-        }
-
         if self.accepted.len() >= bound {
             let detail = format!(
                 "renderer GPU observation bound {bound} was exhausted for accepted submission {}",
@@ -264,6 +266,18 @@ impl RendererGpuObservationState {
                     "renderer GPU observation capacity exceeded",
                 ));
             }
+            // Optional-observation exhaustion cannot erase the exact accepted GPU
+            // lifecycle handle. RunenGPU retains the physical admission authority.
+            self.accepted.push(AcceptedRendererObservation {
+                submission,
+                frame_index,
+                surface,
+                terminal_reported: false,
+                timings: Vec::new(),
+                composed_timing: None,
+                captures: Vec::new(),
+                runenui: Vec::new(),
+            });
             return output;
         }
 
@@ -280,6 +294,9 @@ impl RendererGpuObservationState {
             .extend(runenui.iter().map(|witness| witness.publication_id));
         self.accepted.push(AcceptedRendererObservation {
             submission,
+            frame_index,
+            surface,
+            terminal_reported: false,
             timings: accepted_timings,
             composed_timing: accepted_composed_timing,
             captures: accepted_captures,
@@ -302,6 +319,55 @@ impl RendererGpuObservationState {
         for accepted in &mut self.accepted {
             let invalid_context = (accepted.submission.affinity() != affinity)
                 .then_some("renderer GPU observation belongs to another context/device generation");
+
+            if !accepted.terminal_reported {
+                if let Some(reason) = invalid_context {
+                    tracing::warn!(
+                        target: "runenwerk.gpu.submission",
+                        submission = %accepted.submission.id(),
+                        frame = accepted.frame_index,
+                        surface = accepted.surface,
+                        reason,
+                        "GPU submission generation invalidated"
+                    );
+                    accepted.terminal_reported = true;
+                } else if lifecycle == GpuExecutionLifecycleState::Closed {
+                    tracing::warn!(
+                        target: "runenwerk.gpu.submission",
+                        submission = %accepted.submission.id(),
+                        frame = accepted.frame_index,
+                        surface = accepted.surface,
+                        "GPU submission context closed without terminal observation"
+                    );
+                    accepted.terminal_reported = true;
+                } else {
+                    match accepted.submission.status() {
+                        GpuSubmissionStatus::Accepted => {}
+                        GpuSubmissionStatus::Completed => {
+                            tracing::trace!(
+                                target: "runenwerk.gpu.submission",
+                                submission = %accepted.submission.id(),
+                                frame = accepted.frame_index,
+                                surface = accepted.surface,
+                                "GPU submission completed"
+                            );
+                            accepted.terminal_reported = true;
+                        }
+                        GpuSubmissionStatus::Failed(failure) => {
+                            tracing::error!(
+                                target: "runenwerk.gpu.submission",
+                                submission = %accepted.submission.id(),
+                                frame = accepted.frame_index,
+                                surface = accepted.surface,
+                                kind = ?failure.kind(),
+                                detail = failure.detail(),
+                                "GPU submission terminally failed"
+                            );
+                            accepted.terminal_reported = true;
+                        }
+                    }
+                }
+            }
 
             accepted.timings.retain(|timing| {
                 let status = accepted
@@ -451,10 +517,18 @@ impl RendererGpuObservationState {
             });
         }
         self.accepted.retain(|accepted| {
-            !accepted.timings.is_empty()
-                || accepted.composed_timing.is_some()
-                || !accepted.captures.is_empty()
-                || !accepted.runenui.is_empty()
+            // No optional observer is required for accepted GPU work to stay tracked.
+            // The public submission status and affinity are the only lifecycle facts.
+            let live = accepted.submission.affinity() == affinity
+                && lifecycle != GpuExecutionLifecycleState::Closed
+                && matches!(accepted.submission.status(), GpuSubmissionStatus::Accepted);
+            retain_submission_lifecycle(
+                live,
+                !accepted.timings.is_empty()
+                    || accepted.composed_timing.is_some()
+                    || !accepted.captures.is_empty()
+                    || !accepted.runenui.is_empty(),
+            )
         });
         output
     }
@@ -470,5 +544,27 @@ impl CaptureObservation {
                 failure.detail()
             ),
         )
+    }
+}
+
+/// An accepted submission is retained independently of optional observation requests.
+fn retain_submission_lifecycle(in_flight: bool, pending_observation: bool) -> bool {
+    in_flight || pending_observation
+}
+
+#[cfg(test)]
+mod submission_lifecycle_tests {
+    use super::retain_submission_lifecycle;
+
+    #[test]
+    fn observation_free_work_stays_tracked_while_accepted() {
+        assert!(retain_submission_lifecycle(true, false));
+        assert!(retain_submission_lifecycle(true, true));
+    }
+
+    #[test]
+    fn terminal_work_retires_only_after_observation_obligations() {
+        assert!(!retain_submission_lifecycle(false, false));
+        assert!(retain_submission_lifecycle(false, true));
     }
 }
