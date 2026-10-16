@@ -340,13 +340,29 @@ and its immutable captured inputs. Only successful verification advances
 the producer's completed-tick cursor; a verification error preserves
 the entire admitted batch and its source history.
 `Accepted`, `Failed`, and generation mismatch are **not** completion.
-An immediately failed accepted submission is retained, not retried as if
-no work had happened. After an unknown write or device change, the producer
-MUST reconstruct its domain-owned state and deliberately establish a new
-stream; no automatic rollback or replay is implied.
+An immediately failed accepted submission remains quarantined and MUST
+NOT be treated as never submitted. After a terminal write failure, refused
+semantic verification, or device-generation change, the producer MUST first
+establish the *previous verified* state through owner-authorized reconstruction
+or reimport on the current GPU generation. The distinct public reconstruction
+`GpuSubmission` must be terminal `Completed`; the producer must verify
+its actual effects (for example, a canonical restore operation and exact
+GPU readback). `requeue_verified_after_reconstruction(current_affinity,
+reconstruction, verification)` then moves precisely the original accepted
+immutable step prefix back before later pending inputs, without decrementing
+or reissuing the CPU requested-tick identity. A pending predecessor,
+wrong-generation or identical reconstruction receipt, failed reconstruction,
+or rejected producer verification leaves the original accepted batch
+untouched. Every replay still requires a *freshly prepared* G5 graph; the
+method does not infer transient retained contention or take over RunenGPU
+admission. An owner may instead perform an explicit semantic reset with a
+new logical state identity, but discarding old steps is never automatic.
 
-This reusable producer transport is exercised by the native public-G5
-fixed-step continuity test with independently captured historical inputs.
+This producer transport is exercised by the native public-G5 fixed-step
+continuity test, including a bounded terminal-success reset/requeue proof.
+A failed/partially executed GPU write or generation-loss recovery remains
+a separate negative acceptance requirement; successful physical completion
+is not automatically a simulation-verified result.
 It is **not yet connected** to the ordinary composed RenderFlow preparation,
 surface acquisition, terminal receipt association or windowed boids example.
 The current RenderFlow fixed-step uniform ABI cannot be assumed to encode
