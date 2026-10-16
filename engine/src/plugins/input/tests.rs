@@ -238,7 +238,11 @@ fn repeated_key_down_does_not_create_a_second_pressed_edge() {
 fn native_ui_denies_generationless_repeat_or_synthetic_hold_until_authentic_up() {
     for (source, repeat, origin) in [
         (101, true, ObservationOrigin::SourceReport),
-        (102, false, ObservationOrigin::BackendSyntheticReconciliation),
+        (
+            102,
+            false,
+            ObservationOrigin::BackendSyntheticReconciliation,
+        ),
     ] {
         let mut input = InputState::new();
         let mut actions = ActionState::new();
