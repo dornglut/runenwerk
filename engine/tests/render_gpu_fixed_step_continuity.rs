@@ -181,6 +181,9 @@ impl StepLedger {
             return false;
         }
         assert_eq!(snapshots[0].tick, self.history.completed_tick() + 1);
+        for (intent, snapshot) in self.history.candidate(3).iter().zip(&snapshots) {
+            assert_eq!(intent.tick(), snapshot.tick, "captured and authored step identity agree");
+        }
         for window in snapshots.windows(2) {
             assert_eq!(window[1].tick, window[0].tick + 1);
         }

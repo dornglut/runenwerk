@@ -33,7 +33,6 @@ pub enum RenderGpuStepDemandError {
     BatchExceedsPending,
     PredecessorInFlight,
     NoAcceptedBatch,
-    SubmissionNotAccepted,
     SubmissionPending,
     SubmissionFailed,
     DeviceGenerationChanged,
@@ -159,9 +158,9 @@ impl<T> RenderGpuStepDemand<T> {
         if selected_steps > self.pending.len() {
             return Err(RenderGpuStepDemandError::BatchExceedsPending);
         }
-        if matches!(submission.status(), GpuSubmissionStatus::Failed(_)) {
-            return Err(RenderGpuStepDemandError::SubmissionNotAccepted);
-        }
+        // A public handle can become terminally failed immediately after G5
+        // accepts it. Even then its write may have partly executed: retain
+        // the historical batch and require producer-owned reconstruction.
         let steps = self.pending.drain(..selected_steps).collect();
         self.accepted = Some(AcceptedSteps { submission, steps });
         Ok(())
