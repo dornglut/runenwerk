@@ -379,11 +379,21 @@ pass outside the region. All violations reject preparation before G5.
 Ordinary RenderFlow expands those snapshots into actual repeated compute
 occurrences with source-specific ordered uploads. A producer whose previous
 accepted interval has not been semantically verified is deferred without
-acquiring a new surface image. On successful actual G5 admission, the
-precise source interval moves to its accepted receipt before later renderer
-work can fail. Unrelated independent surface work remains free to proceed;
-the current integration does **not** claim resource-granular scheduling of
-unrelated flows inside one deferred physical surface frame.
+acquiring a new surface image. Even after all producer steps are verified,
+an idle presentation pass can still read retained storage. G5 reserves
+read-only participants too, so a new frame selecting the same **registered**
+stateful flow defers while an earlier composed G5 frame receipt for that flow
+is physically in flight. The one existing GPU progress point and exact
+accepted-frame lifecycle determine retirement, not a second GPU scheduler
+or a flow-label claim about actual resource participation.
+On successful actual G5 admission, the precise source interval moves to
+its accepted receipt before later renderer work can fail. Unrelated
+independent surface work remains free to proceed; differently named flows
+that share retained resources still rely on G5 admission and require an
+independent sharing qualification.
+The current integration does **not** claim
+resource-granular scheduling of unrelated flows inside one deferred
+physical surface frame.
 
 `storage_array_with_initialization::<T>(label, len, initialization)`
 explicitly declares an initial RunenGPU buffer-content contract. For example,

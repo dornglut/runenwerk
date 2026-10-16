@@ -69,8 +69,11 @@ RUNENWERK_G5_REQUIRE_GPU=1 cargo +stable test -p engine --test render_gpu_fixed_
 
 The first proves conservative read-only retained-resource exclusion, independent
 retained-resource admission, terminal readback, and fresh post-terminal
-submission. The second exercises the `RenderGpuStepDemand<T>` immutable-input
-transport with a test-owned producer: bounded historical input capture across
+submission. The native historical RenderFlow hook also asserts that no two
+still-pending G5 frame receipts can select its registered stateful flow,
+including after its producer has committed all steps and subsequent frames
+merely read the retained counter for presentation.
+The second exercises the `RenderGpuStepDemand<T>` immutable-input transport with a test-owned producer: bounded historical input capture across
 deferred host frames, exact GPU results, transient G5 conflict followed by
 fresh preparation, and explicitly verified GPU reset followed by requeue of the
 *same* historical inputs. The recovery fixture reconstructs a semantically

@@ -1251,6 +1251,24 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                 }
             }
         }
+        // A step-empty presentation still participates in G5 retained reads.
+        // Count exact accepted composed frame receipts, not semantic steps.
+        if let Ok(gfx) = world.resource::<Gfx>() {
+            let selected_count = gfx
+                .pending_gpu_frame_submissions()
+                .iter()
+                .filter(|receipt| {
+                    receipt
+                        .invocations()
+                        .iter()
+                        .any(|invocation| invocation.flow_id() == self.flow)
+                })
+                .count();
+            anyhow::ensure!(
+                selected_count <= 1,
+                "registered retained RenderFlow has concurrent accepted frames, including idle read-only presentation"
+            );
+        }
         if let Ok(gfx) = world.resource::<Gfx>()
             && !self.second_committed
         {

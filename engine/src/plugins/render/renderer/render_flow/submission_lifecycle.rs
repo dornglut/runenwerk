@@ -235,6 +235,12 @@ fn push_bounded<T>(queue: &mut VecDeque<T>, lost: &mut u64, limit: usize, item: 
     queue.push_back(item);
 }
 
+fn contains_flow(invocations: &[RenderGpuFrameInvocationReceipt], flow_id: RenderFlowId) -> bool {
+    invocations
+        .iter()
+        .any(|invocation| invocation.flow_id() == flow_id)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum SubmissionDisposition {
     Pending,
@@ -304,6 +310,21 @@ impl RendererSubmissionLifecycle {
             surface,
             invocations,
         });
+    }
+
+    /// A previously accepted ordinary invocation of this opt-in producer
+    /// flow is still pending. The enclosing Gfx has already performed its
+    /// one RunenGPU progress point and reconciled this lifecycle.
+    ///
+    /// This is a conservative same-flow host pacing check, not evidence of
+    /// exact retained-resource participation or a replacement G5 lock.
+    pub(in crate::plugins::render::renderer) fn has_pending_flow(
+        &self,
+        flow_id: RenderFlowId,
+    ) -> bool {
+        self.accepted
+            .iter()
+            .any(|entry| contains_flow(&entry.invocations, flow_id))
     }
 
     pub(in crate::plugins::render::renderer) fn pending_receipts(
@@ -446,6 +467,21 @@ mod tests {
         let receipt = RenderGpuFrameInvocationReceipt::new(flow_id, invocation.clone());
         assert_eq!(receipt.flow_id(), flow_id);
         assert_eq!(receipt.invocation_id(), &invocation);
+    }
+
+    #[test]
+    fn in_flight_flow_membership_is_conservative_across_invocations() {
+        let stateful = RenderFlowId::try_from_raw(12).expect("stateful flow");
+        let unrelated = RenderFlowId::try_from_raw(13).expect("unrelated flow");
+        let other = RenderFlowId::try_from_raw(14).expect("other flow");
+        let invocations = [
+            RenderGpuFrameInvocationReceipt::new(stateful, PreparedFlowInvocationId::new("a")),
+            RenderGpuFrameInvocationReceipt::new(unrelated, PreparedFlowInvocationId::new("b")),
+        ];
+        assert!(contains_flow(&invocations, stateful));
+        assert!(contains_flow(&invocations, unrelated));
+        assert!(!contains_flow(&invocations, other));
+        assert!(!contains_flow(&[], stateful));
     }
 
     #[test]

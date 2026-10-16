@@ -1015,11 +1015,25 @@ impl Gfx {
             deterministic_contributions,
             prepared_frame.surface.render_surface_id,
         );
+        // A registered GPU producer's idle frame may still *read* the same
+        // retained state for display. G5 reserves read-only participants too.
+        // An exact earlier composed receipt with this selected flow therefore
+        // defers a new frame even when no semantic step batch is accepted.
+        // This is conservative same-flow pacing, not G5 resource arbitration;
+        // shared resources across different flows still need G5 validation.
+        let pending_registered_flow = prepared_frame.flow_invocations.iter().any(|invocation| {
+            gpu_step_streams.stream(invocation.flow_id).is_some()
+                && self
+                    .renderer
+                    .submission_lifecycle
+                    .has_pending_flow(invocation.flow_id)
+        });
         if should_defer_deterministic_surface(
             !surface_contributions.is_empty(),
             self.renderer
                 .has_in_flight_deterministic_producer(&surface_contributions),
         ) || gpu_step_streams.should_defer(prepared_frame)
+            || pending_registered_flow
         {
             // Progressed observations were published before deferral. This
             // frame did not submit or acquire a surface image.
