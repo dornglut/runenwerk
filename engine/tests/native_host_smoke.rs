@@ -1284,9 +1284,9 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                 capture.identity.flow_id() == self.flow.to_string()
                     && capture.identity.pass_id() == self.display_pass
                     && (!self.semantic_committed
-                        || self.first_capture_frame.is_none_or(|first| {
-                            capture.identity.frame_index > first
-                        }))
+                        || self
+                            .first_capture_frame
+                            .is_none_or(|first| capture.identity.frame_index > first))
             };
         let capture = world
             .resource::<Gfx>()
@@ -1386,13 +1386,11 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     )
                     .to_vec(),
                 )]),
-                iteration: RenderFixedStepIterationUniform::new(
-                    0, 1, 4, 4, 1.0 / 4.0, 0.0,
-                ),
+                iteration: RenderFixedStepIterationUniform::new(0, 1, 4, 4, 1.0 / 4.0, 0.0),
             };
-            producer
-                .capture(step)
-                .map_err(|(err, _)| anyhow::anyhow!("second native producer capture failed: {err}"))?;
+            producer.capture(step).map_err(|(err, _)| {
+                anyhow::anyhow!("second native producer capture failed: {err}")
+            })?;
             self.semantic_committed = true;
         }
 
