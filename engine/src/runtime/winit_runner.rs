@@ -3597,6 +3597,13 @@ mod tests {
 
         // An explicitly mounted and bound UI window is equally not a window
         // attribution witness for raw DeviceEvent::MouseMotion.
+        let secondary = NativeWindowId::try_from_raw(2).expect("distinct native window");
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .unwrap()
+            .register_created_window(secondary, "legacy second window", (800, 600), 1.0, false);
         let mut slots = runner
             .state
             .world
@@ -3607,6 +3614,18 @@ mod tests {
             .world
             .remove_resource::<UiNativeInputRecipientsResource>()
             .unwrap();
+        recipients
+            .bind(
+                secondary,
+                NativeInputRecipient::LegacyNativeConsumer,
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap(),
+                &mut slots,
+            )
+            .expect("independent secondary legacy recipient");
         recipients
             .bind(
                 NativeWindowId::primary(),
