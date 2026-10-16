@@ -55,6 +55,28 @@ RUNENRENDER_R8_REQUIRE_GPU=1 cargo +stable test -p engine --test runenrender_ord
 
 The execution case authors its own renderer scene, request, semantic surface input, availability fact, and output destination using only the candidate transferable RunenRender surface plus public RunenGPU. It requests its own headless RunenGPU context without Runenwerk GPU-context policy, submits through `submit_render`, and requires the returned public RunenGPU submission to complete. The ordinary path authors no CPU readback and does not depend on App/ECS/Winit/World/Render-Lab/private deterministic modules.
 
+## Downstream stateful RunenGPU G5 conformance
+
+The native Vulkan consumer lane also exercises the public RunenGPU retained-work
+integration boundary used by Runenwerk. These tests request a headless GPU
+context and MUST fail, rather than silently skip, when the required adapter is
+unavailable in the hosted lane:
+
+```bash
+RUNENWERK_G5_REQUIRE_GPU=1 cargo +stable test -p engine --test render_gpu_retained_cross_frame --locked -- --nocapture --test-threads=1
+RUNENWERK_G5_REQUIRE_GPU=1 cargo +stable test -p engine --test render_gpu_fixed_step_continuity --locked -- --nocapture --test-threads=1
+```
+
+The first proves conservative read-only retained-resource exclusion, independent
+retained-resource admission, terminal readback, and fresh post-terminal
+submission. The second is an isolated, test-owned reference producer that
+captures bounded fixed-step demand across deferred host frames and checks the
+terminal GPU result. Both use RunenGPU's public G3/G5 contracts; neither
+implements production RenderFlow scheduling or proves native windowed boids
+`--species` continuity, accepted GPU-write recovery, or user-visible Present.
+An exact-head green Vulkan lane is therefore a *scoped* integration result,
+not completion of [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291).
+
 ## Supplemental RunenRender GPU execution proof
 
 Current Runenwerk CI also runs `RunenRender Vulkan execution proofs` for pull-request feature heads, merge-group integration revisions, accepted-main pushes, and manual dispatch. It resolves and proves the selected repository revision, restricts Vulkan loading to the installed Mesa software Vulkan implementation, and runs maintained native integration, direct standalone public-consumer, founding-direct, and Render Lab temporal-quality evidence.
