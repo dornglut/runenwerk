@@ -601,6 +601,13 @@ impl WinitRunner {
         if retired {
             self.native_ui_keyboards.remove(&window);
             self.native_ui_modifiers.remove(&window);
+            // Recipient retirement is itself an input-permission boundary.
+            // The original window source may remain physically held while a
+            // new UI recipient is bound. No old game-held generation may be
+            // carried into that replacement merely because M13 is unfocused.
+            if let Some(context) = self.input_adapter.window_source_context(window) {
+                self.revoke_native_game_keyboard_source(context.source)?;
+            }
         }
         if let Some(error) = cancellation_failure {
             return Err(error);
@@ -4149,6 +4156,115 @@ mod tests {
                 .last_observed_revision,
             Some(current.revision().get()),
             "witness reconciles to the actual framework revision"
+        );
+    }
+
+    #[test]
+    fn retiring_legacy_recipient_retracts_old_game_hold_before_ui_rebind() {
+        use runen_input::{
+            DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+            ObservationOrigin,
+        };
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        let window = NativeWindowId::primary();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                window,
+                NativeInputRecipient::LegacyNativeConsumer,
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap(),
+                &mut slots,
+            )
+            .expect("real legacy host recipient");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+        runner
+            .state
+            .world
+            .insert_resource(UiRuntimePresentationAssociationsResource::default());
+
+        let source = runner
+            .input_adapter
+            .window_context(window, winit::event::DeviceId::dummy())
+            .unwrap();
+        runner
+            .state
+            .world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(
+                source,
+                &KeyboardInput {
+                    physical_key: PhysicalKeyIdentity::code("KeyW"),
+                    logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                    location: KeyLocation::Standard,
+                    state: DigitalState::Pressed,
+                    repeat: false,
+                    origin: ObservationOrigin::SourceReport,
+                },
+            );
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP)
+        );
+
+        assert!(
+            runner
+                .retire_native_input_recipient(window)
+                .expect("recipient retirement must preserve a real source")
+        );
+        assert!(
+            runner.input_adapter.window_source_context(window).is_some(),
+            "recipient retirement must not counterfeit physical device loss"
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(
+                    source,
+                    &PhysicalKeyIdentity::code("KeyW")
+                )
+                .is_some(),
+            "canonical physical W remains genuinely held"
+        );
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "former legacy recipient cannot carry its old W into new UI scope"
+        );
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "later projection cannot revive a retired original Down generation"
         );
     }
 
