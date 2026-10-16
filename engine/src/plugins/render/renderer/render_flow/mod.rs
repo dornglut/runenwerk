@@ -89,6 +89,7 @@ pub(crate) use runtime_resources::{
 };
 pub(super) use submission_lifecycle::RendererSubmissionLifecycle;
 pub use submission_lifecycle::{
-    RenderGpuFrameInvocationReceipt, RenderGpuFrameSubmissionReceipt, RenderGpuFrameTerminalBatch,
+    RenderGpuFrameInvocationReceipt, RenderGpuFramePostAcceptAssociationFailure,
+    RenderGpuFrameSubmissionReceipt, RenderGpuFrameTerminalBatch,
     RenderGpuFrameTerminalDisposition, RenderGpuFrameTerminalOutcome,
 };

@@ -45,6 +45,65 @@ impl RenderGpuFrameInvocationReceipt {
     }
 }
 
+/// Typed evidence that composed GPU work was *already* G5-accepted before
+/// a later renderer-owned retained-session association failed. This is not a
+/// GPU admission rejection; it cannot be safely resubmitted by interpreting
+/// the outer render Result as if no GPU work was issued.
+#[derive(Debug, Clone, Copy)]
+pub struct RenderGpuFramePostAcceptAssociationFailure {
+    frame: u64,
+    surface: u64,
+    submission: GpuSubmissionId,
+    affinity: GpuContextAffinity,
+}
+
+impl RenderGpuFramePostAcceptAssociationFailure {
+    pub(super) const fn new(
+        frame: u64,
+        surface: u64,
+        submission: GpuSubmissionId,
+        affinity: GpuContextAffinity,
+    ) -> Self {
+        Self {
+            frame,
+            surface,
+            submission,
+            affinity,
+        }
+    }
+
+    pub const fn frame(&self) -> u64 {
+        self.frame
+    }
+
+    pub const fn surface(&self) -> u64 {
+        self.surface
+    }
+
+    pub const fn submission_id(&self) -> GpuSubmissionId {
+        self.submission
+    }
+
+    pub const fn affinity(&self) -> GpuContextAffinity {
+        self.affinity
+    }
+}
+
+impl std::fmt::Display for RenderGpuFramePostAcceptAssociationFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "GPU submission {} for frame {} surface {} was already G5-accepted (affinity {:?}) before retained-session association failed; do not retry as unsubmitted work",
+            self.submission,
+            self.frame,
+            self.surface,
+            self.affinity
+        )
+    }
+}
+
+impl std::error::Error for RenderGpuFramePostAcceptAssociationFailure {}
+
 // This is a bounded *observation delivery* buffer, not a G5 reservation table
 // or a domain simulation cursor. Consumers MUST regard any reported gap as
 // incomplete evidence and requalify their own state before continuing.

@@ -860,7 +860,8 @@ pub struct Renderer {
 }
 
 pub use render_flow::{
-    RenderGpuFrameInvocationReceipt, RenderGpuFrameSubmissionReceipt, RenderGpuFrameTerminalBatch,
+    RenderGpuFrameInvocationReceipt, RenderGpuFramePostAcceptAssociationFailure,
+    RenderGpuFrameSubmissionReceipt, RenderGpuFrameTerminalBatch,
     RenderGpuFrameTerminalDisposition, RenderGpuFrameTerminalOutcome,
 };
 
