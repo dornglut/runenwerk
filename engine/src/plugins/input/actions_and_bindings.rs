@@ -548,6 +548,72 @@ impl ActionState {
         self.recompute_action_down_states(input);
     }
 
+    /// Retract all projected game keyboard contributors for one genuine
+    /// native source after the host has established an incompatible M13
+    /// ownership boundary or a revision gap that cannot prove continuity.
+    /// Never call this merely because a generic widget has focus.
+    ///
+    /// Source identity and UI scope are checked by the caller. The owned
+    /// RunenInput reducer supplies every physical lifetime; this method only
+    /// changes Engine ActionState gameplay eligibility.
+    pub(crate) fn revoke_source_keyboard_for_ui_ownership(
+        &mut self,
+        input: &InputState,
+        source: InputSourceId,
+    ) {
+        let mut changed = false;
+        // Pressed may still be observable after a same-frame physical Up.
+        for press in input
+            .keyboard_press_samples()
+            .iter()
+            .filter(|press| press.context.source == source)
+        {
+            if !self.revoked_keyboard_lifetimes.iter().any(|denied| {
+                denied.context == press.context
+                    && denied.key == press.physical_key
+                    && denied.generation == press.generation
+            }) {
+                self.revoked_keyboard_lifetimes.push(RevokedKeyboardLifetime {
+                    context: press.context,
+                    key: press.physical_key.clone(),
+                    generation: press.generation,
+                });
+                changed = true;
+            }
+        }
+
+        let releases_seen = input.keyboard_real_release_samples().len();
+        for (context, key, generation) in input.keyboard_held_lifetimes_for_source(source) {
+            if let Some(generation) = generation {
+                if !self.revoked_keyboard_lifetimes.iter().any(|denied| {
+                    denied.context == context
+                        && denied.key == *key
+                        && denied.generation == generation
+                }) {
+                    self.revoked_keyboard_lifetimes.push(RevokedKeyboardLifetime {
+                        context,
+                        key: key.clone(),
+                        generation,
+                    });
+                    changed = true;
+                }
+            }
+            if !self.blocked_held_key(context, key) {
+                self.blocked_held_keys.push(BlockedHeldKey {
+                    context,
+                    key: key.clone(),
+                    generation,
+                    releases_seen,
+                });
+                changed = true;
+            }
+        }
+        if changed {
+            self.retract_ineligible_pressed_contributors(input);
+            self.recompute_action_down_states(input);
+        }
+    }
+
     /// A native UI recipient may suppress a synthetic Press or a repeat
     /// without an authentic prior Down. RunenInput retains that physical
     /// generationless observation for legacy consumers, but UI-owned input

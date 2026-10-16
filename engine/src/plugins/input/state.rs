@@ -921,6 +921,18 @@ impl InputState {
             .map(|contributor| contributor.context)
     }
 
+    /// Existing source-qualified derived physical held keys. Only ActionState
+    /// can change their gameplay eligibility after a native M13 decision.
+    pub(super) fn keyboard_held_lifetimes_for_source(
+        &self,
+        source: InputSourceId,
+    ) -> impl Iterator<Item = (InputContext, &PhysicalKeyIdentity, Option<u64>)> + '_ {
+        self.keyboard_held_contributors
+            .iter()
+            .filter(move |held| held.context.source == source)
+            .map(|held| (held.context, &held.physical_key, held.generation))
+    }
+
     pub(super) fn keyboard_press_samples(&self) -> &[KeyboardPressSample] {
         &self.keyboard_press_samples
     }

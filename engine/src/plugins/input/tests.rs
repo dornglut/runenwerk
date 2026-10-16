@@ -1033,6 +1033,87 @@ fn revocation_preserves_other_source_pressed_contributors_without_rebinding_repl
 }
 
 #[test]
+fn late_m13_source_denial_retracts_projected_presses_and_held_without_cross_source_loss() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let ui = InputContext::new(InputSourceId::new(901), Some(InputDeviceId::new(21)));
+    let game = InputContext::new(InputSourceId::new(902), Some(InputDeviceId::new(22)));
+    let w = physical_key(KeyCode::KeyW);
+    let a = physical_key(KeyCode::KeyA);
+
+    input.handle_normalized_keyboard(ui, &normalized_key(DigitalState::Pressed));
+    input.handle_normalized_keyboard(
+        ui,
+        &KeyboardInput {
+            physical_key: a,
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    input.handle_normalized_keyboard(
+        game,
+        &KeyboardInput {
+            physical_key: physical_key(KeyCode::KeyD),
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_LEFT));
+    assert!(actions.action_down(action::WORLD_MOVE_RIGHT));
+
+    // Caller has certified a new incompatible M13 ownership boundary for
+    // the exact UI-native source; the one gameplay owner acts synchronously.
+    actions.revoke_source_keyboard_for_ui_ownership(&input, ui.source);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_LEFT));
+    assert!(actions.action_down(action::WORLD_MOVE_RIGHT));
+    actions.revoke_source_keyboard_for_ui_ownership(&input, ui.source);
+
+    clear_frame(&mut input, &mut actions);
+    input.handle_normalized_keyboard(
+        ui,
+        &KeyboardInput {
+            repeat: true,
+            ..normalized_key(DigitalState::Pressed)
+        },
+    );
+    actions.map_key(&input, "new.w", w);
+    actions.project(&input);
+    assert!(!actions.action_down("new.w"));
+    assert!(actions.action_down(action::WORLD_MOVE_RIGHT));
+
+    input.handle_normalized_keyboard(ui, &normalized_key(DigitalState::Released));
+    actions.project(&input);
+    clear_frame(&mut input, &mut actions);
+    input.handle_normalized_keyboard(ui, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down("new.w"));
+}
+
+#[test]
+fn late_m13_source_denial_removes_already_released_same_frame_press() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let ui = InputContext::new(InputSourceId::new(903), Some(InputDeviceId::new(23)));
+    let game = InputContext::new(InputSourceId::new(904), Some(InputDeviceId::new(24)));
+
+    input.handle_normalized_keyboard(ui, &normalized_key(DigitalState::Pressed));
+    input.handle_normalized_keyboard(ui, &normalized_key(DigitalState::Released));
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+
+    actions.revoke_source_keyboard_for_ui_ownership(&input, ui.source);
+    assert!(!actions.action_pressed(action::WORLD_MOVE_UP));
+    input.handle_normalized_keyboard(game, &normalized_key(DigitalState::Pressed));
+    actions.project(&input);
+    assert!(actions.action_pressed(action::WORLD_MOVE_UP));
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+}
+
+#[test]
 fn ui_owned_modifier_cannot_keep_a_game_chord_held() {
     let mut input = InputState::new();
     let mut actions = ActionState::new();
