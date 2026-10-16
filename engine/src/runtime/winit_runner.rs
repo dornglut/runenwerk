@@ -1026,21 +1026,33 @@ impl WinitRunner {
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("UI slot authority missing during native keyboard cancellation")?;
-        let composition = slots
-            .input_ownership(slot)
-            .map(|snapshot| native_keyboard_composition(&snapshot))
-            .map_err(|reason| {
-                anyhow!("native keyboard cancellation lacked M13 pre-state: {reason:?}")
-            })?;
+        let before = slots.input_ownership(slot).map_err(|reason| {
+            anyhow!("native keyboard cancellation lacked M13 pre-state: {reason:?}")
+        })?;
         for event in lifetime
             .keyboard
-            .cancel_all(KeyModifiers::NONE, composition)
+            .cancel_all(KeyModifiers::NONE, native_keyboard_composition(&before))
         {
-            if slots.submit_native_keyboard(slot, event).is_ok() {
-                // Cancellation does not grant gameplay, even if settlement is
-                // paused, rejected, or unavailable.
-                let _ = slots.pump_native_input_records(slot);
-            }
+            let device = event
+                .device_id()
+                .context("native keyboard Cancel lost its original device identity")?;
+            let submission = slots
+                .submit_native_keyboard(slot, event)
+                .map_err(|error| anyhow!("native keyboard Cancel M13 admission rejected: {error:?}"))?;
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .map_err(|error| anyhow!("native keyboard Cancel M13 pump failed: {error:?}"))?;
+            let evidence = native_keyboard_finality(
+                before.scope(),
+                device,
+                submission,
+                &batch,
+                &status,
+            );
+            anyhow::ensure!(
+                matches!(evidence, Ok(UiInputFinality::Committed(_))),
+                "native keyboard Cancel lacked committed M13 settlement: {evidence:?}"
+            );
         }
         Ok(())
     }
