@@ -26,6 +26,16 @@ pub(crate) struct NativeAppMutationPermit {
 }
 
 #[cfg(test)]
+pub(crate) fn test_retired_slot_teardown(
+    slots: &mut UiRuntimeSlotsResource,
+    slot: UiRuntimeSlotId,
+) -> std::result::Result<Option<InputShutdownBatch>, UiRuntimeSlotOperationFailure> {
+    // Recipient tests must first verify the live binding/intent is retired.
+    // Only the production World boundary may normally grant this permit.
+    slots.unmount_retired_native(&NativeAppMutationPermit { _sealed: () }, slot)
+}
+
+#[cfg(test)]
 pub(crate) fn test_selected_slot_operation<T>(
     slots: &mut UiRuntimeSlotsResource,
     slot: UiRuntimeSlotId,

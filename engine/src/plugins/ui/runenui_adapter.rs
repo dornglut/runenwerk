@@ -1978,6 +1978,22 @@ impl UiRuntimeSlotsResource {
         slot.accepted_ingress(next)
     }
 
+    /// Simulates an external/terminal framework scope disappearing while its
+    /// old native recipient is still recorded. This is deliberately NOT an
+    /// authorized production unmount; negative recipient tests must detect it.
+    #[cfg(test)]
+    pub(crate) fn test_inject_external_scope_loss(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        let index = self
+            .slots
+            .iter()
+            .position(|slot| slot.id == slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        self.unmount_slot(index).map(|_| ())
+    }
+
     /// A test-only pending-pump fixture. The real native transaction still
     /// invokes RunenUI's ordinary settlement and requires a fresh final M13
     /// observation; this only establishes the unavailable *prestate*.

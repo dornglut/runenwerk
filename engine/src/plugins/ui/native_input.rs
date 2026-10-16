@@ -759,12 +759,9 @@ mod tests {
             .record_mut(primary)
             .expect("pending window")
             .approve_close();
-        crate::plugins::ui::native_transaction::test_selected_slot_operation(
-            &mut slots,
-            slot,
-            |slots| slots.unmount_with_retirement(slot),
-        )
-        .expect("retire original framework scope");
+        slots
+            .test_inject_external_scope_loss(slot)
+            .expect("inject loss of original framework scope");
         assert!(matches!(
             recipients.resolve_for_cancellation(primary, &windows, &mut slots),
             Err(NativeInputRecipientError::OwnershipUnavailable(
@@ -992,12 +989,9 @@ mod tests {
                 &mut slots,
             )
             .expect("bind first");
-        crate::plugins::ui::native_transaction::test_selected_slot_operation(
-            &mut slots,
-            a,
-            |slots| slots.unmount_with_retirement(a),
-        )
-        .expect("runtime retirement");
+        slots
+            .test_inject_external_scope_loss(a)
+            .expect("inject stale framework scope");
         assert!(matches!(
             recipients.resolve(first, &windows, &mut slots),
             Err(NativeInputRecipientError::OwnershipUnavailable(
@@ -1056,12 +1050,12 @@ mod tests {
             Err(NativeInputRecipientError::MissingRecipient)
         );
         // Even with zero UI mounts, retirement cannot auto-promote game input.
-        crate::plugins::ui::native_transaction::test_selected_slot_operation(
-            &mut slots,
-            slot,
-            |slots| slots.unmount_with_retirement(slot),
-        )
-        .expect("retire slot");
+        assert!(
+            !recipients.has_native_slot_intent(slot),
+            "original recipient must be retired before framework teardown"
+        );
+        crate::plugins::ui::native_transaction::test_retired_slot_teardown(&mut slots, slot)
+            .expect("retire unbound native slot");
         assert_eq!(
             recipients.resolve(first, &windows, &mut slots),
             Err(NativeInputRecipientError::MissingRecipient)
