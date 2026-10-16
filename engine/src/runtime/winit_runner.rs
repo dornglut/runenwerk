@@ -161,14 +161,11 @@ impl NativeUiTouchTranslator {
         device: UiInputDeviceId,
         point: LogicalPoint,
         input_context: runenui_core::SurfaceInputContext,
-    ) -> Result<runenui_core::PointerEvent, runenui_winit::touch_input::TouchIngressDiagnostic> {
-        let event = self.touch.transition(
-            device,
-            original.id,
-            original.phase,
-            point,
-            input_context,
-        )?;
+    ) -> Result<runenui_core::PointerEvent, runenui_winit::touch_input::TouchIngressDiagnostic>
+    {
+        let event =
+            self.touch
+                .transition(device, original.id, original.phase, point, input_context)?;
         self.backend_devices.insert(original.device_id);
         if self.touch.active_contact_count() == 0 {
             self.backend_devices.clear();
