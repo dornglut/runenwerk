@@ -141,7 +141,11 @@ pub fn transact_ui_slot<T>(
         revoke_game_source(world, source)?;
     }
     match outcome {
-        Ok(result) => result,
+        Ok(Ok(value)) if valid_after => Ok(value),
+        Ok(Ok(_)) => Err(anyhow!(
+            "native RunenUI app mutation lost its binding or final M13 ownership observation"
+        )),
+        Ok(Err(error)) => Err(error),
         Err(panic) => std::panic::resume_unwind(panic),
     }
 }
@@ -329,6 +333,49 @@ mod tests {
             )
             .unwrap();
         runtime.run_schedule::<Update>(&mut world).unwrap();
+    }
+
+    #[test]
+    fn native_transaction_reports_failure_if_final_m13_scope_disappears() {
+        let mut world = setup();
+        let (slot, ui, game) = {
+            let probe = world.resource::<Probe>().unwrap();
+            (probe.slot, probe.ui, probe.game)
+        };
+        let result = transact_ui_slot(&mut world, slot, |slots| {
+            // Real framework runtime shutdown destroys the old M13 scope
+            // after the initial valid selected native ownership observation.
+            slots
+                .shutdown_native_slots()
+                .map_err(|_| UiRuntimeSlotOperationFailure::NativeHostClosed)?;
+            Ok(())
+        });
+        assert!(
+            result.is_err(),
+            "a successful callback may not certify a missing final M13 scope"
+        );
+        assert!(
+            world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(ui, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some(),
+            "framework shutdown must not manufacture original physical key Up"
+        );
+        world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(game, &key(DigitalState::Released));
+        let mut actions = world.remove_resource::<ActionState>().unwrap();
+        actions.project(world.resource::<InputState>().unwrap());
+        world.insert_resource(actions);
+        assert!(
+            !world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "invalid final M13 scope must revoke old UI-source game permission"
+        );
     }
 
     #[test]
