@@ -12,7 +12,8 @@ use runen_gpu::{
     GpuDispatchSize, GpuExecutionPreference, GpuReadbackId, GpuReadbackOperation,
     GpuReadbackStatus, GpuReconstruction, GpuResourceLabel, GpuResourceLifetime,
     GpuResourceProvenance, GpuRuntimeBindingResource, GpuRuntimeBindingSet, GpuRuntimeBindingValue,
-    GpuRuntimeBufferBinding, GpuSubmission, GpuSubmissionStatus, GpuWorkFragment,
+    GpuRuntimeBufferBinding, GpuSubmission, GpuSubmissionRejectionKind, GpuSubmissionStatus,
+    GpuWorkFragment, GpuWorkSubmissionError,
     GpuWorkFragmentBuilder, GpuWorkOperation, GpuWorkResourceIdAllocator,
     admit_static_wgsl_sources,
 };
@@ -378,4 +379,109 @@ fn delayed_gpu_batches_consume_all_captured_steps_once() {
     assert_eq!(ledger.completed_counter, 7);
     assert_eq!(ledger.outstanding(), 0);
     assert!(!ledger.admit(&context, &buffer, &pipeline));
+}
+
+#[test]
+fn captured_producer_steps_survive_real_g5_rejection_and_fresh_reprepare() {
+    let Some(context) = context() else {
+        return;
+    };
+    let buffer = state_buffer();
+    let pipeline = pipeline();
+
+    // External accepted retained work reserves the same actual RunenGPU
+    // resource. This is a deliberately controlled G5 admission conflict.
+    let (blocking_fragment, _) = batch_fragment(
+        &buffer,
+        &pipeline,
+        &[Step {
+            tick: 99,
+            increments: 1,
+        }],
+    );
+    let blocker = pollster::block_on(
+        context.submit_work("fixed.step.g5.blocker", [blocking_fragment]),
+    )
+    .expect("first retained GPU admission");
+    assert_eq!(blocker.status(), GpuSubmissionStatus::Accepted);
+
+    let mut producer = engine::plugins::render::RenderGpuStepDemand::new(0, 3);
+    let snapshots = [
+        Step {
+            tick: 1,
+            increments: 2,
+        },
+        Step {
+            tick: 2,
+            increments: 3,
+        },
+    ];
+    producer
+        .capture_batch(snapshots.to_vec())
+        .expect("capture both producer-authored historical inputs");
+
+    let rejected = producer.submit_with(2, |candidate| {
+        let captured = candidate.iter().map(|entry| *entry.input()).collect::<Vec<_>>();
+        let (graph, _) = batch_fragment(&buffer, &pipeline, &captured);
+        pollster::block_on(context.submit_work("fixed.step.g5.conflict", [graph]))
+            .map(|submission| (submission, ()))
+    });
+    let rejection = match rejected {
+        Err(GpuWorkSubmissionError::SubmissionRejected(reason)) => reason,
+        Err(error) => panic!("expected RunenGPU G5 retained rejection, got {error:?}"),
+        Ok(_) => panic!("overlapping retained writer was incorrectly accepted"),
+    };
+    assert_eq!(
+        rejection.kind(),
+        GpuSubmissionRejectionKind::RetainedContinuityChanged,
+    );
+    assert_eq!(producer.requested_tick(), 2);
+    assert_eq!(producer.completed_tick(), 0);
+    assert_eq!(producer.pending_len(), 2);
+    assert_eq!(producer.outstanding(), 2);
+    assert!(producer.accepted_submission().is_none());
+    assert_eq!(
+        producer
+            .candidate(2)
+            .iter()
+            .map(|intent| (intent.tick(), intent.input().increments))
+            .collect::<Vec<_>>(),
+        vec![(1, 2), (2, 3)]
+    );
+
+    // This test *knows* its transient predecessor and waits for that exact
+    // public receipt to finish. Production MUST NOT infer retryability from
+    // RetainedContinuityChanged alone: #168 distinguishes permanent faults.
+    progress_to_terminal(&context, &blocker);
+    let readback = producer
+        .submit_with(2, |candidate| {
+            let captured = candidate.iter().map(|entry| *entry.input()).collect::<Vec<_>>();
+            let (fresh_graph, readback) = batch_fragment(&buffer, &pipeline, &captured);
+            pollster::block_on(context.submit_work(
+                "fixed.step.g5.fresh-after-terminal",
+                [fresh_graph],
+            ))
+            .map(|submission| (submission, readback))
+        })
+        .expect("fresh graph after exact predecessor termination")
+        .expect("both historical steps are still pending");
+    let accepted = producer
+        .accepted_submission()
+        .expect("exact accepted G5 receipt")
+        .clone();
+    assert_eq!(producer.pending_len(), 0);
+    assert_eq!(producer.outstanding(), 2);
+    assert_eq!(producer.completed_tick(), 0);
+    progress_to_terminal(&context, &accepted);
+    let readback = accepted.readback(readback).expect("completed producer readback");
+    let GpuReadbackStatus::Ready(bytes) = readback.status() else {
+        panic!("completed producer readback must be ready");
+    };
+    assert_eq!(
+        u32::from_le_bytes(bytes.as_bytes()[..4].try_into().expect("counter bytes")),
+        6,
+        "one blocking increment and then historical producer increments 2+3",
+    );
+    assert_eq!(producer.commit_completed(context.affinity()), Ok(2));
+    assert_eq!(producer.outstanding(), 0);
 }
