@@ -3111,6 +3111,38 @@ mod tests {
             "an unrelated device cannot borrow this exact M13 receipt"
         );
 
+        // A genuinely focused, previously admitted original Down has an
+        // ordinary same-device M13 Cancel. The native host must observe its
+        // committed settlement; an accepted queue receipt alone is insufficient.
+        let cancel = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Cancel,
+                    PhysicalKey::Code(String::from("KeyW")),
+                    LogicalKey::Character(String::from("w")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(native_device),
+                ),
+            )
+            .expect("focused native keyboard Cancel enters the canonical M13 queue");
+        let (cancel_batch, cancel_status) = slots
+            .pump_native_input_records(slot)
+            .expect("focused native keyboard Cancel reaches canonical settlement");
+        assert!(matches!(
+            native_keyboard_finality(
+                settled.scope(),
+                native_device,
+                cancel,
+                &cancel_batch,
+                &cancel_status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+
         let missing_scope_slot = slots
             .mount_app::<NativeKeyboardApp>(
                 UiTypedScreenId::new("native.keyboard.foreign"),
