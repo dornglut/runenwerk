@@ -587,19 +587,19 @@ impl ActionState {
 
         let releases_seen = input.keyboard_real_release_samples().len();
         for (context, key, generation) in input.keyboard_held_lifetimes_for_source(source) {
-            if let Some(generation) = generation {
-                if !self.revoked_keyboard_lifetimes.iter().any(|denied| {
+            if let Some(generation) = generation
+                && !self.revoked_keyboard_lifetimes.iter().any(|denied| {
                     denied.context == context
                         && denied.key == *key
                         && denied.generation == generation
-                }) {
-                    self.revoked_keyboard_lifetimes
-                        .push(RevokedKeyboardLifetime {
-                            context,
-                            key: key.clone(),
-                            generation,
-                        });
-                }
+                })
+            {
+                self.revoked_keyboard_lifetimes
+                    .push(RevokedKeyboardLifetime {
+                        context,
+                        key: key.clone(),
+                        generation,
+                    });
             }
             if !self.blocked_held_key(context, key) {
                 self.blocked_held_keys.push(BlockedHeldKey {
