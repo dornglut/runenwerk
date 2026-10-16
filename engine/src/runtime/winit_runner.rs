@@ -2293,15 +2293,22 @@ impl WinitRunner {
             WinitWindowRealizer::apply_physical_record(&window, &record);
 
             if record.close_requested {
+                // A failed framework Cancel may stop this host, but must not
+                // prevent the original neutral source and gameplay contributors
+                // from retiring. Invoke both existing owners before propagating
+                // either failure; never promote cleanup to an input authority.
+                let recipient_retirement = self.retire_native_input_recipient(native_window_id);
+                let source_retirement = self.retire_window_input_source(native_window_id);
                 if native_window_id == NativeWindowId::primary() {
-                    self.retire_native_input_recipient(native_window_id)?;
                     // Windows winit must not enter a blocking wait after exit.
                     event_loop.set_control_flow(ControlFlow::Poll);
                     event_loop.exit();
+                    recipient_retirement?;
+                    source_retirement?;
                     return Ok(());
                 }
-                self.retire_native_input_recipient(native_window_id)?;
-                self.retire_window_input_source(native_window_id)?;
+                recipient_retirement?;
+                source_retirement?;
                 render_native_host::retire_secondary(&mut self.state.world, native_window_id);
                 if let Ok(window_registry) = self
                     .state
