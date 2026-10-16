@@ -1094,6 +1094,13 @@ mod tests {
             )
             .expect("only exact completed-native-display evidence can admit pointer input");
         assert_eq!(checked_display.input_context, expected);
+        assert_eq!(
+            recipients.resolve(first, &windows, &mut slots),
+            Err(NativeInputRecipientError::OwnershipUnavailable(
+                UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
+            )),
+            "a genuinely admitted, not-yet-pumped M13 event must be visible as unsettled to the native recipient resolver"
+        );
         let (batch, status) = slots
             .pump_native_input_records(slot)
             .expect("one actual pinned ordered M13 pointer result");

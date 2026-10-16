@@ -100,6 +100,19 @@ fn native_ime_allowed_for_m13(
         && (capability.accepts_committed_text() || capability.accepts_composition())
 }
 
+/// A passive OS-effect projection may observe M13 while work is pending.
+/// The real recipient resolver reports this before any secondary ownership
+/// lookup can run. Deny OS IME temporarily; ordinary input admission still
+/// fails closed on an unsettled runtime.
+fn native_ime_waiting_for_m13_settlement(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<NativeInputRecipientError>(),
+        Some(NativeInputRecipientError::OwnershipUnavailable(
+            crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
+        ))
+    )
+}
+
 /// A pinned winit translator must NEVER cross its native window, physical
 /// source or selected M13 recipient lifetime. No UI focus or gameplay owner
 /// is replicated here; only the adapter's transient pressed-key state.
@@ -2588,6 +2601,7 @@ impl WinitRunner {
                     {
                         false
                     }
+                    Err(error) if native_ime_waiting_for_m13_settlement(&error) => false,
                     Err(error) => return Err(error),
                     Ok((NativeInputRecipient::RunenUiSlot(_), None)) => {
                         return Err(anyhow!("native IME slot selected without binding epoch"));
@@ -3242,6 +3256,27 @@ mod tests {
             .is_err(),
             "nonfinite wheel must not enter M13"
         );
+    }
+
+    #[test]
+    fn native_ime_projection_denies_only_transient_m13_work() {
+        use crate::plugins::ui::UiRuntimeSlotOperationFailure;
+
+        assert!(native_ime_waiting_for_m13_settlement(&anyhow!(
+            NativeInputRecipientError::OwnershipUnavailable(
+                UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
+            )
+        )));
+        for error in [
+            NativeInputRecipientError::StaleSlot,
+            NativeInputRecipientError::RuntimeNotRunning,
+            NativeInputRecipientError::MissingRecipient,
+        ] {
+            assert!(
+                !native_ime_waiting_for_m13_settlement(&anyhow!(error)),
+                "terminal, stale or absent recipients must not be mistaken for normal pending work"
+            );
+        }
     }
 
     /// Exercise the same pinned typed RunenUI ownership as the native host:
