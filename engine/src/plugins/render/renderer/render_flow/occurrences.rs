@@ -205,7 +205,17 @@ fn fixed_step_schedule_for_region(
                 region.iteration_uniform
             )
         })?;
-    schedule.submitted_substeps = schedule.submitted_substeps.min(region.max_substeps);
+    // Prepared work can also originate outside the ordinary host frame-preparation
+    // path. Never silently clip a stateful GPU iteration count at realization:
+    // absent explicit producer-authored drop/replay policy, missing steps are a
+    // correctness failure, not a harmless scheduling optimization.
+    anyhow::ensure!(
+        schedule.submitted_substeps <= region.max_substeps,
+        "fixed-step region '{}' requests {} GPU steps above its {}-step capacity; refusing silent GPU-step truncation",
+        region.region_label,
+        schedule.submitted_substeps,
+        region.max_substeps,
+    );
     schedule.max_substeps = region.max_substeps;
     Ok(schedule)
 }
@@ -327,16 +337,12 @@ mod tests {
     }
 
     #[test]
-    fn fixed_step_expansion_clamps_to_region_max_substeps() {
+    fn fixed_step_expansion_rejects_steps_beyond_authored_region_capacity() {
         let plan = fixed_step_test_plan(false);
-        let region = &plan.execution.fixed_step_regions[0];
         let inputs = inputs_for_substeps(&plan, 99);
-        let occurrences = expand_render_pass_occurrences(&plan, &inputs, |_| Ok(true))
-            .expect("clamped expansion should succeed");
-        assert_eq!(
-            occurrences.len(),
-            region.pass_ids.len() * region.max_substeps as usize
-        );
+        let err = expand_render_pass_occurrences(&plan, &inputs, |_| Ok(true))
+            .expect_err("stateful GPU steps may not be silently clipped");
+        assert!(err.to_string().contains("refusing silent GPU-step truncation"));
     }
 
     #[test]
