@@ -93,9 +93,12 @@ The test requires exact G5 producer/frame receipt correspondence, terminal
 physical success and the absence of duplicated admission. A second actual
 fullscreen GPU pass reads the retained counter and colors the captured surface
 pixel green iff the original heterogeneous step values sum to exactly 6; the
-test requires that exact RGBA pixel and only then commits the producer's
-semantic tick 3. Deferred GPU progress must deliver the selected capture
-without acquiring another surface image or issuing another producer batch.
+test requires that exact green RGBA pixel and only then commits the
+producer's semantic tick 3. The same producer then captures an additional
+historical step 4 and proves *a new, separately G5-accepted GPU submission*
+continues retained state from 6 to 10 (exact blue RGBA pixel), before
+committing tick 4. Deferred GPU progress must deliver each selected capture
+without acquiring another surface image or duplicating either batch.
 It rejects shader fallback rather than permitting a no-op simulation.
 
 This is a **hosted software Vulkan execution proof**, not a native end-user

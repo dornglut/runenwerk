@@ -1155,13 +1155,20 @@ struct NativeHistoricalCounter {
 
 struct NativeHistoricalGpuHook {
     flow: RenderFlowId,
+    uniform_id: runen_gpu::GpuWorkResourceId,
     display_pass: String,
     frames: u32,
     first_submission: Option<runen_gpu::GpuSubmissionId>,
+    second_submission: Option<runen_gpu::GpuSubmissionId>,
     saw_terminal: bool,
+    saw_second_terminal: bool,
     saw_gpu_frame: bool,
+    saw_second_gpu_frame: bool,
     verified_pixel: bool,
+    verified_second_pixel: bool,
+    first_capture_frame: Option<u64>,
     semantic_committed: bool,
+    second_committed: bool,
 }
 
 impl NativeWindowHook for NativeHistoricalGpuHook {
@@ -1176,35 +1183,62 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                 .stream(self.flow)
                 .ok_or_else(|| anyhow::anyhow!("historical GPU producer disappeared"))?;
             anyhow::ensure!(
-                producer.requested_tick() == 3
-                    && producer.completed_tick() == if self.semantic_committed { 3 } else { 0 },
+                producer.requested_tick() == if self.semantic_committed { 4 } else { 3 }
+                    && producer.completed_tick()
+                        == if self.second_committed {
+                            4
+                        } else if self.semantic_committed {
+                            3
+                        } else {
+                            0
+                        },
                 "native GPU execution must not invent verified semantic steps"
             );
             anyhow::ensure!(
-                producer.outstanding() == if self.semantic_committed { 0 } else { 3 },
+                producer.outstanding()
+                    == if self.second_committed {
+                        0
+                    } else if self.semantic_committed {
+                        1
+                    } else {
+                        3
+                    },
                 "native GPU step history was lost or duplicated"
             );
             if let Some(gpu) = producer.accepted_submission() {
                 let gpu_id = gpu.id();
-                if let Some(earlier) = self.first_submission {
+                let expected = if self.semantic_committed {
+                    &mut self.second_submission
+                } else {
+                    &mut self.first_submission
+                };
+                if let Some(earlier) = expected.as_ref() {
                     anyhow::ensure!(
-                        earlier == gpu_id,
+                        *earlier == gpu_id,
                         "a deferred GPU producer was submitted more than once"
                     );
                 } else {
-                    self.first_submission = Some(gpu_id);
+                    *expected = Some(gpu_id);
                 }
+                let expected_steps = if self.semantic_committed {
+                    vec![4]
+                } else {
+                    vec![1, 2, 3]
+                };
                 anyhow::ensure!(
                     producer
                         .accepted_steps()
                         .iter()
                         .map(|step| step.tick())
                         .collect::<Vec<_>>()
-                        == vec![1, 2, 3],
+                        == expected_steps,
                     "accepted native RenderFlow did not retain its precise historical interval"
                 );
                 match gpu.status() {
                     GpuSubmissionStatus::Accepted => {}
+                    GpuSubmissionStatus::Completed if self.semantic_committed => {
+                        self.saw_second_terminal = true;
+                    }
                     GpuSubmissionStatus::Completed => self.saw_terminal = true,
                     GpuSubmissionStatus::Failed(failure) => {
                         anyhow::bail!("native RenderFlow G5 execution failed: {failure:?}");
@@ -1213,7 +1247,7 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
             }
         }
         if let Ok(gfx) = world.resource::<Gfx>()
-            && !self.semantic_committed
+            && !self.second_committed
         {
             for receipt in gfx.pending_gpu_frame_submissions() {
                 if receipt
@@ -1221,14 +1255,23 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     .iter()
                     .any(|invocation| invocation.flow_id() == self.flow)
                 {
-                    let source_id = self.first_submission.ok_or_else(|| {
+                    let source_id = if self.semantic_committed {
+                        self.second_submission
+                    } else {
+                        self.first_submission
+                    }
+                    .ok_or_else(|| {
                         anyhow::anyhow!("G5 frame receipt exists without source step acceptance")
                     })?;
                     anyhow::ensure!(
                         receipt.submission().id() == source_id,
                         "composed RenderFlow receipt did not identify the exact producer work"
                     );
-                    self.saw_gpu_frame = true;
+                    if self.semantic_committed {
+                        self.saw_second_gpu_frame = true;
+                    } else {
+                        self.saw_gpu_frame = true;
+                    }
                 }
             }
         }
@@ -1240,6 +1283,10 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
             |capture: &engine::plugins::render::inspect::RenderCapturedTexture| {
                 capture.identity.flow_id() == self.flow.to_string()
                     && capture.identity.pass_id() == self.display_pass
+                    && (!self.semantic_committed
+                        || self.first_capture_frame.is_none_or(|first| {
+                            capture.identity.frame_index > first
+                        }))
             };
         let capture = world
             .resource::<Gfx>()
@@ -1249,7 +1296,13 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     .last_captured_textures()
                     .iter()
                     .find(|capture| matches_capture(capture))
-                    .map(|capture| (capture.terminal.clone(), capture.sample_center_rgba8()))
+                    .map(|capture| {
+                        (
+                            capture.identity.frame_index,
+                            capture.terminal.clone(),
+                            capture.sample_center_rgba8(),
+                        )
+                    })
             })
             .or_else(|| {
                 world
@@ -1261,21 +1314,35 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                             .iter()
                             .find(|capture| matches_capture(capture))
                             .map(|capture| {
-                                (capture.terminal.clone(), capture.sample_center_rgba8())
+                                (
+                                    capture.identity.frame_index,
+                                    capture.terminal.clone(),
+                                    capture.sample_center_rgba8(),
+                                )
                             })
                     })
             });
-        if let Some((terminal, pixel)) = capture {
+        if let Some((capture_frame, terminal, pixel)) = capture {
             anyhow::ensure!(
                 terminal.code
                     == engine::plugins::render::inspect::RenderCaptureTerminalCode::Completed,
                 "native historical GPU result capture failed: {terminal:?}"
             );
+            let expected = if self.semantic_committed {
+                [0, 0, 255, 255] // 6 + 4 = 10
+            } else {
+                [0, 255, 0, 255] // 1 + 2 + 3 = 6
+            };
             anyhow::ensure!(
-                pixel == Some([0, 255, 0, 255]),
+                pixel == Some(expected),
                 "GPU historical step inputs produced wrong retained state pixel: {pixel:?}"
             );
-            self.verified_pixel = true;
+            if self.semantic_committed {
+                self.verified_second_pixel = true;
+            } else {
+                self.first_capture_frame = Some(capture_frame);
+                self.verified_pixel = true;
+            }
         }
 
         // Semantic completion is a separate producer-owned decision. It is
@@ -1308,17 +1375,66 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     anyhow::anyhow!("native producer GPU verification failed: {error}")
                 })?;
             anyhow::ensure!(completed == 3, "native source committed wrong GPU tick");
+            // Author one *new* semantic step only after the prior GPU result is
+            // verified. This must enter a distinct G5 submission and retain the
+            // original GPU counter from the previous terminal generation.
+            let step = RenderGpuFixedStepInput {
+                uniforms: BTreeMap::from([(
+                    self.uniform_id,
+                    engine::plugins::render::bytemuck::bytes_of(
+                        &NativeHistoricalUniform { meta: [4, 0, 0, 0] }.to_gpu(),
+                    )
+                    .to_vec(),
+                )]),
+                iteration: RenderFixedStepIterationUniform::new(
+                    0, 1, 4, 4, 1.0 / 4.0, 0.0,
+                ),
+            };
+            producer
+                .capture(step)
+                .map_err(|(err, _)| anyhow::anyhow!("second native producer capture failed: {err}"))?;
             self.semantic_committed = true;
         }
 
-        if self.frames >= 40 {
+        if self.verified_second_pixel && self.saw_second_terminal && !self.second_committed {
+            let producer = world
+                .resource_mut::<RenderGpuFlowStepStreams>()?
+                .stream_mut(self.flow)
+                .ok_or_else(|| anyhow::anyhow!("second native semantic producer disappeared"))?;
+            let affinity = producer
+                .accepted_submission()
+                .ok_or_else(|| anyhow::anyhow!("second native GPU result lacks G5 receipt"))?
+                .affinity();
+            let exact_id = self
+                .second_submission
+                .ok_or_else(|| anyhow::anyhow!("second native G5 admission missing"))?;
+            let last = producer
+                .commit_verified(affinity, |submission, steps| {
+                    anyhow::ensure!(
+                        submission.id() == exact_id
+                            && steps.iter().map(|step| step.tick()).collect::<Vec<_>>() == vec![4],
+                        "second native GPU verification has incorrect exact history"
+                    );
+                    Ok::<(), anyhow::Error>(())
+                })
+                .map_err(|err| anyhow::anyhow!("second semantic GPU commit failed: {err}"))?;
+            anyhow::ensure!(last == 4, "second native GPU interval committed wrong tick");
+            self.second_committed = true;
+        }
+
+        if self.frames >= 80 {
             anyhow::ensure!(
                 self.first_submission.is_some()
                     && self.saw_terminal
                     && self.saw_gpu_frame
                     && self.verified_pixel
-                    && self.semantic_committed,
-                "native historical RenderFlow must verify exact GPU pixels, source lineage and semantic commit"
+                    && self.semantic_committed
+                    && self.second_submission.is_some()
+                    && self.saw_second_terminal
+                    && self.saw_second_gpu_frame
+                    && self.verified_second_pixel
+                    && self.second_committed,
+                "native RenderFlow must verify two distinct G5 batches, historical retained state and exact semantic commits"
             );
             // The renderer may already have retired its observation receipt at
             // terminal; source-owned G5 handles remain the execution truth.
@@ -1459,13 +1575,20 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         .resource_mut::<NativeWindowHookRegistryResource>()?
         .register_hook(NativeHistoricalGpuHook {
             flow: flow_id,
+            uniform_id: uniform.diagnostic_identity(),
             display_pass,
             frames: 0,
             first_submission: None,
+            second_submission: None,
             saw_terminal: false,
+            saw_second_terminal: false,
             saw_gpu_frame: false,
+            saw_second_gpu_frame: false,
             verified_pixel: false,
+            verified_second_pixel: false,
+            first_capture_frame: None,
             semantic_committed: false,
+            second_committed: false,
         });
     app.run()?;
     println!("native_historical_gpu_render_flow=pass");

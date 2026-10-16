@@ -398,8 +398,13 @@ completed observation/capture evidence is published without claiming that
 a new GPU frame was submitted. The native Vulkan historical smoke observes
 a composed fullscreen GPU result: its source-owned retained counter must
 sum to six, producing an exact green capture, before the test producer calls
-`commit_verified`. This is an executable GPU result check, not a general
-storage-buffer readback or a guarantee that ordinary clients enable capture.
+`commit_verified` for ticks 1–3. Only then does the same producer capture
+tick 4; a **distinct subsequent G5 submission** must preserve the previous
+retained GPU counter and produce an exact blue capture when the result is 10.
+A second producer `commit_verified` advances tick 4 only after this real
+GPU evidence. Subsequent empty histories must not reissue either mutation.
+This is an executable GPU result check, not a general storage-buffer readback
+or a guarantee that ordinary clients enable capture.
 
 Physical `Completed` and successful Present remain distinct from producer
 semantic verification. Native-window original/species boids, unknown partial
