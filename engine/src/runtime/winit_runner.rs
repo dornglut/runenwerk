@@ -424,8 +424,8 @@ impl WinitRunner {
     fn retire_native_input_recipient(&mut self, window: NativeWindowId) -> Result<bool> {
         // Cancel against the previous pinned M13 scope before removing the
         // recipient and its terminal displayed input authority.
-        let mouse_cancel = self.cancel_native_ui_mouse(window)?;
-        let touch_cancel = self.cancel_native_ui_touch(window)?;
+        let mouse_cancel = self.cancel_native_ui_mouse(window);
+        let touch_cancel = self.cancel_native_ui_touch(window);
         let cancellation_failure = mouse_cancel.err().or(touch_cancel.err());
         // Retire the original framework-held keyboard stream while its
         // source/recipient binding is still valid. After retirement, a
