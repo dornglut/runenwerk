@@ -100,6 +100,21 @@ fn native_ime_allowed_for_m13(
         && (capability.accepts_committed_text() || capability.accepts_composition())
 }
 
+fn native_ui_blocks_preframe_keyboard_gameplay(
+    ownership: &runenui_runtime::InputOwnershipSnapshot,
+) -> bool {
+    let keyboard = ownership.keyboard();
+    let text = keyboard.text_input_capability();
+    ownership.status() != runenui_runtime::RuntimeStatus::Running
+        || (keyboard.focused_node().is_some()
+            && (text.accepts_committed_text() || text.accepts_composition()))
+        || keyboard.composition_generation().is_some()
+        || ownership
+            .surfaces()
+            .iter()
+            .any(|surface| surface.modal_blocker().is_some())
+}
+
 /// A passive OS-effect projection may observe M13 while work is pending.
 /// The real recipient resolver reports this before any secondary ownership
 /// lookup can run. Deny OS IME temporarily; ordinary input admission still
@@ -2302,6 +2317,50 @@ impl WinitRunner {
         )
     }
 
+    /// Verify the original native source before the next PreUpdate. This
+    /// cannot replace the synchronous same-Update mutation transaction.
+    fn reconcile_native_ui_keyboard_before_frame(&mut self) -> Result<()> {
+        if self.state.world.resource::<ActionState>().is_err() {
+            return Ok(());
+        }
+        let Ok(registry) = self.state.world.resource::<WindowStateRegistryResource>() else {
+            return Ok(());
+        };
+        let windows = registry
+            .records()
+            .filter(|record| record.lifecycle_state == NativeWindowLifecycleState::Created)
+            .map(|record| record.native_window_id)
+            .collect::<Vec<_>>();
+        for window in windows {
+            let Some(context) = self.input_adapter.window_source_context(window) else {
+                continue;
+            };
+            let incompatible = match self.native_input_recipient(window) {
+                Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => false,
+                Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => self
+                    .state
+                    .world
+                    .resource_mut::<UiRuntimeSlotsResource>()?
+                    .input_ownership(slot)
+                    .map_or(true, |ownership| native_ui_blocks_preframe_keyboard_gameplay(&ownership)),
+                Err(_) => true,
+            };
+            if incompatible {
+                let world = &mut self.state.world;
+                let mut actions = world.remove_resource::<ActionState>().context("gameplay actions vanished during native M13 reconciliation")?;
+                let update = world
+                    .resource::<InputState>()
+                    .map(|input| {
+                        actions.revoke_source_keyboard_for_ui_ownership(input, context.source);
+                    })
+                    .context("native M13 reconciliation missing physical InputState");
+                world.insert_resource(actions);
+                update?;
+            }
+        }
+        Ok(())
+    }
+
     fn run_frame(&mut self) -> Result<()> {
         if let Some(window) = self.window_realizer.primary_window() {
             with_native_window_hooks(&mut self.state.world, |registry, world| {
@@ -2314,6 +2373,7 @@ impl WinitRunner {
                 .resource_mut::<UiRuntimeSlotsResource>()?
                 .settle_native_slots()?;
         }
+        self.reconcile_native_ui_keyboard_before_frame()?;
         run_runtime_frame(&mut self.state.world, &mut self.state.scheduler)
     }
 
@@ -3434,6 +3494,10 @@ mod tests {
             !native_ime_allowed_for_m13(true, &initially_unfocused),
             "a mounted text field without semantic focus cannot enable native OS IME"
         );
+        assert!(
+            !native_ui_blocks_preframe_keyboard_gameplay(&initially_unfocused),
+            "unfocused RunenUI is not a blanket game-keyboard veto"
+        );
         let field = runtime
             .index()
             .nodes()
@@ -3455,6 +3519,10 @@ mod tests {
         assert!(
             native_ime_allowed_for_m13(true, &before),
             "a text-capable focused M13 owner enables its selected native window's OS IME"
+        );
+        assert!(
+            native_ui_blocks_preframe_keyboard_gameplay(&before),
+            "real M13 text focus must revoke old source-local gameplay holds"
         );
         assert!(
             !native_ime_allowed_for_m13(false, &before),
