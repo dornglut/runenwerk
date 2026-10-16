@@ -155,7 +155,7 @@ mod tests {
     use super::*;
     use crate::plugins::action;
     use crate::plugins::ui::{NativeInputRecipient, UiRuntimeFontConfiguration, UiTypedScreenId};
-    use crate::runtime::{NativeWindowId, SystemConfigExt, SystemMobilityExt, Update, WorldMut};
+    use crate::runtime::{SystemConfigExt, SystemMobilityExt, Update, WorldMut};
     use runen_ecs::{Runtime, SystemSet};
     use runen_input::{
         DigitalState, InputContext, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
