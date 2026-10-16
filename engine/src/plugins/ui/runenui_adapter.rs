@@ -2740,9 +2740,7 @@ mod tests {
             published.input_context().clone(),
         )
         .with_device_id(other_device)
-        .with_buttons(runenui_core::PointerButtons::new([
-            runenui_core::PointerButton::Primary,
-        ]));
+        .with_buttons(runenui_core::PointerButtons::new([runenui_core::PointerButton::Primary]));
         let rejected_submission = slots
             .submit_native_pointer(slot, wrong_stream_device)
             .expect("framework queue admits original foreign-device pointer for processing");
