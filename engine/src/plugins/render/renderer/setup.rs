@@ -203,17 +203,13 @@ impl Renderer {
 
     /// Accepted work is traced independently of optional timing/capture/UI.
     /// These receipts reference the exact RunenGPU submission status handles.
-    pub fn pending_gpu_frame_submissions(
-        &self,
-    ) -> Vec<super::RenderGpuFrameSubmissionReceipt> {
+    pub fn pending_gpu_frame_submissions(&self) -> Vec<super::RenderGpuFrameSubmissionReceipt> {
         self.submission_lifecycle.pending_receipts()
     }
 
     /// Returns terminal outcomes once, preserving a nonzero loss counter when
     /// the bounded delivery buffer overflowed before consumption.
-    pub fn take_gpu_frame_terminal_outcomes(
-        &mut self,
-    ) -> super::RenderGpuFrameTerminalBatch {
+    pub fn take_gpu_frame_terminal_outcomes(&mut self) -> super::RenderGpuFrameTerminalBatch {
         self.submission_lifecycle.take_terminal()
     }
 
