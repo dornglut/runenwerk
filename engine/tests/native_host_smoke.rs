@@ -1169,6 +1169,7 @@ struct NativeHistoricalGpuHook {
     first_capture_frame: Option<u64>,
     queued_while_in_flight: bool,
     overflow_rejected_without_loss: bool,
+    semantic_verification_refusal_preserved: bool,
     semantic_committed: bool,
     second_committed: bool,
 }
@@ -1185,8 +1186,7 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                 .stream(self.flow)
                 .ok_or_else(|| anyhow::anyhow!("historical GPU producer disappeared"))?;
             anyhow::ensure!(
-                producer.requested_tick()
-                    == if self.queued_while_in_flight { 4 } else { 3 }
+                producer.requested_tick() == if self.queued_while_in_flight { 4 } else { 3 }
                     && producer.completed_tick()
                         == if self.second_committed {
                             4
@@ -1314,9 +1314,9 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     0.0,
                 ),
             };
-            producer
-                .capture(input(4))
-                .map_err(|(err, _)| anyhow::anyhow!("backlogged native step capture failed: {err}"))?;
+            producer.capture(input(4)).map_err(|(err, _)| {
+                anyhow::anyhow!("backlogged native step capture failed: {err}")
+            })?;
             let overflow = input(99);
             let (failure, returned) = producer
                 .capture(overflow.clone())
@@ -1419,6 +1419,32 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
             let exact_id = self
                 .first_submission
                 .ok_or_else(|| anyhow::anyhow!("native source admission was never observed"))?;
+            // A physically completed G5 submission must remain uncommitted
+            // when the *producer's* semantic verifier refuses the result.
+            // The second pending step and the original accepted prefix must
+            // survive the negative decision, without a new GPU admission.
+            let refused = producer
+                .commit_verified(affinity, |_submission, _steps| {
+                    Err::<(), anyhow::Error>(anyhow::anyhow!(
+                        "deliberately refuse this verified GPU-result candidate"
+                    ))
+                })
+                .expect_err("producer refusal must reject semantic completion");
+            anyhow::ensure!(
+                matches!(
+                    refused,
+                    engine::plugins::render::RenderGpuStepCommitError::Verification(_)
+                )
+                    && producer.completed_tick() == 0
+                    && producer.requested_tick() == 4
+                    && producer.pending_len() == 1
+                    && producer.accepted_steps().len() == 3
+                    && producer
+                        .accepted_submission()
+                        .is_some_and(|gpu| gpu.id() == exact_id),
+                "rejected native semantic verification lost exact accepted or queued history"
+            );
+            self.semantic_verification_refusal_preserved = true;
             let completed = producer
                 .commit_verified(affinity, |submission, steps| {
                     anyhow::ensure!(
@@ -1486,7 +1512,8 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     && self.verified_second_pixel
                     && self.second_committed
                     && self.queued_while_in_flight
-                    && self.overflow_rejected_without_loss,
+                    && self.overflow_rejected_without_loss
+                    && self.semantic_verification_refusal_preserved,
                 "native RenderFlow must verify two distinct G5 batches, historical retained state and exact semantic commits"
             );
             // The renderer may already have retired its observation receipt at
@@ -1642,6 +1669,7 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             first_capture_frame: None,
             queued_while_in_flight: false,
             overflow_rejected_without_loss: false,
+            semantic_verification_refusal_preserved: false,
             semantic_committed: false,
             second_committed: false,
         });

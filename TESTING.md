@@ -99,8 +99,11 @@ accepted but semantically unverified**, the producer captures historical step
 4 in its bounded queue and deliberately attempts a fifth input. Admission of
 that fifth input must return typed `CapacityExceeded` and the exact immutable
 unconsumed payload, without advancing the requested or verified cursor,
-consuming queued history or submitting duplicate G5 work. After first-batch
-verification, step 4 (captured *before* completion) proves *a new, separately
+consuming queued history or submitting duplicate G5 work. After the first
+terminal GPU pixel oracle succeeds, the producer first *deliberately refuses*
+semantic verification and requires the exact accepted batch and queued tick 4
+to remain unchanged. Only an independent successful verification callback
+may advance the completed cursor. After first-batch verification, step 4 (captured *before* completion) proves *a new, separately
 G5-accepted GPU submission* continues retained state from 6 to 10 (exact
 blue RGBA pixel), before committing tick 4. Deferred GPU progress must deliver each selected capture
 without acquiring another surface image or duplicating either batch.
