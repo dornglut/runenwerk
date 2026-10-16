@@ -9,7 +9,7 @@ use engine::plugins::render::host::{
 use engine::plugins::render::{
     Gfx, GpuParams, GpuStorage, GpuUniform, RenderFixedStepIterationUniform, RenderFlow,
     RenderFlowId, RenderFrameProducerId, RenderGpuFixedStepInput, RenderGpuFlowStepStreams,
-    SurfaceFrameSubmissionOrder,
+    ShaderRegistryResource, SurfaceFrameSubmissionOrder,
 };
 use engine::plugins::ui::{
     AppUiExt, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
@@ -1251,6 +1251,25 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
     app.add_plugins(default_plugins());
     app.add_plugin(RenderPlugin);
 
+    // Explicit absolute asset path: never accept a fallback empty kernel.
+    let asset_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../assets/shaders/native_historical_gpu_step_smoke.wgsl"
+    );
+    let shader_registry = app.world_mut().resource_mut::<ShaderRegistryResource>()?;
+    let shader = shader_registry.register_shader_with_id(
+        "native.historical.gpu.compute",
+        asset_path,
+    );
+    shader_registry.poll_updates();
+    anyhow::ensure!(
+        shader_registry.revision_for_handle(shader) > 0
+            && shader_registry
+                .loaded_source(asset_path)
+                .is_some_and(|source| source.contains("fn cs_main()")),
+        "native historical GPU probe requires loaded compute WGSL"
+    );
+
     let (flow, uniform) = RenderFlow::new("native.historical.gpu")
         .with_state::<NativeHistoricalSource>()
         .with_surface_color()?
@@ -1259,7 +1278,7 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         flow.storage_array::<NativeHistoricalCounter>("native.historical.counter", 1)?;
     let flow = flow
         .compute_pass("native.historical.step")
-        .shader_asset("assets/shaders/native_historical_gpu_step_smoke.wgsl")
+        .shader(shader)
         .uniform_from_state_to(
             GpuBindingKey::try_new(0, 0)?,
             uniform.clone(),
