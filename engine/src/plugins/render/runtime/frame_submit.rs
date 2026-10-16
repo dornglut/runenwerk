@@ -355,7 +355,7 @@ mod contribution_deferral_tests {
         let primary = RenderSurfaceId::primary();
         let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
         let tertiary = RenderSurfaceId::try_from_raw(3).expect("tertiary surface id");
-        let frames = vec![
+        let frames = [
             prepared_frame(primary, 0),
             prepared_frame(secondary, 1),
             prepared_frame(tertiary, 2),
