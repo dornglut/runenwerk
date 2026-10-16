@@ -2625,6 +2625,8 @@ mod tests {
         use runenui_runtime::{
             InputArbitrationRecord, UiInputFamily, UiInputFinality, UiInputProcessingRejection,
         };
+        use runenui_winit::TouchInputState;
+        use winit::event::TouchPhase;
 
         struct NativePointerApp;
         impl UiApp for NativePointerApp {
@@ -2806,6 +2808,102 @@ mod tests {
             ),
             "a reached invalid foreign-device stream must be expressly rejected, not committed: {refused:?}"
         );
+
+        // Real selective touch cancellation uses one framework-owned M13
+        // stream for each original device, even when their OS contact IDs
+        // overlap. A's Cancel cannot retire B or borrow its settlement.
+        let mut contacts = TouchInputState::default();
+        let touch_a = InputDeviceId::new(9).expect("touch A");
+        let touch_b = InputDeviceId::new(10).expect("touch B");
+        let position = LogicalPoint::new(12.0, 8.0).expect("finite touch");
+        let mut pointer_a = None;
+        let mut pointer_b = None;
+        for (touch_device, contact) in [(touch_a, &mut pointer_a), (touch_b, &mut pointer_b)] {
+            let down = contacts
+                .transition(
+                    touch_device,
+                    41,
+                    TouchPhase::Started,
+                    position,
+                    published.input_context().clone(),
+                )
+                .expect("distinct device-qualified touch contact starts");
+            let pointer_id = down.pointer_id();
+            *contact = Some(pointer_id);
+            let submission = slots
+                .submit_native_pointer(slot, down)
+                .expect("touch Down admitted to pinned M13");
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .expect("touch Down has actual terminal M13 record");
+            assert!(matches!(
+                native_pointer_finality(
+                    before.scope(),
+                    touch_device,
+                    pointer_id,
+                    published.input_context().surface_id(),
+                    submission,
+                    &batch,
+                    &status,
+                ),
+                Ok(UiInputFinality::Committed(_))
+            ));
+        }
+        let pointer_a = pointer_a.expect("A live original contact");
+        let pointer_b = pointer_b.expect("B live original contact");
+        assert_ne!(pointer_a, pointer_b);
+        let cancelled = contacts.cancel_device(touch_a);
+        assert_eq!(cancelled.len(), 1);
+        assert_eq!(contacts.active_contact_count(), 1);
+        let cancel = cancelled.into_iter().next().expect("A Cancel");
+        assert_eq!(cancel.pointer_id(), pointer_a);
+        let submission = slots
+            .submit_native_pointer(slot, cancel)
+            .expect("A device-specific Cancel admitted");
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("A Cancel reaches a real M13 settlement");
+        assert!(matches!(
+            native_pointer_finality(
+                before.scope(),
+                touch_a,
+                pointer_a,
+                published.input_context().surface_id(),
+                submission,
+                &batch,
+                &status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        let released_b = contacts
+            .transition(
+                touch_b,
+                41,
+                TouchPhase::Ended,
+                position,
+                published.input_context().clone(),
+            )
+            .expect("B still owns its authentic Up after A cancellation");
+        assert_eq!(released_b.pointer_id(), pointer_b);
+        let submission = slots
+            .submit_native_pointer(slot, released_b)
+            .expect("B Up admitted independently after A retirement");
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("B Up reaches its own terminal M13 record");
+        assert!(matches!(
+            native_pointer_finality(
+                before.scope(),
+                touch_b,
+                pointer_b,
+                published.input_context().surface_id(),
+                submission,
+                &batch,
+                &status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert_eq!(contacts.active_contact_count(), 0);
 
         let later = slots
             .submit_native_pointer(slot, event())
