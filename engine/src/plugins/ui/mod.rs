@@ -35,7 +35,7 @@ pub use mount::*;
 pub use native_input::*;
 pub use native_transaction::{
     bind_native_input_recipient, realize_requested_native_primary, retire_native_input_recipient,
-    settle_native_ui_slot, transact_ui_slot,
+    mount_native_ui_app, settle_native_ui_slot, transact_ui_slot,
 };
 pub use plugin::UiPlugin;
 pub use presentation::*;

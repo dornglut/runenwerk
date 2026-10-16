@@ -185,7 +185,7 @@ pub struct UiNativeInputRecipientsResource {
 impl UiNativeInputRecipientsResource {
     /// Declare primary input ownership during App configuration, before the
     /// native window exists. A UI mount alone NEVER makes this choice.
-    pub fn request_primary(
+    pub(crate) fn request_primary(
         &mut self,
         recipient: NativeInputRecipient,
     ) -> Result<(), NativeInputRecipientError> {

@@ -92,6 +92,7 @@ pub enum UiRuntimeSlotMountFailure {
     SlotIdentityExhausted,
     SlotCapacityExhausted,
     IncompatibleNativeClock,
+    NativeInputTransactionRequired,
 }
 
 impl UiRuntimeSlotMountFailure {
@@ -110,6 +111,9 @@ impl UiRuntimeSlotMountFailure {
             Self::SlotCapacityExhausted => "RunenUI slot mount storage could not be reserved",
             Self::IncompatibleNativeClock => {
                 "RunenUI native clock must be configured before mounting; an existing time domain cannot be replaced"
+            }
+            Self::NativeInputTransactionRequired => {
+                "live native RunenUI mounting requires the Engine World consistency transaction"
             }
         }
     }
@@ -992,6 +996,9 @@ pub struct UiRuntimeSlotsResource {
     /// Ephemeral mutation permit scoped to exactly one selected native slot.
     /// Actual binding, source and scope remain owned by their existing owners.
     native_mutation_slot: Option<UiRuntimeSlotId>,
+    /// Temporary write permission for a World-owned native mount. Never an
+    /// alternative window recipient or source identity.
+    native_mount_permitted: bool,
 }
 
 impl Default for UiRuntimeSlotsResource {
@@ -1003,6 +1010,7 @@ impl Default for UiRuntimeSlotsResource {
             native_transport: None,
             native_closed: false,
             native_mutation_slot: None,
+            native_mount_permitted: false,
         }
     }
 }
@@ -1258,6 +1266,18 @@ impl UiRuntimeSlotsResource {
                 UiRuntimeSlotMountFailure::RuntimeInitialization,
             );
         }
+        // Adding the first UI slot can revoke implicit game-only routing for
+        // an unbound native window. A live host must atomically reconcile its
+        // existing ActionState in the World, not mount through a bare resource.
+        if (self.native_transport.is_some()
+            || self.slots.iter().any(|slot| slot.native_input_selected))
+            && !self.native_mount_permitted
+        {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::NativeInputTransactionRequired,
+            );
+        }
         let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
             return UiRuntimeSlotMountReport::rejected(
                 screen_id,
@@ -1316,6 +1336,36 @@ impl UiRuntimeSlotsResource {
             native_input_selected: false,
         });
         UiRuntimeSlotMountReport::accepted(screen_id, id)
+    }
+
+    /// The sealed Engine World boundary alone may mount new UI during native
+    /// execution. Mounting is a route-affecting mutation even without a
+    /// selected slot: implicit legacy gameplay must be reconciled immediately.
+    pub(crate) fn mount_native_app<A>(
+        &mut self,
+        _permit: &super::native_transaction::NativeAppMutationPermit,
+        screen_id: UiTypedScreenId,
+        state: A::State,
+        fonts: &UiRuntimeFontConfiguration,
+    ) -> UiRuntimeSlotMountReport
+    where
+        A: UiApp + 'static,
+    {
+        if self.native_mount_permitted || self.native_mutation_slot.is_some() {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::NativeInputTransactionRequired,
+            );
+        }
+        self.native_mount_permitted = true;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.mount_app::<A>(screen_id, state, fonts)
+        }));
+        self.native_mount_permitted = false;
+        match outcome {
+            Ok(report) => report,
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
     }
 
     /// Typed action ingress increments the Engine epoch immediately upon RunenUI

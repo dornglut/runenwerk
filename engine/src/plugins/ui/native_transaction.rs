@@ -200,6 +200,98 @@ pub fn transact_ui_slot<T>(
     transact_ui_slot_inner(world, slot, false, operation)
 }
 
+
+/// Mount a new typed RunenUI app while a native World is running.
+///
+/// Merely adding the first mounted UI runtime changes unbound native windows
+/// from implicit game-only recipients into unresolved recipients. Therefore
+/// the canonical original input sources and the one Engine ActionState must
+/// be reconciled before this operation returns to another ECS system.
+/// Headless/configuration-time mounts retain the ordinary mounting API.
+pub fn mount_native_ui_app<A>(
+    world: &mut World,
+    screen_id: super::UiTypedScreenId,
+    state: A::State,
+    fonts: &super::UiRuntimeFontConfiguration,
+) -> Result<super::UiRuntimeSlotMountReport>
+where
+    A: runenui_core::UiApp + 'static,
+{
+    let sources = world
+        .resource::<WinitInputAdapter>()?
+        .window_source_ids()
+        .collect::<Vec<_>>();
+    world.resource::<WindowStateRegistryResource>()?;
+    world.resource::<UiNativeInputRecipientsResource>()?;
+    world.resource::<UiRuntimeSlotsResource>()?;
+    if !sources.is_empty()
+        && world.resource::<ActionState>().is_ok()
+        && world.resource::<InputState>().is_err()
+    {
+        return Err(anyhow!(
+            "cannot mount native RunenUI while physical InputState is unavailable"
+        ));
+    }
+
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("native slot registry verified before mutable mounting")
+            .mount_native_app::<A>(
+                &NativeAppMutationPermit { _sealed: () },
+                screen_id,
+                state,
+                fonts,
+            )
+    }));
+    // The caller may catch a panic from user-authored UiApp mount code.
+    // Reconcile even then: partial native runtime changes cannot preserve
+    // previously projected gameplay eligibility on an unknown route.
+    if !matches!(&outcome, Ok(report) if !report.accepted_mount()) {
+        if let Err(error) = reconcile_game_after_native_mount(world, &sources) {
+            for (_, source) in sources {
+                let _ = revoke_game_source(world, source);
+            }
+            match outcome {
+                Ok(_) => return Err(error),
+                Err(panic) => std::panic::resume_unwind(panic),
+            }
+        }
+    }
+    match outcome {
+        Ok(report) => Ok(report),
+        Err(panic) => std::panic::resume_unwind(panic),
+    }
+}
+
+fn reconcile_game_after_native_mount(
+    world: &mut World,
+    sources: &[(NativeWindowId, runen_input::InputSourceId)],
+) -> Result<()> {
+    let mut slots = world
+        .remove_resource::<UiRuntimeSlotsResource>()
+        .ok_or_else(|| anyhow!("native UI slots missing during mount reconciliation"))?;
+    let decisions = (|| -> Result<Vec<_>> {
+        let windows = world.resource::<WindowStateRegistryResource>()?;
+        let recipients = world.resource::<UiNativeInputRecipientsResource>()?;
+        Ok(sources
+            .iter()
+            .filter_map(|(window, source)| {
+                (!matches!(
+                    recipients.resolve(*window, windows, &mut slots),
+                    Ok(NativeInputRecipient::LegacyNativeConsumer)
+                ))
+                .then_some(*source)
+            })
+            .collect())
+    })();
+    world.insert_resource(slots);
+    for source in decisions? {
+        revoke_game_source(world, source)?;
+    }
+    Ok(())
+}
+
 /// The only native-selected recovery lane for an incomplete RunenUI pump.
 /// A pending M13 snapshot cannot certify old gameplay permission: withdraw
 /// the exact source *before* attempting bounded framework-owned settlement,
@@ -885,4 +977,134 @@ mod tests {
             .unwrap();
         slots.submit_app_action::<ProbeApp>(slot, ()).unwrap();
     }
+
+    #[derive(runen_ecs::Resource)]
+    struct FirstMountInput(InputContext);
+
+    fn mount_first_ui_in_update(mut world: WorldMut) -> Result<()> {
+        assert!(world
+            .resource::<ActionState>()?
+            .action_down(action::WORLD_MOVE_UP));
+        let report = mount_native_ui_app::<ProbeApp>(
+            &mut world,
+            UiTypedScreenId::new("native.dynamic.first"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )?;
+        assert!(report.accepted_mount());
+        Ok(())
+    }
+
+    fn read_after_first_ui_mount(mut world: WorldMut) -> Result<()> {
+        let original = world.resource::<FirstMountInput>()?.0;
+        assert!(world
+            .resource::<InputState>()?
+            .keyboard_down_generation_in(original, &PhysicalKeyIdentity::code("KeyW"))
+            .is_some());
+        assert!(
+            !world
+                .resource::<ActionState>()?
+                .action_down(action::WORLD_MOVE_UP),
+            "first UI mount invalidates an old implicit-legacy game hold in the SAME Update"
+        );
+        let mut slots = world.remove_resource::<UiRuntimeSlotsResource>().unwrap();
+        let resolution = {
+            let recipients = world.resource::<UiNativeInputRecipientsResource>()?;
+            let windows = world.resource::<WindowStateRegistryResource>()?;
+            recipients.resolve(NativeWindowId::primary(), windows, &mut slots)
+        };
+        world.insert_resource(slots);
+        assert!(resolution.is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn first_native_ui_mount_revokes_implicit_game_hold_before_next_ecs_reader() {
+        let mut world = World::new();
+        let mut windows = WindowStateRegistryResource::default();
+        let window = windows.register_primary_window("game", (640, 480), 1.0, true);
+        let mut adapter = WinitInputAdapter::default();
+        let context = adapter
+            .window_context(window, winit::event::DeviceId::dummy())
+            .unwrap();
+        let mut input = InputState::new();
+        input.handle_normalized_keyboard(context, &key(DigitalState::Pressed));
+        let mut actions = ActionState::new();
+        actions.project(&input);
+        assert!(actions.action_down(action::WORLD_MOVE_UP));
+        world.insert_resource(windows);
+        world.insert_resource(adapter);
+        world.insert_resource(UiNativeInputRecipientsResource::default());
+        world.insert_resource(UiRuntimeSlotsResource::default());
+        world.insert_resource(input);
+        world.insert_resource(actions);
+        world.insert_resource(FirstMountInput(context));
+        let mut runtime = Runtime::new();
+        runtime
+            .add_systems(
+                Update,
+                mount_first_ui_in_update
+                    .on_invoker_thread()
+                    .in_set(NativeMutation),
+            )
+            .unwrap();
+        runtime
+            .add_systems(
+                Update,
+                read_after_first_ui_mount
+                    .on_invoker_thread()
+                    .in_set(ImmediateReader)
+                    .after(NativeMutation),
+            )
+            .unwrap();
+        runtime.run_schedule::<Update>(&mut world).unwrap();
+    }
+
+    #[test]
+    fn direct_selected_native_mount_is_denied_but_world_mount_keeps_legacy_source() {
+        let mut world = setup();
+        let rejected = world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .mount_app::<ProbeApp>(
+                UiTypedScreenId::new("native.direct.denied"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            );
+        assert_eq!(
+            rejected.failure(),
+            Some(super::super::UiRuntimeSlotMountFailure::NativeInputTransactionRequired)
+        );
+        let accepted = mount_native_ui_app::<ProbeApp>(
+            &mut world,
+            UiTypedScreenId::new("native.world.allowed"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .unwrap();
+        assert!(accepted.accepted_mount());
+        assert!(
+            world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "world transaction must preserve independent explicit legacy source"
+        );
+        let game = world.resource::<Probe>().unwrap().game;
+        world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(game, &key(DigitalState::Released));
+        let mut actions = world.remove_resource::<ActionState>().unwrap();
+        actions.project(world.resource::<InputState>().unwrap());
+        world.insert_resource(actions);
+        assert!(
+            !world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "selected UI source must remain denied after independent legacy Up"
+        );
+    }
+
 }
