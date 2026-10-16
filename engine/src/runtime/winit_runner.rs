@@ -3876,7 +3876,10 @@ mod tests {
             .remove_window(secondary)
             .expect("original secondary was created");
         assert!(
-            runner.input_adapter.window_source_context(secondary).is_some(),
+            runner
+                .input_adapter
+                .window_source_context(secondary)
+                .is_some(),
             "source retirement has not yet happened"
         );
         runner.reconcile_native_ui_keyboard_before_frame().unwrap();
