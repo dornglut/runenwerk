@@ -1131,29 +1131,78 @@ mod tests {
             "selected UI source must remain denied after independent legacy Up"
         );
     }
+    fn program_source() -> super::super::UiTypedSource {
+        super::super::UiTypedSource::new(
+            UiTypedScreenId::new("native.program"),
+            ui_program::UiProgramSourceId::new("native.program.source"),
+            ui_definition::UiNodeDefinition::Label {
+                id: ui_definition::AuthoredId::new("native.program.label"),
+                label: ui_definition::UiValueBinding::static_text("Native program"),
+                availability: None,
+            },
+        )
+    }
+
+    fn program_registry() -> ui_controls::ControlPackageRegistrySnapshot {
+        ui_controls::ControlPackageRegistry::new()
+            .with_package(ui_controls::runenwerk_control_package())
+            .unwrap()
+            .snapshot()
+    }
+
     #[test]
     fn selected_native_program_mount_cannot_bypass_world_input_consistency() {
         let mut world = setup();
-        let source = super::super::UiTypedSource::new(
-            UiTypedScreenId::new("native.program.direct"),
-            ui_program::UiProgramSourceId::new("native.program.source"),
-            ui_definition::UiNodeDefinition::Column {
-                id: ui_definition::AuthoredId::new("native.program.root"),
-                children: Vec::new(),
-            },
-        );
-        let snapshot = ui_controls::ControlPackageRegistry::new()
-            .with_package(ui_controls::runenwerk_control_package())
-            .unwrap()
-            .snapshot();
         let rejected = world
             .resource_mut::<UiRuntimeSlotsResource>()
             .unwrap()
-            .mount_with_fonts(source, &snapshot, &UiRuntimeFontConfiguration::default());
+            .mount_with_fonts(
+                program_source(),
+                &program_registry(),
+                &UiRuntimeFontConfiguration::default(),
+            );
         assert_eq!(
             rejected.failure(),
             Some(super::super::UiRuntimeSlotMountFailure::NativeInputTransactionRequired),
             "the program/Counter mount cannot mutate native routing through a bare slot resource"
+        );
+    }
+
+    #[test]
+    fn world_native_program_mount_preserves_independent_legacy_input() {
+        let mut world = setup();
+        let result = mount_native_ui_program(
+            &mut world,
+            program_source(),
+            &program_registry(),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .unwrap();
+        assert!(
+            result.accepted_mount(),
+            "a valid UI program must mount through the World transaction"
+        );
+        assert!(
+            world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "a new visual-only program cannot revoke an explicitly legacy second window"
+        );
+        let game = world.resource::<Probe>().unwrap().game;
+        world
+            .resource_mut::<InputState>()
+            .unwrap()
+            .handle_normalized_keyboard(game, &key(DigitalState::Released));
+        let mut actions = world.remove_resource::<ActionState>().unwrap();
+        actions.project(world.resource::<InputState>().unwrap());
+        world.insert_resource(actions);
+        assert!(
+            !world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "the old native UI source may not regain game permission after legacy Up"
         );
     }
 }
