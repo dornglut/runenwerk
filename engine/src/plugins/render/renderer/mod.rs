@@ -1236,8 +1236,7 @@ mod tests {
     use crate::plugins::render::inspect::{
         CaptureStage, CaptureTextureClass, RenderCaptureIdentity, RenderCapturePointIdentity,
         RenderCaptureTerminal, RenderCapturedTexture, RenderCapturedTextureState,
-        RenderComposedFrameGpuTimingEvidence,
-        RenderGpuTimingCapability, RenderPassTimingEvidence,
+        RenderComposedFrameGpuTimingEvidence, RenderGpuTimingCapability, RenderPassTimingEvidence,
     };
 
     #[test]
@@ -1435,7 +1434,9 @@ mod tests {
         assert_eq!(view.captures.len(), 64);
         assert_eq!(view.dropped_observations, 32);
         assert_eq!(
-            view.last_dropped_identity.as_ref().map(|identity| identity.frame_index),
+            view.last_dropped_identity
+                .as_ref()
+                .map(|identity| identity.frame_index),
             Some(32)
         );
         assert!(
