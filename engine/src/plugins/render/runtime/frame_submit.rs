@@ -1213,9 +1213,10 @@ fn drain_progressed_gpu_captures(
     let (current_results, delayed_results): (Vec<_>, Vec<_>) =
         results.into_iter().partition(|result| {
             current_source.is_some_and(|source| {
-                result.frame_identity.as_ref().is_none_or(|identity| {
-                    (identity.frame_index, identity.surface_id()) == source
-                })
+                result
+                    .frame_identity
+                    .as_ref()
+                    .is_none_or(|identity| (identity.frame_index, identity.surface_id()) == source)
             })
         });
     let mut transactions = world
