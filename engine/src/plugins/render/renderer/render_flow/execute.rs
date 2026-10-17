@@ -399,6 +399,20 @@ impl Renderer {
             })
             .collect::<Vec<_>>();
         capture_readbacks.append(&mut batch.final_captures);
+        // The producer already retains this exact G5 submission through its
+        // accepted immutable step interval. Associate only the source's
+        // canonical readback IDs before optional renderer/ECS diagnostic
+        // publication, so loss of that derived view cannot lose the proof.
+        for capture in &capture_readbacks {
+            gpu_step_streams.associate_accepted_capture(
+                &submission,
+                capture.identity.clone(),
+                capture.canonical_operation().id(),
+                capture.width,
+                capture.height,
+                capture.source_format,
+            );
+        }
         let mut observation_output = self.gpu_observations.accept(
             context,
             submission,

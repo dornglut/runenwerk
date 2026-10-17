@@ -308,3 +308,42 @@ a lossless producer-verification transport. Validation of genuinely
 simultaneous native windows, deferred primary with secondary readback,
 resource-sharing across surfaces, partial-failure restoration, and original
 boids / `--species` at 120+ visible frames remains separately required.
+
+## RW-1291-PROD11 — retained G5 capture evidence, without diagnostic-image delivery
+
+In the ordinary historical fixed-step RenderFlow, each accepted producer interval
+holds the exact public `GpuSubmission`. Immediately after real G5 acceptance,
+the renderer associates **only canonical capture readback IDs actually present
+in that same submission** with the registered producer's flow and exact
+`(frame, surface, pass, capture point)`. The `RenderGpuFlowStepStreams`
+sidecar retains up to 64 lightweight readback descriptors per active accepted
+interval; exceeding the bound is an explicit `CapacityExceeded`, never a
+truncated apparently-valid list. Descriptors are invalidated by new accepted
+interval association and cannot be returned after the producer no longer owns
+the matching accepted G5 submission.
+
+The producer's `accepted_capture_readbacks(flow)` obtains these descriptors
+without reading the derived `RenderCapturedTextureState` ECS cache. Its
+`sample_center_rgba8(submission)` only provides pixels for exact submission
+ID/affinity + physically completed G5 work + `Ready` canonical readback,
+matching format, dimensions and byte length, and correctly maps BGRA to RGBA.
+Missing/pending/failed/out-of-generation evidence returns **no pixel**; it
+does not advance the producer. The source then independently checks expected
+pixels, immutable step lineage, and commits with `commit_verified`. The
+public RunenGPU submission, not a Runenwerk event queue, retains the
+readback bytes until the producer releases that submission.
+
+The native historical smoke has been changed to verify its green/blue
+semantic counter pixels through this producer-held G5 readback, rather
+than looking up potentially evicted diagnostic ECS images. It still
+checks two successive accepted intervals, 1+2+3=6 and 6+4=10, bounded
+historical input capture, explicit producer verification refusal,
+non-duplicate admission, and correct source/surface identity.
+
+This is a **bounded source-flow receipt association**, not an assertion that
+all RenderFlow capture selectors belong to a producer, that G5 guarantees
+pixel meaning or Present, that unsupported/missing readbacks can prove
+simulation progress, or that a production boids owner has adopted the
+verification policy. Arbitrary cross-flow evidence composition, GPU
+partial-write restoration, native two-surface stress, and 120+ presented
+original/species boids frames remain separately unqualified.

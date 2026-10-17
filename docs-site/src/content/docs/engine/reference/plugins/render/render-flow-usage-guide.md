@@ -460,8 +460,23 @@ Pre-G5 capture failures have no receipt, and postaccept failures remain
 explicitly failed. Because the bounded ECS view can lose evidence, an
 application requiring producer verification MUST fail closed on any delivery
 gap and separately maintain its accepted simulation inputs and exact G5
-handle. Lossless producer verification and partial-write recovery remain
-separate requirements.
+handle. When a registered fixed-step producer has a capture on its own
+flow in the *same* accepted GPU graph, the renderer also associates that
+capture's exact G5 readback ID with the producer's accepted submission before
+optional diagnostic publication. The producer can use
+`RenderGpuFlowStepStreams::accepted_capture_readbacks(flow)` and
+`RenderGpuAcceptedCaptureReadback::sample_center_rgba8(submission)` to
+verify the original RunenGPU-retained bytes directly, without consuming the
+evictable ECS image window. At most 64 metadata references are retained for
+an accepted producer interval; overflow is a typed error and never an
+apparently-complete truncated result set. The producer keeps immutable steps
+and the G5 handle until its own semantic verifier explicitly commits.
+The readback must be actually authored and admitted (for example by an
+opt-in supported capture selector): a missing/disabled or failed readback
+cannot prove progress. This is **not** automatic production-grade readback
+authoring for every compute workload, nor recovery after uncertain writes,
+and does not imply successful Present. Those remain separately owned
+requirements.
 
 Physical `Completed` and successful Present remain distinct from producer
 semantic verification. Native-window original/species boids, unknown partial

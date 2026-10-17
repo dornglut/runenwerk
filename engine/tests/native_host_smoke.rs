@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use engine::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
-use engine::plugins::render::inspect::{RenderCaptureSelector, RenderCapturedTextureState};
+use engine::plugins::render::inspect::RenderCaptureSelector;
 use engine::plugins::render::{
     Gfx, GpuParams, GpuStorage, GpuUniform, RenderFixedStepIterationUniform, RenderFlow,
     RenderFlowId, RenderFrameProducerId, RenderGpuFixedStepInput, RenderGpuFlowStepStreams,
@@ -1161,8 +1161,6 @@ struct NativeHistoricalGpuHook {
     frames: u32,
     first_submission: Option<runen_gpu::GpuSubmissionId>,
     second_submission: Option<runen_gpu::GpuSubmissionId>,
-    /// Scoped to one accepted producer interval, never all past diagnostic images.
-    capture_loss_scope: Option<(runen_gpu::GpuSubmissionId, u64)>,
     saw_terminal: bool,
     saw_second_terminal: bool,
     saw_gpu_frame: bool,
@@ -1383,11 +1381,20 @@ impl NativeHistoricalGpuHook {
             self.overflow_rejected_without_loss = true;
         }
 
-        // A real debug capture (not CPU prediction or mere Completed status)
-        // establishes the precise counter value 1+2+3 = 6. Red is a failure,
-        // green is proof, in the actual composed fullscreen GPU pass.
-        let matches_capture =
-            |capture: &engine::plugins::render::inspect::RenderCapturedTexture| {
+        // The semantic producer reads its own accepted G5 readback directly.
+        // Renderer/ECS diagnostic history is bounded and may evict pixels;
+        // that derived cache cannot be the required source of GPU proof.
+        let step_streams = world.resource::<RenderGpuFlowStepStreams>()?;
+        let accepted_submission = step_streams
+            .stream(self.flow)
+            .and_then(|producer| producer.accepted_submission());
+        let capture = if let Some(submission) = accepted_submission {
+            anyhow::ensure!(
+                !matches!(submission.status(), runen_gpu::GpuSubmissionStatus::Failed(_)),
+                "native source G5 submission failed before semantic verification"
+            );
+            let readbacks = step_streams.accepted_capture_readbacks(self.flow)?;
+            let candidate = readbacks.iter().find(|capture| {
                 capture.identity.flow_id() == self.flow.to_string()
                     && capture.identity.pass_id() == self.display_pass
                     && !self.second_committed
@@ -1395,81 +1402,25 @@ impl NativeHistoricalGpuHook {
                         || self
                             .first_capture_frame
                             .is_none_or(|first| capture.identity.frame_index > first))
-            };
-        // A bounded diagnostics view contains historical captures after a
-        // producer has committed its earlier interval. Those samples are not
-        // evidence for another interval and must not require a live receipt.
-        // Select only observations correlated with the producer's currently
-        // accepted G5 submission; never accept a stale matching pixel.
-        let accepted_submission = world
-            .resource::<RenderGpuFlowStepStreams>()?
-            .stream(self.flow)
-            .and_then(|producer| producer.accepted_submission());
-        let dropped_observations = world
-            .resource::<RenderCapturedTextureState>()?
-            .dropped_observations;
-        // Only an *active* accepted interval has unconsumed producer evidence.
-        // Once verified, bounded diagnostic history may evict old pixels without
-        // retroactively invalidating the producer-owned committed state.
-        if let Some(submission) = accepted_submission {
-            match self.capture_loss_scope {
-                Some((id, earlier_loss)) if id == submission.id() => {
-                    anyhow::ensure!(
-                        dropped_observations == earlier_loss,
-                        "native producer lost capture evidence while G5 submission {} awaited verification",
-                        id
-                    );
-                }
-                _ => {
-                    self.capture_loss_scope = Some((submission.id(), dropped_observations));
-                }
-            }
-        } else {
-            self.capture_loss_scope = None;
-        }
-        let capture = world
-            .resource::<RenderCapturedTextureState>()
-            .ok()
-            .and_then(|state| {
-                state
-                    .captures
-                    .iter()
-                    .find(|capture| {
-                        matches_capture(capture)
-                            && capture.submission_receipt.is_some_and(|origin| {
-                                accepted_submission.is_some_and(|gpu| {
-                                    origin.submission_id() == gpu.id()
-                                        && origin.affinity() == gpu.affinity()
-                                })
-                            })
-                    })
-                    .map(|capture| {
-                        (
-                            capture.identity.surface_id(),
-                            capture.identity.frame_index,
-                            capture.terminal.clone(),
-                            capture.sample_center_rgba8(),
-                            capture.submission_receipt,
-                        )
-                    })
             });
-        if let Some((capture_surface, capture_frame, terminal, pixel, receipt)) = capture {
+            if matches!(submission.status(), runen_gpu::GpuSubmissionStatus::Completed) {
+                anyhow::ensure!(
+                    candidate.is_some(),
+                    "completed producer G5 interval has no associated source capture readback"
+                );
+            }
+            candidate.and_then(|capture| {
+                capture
+                    .sample_center_rgba8(submission)
+                    .map(|pixel| (capture.identity.surface_id(), capture.identity.frame_index, pixel))
+            })
+        } else {
+            None
+        };
+        if let Some((capture_surface, capture_frame, pixel)) = capture {
             anyhow::ensure!(
                 capture_surface == RenderSurfaceId::primary().raw(),
                 "native producer capture came from wrong prepared surface {capture_surface}"
-            );
-            anyhow::ensure!(
-                terminal.code
-                    == engine::plugins::render::inspect::RenderCaptureTerminalCode::Completed,
-                "native historical GPU result capture failed: {terminal:?}"
-            );
-            // Do not infer a producer's completed G5 work from an unqualified
-            // diagnostic pixel, even when its source frame and surface match.
-            let source_submission = accepted_submission
-                .ok_or_else(|| anyhow::anyhow!("correlated pixel has no producer G5 submission"))?;
-            anyhow::ensure!(
-                receipt.is_some_and(|origin| origin.matches_completed_readback(source_submission)),
-                "GPU pixel readback is not bound to the producer's exact completed G5 submission"
             );
             let expected = if self.semantic_committed {
                 [0, 0, 255, 255] // 6 + 4 = 10
@@ -1477,7 +1428,7 @@ impl NativeHistoricalGpuHook {
                 [0, 255, 0, 255] // 1 + 2 + 3 = 6
             };
             anyhow::ensure!(
-                pixel == Some(expected),
+                pixel == expected,
                 "GPU historical step inputs produced wrong retained state pixel: {pixel:?}"
             );
             if self.semantic_committed {
@@ -1746,7 +1697,6 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             frames: 0,
             first_submission: None,
             second_submission: None,
-            capture_loss_scope: None,
             saw_terminal: false,
             saw_second_terminal: false,
             saw_gpu_frame: false,

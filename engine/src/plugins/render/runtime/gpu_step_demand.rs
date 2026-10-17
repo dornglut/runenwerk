@@ -4,8 +4,16 @@
 //! GPU resource reservation system, or a replacement for RunenGPU's G3/G5.
 //! Only the producer can certify that a prepared GPU graph faithfully lowers
 //! every captured step. An accepted submission is not a completed simulation.
-use crate::plugins::render::{PreparedRenderFrame, RenderFixedStepIterationUniform, RenderFlowId};
-use runen_gpu::{GpuContextAffinity, GpuSubmission, GpuSubmissionStatus, GpuWorkResourceId};
+use crate::plugins::render::{
+    PreparedRenderFrame, RenderFixedStepIterationUniform, RenderFlowId,
+};
+use crate::plugins::render::inspect::{
+    RenderCaptureIdentity, RenderCaptureSubmissionReceipt,
+};
+use runen_gpu::{
+    GpuContextAffinity, GpuReadbackId, GpuReadbackStatus, GpuSubmission, GpuSubmissionStatus,
+    GpuTextureFormat, GpuWorkResourceId,
+};
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 /// A copied or otherwise producer-owned immutable step input with its sequence
@@ -437,6 +445,75 @@ pub struct RenderGpuFixedStepInput {
     pub iteration: RenderFixedStepIterationUniform,
 }
 
+/// Immutable capture metadata paired with the exact producer-owned G5
+/// submission. The actual readback bytes remain in RunenGPU, not a bounded
+/// diagnostic ECS view or another Runenwerk byte queue.
+#[derive(Debug, Clone)]
+pub struct RenderGpuAcceptedCaptureReadback {
+    pub identity: RenderCaptureIdentity,
+    pub receipt: RenderCaptureSubmissionReceipt,
+    pub width: u32,
+    pub height: u32,
+    pub source_format: GpuTextureFormat,
+}
+
+impl RenderGpuAcceptedCaptureReadback {
+    pub fn sample_center_rgba8(&self, submission: &GpuSubmission) -> Option<[u8; 4]> {
+        if !self.receipt.matches_completed_readback(submission) {
+            return None;
+        }
+        let readback = submission.readback(self.receipt.readback_id())?;
+        let GpuReadbackStatus::Ready(bytes) = readback.status() else {
+            return None;
+        };
+        if bytes.texture_format() != Some(self.source_format) {
+            return None;
+        }
+        let width = usize::try_from(self.width).ok()?;
+        let height = usize::try_from(self.height).ok()?;
+        let expected_len = width.checked_mul(height)?.checked_mul(4)?;
+        if width == 0 || height == 0 || bytes.as_bytes().len() != expected_len {
+            return None;
+        }
+        let pixel_offset = (height / 2)
+            .checked_mul(width)?
+            .checked_add(width / 2)?
+            .checked_mul(4)?;
+        let pixel = bytes.as_bytes().get(pixel_offset..pixel_offset.checked_add(4)?)?;
+        let mut rgba = [pixel[0], pixel[1], pixel[2], pixel[3]];
+        match self.source_format {
+            GpuTextureFormat::Bgra8Unorm | GpuTextureFormat::Bgra8UnormSrgb => rgba.swap(0, 2),
+            GpuTextureFormat::Rgba8Unorm | GpuTextureFormat::Rgba8UnormSrgb => {}
+            _ => return None,
+        }
+        Some(rgba)
+    }
+}
+
+/// A producer cannot treat missing or truncated capture references as
+/// successful verification. A full G5 submission stays retained either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderGpuAcceptedCaptureError {
+    NoAcceptedBatch,
+    CapacityExceeded,
+}
+
+impl std::fmt::Display for RenderGpuAcceptedCaptureError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl std::error::Error for RenderGpuAcceptedCaptureError {}
+
+const MAX_ACCEPTED_PRODUCER_READBACKS: usize = 64;
+
+#[derive(Debug, Default)]
+struct AcceptedCaptureReadbacks {
+    references: Vec<RenderGpuAcceptedCaptureReadback>,
+    truncated: bool,
+}
+
 /// An opt-in, producer-owned set of streams, one per ordinary RenderFlow.
 /// Existing CPU-driven flows never consult this registry. Producers capture
 /// snapshots before irreversibly advancing their own domain state and verify
@@ -444,6 +521,7 @@ pub struct RenderGpuFixedStepInput {
 #[derive(Debug, Default, runen_ecs::Resource)]
 pub struct RenderGpuFlowStepStreams {
     streams: BTreeMap<RenderFlowId, RenderGpuStepDemand<RenderGpuFixedStepInput>>,
+    accepted_capture_readbacks: BTreeMap<RenderFlowId, AcceptedCaptureReadbacks>,
 }
 
 impl RenderGpuFlowStepStreams {
@@ -476,6 +554,73 @@ impl RenderGpuFlowStepStreams {
         flow: RenderFlowId,
     ) -> Option<&RenderGpuStepDemand<RenderGpuFixedStepInput>> {
         self.streams.get(&flow)
+    }
+
+    /// The capture readback IDs of the currently accepted producer interval.
+    /// Unlike derived ECS pixel images, these descriptors are not evicted by
+    /// diagnostic history pressure. Consumers must verify G5's terminal
+    /// readback and their own source semantics before committing any tick.
+    pub fn accepted_capture_readbacks(
+        &self,
+        flow: RenderFlowId,
+    ) -> Result<&[RenderGpuAcceptedCaptureReadback], RenderGpuAcceptedCaptureError> {
+        let Some(stream) = self.streams.get(&flow) else {
+            return Err(RenderGpuAcceptedCaptureError::NoAcceptedBatch);
+        };
+        let Some(submission) = stream.accepted_submission() else {
+            return Err(RenderGpuAcceptedCaptureError::NoAcceptedBatch);
+        };
+        let Some(associated) = self.accepted_capture_readbacks.get(&flow) else {
+            return Ok(&[]);
+        };
+        if associated.truncated {
+            return Err(RenderGpuAcceptedCaptureError::CapacityExceeded);
+        }
+        debug_assert!(associated.references.iter().all(|reference| {
+            reference.receipt.submission_id() == submission.id()
+                && reference.receipt.affinity() == submission.affinity()
+        }));
+        Ok(&associated.references)
+    }
+
+    /// Associate only canonical readback IDs of this exact accepted G5 graph.
+    /// This does not produce GPU completion, duplicate bytes, or decide whether
+    /// a producer's simulator has semantically advanced.
+    pub(crate) fn associate_accepted_capture(
+        &mut self,
+        submission: &GpuSubmission,
+        identity: RenderCaptureIdentity,
+        readback_id: GpuReadbackId,
+        width: u32,
+        height: u32,
+        source_format: GpuTextureFormat,
+    ) {
+        if submission.readback(readback_id).is_none() {
+            return;
+        }
+        for (flow, stream) in &self.streams {
+            if identity.flow_id() != flow.to_string()
+                || !stream.accepted_submission().is_some_and(|accepted| {
+                    accepted.id() == submission.id()
+                        && accepted.affinity() == submission.affinity()
+                })
+            {
+                continue;
+            }
+            let entry = self.accepted_capture_readbacks.entry(*flow).or_default();
+            if entry.references.len() >= MAX_ACCEPTED_PRODUCER_READBACKS {
+                entry.truncated = true;
+                return;
+            }
+            entry.references.push(RenderGpuAcceptedCaptureReadback {
+                identity,
+                receipt: RenderCaptureSubmissionReceipt::accepted(submission, readback_id),
+                width,
+                height,
+                source_format,
+            });
+            return;
+        }
     }
 
     /// Called before surface acquisition. One accepted semantic producer
@@ -558,6 +703,7 @@ impl RenderGpuFlowStepStreams {
                 .as_ref()
                 .expect("prevalidated producer history");
             if !history.steps.is_empty() {
+                self.accepted_capture_readbacks.remove(&invocation.flow_id);
                 stream.accept_prevalidated(history.steps.len(), submission.clone());
             }
         }
