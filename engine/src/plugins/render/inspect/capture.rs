@@ -454,7 +454,7 @@ mod tests {
         }
         assert_eq!(state.captures.len(), 2);
         assert_eq!(state.dropped_observations, 1);
-        assert_eq!(state.last_dropped_identity.unwrap().frame_index, 1);
+        assert_eq!(state.last_dropped_identity.as_ref().unwrap().frame_index, 1);
         assert!(
             state
                 .find_from_source(
