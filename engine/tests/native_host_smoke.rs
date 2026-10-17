@@ -1665,10 +1665,7 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
     sources.register(flow_id, 0, 4)?;
     sources.require_capture(
         flow_id,
-        RenderCaptureSelector::named_pass_surface_color(
-            flow_id.to_string(),
-            display_pass.clone(),
-        ),
+        RenderCaptureSelector::named_pass_surface_color(flow_id.to_string(), display_pass.clone()),
     )?;
     let input = |value: u32| RenderGpuFixedStepInput {
         uniforms: BTreeMap::from([(

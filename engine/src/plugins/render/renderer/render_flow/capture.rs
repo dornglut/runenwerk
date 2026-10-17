@@ -105,8 +105,7 @@ impl FrameCaptureRuntime {
     }
 
     pub fn is_required(&self, selector_index: usize) -> bool {
-        selector_index >= self.diagnostic_selector_count
-            && selector_index < self.selectors.len()
+        selector_index >= self.diagnostic_selector_count && selector_index < self.selectors.len()
     }
 
     /// Bound producer-required GPU readbacks by actual texture byte size.

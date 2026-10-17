@@ -566,17 +566,19 @@ impl RenderGpuFlowStepStreams {
         flow: RenderFlowId,
         selector: RenderCaptureSelector,
     ) -> anyhow::Result<()> {
-        let stream = self
-            .streams
-            .get(&flow)
-            .ok_or_else(|| anyhow::anyhow!("GPU result capture requires a registered source flow"))?;
+        let stream = self.streams.get(&flow).ok_or_else(|| {
+            anyhow::anyhow!("GPU result capture requires a registered source flow")
+        })?;
         anyhow::ensure!(
             stream.accepted_submission().is_none(),
             "cannot change GPU result capture while its producer submission is accepted"
         );
         anyhow::ensure!(
             selector.flow_id.as_deref() == Some(flow.to_string().as_str())
-                && selector.pass_id.as_ref().is_some_and(|value| !value.is_empty())
+                && selector
+                    .pass_id
+                    .as_ref()
+                    .is_some_and(|value| !value.is_empty())
                 && matches!(selector.stage, CaptureStage::Before | CaptureStage::After)
                 && !selector.resource_id.is_empty(),
             "producer-required GPU capture must identify its exact flow, pass, stage and resource"
@@ -604,11 +606,9 @@ impl RenderGpuFlowStepStreams {
             .flow_invocations
             .iter()
             .filter(|invocation| {
-                self.streams
-                    .get(&invocation.flow_id)
-                    .is_some_and(|stream| {
-                        stream.pending_len() > 0 && stream.accepted_submission().is_none()
-                    })
+                self.streams.get(&invocation.flow_id).is_some_and(|stream| {
+                    stream.pending_len() > 0 && stream.accepted_submission().is_none()
+                })
             })
             .flat_map(|invocation| {
                 self.required_capture_selectors
@@ -783,8 +783,7 @@ mod required_capture_tests {
         let other = RenderFlowId::try_from_raw(72).unwrap();
         let mut streams = RenderGpuFlowStepStreams::default();
         streams.register(flow, 0, 4).unwrap();
-        let selector =
-            RenderCaptureSelector::named_pass_surface_color(flow.to_string(), "display");
+        let selector = RenderCaptureSelector::named_pass_surface_color(flow.to_string(), "display");
         assert!(streams.require_capture(other, selector.clone()).is_err());
         assert!(streams.require_capture(flow, selector.clone()).is_ok());
         assert!(streams.require_capture(flow, selector.clone()).is_err());
@@ -798,6 +797,9 @@ mod required_capture_tests {
         let mut final_stage = selector;
         final_stage.stage = CaptureStage::Final;
         assert!(streams.require_capture(flow, final_stage).is_err());
-        assert_eq!(streams.required_capture_selectors.get(&flow).unwrap().len(), 1);
+        assert_eq!(
+            streams.required_capture_selectors.get(&flow).unwrap().len(),
+            1
+        );
     }
 }
