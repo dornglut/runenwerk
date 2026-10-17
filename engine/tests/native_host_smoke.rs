@@ -1377,13 +1377,18 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                     .find(|capture| matches_capture(capture))
                     .map(|capture| {
                         (
+                            capture.identity.surface_id(),
                             capture.identity.frame_index,
                             capture.terminal.clone(),
                             capture.sample_center_rgba8(),
                         )
                     })
             });
-        if let Some((capture_frame, terminal, pixel)) = capture {
+        if let Some((capture_surface, capture_frame, terminal, pixel)) = capture {
+            anyhow::ensure!(
+                capture_surface == RenderSurfaceId::primary().raw(),
+                "native producer capture came from wrong prepared surface {capture_surface}"
+            );
             anyhow::ensure!(
                 terminal.code
                     == engine::plugins::render::inspect::RenderCaptureTerminalCode::Completed,
