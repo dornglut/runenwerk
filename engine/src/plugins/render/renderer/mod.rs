@@ -1235,7 +1235,8 @@ mod tests {
     use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::render::inspect::{
         CaptureStage, CaptureTextureClass, RenderCaptureIdentity, RenderCapturePointIdentity,
-        RenderCaptureTerminal, RenderCapturedTexture, RenderComposedFrameGpuTimingEvidence,
+        RenderCaptureTerminal, RenderCapturedTexture, RenderCapturedTextureState,
+        RenderComposedFrameGpuTimingEvidence,
         RenderGpuTimingCapability, RenderPassTimingEvidence,
     };
 
@@ -1391,5 +1392,59 @@ mod tests {
         assert!(renderer.last_gpu_pass_timing_evidence.is_empty());
         assert!(renderer.last_composed_gpu_timing_evidence.is_empty());
         assert!(renderer.last_captured_textures.is_empty());
+    }
+
+    #[test]
+    fn repeated_secondary_capture_handoffs_retire_renderer_bytes_and_bound_ecs_view() {
+        let mut renderer = Renderer::new();
+        let mut view = RenderCapturedTextureState::default();
+        // Pure observation-lifetime proof: no native GPU or surface is synthesized.
+        // Each completed secondary source is drained while no primary publication occurs.
+        for frame_index in 1..=96 {
+            renderer
+                .pending_gpu_observation_output
+                .captured_textures
+                .push(RenderCapturedTexture {
+                    identity: RenderCaptureIdentity {
+                        frame_index,
+                        surface_id: 2,
+                        pass_label: "pass".into(),
+                        capture_point: RenderCapturePointIdentity {
+                            flow_id: "secondary".into(),
+                            pass_id: "pass".into(),
+                            stage: CaptureStage::After,
+                            resource_id: "output".into(),
+                            texture_class: CaptureTextureClass::ColorTarget,
+                        },
+                    },
+                    width: 1,
+                    height: 1,
+                    format: "rgba8".into(),
+                    bytes_rgba8: Some(vec![frame_index as u8, 0, 0, 255]),
+                    terminal: RenderCaptureTerminal::completed(),
+                });
+            renderer.publish_progressed_gpu_observations();
+            let terminal = renderer.take_published_captured_textures();
+            assert_eq!(terminal.len(), 1);
+            view.observe_frame(frame_index, &terminal);
+            assert!(renderer.last_captured_textures().is_empty());
+            // A later idempotent progress publication cannot redeliver drained bytes.
+            renderer.publish_progressed_gpu_observations();
+            assert!(renderer.take_published_captured_textures().is_empty());
+        }
+        assert_eq!(view.captures.len(), 64);
+        assert_eq!(view.dropped_observations, 32);
+        assert_eq!(
+            view.last_dropped_identity.as_ref().map(|identity| identity.frame_index),
+            Some(32)
+        );
+        assert!(
+            view.find_from_source(96, 2, "secondary", "pass", CaptureStage::After, "output")
+                .is_some()
+        );
+        assert!(
+            view.find_from_source(1, 2, "secondary", "pass", CaptureStage::After, "output")
+                .is_none()
+        );
     }
 }

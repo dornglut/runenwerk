@@ -234,22 +234,36 @@ impl Default for RenderCapturedTextureState {
 impl RenderCapturedTextureState {
     pub fn observe_frame(&mut self, frame_index: u64, captures: &[RenderCapturedTexture]) {
         self.frame_index = frame_index;
+        let mut retained_bytes = self
+            .captures
+            .iter()
+            .filter_map(|capture| capture.bytes_rgba8.as_ref())
+            .map(Vec::len)
+            .fold(0usize, usize::saturating_add);
         for capture in captures {
-            self.captures.push(capture.clone());
-            while self.captures.len() > self.max_records
-                || self
-                    .captures
-                    .iter()
-                    .filter_map(|c| c.bytes_rgba8.as_ref())
-                    .map(Vec::len)
-                    .fold(0usize, usize::saturating_add)
-                    > self.max_bytes
+            let incoming_bytes = capture.bytes_rgba8.as_ref().map_or(0, Vec::len);
+            if self.max_records == 0 || incoming_bytes > self.max_bytes {
+                // Never clone a payload larger than the derived view's
+                // capacity or erase good older data to make room for it.
+                self.record_loss(capture.identity.clone());
+                continue;
+            }
+            while self.captures.len() >= self.max_records
+                || retained_bytes > self.max_bytes.saturating_sub(incoming_bytes)
             {
                 let evicted = self.captures.remove(0);
-                self.dropped_observations = self.dropped_observations.saturating_add(1);
-                self.last_dropped_identity = Some(evicted.identity);
+                let evicted_bytes = evicted.bytes_rgba8.as_ref().map_or(0, Vec::len);
+                retained_bytes = retained_bytes.saturating_sub(evicted_bytes);
+                self.record_loss(evicted.identity);
             }
+            self.captures.push(capture.clone());
+            retained_bytes = retained_bytes.saturating_add(incoming_bytes);
         }
+    }
+
+    fn record_loss(&mut self, identity: RenderCaptureIdentity) {
+        self.dropped_observations = self.dropped_observations.saturating_add(1);
+        self.last_dropped_identity = Some(identity);
     }
 
     /// Exact source lookup; this is observation, not semantic verification.
@@ -466,6 +480,37 @@ mod tests {
                     "surface.color"
                 )
                 .is_none()
+        );
+    }
+
+    #[test]
+    fn oversized_observation_is_reported_without_erasing_earlier_source() {
+        let mut view = RenderCapturedTextureState::with_limits(4, 20);
+        let mut first = capture_with_test_pixels();
+        first.identity.frame_index = 1;
+        view.observe_frame(1, &[first]);
+        let mut oversized = capture_with_test_pixels();
+        oversized.identity.frame_index = 2;
+        oversized.bytes_rgba8 = Some(vec![6; 40]);
+        view.observe_frame(2, &[oversized]);
+        assert_eq!(view.dropped_observations, 1);
+        assert_eq!(
+            view.last_dropped_identity
+                .as_ref()
+                .map(|value| value.frame_index),
+            Some(2)
+        );
+        assert_eq!(view.captures.len(), 1);
+        assert!(
+            view.find_from_source(
+                1,
+                1,
+                "flow.main",
+                "pass.compose",
+                CaptureStage::After,
+                "surface.color"
+            )
+            .is_some()
         );
     }
 

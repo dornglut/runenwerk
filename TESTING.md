@@ -238,7 +238,7 @@ once after primary success, deferral or failure and after secondary success,
 deferral or failure. Observations for earlier source `(frame_index,surface_id)`
 are routed to **existing** diagnostic transactions, without fabricating
 a transaction for a deferred/unsubmitted frame. The derived ECS capture view
-retains up to 64 records and 64 MiB across source identities. Overflow
+retains up to 64 records and 64 MiB across source identities. Overflow (old-record eviction or oversized incoming capture rejection)
 increments `dropped_observations` and retains `last_dropped_identity`;
 unscoped matching captures on multiple surfaces are refused, while
 `find_from_source` requires exact origin. Unit tests check independent

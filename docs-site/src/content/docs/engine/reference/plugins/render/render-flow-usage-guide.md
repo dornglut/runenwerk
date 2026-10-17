@@ -430,9 +430,9 @@ frame ordinal from overwriting the first surface's manifest. These are export
 identity and isolation guarantees only. Terminal capture readbacks are drained once
 on primary success/deferral/error and secondary success/deferral/error into
 bounded derived ECS observations and any already-pending source-keyed diagnostics.
-ECS retains up to 64 observations and 64 MiB across sources; evictions increment
-`dropped_observations` and record `last_dropped_identity` rather than silently
-implying verification. `find_from_source(frame,surface,...)` provides exact
+ECS retains up to 64 observations and 64 MiB across sources; capacity loss
+(eviction or rejection of an oversized readback) increments `dropped_observations`
+and records `last_dropped_identity` without silently implying verification. `find_from_source(frame,surface,...)` provides exact
 origin lookup, while unscoped `find(...)` refuses matching captures from different
 surfaces. This ECS view is **not** a lossless semantic producer queue. Secondary
 success still does not create its own full diagnostics transaction/report.
