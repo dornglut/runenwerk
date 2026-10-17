@@ -14,9 +14,26 @@ const MAX_PENDING_DIAGNOSTIC_TRANSACTIONS: usize = 8;
 const MAX_RETAINED_DIAGNOSTIC_CAPTURE_BYTES: usize = 64 * 1024 * 1024;
 const CAPTURE_BYTE_CAPACITY_REASON: &str = "diagnostics_capture_byte_capacity_exceeded";
 
+/// Correlation key for product diagnostic work. A host-frame ordinal is not
+/// globally unique when more than one render surface participates.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+struct RenderFrameDiagnosticsKey {
+    frame_index: u64,
+    surface_id: u64,
+}
+
+impl RenderFrameDiagnosticsKey {
+    const fn new(frame_index: u64, surface_id: u64) -> Self {
+        Self {
+            frame_index,
+            surface_id,
+        }
+    }
+}
+
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub(crate) struct RenderFrameDiagnosticsTransactionState {
-    pending: BTreeMap<u64, RenderFrameDiagnosticsTransaction>,
+    pending: BTreeMap<RenderFrameDiagnosticsKey, RenderFrameDiagnosticsTransaction>,
     max_pending_transactions: usize,
     max_retained_capture_bytes: usize,
 }
@@ -34,6 +51,7 @@ impl Default for RenderFrameDiagnosticsTransactionState {
 #[derive(Debug)]
 pub(crate) struct RenderFrameDiagnosticsSnapshot {
     pub frame_index: u64,
+    pub surface_id: u64,
     pub simulation_tick: u64,
     pub provenance: Vec<RenderPassProvenanceRecord>,
     pub capture_plan: ResolvedRenderCapturePlan,
@@ -57,6 +75,7 @@ enum RenderFrameDiagnosticsCompletionMode {
 #[derive(Debug)]
 struct RenderFrameDiagnosticsTransaction {
     frame_index: u64,
+    surface_id: u64,
     simulation_tick: u64,
     provenance: Vec<RenderPassProvenanceRecord>,
     capture_plan: ResolvedRenderCapturePlan,
@@ -106,21 +125,21 @@ impl RenderFrameDiagnosticsTransactionState {
         results: Vec<RenderCaptureSelectorResult>,
     ) -> Vec<CompletedRenderFrameDiagnostics> {
         for capture in captures {
-            let frame_index = capture.identity.frame_index;
-            if let Some(transaction) = self.pending.get_mut(&frame_index) {
+            let key = RenderFrameDiagnosticsKey::new(
+                capture.identity.frame_index,
+                capture.identity.surface_id(),
+            );
+            if let Some(transaction) = self.pending.get_mut(&key) {
                 transaction.observe_capture(capture, usize::MAX);
             }
         }
 
         for result in results {
-            let Some(frame_index) = result
-                .frame_identity
-                .as_ref()
-                .map(|identity| identity.frame_index)
-            else {
+            let Some(identity) = result.frame_identity.as_ref() else {
                 continue;
             };
-            if let Some(transaction) = self.pending.get_mut(&frame_index) {
+            let key = RenderFrameDiagnosticsKey::new(identity.frame_index, identity.surface_id());
+            if let Some(transaction) = self.pending.get_mut(&key) {
                 transaction.observe_capture_result(result);
             }
         }
@@ -144,6 +163,7 @@ impl RenderFrameDiagnosticsTransactionState {
         results: Vec<RenderCaptureSelectorResult>,
     ) -> Vec<CompletedRenderFrameDiagnostics> {
         let frame_index = snapshot.frame_index;
+        let key = RenderFrameDiagnosticsKey::new(frame_index, snapshot.surface_id);
         let mut transaction = RenderFrameDiagnosticsTransaction::new(snapshot);
         for result in results {
             transaction.observe_capture_result(result);
@@ -157,11 +177,12 @@ impl RenderFrameDiagnosticsTransactionState {
             return vec![transaction.into_completion()];
         }
 
-        if self.pending.contains_key(&frame_index) {
+        if self.pending.contains_key(&key) {
             transaction.fail_capacity(
                 "diagnostics_frame_already_pending",
                 format!(
-                    "a product diagnostics transaction for semantic frame {frame_index} already exists"
+                    "a product diagnostics transaction for frame {frame_index} surface {} already exists",
+                    key.surface_id
                 ),
             );
             return vec![transaction.into_completion()];
@@ -186,7 +207,7 @@ impl RenderFrameDiagnosticsTransactionState {
         if transaction.is_complete() {
             vec![transaction.into_completion()]
         } else {
-            self.pending.insert(frame_index, transaction);
+            self.pending.insert(key, transaction);
             Vec::new()
         }
     }
@@ -202,13 +223,11 @@ impl RenderFrameDiagnosticsTransactionState {
         let completed = self
             .pending
             .iter()
-            .filter_map(|(frame_index, transaction)| {
-                transaction.is_complete().then_some(*frame_index)
-            })
+            .filter_map(|(key, transaction)| transaction.is_complete().then_some(*key))
             .collect::<Vec<_>>();
         completed
             .into_iter()
-            .filter_map(|frame_index| self.pending.remove(&frame_index))
+            .filter_map(|key| self.pending.remove(&key))
             .map(RenderFrameDiagnosticsTransaction::into_completion)
             .collect()
     }
@@ -261,6 +280,7 @@ impl RenderFrameDiagnosticsTransaction {
 
         Self {
             frame_index: snapshot.frame_index,
+            surface_id: snapshot.surface_id,
             simulation_tick: snapshot.simulation_tick,
             provenance: snapshot.provenance,
             capture_plan: snapshot.capture_plan,
@@ -282,7 +302,9 @@ impl RenderFrameDiagnosticsTransaction {
     }
 
     fn observe_capture(&mut self, mut capture: RenderCapturedTexture, available_bytes: usize) {
-        if capture.identity.frame_index != self.frame_index {
+        if capture.identity.frame_index != self.frame_index
+            || capture.identity.surface_id() != self.surface_id
+        {
             return;
         }
         if self
@@ -314,12 +336,9 @@ impl RenderFrameDiagnosticsTransaction {
     }
 
     fn observe_capture_result(&mut self, result: RenderCaptureSelectorResult) {
-        let result_frame = result
-            .frame_identity
-            .as_ref()
-            .map(|identity| identity.frame_index)
-            .unwrap_or(self.frame_index);
-        if result_frame != self.frame_index {
+        if result.frame_identity.as_ref().is_some_and(|identity| {
+            identity.frame_index != self.frame_index || identity.surface_id() != self.surface_id
+        }) {
             return;
         }
         if self.capture_results.contains_key(&result.selector_index) {
@@ -793,6 +812,7 @@ mod tests {
     ) -> RenderFrameDiagnosticsSnapshot {
         RenderFrameDiagnosticsSnapshot {
             frame_index,
+            surface_id: 1,
             simulation_tick: frame_index.saturating_mul(10),
             provenance: Vec::new(),
             capture_plan,
@@ -1054,7 +1074,11 @@ mod tests {
             vec![result_for(&left_capture, 0)],
         );
         assert!(
-            state.pending.get(&13).unwrap().texture_diffs[0]
+            state
+                .pending
+                .get(&RenderFrameDiagnosticsKey::new(13, 1))
+                .unwrap()
+                .texture_diffs[0]
                 .result
                 .is_none()
         );
@@ -1068,7 +1092,10 @@ mod tests {
                 )
                 .is_empty()
         );
-        let pending = state.pending.get(&13).unwrap();
+        let pending = state
+            .pending
+            .get(&RenderFrameDiagnosticsKey::new(13, 1))
+            .unwrap();
         assert!(pending.texture_diffs[0].result.is_some());
         assert!(pending.captures.is_empty());
     }
@@ -1466,7 +1493,10 @@ mod tests {
                 )
                 .is_empty()
         );
-        let pending = state.pending.get(&26).unwrap();
+        let pending = state
+            .pending
+            .get(&RenderFrameDiagnosticsKey::new(26, 1))
+            .unwrap();
         assert_eq!(pending.retained_capture_bytes(), 0);
         assert!(
             pending
@@ -1511,6 +1541,63 @@ mod tests {
                 && error.contains("artifact export requires capture bytes")
         }));
         assert!(!output.exists());
+    }
+
+    #[test]
+    fn identical_frame_ordinals_are_isolated_by_originating_surface() {
+        let selector = selector("pass.same.ordinal");
+        let mut state = RenderFrameDiagnosticsTransactionState::default();
+        let first = snapshot(
+            41,
+            pending_plan(41, std::slice::from_ref(&selector)),
+            vec![],
+            vec![],
+        );
+        let mut second = snapshot(
+            41,
+            pending_plan(41, std::slice::from_ref(&selector)),
+            vec![],
+            vec![],
+        );
+        second.surface_id = 2;
+        second.simulation_tick = 420;
+        for entry in &mut second.capture_plan.selectors {
+            if let RenderSelectorResolution::Pending { frame_identity, .. } =
+                &mut entry.resolution
+            {
+                frame_identity.surface_id = 2;
+            }
+        }
+        assert!(state.begin_frame(first, vec![], vec![]).is_empty());
+        assert!(state.begin_frame(second, vec![], vec![]).is_empty());
+        assert_eq!(state.pending_count(), 2);
+
+        // Same selector index, frame ordinal and pass. Only the originating
+        // surface may receive this terminal readback/result pair.
+        let mut secondary_capture = capture(41, &selector, [2, 3, 4, 255]);
+        secondary_capture.identity.surface_id = 2;
+        let completed_secondary = state.observe_terminal_captures(
+            vec![secondary_capture.clone()],
+            vec![result_for(&secondary_capture, 0)],
+        );
+        assert_eq!(completed_secondary.len(), 1);
+        assert_eq!(completed_secondary[0].simulation_tick, 420);
+        assert_eq!(state.pending_count(), 1);
+        assert!(state
+            .pending
+            .contains_key(&RenderFrameDiagnosticsKey::new(41, 1)));
+        assert!(!state
+            .pending
+            .contains_key(&RenderFrameDiagnosticsKey::new(41, 2)));
+
+        let primary_capture = capture(41, &selector, [1, 2, 3, 255]);
+        let completed_primary = state.observe_terminal_captures(
+            vec![primary_capture.clone()],
+            vec![result_for(&primary_capture, 0)],
+        );
+        assert_eq!(completed_primary.len(), 1);
+        assert_eq!(completed_primary[0].simulation_tick, 410);
+        assert_eq!(state.pending_count(), 0);
     }
 
     #[test]

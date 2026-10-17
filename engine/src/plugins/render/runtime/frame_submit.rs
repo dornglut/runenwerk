@@ -925,13 +925,19 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 let semantic_frame_index = prepared_frame.context.frame_index;
                 let (current_captures, delayed_captures): (Vec<_>, Vec<_>) = published_captures
                     .into_iter()
-                    .partition(|capture| capture.identity.frame_index == semantic_frame_index);
+                    .partition(|capture| {
+                        capture.identity.frame_index == semantic_frame_index
+                            && capture.identity.surface_id() == render_surface_id.raw()
+                    });
                 let (current_capture_results, delayed_capture_results): (Vec<_>, Vec<_>) =
                     published_capture_results.into_iter().partition(|result| {
                         result
                             .frame_identity
                             .as_ref()
-                            .is_none_or(|identity| identity.frame_index == semantic_frame_index)
+                            .is_none_or(|identity| {
+                                identity.frame_index == semantic_frame_index
+                                    && identity.surface_id() == render_surface_id.raw()
+                            })
                     });
 
                 let mut diagnostics_transactions = world
@@ -945,6 +951,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                         diagnostics_transactions.begin_frame(
                             RenderFrameDiagnosticsSnapshot {
                                 frame_index: semantic_frame_index,
+                                surface_id: render_surface_id.raw(),
                                 simulation_tick: diagnostics_simulation_tick,
                                 provenance: gfx.renderer.last_pass_provenance().to_vec(),
                                 capture_plan: gfx.renderer.last_capture_plan().clone(),
