@@ -294,11 +294,11 @@ mod tests {
         );
         assert_eq!(
             state.capture_artifact_manifest_for_source(9, 1),
-            Some(PathBuf::from("surface-1.json").as_path())
+            Some(&PathBuf::from("surface-1.json"))
         );
         assert_eq!(
             state.capture_artifact_manifest_for_source(9, 2),
-            Some(PathBuf::from("surface-2.json").as_path())
+            Some(&PathBuf::from("surface-2.json"))
         );
         assert_eq!(
             state.latest.as_ref().map(|report| report.surface_id),
