@@ -53,15 +53,6 @@ pub struct FrameCaptureRuntime {
 }
 
 impl FrameCaptureRuntime {
-    pub fn new(
-        frame_index: u64,
-        surface_id: u64,
-        debug_control: &RenderDebugControlResource,
-        selectors: &[RenderCaptureSelector],
-    ) -> Self {
-        Self::new_with_required(frame_index, surface_id, debug_control, selectors, &[])
-    }
-
     pub fn new_with_required(
         frame_index: u64,
         surface_id: u64,
@@ -525,7 +516,7 @@ mod tests {
             1,
             RenderCaptureTerminalCode::Unsupported,
             "bad_format",
-            "required source readback must fail closed",
+            "required source readback must fail closed".to_string(),
         );
         assert!(runtime.validate_required().is_err());
         let (plan, results) = runtime.into_plan_and_results();
@@ -542,8 +533,13 @@ mod tests {
             readback_enabled: true,
             ..RenderDebugControlResource::default()
         };
-        let mut runtime =
-            FrameCaptureRuntime::new(37, 2, &control, std::slice::from_ref(&selector));
+        let mut runtime = FrameCaptureRuntime::new_with_required(
+            37,
+            2,
+            &control,
+            std::slice::from_ref(&selector),
+            &[],
+        );
         let capture_point = selector.stable_point_fallback();
         runtime.set_matched_identity(
             0,
