@@ -13,11 +13,12 @@ use serde::Serialize;
 const RENDER_PRODUCER_ID: &str = "render.inspect";
 const RENDER_DOMAIN_ID: &str = "render";
 const RENDER_SCHEMA_ID: &str = "runenwerk.render.frame_report";
-const RENDER_SCHEMA_VERSION: u32 = 2;
+const RENDER_SCHEMA_VERSION: u32 = 3;
 
 #[derive(Debug, Serialize)]
 pub struct RenderDiagnosticsEntryDto {
     pub frame_index: u64,
+    pub surface_id: u64,
     pub provenance_count: usize,
     pub capture_selector_count: usize,
     pub capture_result_count: usize,
@@ -90,11 +91,13 @@ pub struct RenderTextureDiffDto {
 #[derive(Debug, Serialize)]
 struct RenderManifestAttachmentMetadata {
     frame_index: u64,
+    surface_id: u64,
 }
 
 #[derive(Debug, Serialize)]
 struct RenderCaptureImageAttachmentMetadata {
     frame_index: u64,
+    surface_id: u64,
     selector_index: usize,
     flow_id: String,
     pass_id: String,
@@ -105,6 +108,7 @@ struct RenderCaptureImageAttachmentMetadata {
 #[derive(Debug, Serialize)]
 struct RenderTextureDiffAttachmentMetadata {
     frame_index: u64,
+    surface_id: u64,
     diff_id: String,
 }
 
@@ -146,6 +150,7 @@ pub fn map_render_report_to_entry_dto(
 
     RenderDiagnosticsEntryDto {
         frame_index: report.frame_index,
+        surface_id: report.surface_id,
         provenance_count: report.provenance.len(),
         capture_selector_count: report.capture_plan.selectors.len(),
         capture_result_count: report.capture_results.len(),
@@ -236,7 +241,7 @@ fn map_render_report_to_submission(
 
     if let Some(manifest_path) = report.artifact_manifest_path.as_ref() {
         attachments.push(DiagnosticsAttachment {
-            attachment_id: format!("render.manifest.{}", report.frame_index),
+            attachment_id: format!("render.manifest.{}.{}", report.frame_index, report.surface_id),
             kind: "render.capture_manifest".to_string(),
             label: "Render Capture Manifest".to_string(),
             producer_id: RENDER_PRODUCER_ID.to_string(),
@@ -244,6 +249,7 @@ fn map_render_report_to_submission(
             path_or_handle: manifest_path.display().to_string(),
             metadata: Some(serde_json::to_value(RenderManifestAttachmentMetadata {
                 frame_index: report.frame_index,
+                surface_id: report.surface_id,
             })?),
         });
     }
@@ -258,7 +264,10 @@ fn map_render_report_to_submission(
             .map(|identity| identity.frame_index)
             .unwrap_or(report.frame_index);
         attachments.push(DiagnosticsAttachment {
-            attachment_id: format!("render.capture.image.{capture_frame_index}.{index}"),
+            attachment_id: format!(
+                "render.capture.image.{capture_frame_index}.{}.{index}",
+                report.surface_id
+            ),
             kind: "render.capture_image".to_string(),
             label: format!(
                 "Capture {}:{}:{}:{}",
@@ -273,6 +282,7 @@ fn map_render_report_to_submission(
             metadata: Some(serde_json::to_value(
                 RenderCaptureImageAttachmentMetadata {
                     frame_index: capture_frame_index,
+                    surface_id: report.surface_id,
                     selector_index: result.selector_index,
                     flow_id: result.capture_point.flow_id.clone(),
                     pass_id: result.capture_point.pass_id.clone(),
@@ -289,8 +299,9 @@ fn map_render_report_to_submission(
         };
         attachments.push(DiagnosticsAttachment {
             attachment_id: format!(
-                "render.texture.diff.image.{}.{}.{}",
+                "render.texture.diff.image.{}.{}.{}.{}",
                 report.frame_index,
+                report.surface_id,
                 index,
                 sanitize_token(diff.diff_id.as_str())
             ),
@@ -301,6 +312,7 @@ fn map_render_report_to_submission(
             path_or_handle: path.display().to_string(),
             metadata: Some(serde_json::to_value(RenderTextureDiffAttachmentMetadata {
                 frame_index: report.frame_index,
+                surface_id: report.surface_id,
                 diff_id: diff.diff_id.clone(),
             })?),
         });
@@ -331,7 +343,7 @@ fn map_render_report_to_submission(
         frame_index: report.frame_index,
         simulation_tick,
         entry: DiagnosticsEntry {
-            entry_id: format!("render.inspect.frame.{}", report.frame_index),
+            entry_id: format!("render.inspect.frame.{}.{}", report.frame_index, report.surface_id),
             producer_id: RENDER_PRODUCER_ID.to_string(),
             domain_id: RENDER_DOMAIN_ID.to_string(),
             schema_id: RENDER_SCHEMA_ID.to_string(),
@@ -444,8 +456,31 @@ mod tests {
         assert_eq!(submission.entry.producer_id, "render.inspect");
         assert_eq!(submission.entry.domain_id, "render");
         assert_eq!(submission.entry.schema_id, "runenwerk.render.frame_report");
-        assert_eq!(submission.entry.schema_version, 2);
+        assert_eq!(submission.entry.schema_version, 3);
         assert_eq!(submission.simulation_tick, 0);
+    }
+
+    #[test]
+    fn same_frame_distinct_surfaces_have_distinct_entry_and_attachment_ids() {
+        let first = RenderDebugFrameReport {
+            frame_index: 7,
+            surface_id: 1,
+            artifact_manifest_path: Some("surface-one.json".into()),
+            ..RenderDebugFrameReport::default()
+        };
+        let second = RenderDebugFrameReport {
+            surface_id: 2,
+            artifact_manifest_path: Some("surface-two.json".into()),
+            ..first.clone()
+        };
+        let left = map_render_report_to_submission(&first, 42).unwrap();
+        let right = map_render_report_to_submission(&second, 42).unwrap();
+        assert_ne!(left.entry.entry_id, right.entry.entry_id);
+        assert_ne!(left.entry.attachment_ids, right.entry.attachment_ids);
+        assert_eq!(left.entry.schema_version, 3);
+        assert_eq!(right.entry.schema_version, 3);
+        assert_eq!(left.entry.payload_json["surface_id"], 1);
+        assert_eq!(right.entry.payload_json["surface_id"], 2);
     }
 
     #[test]

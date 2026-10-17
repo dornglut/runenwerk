@@ -127,8 +127,13 @@ window frame ordinals and selector indices cannot route terminal captures to a
 foreign transaction; primary report partitioning also treats a same-frame capture
 from another surface as foreign terminal input. A same-frame/two-surface
 regression covers delayed completion.
-Secondary-surface diagnostics creation, surface-keyed ECS transport, bounded
-multi-surface readback retirement and exact G5 result delivery remain unqualified.
+Secondary-surface diagnostics now begin on successful secondary submissions
+when normal full-report policy is enabled, with their own capture plan,
+source scope and simulation-tick snapshot. Completed reports and canonical
+diagnostics entries now carry exact (frame, surface) identity. Source-keyed
+bounded ECS delivery and accepted G5 readback association have separate
+proofs; full native concurrent/deferred-primary stress and lossless producer
+result delivery remain unqualified.
 It rejects shader fallback rather than permitting a no-op simulation.
 
 This is a **hosted software Vulkan execution proof**, not a native end-user
@@ -246,9 +251,10 @@ same-ordinal surfaces and observable bounded eviction.
 
 This is **not** producer-semantic proof or lossless delivery: losing a capture
 cannot advance a producer verification cursor. Complete new-secondary
-diagnostic/report initiation, end-to-end native sustained deferral/capture
-stress, exact G5 capture-to-submission evidence, partially executed GPU state
-restoration, unrelated same-surface progress and real original/species boids
+diagnostic initiation and accepted G5 capture receipt association are now
+implemented in later increments; end-to-end native sustained two-surface
+deferral/capture stress, partially executed GPU state restoration,
+unrelated same-surface progress and real original/species boids
 120+ visible frames still require their own qualification.
 
 ## RW-1291-G5CAP08 — exact accepted readback/producer receipt correlation (draft)
@@ -275,3 +281,30 @@ validated pixel meaning, zero-gap delivery, or successful retained-state
 reconstruction. This is a source/provenance API and one native smoke assertion,
 not a general lossless producer verification queue or end-to-end
 cross-surface/recovery qualification.
+
+## RW-1291-SURF10 — full source-keyed secondary diagnostic reports (draft)
+
+A successfully submitted secondary surface now begins the normal full
+diagnostic transaction from its own submission-time resolved capture plan,
+provenance, original simulation tick, selector results and readback observations,
+using `(frame_index, surface_id)` as the transaction identity. Progressed
+terminal observations for earlier sources remain routed to their already
+pending source transactions. A deferred or rejected *new* surface never
+fabricates a successfully submitted diagnostic snapshot.
+
+Completed `RenderDebugFrameReport` includes `surface_id`. Bounded report
+history is keyed by `(frame, surface)`, with exact-source methods and
+frame-only legacy convenience lookups that refuse an ambiguous collision.
+Canonical render diagnostics payload schema version 3 adds `surface_id`;
+entry and artifact attachment IDs also include source surface to prevent
+different windows at the same frame ordinal from sharing identifiers.
+Regression tests cover same-frame two-surface completed report isolation,
+unique canonical diagnostic/attachment IDs, and retained original tick
+and surface in delayed transactions.
+
+This is a Runenwerk diagnostics delivery and source-provenance correction,
+not RunenGPU lifecycle authority. These bounded diagnostic surfaces are not
+a lossless producer-verification transport. Validation of genuinely
+simultaneous native windows, deferred primary with secondary readback,
+resource-sharing across surfaces, partial-failure restoration, and original
+boids / `--species` at 120+ visible frames remains separately required.

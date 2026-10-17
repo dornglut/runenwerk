@@ -575,6 +575,7 @@ impl RenderFrameDiagnosticsTransaction {
             simulation_tick: self.simulation_tick,
             report: RenderDebugFrameReport {
                 frame_index: self.frame_index,
+                surface_id: self.surface_id,
                 provenance: self.provenance,
                 capture_plan: self.capture_plan,
                 capture_results: self.capture_results.into_values().collect(),
@@ -1588,6 +1589,7 @@ mod tests {
         );
         assert_eq!(completed_secondary.len(), 1);
         assert_eq!(completed_secondary[0].simulation_tick, 420);
+        assert_eq!(completed_secondary[0].report.surface_id, 2);
         assert_eq!(state.pending_count(), 1);
         assert!(
             state
@@ -1607,6 +1609,7 @@ mod tests {
         );
         assert_eq!(completed_primary.len(), 1);
         assert_eq!(completed_primary[0].simulation_tick, 410);
+        assert_eq!(completed_primary[0].report.surface_id, 1);
         assert_eq!(state.pending_count(), 0);
     }
 

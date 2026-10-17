@@ -1140,6 +1140,8 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             preflight_config,
             &debug_control,
             &debug_config,
+            diagnostics_policy,
+            diagnostics_simulation_tick,
         ) {
             Ok(additional_deferred) => {
                 deferred_deterministic_contributions.extend(additional_deferred)
@@ -1375,6 +1377,8 @@ fn render_additional_surfaces(
     preflight_config: RenderPreflightValidationConfigResource,
     debug_control: &RenderDebugControlResource,
     debug_config: &RenderDebugConfigResource,
+    diagnostics_policy: RenderFrameDiagnosticsPolicyResource,
+    diagnostics_simulation_tick: u64,
 ) -> AdditionalSurfaceRenderResult {
     let mut deferred = Vec::new();
     for (prepared_frame_index, prepared_frame) in prepared_frames.iter().enumerate() {
@@ -1481,8 +1485,50 @@ fn render_additional_surfaces(
                 AdditionalSurfaceRenderOutcome::Deferred
             }
             Ok(timings) => {
-                // Secondary success is also a terminal observation drain point.
-                publish_progressed_gpu_captures(world, gfx, prepared_frame.context.frame_index);
+                // Route terminal observations from other sources to their
+                // pending transactions, but keep this source's results for its
+                // own immutable submission-time diagnostics snapshot.
+                let (current_captures, current_results, mut completed_reports) =
+                    drain_progressed_gpu_captures(
+                        world,
+                        gfx,
+                        prepared_frame.context.frame_index,
+                        Some((prepared_frame.context.frame_index, render_surface_id.raw())),
+                    );
+                let workload_ms = timings.renderer.prepare_ui_ms
+                    + timings.renderer.prepare_mesh_ms
+                    + timings.renderer.world_prepare_ms
+                    + timings.renderer.preflight_ms
+                    + timings.renderer.flow_encode_ms
+                    + timings.renderer.encode_submit_ms;
+                if should_build_full_render_diagnostics(
+                    diagnostics_policy,
+                    debug_control,
+                    debug_config,
+                    workload_ms,
+                ) {
+                    let mut transactions = world
+                        .remove_resource::<RenderFrameDiagnosticsTransactionState>()
+                        .unwrap_or_default();
+                    completed_reports.extend(transactions.begin_frame(
+                        RenderFrameDiagnosticsSnapshot {
+                            frame_index: prepared_frame.context.frame_index,
+                            surface_id: render_surface_id.raw(),
+                            simulation_tick: diagnostics_simulation_tick,
+                            provenance: gfx.renderer.last_pass_provenance().to_vec(),
+                            capture_plan: gfx.renderer.last_capture_plan().clone(),
+                            pixel_probes: debug_config.pixel_probes.clone(),
+                            texture_diffs: debug_config.texture_diffs.clone(),
+                            artifact_output_dir: debug_control
+                                .artifact_export_enabled
+                                .then(|| debug_control.artifact_output_dir.clone()),
+                        },
+                        current_captures,
+                        current_results,
+                    ));
+                    world.insert_resource(transactions);
+                }
+                publish_completed_render_frame_reports(world, completed_reports);
                 let history_enabled = observe_submitted_frame_history(
                     world,
                     prepared_frame,

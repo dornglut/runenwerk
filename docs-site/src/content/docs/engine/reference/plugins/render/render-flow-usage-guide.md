@@ -434,8 +434,21 @@ ECS retains up to 64 observations and 64 MiB across sources; capacity loss
 (eviction or rejection of an oversized readback) increments `dropped_observations`
 and records `last_dropped_identity` without silently implying verification. `find_from_source(frame,surface,...)` provides exact
 origin lookup, while unscoped `find(...)` refuses matching captures from different
-surfaces. This ECS view is **not** a lossless semantic producer queue. Secondary
-success still does not create its own full diagnostics transaction/report.
+surfaces. This ECS view is **not** a lossless semantic producer queue. A successful
+secondary surface now starts its own full diagnostics transaction when the
+normal diagnostics policy enables one; its capture plan, provenance, requests,
+source identity and original simulation tick are snapshotted at submission,
+independent of a deferred primary. Already-completing observations of other
+surfaces are delivered to their original transactions exactly once. The
+completed `RenderDebugFrameReport`, report history and canonical diagnostics
+entry/attachment identities all distinguish `(frame_index, surface_id)`.
+Use `capture_results_for_source`, `texture_diff_results_for_source` or
+`capture_artifact_manifest_for_source` to inspect concurrent sources:
+frame-only convenience lookups refuse ambiguity. Canonical render report
+payload schema version 3 adds `surface_id`, so diagnostics consumers
+can distinguish reports from separate windows. Full native deferred-primary /
+active-secondary stress, and lossless producer result delivery remain separate
+qualification requirements.
 Accepted GPU readbacks now carry a typed `submission_receipt` containing the
 exact G5 submission ID, context/device affinity and readback ID. A producer
 may compare this receipt with its own retained `GpuSubmission` using
