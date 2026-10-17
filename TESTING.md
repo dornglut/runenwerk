@@ -263,9 +263,12 @@ RGBA payload, matching submission ID and affinity, that submission's physical
 `Completed` status, and the exact readback's `Ready` status.
 Preaccept/unsupported capture failures cannot synthesize a receipt.
 
-The native historical fixed-step smoke additionally rejects evidence if the
-derived ECS capture window reports lost observations, and pairs real green
-and blue pixel verification with the exact accepted producer submission's
+The native historical fixed-step smoke tracks observation loss separately
+for each accepted G5 producer interval. Eviction while that exact interval
+awaits semantic verification invalidates its diagnostic evidence; once the
+producer commits the interval, later permitted diagnostic history eviction
+does not retroactively invalidate the committed state. Real green and blue
+pixel verification still requires the exact accepted producer submission's
 readback receipt. Pixel comparison and producer-owned `commit_verified`
 remain **separate** operations. No field or method here asserts Present,
 validated pixel meaning, zero-gap delivery, or successful retained-state

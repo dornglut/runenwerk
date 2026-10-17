@@ -1161,6 +1161,8 @@ struct NativeHistoricalGpuHook {
     frames: u32,
     first_submission: Option<runen_gpu::GpuSubmissionId>,
     second_submission: Option<runen_gpu::GpuSubmissionId>,
+    /// Scoped to one accepted producer interval, never all past diagnostic images.
+    capture_loss_scope: Option<(runen_gpu::GpuSubmissionId, u64)>,
     saw_terminal: bool,
     saw_second_terminal: bool,
     saw_gpu_frame: bool,
@@ -1394,13 +1396,6 @@ impl NativeHistoricalGpuHook {
                             .first_capture_frame
                             .is_none_or(|first| capture.identity.frame_index > first))
             };
-        anyhow::ensure!(
-            world
-                .resource::<RenderCapturedTextureState>()?
-                .dropped_observations
-                == 0,
-            "native producer diagnostic capture observation history has a delivery gap"
-        );
         // A bounded diagnostics view contains historical captures after a
         // producer has committed its earlier interval. Those samples are not
         // evidence for another interval and must not require a live receipt.
@@ -1410,6 +1405,28 @@ impl NativeHistoricalGpuHook {
             .resource::<RenderGpuFlowStepStreams>()?
             .stream(self.flow)
             .and_then(|producer| producer.accepted_submission());
+        let dropped_observations = world
+            .resource::<RenderCapturedTextureState>()?
+            .dropped_observations;
+        // Only an *active* accepted interval has unconsumed producer evidence.
+        // Once verified, bounded diagnostic history may evict old pixels without
+        // retroactively invalidating the producer-owned committed state.
+        if let Some(submission) = accepted_submission {
+            match self.capture_loss_scope {
+                Some((id, earlier_loss)) if id == submission.id() => {
+                    anyhow::ensure!(
+                        dropped_observations == earlier_loss,
+                        "native producer lost capture evidence while G5 submission {} awaited verification",
+                        id
+                    );
+                }
+                _ => {
+                    self.capture_loss_scope = Some((submission.id(), dropped_observations));
+                }
+            }
+        } else {
+            self.capture_loss_scope = None;
+        }
         let capture = world
             .resource::<RenderCapturedTextureState>()
             .ok()
@@ -1730,6 +1747,7 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             frames: 0,
             first_submission: None,
             second_submission: None,
+            capture_loss_scope: None,
             saw_terminal: false,
             saw_second_terminal: false,
             saw_gpu_frame: false,
