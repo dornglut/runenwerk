@@ -125,6 +125,11 @@ jobs:
               cargo +stable test -p engine \
                 --test native_host_smoke \
                 --locked
+          RUNENWERK_NATIVE_HISTORICAL_GPU_SMOKE=1 \
+            xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+              cargo +stable test -p engine \
+                --test native_host_smoke \
+                --locked
 
       - name: Run maintained arena presentation GPU proof
         env:
@@ -145,6 +150,26 @@ jobs:
           set -euo pipefail
           cargo +stable test -p engine \
             --test runenrender_ordinary_public_api \
+            --locked -- --nocapture --test-threads=1
+
+      - name: Prove downstream retained cross-frame G5 submission semantics
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            --test render_gpu_retained_cross_frame \
+            --locked -- --nocapture --test-threads=1
+
+      - name: Prove downstream fixed GPU step continuity under deferred frames
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            --test render_gpu_fixed_step_continuity \
             --locked -- --nocapture --test-threads=1
 
   runenrender-r6-vulkan-render-lab:

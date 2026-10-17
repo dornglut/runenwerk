@@ -118,7 +118,9 @@ impl RenderFixedStepIterationUniform {
     }
 
     pub fn from_uniform_bytes(bytes: &[u8]) -> Option<Self> {
-        bytemuck::try_from_bytes::<RenderFixedStepIterationUniformRaw>(bytes)
+        // Prepared uniforms are transported as Vec<u8>; typed alignment is
+        // not guaranteed by that representation. Decode by value.
+        bytemuck::try_pod_read_unaligned::<RenderFixedStepIterationUniformRaw>(bytes)
             .ok()
             .map(|raw| Self {
                 substep_index: raw.substep_index,
@@ -321,5 +323,27 @@ where
         let params = (self.build)(state, surface_size);
         let raw = params.to_gpu();
         Some(crate::plugins::render::bytemuck::bytes_of(&raw).to_vec())
+    }
+}
+
+#[cfg(test)]
+mod fixed_step_uniform_tests {
+    use super::*;
+
+    #[test]
+    fn decoded_fixed_step_uniform_accepts_unaligned_bytes_without_partial_reads() {
+        let expected = RenderFixedStepIterationUniform::new(1, 3, 4, 9, 1.0 / 60.0, 0.125);
+        let bytes = expected.to_uniform_bytes();
+        let mut prefixed = vec![0u8];
+        prefixed.extend_from_slice(&bytes);
+        assert_eq!(
+            RenderFixedStepIterationUniform::from_uniform_bytes(&prefixed[1..]),
+            Some(expected),
+        );
+        assert!(
+            RenderFixedStepIterationUniform::from_uniform_bytes(&prefixed[1..prefixed.len() - 1])
+                .is_none(),
+            "truncated iteration projections must not be accepted"
+        );
     }
 }

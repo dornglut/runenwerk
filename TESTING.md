@@ -55,6 +55,87 @@ RUNENRENDER_R8_REQUIRE_GPU=1 cargo +stable test -p engine --test runenrender_ord
 
 The execution case authors its own renderer scene, request, semantic surface input, availability fact, and output destination using only the candidate transferable RunenRender surface plus public RunenGPU. It requests its own headless RunenGPU context without Runenwerk GPU-context policy, submits through `submit_render`, and requires the returned public RunenGPU submission to complete. The ordinary path authors no CPU readback and does not depend on App/ECS/Winit/World/Render-Lab/private deterministic modules.
 
+## Downstream stateful RunenGPU G5 conformance
+
+The native Vulkan consumer lane also exercises the public RunenGPU retained-work
+integration boundary used by Runenwerk. These tests request a headless GPU
+context and MUST fail, rather than silently skip, when the required adapter is
+unavailable in the hosted lane:
+
+```bash
+RUNENWERK_G5_REQUIRE_GPU=1 cargo +stable test -p engine --test render_gpu_retained_cross_frame --locked -- --nocapture --test-threads=1
+RUNENWERK_G5_REQUIRE_GPU=1 cargo +stable test -p engine --test render_gpu_fixed_step_continuity --locked -- --nocapture --test-threads=1
+```
+
+The first proves conservative read-only retained-resource exclusion, independent
+retained-resource admission, terminal readback, and fresh post-terminal
+submission. The native historical RenderFlow hook also asserts that no two
+still-pending G5 frame receipts can select its registered stateful flow,
+including after its producer has committed all steps and subsequent frames
+merely read the retained counter for presentation.
+The second exercises the `RenderGpuStepDemand<T>` immutable-input transport with a test-owned producer: bounded historical input capture across
+deferred host frames, exact GPU results, transient G5 conflict followed by
+fresh preparation, and explicitly verified GPU reset followed by requeue of the
+*same* historical inputs. The recovery fixture reconstructs a semantically
+unverified **terminal-success** batch; it does not emulate an unknown
+partially executed write or device loss. These public G3/G5 tests do not
+implement production RenderFlow scheduling or prove native windowed boids
+`--species` continuity, post-failure GPU reconstruction, or visible Present.
+An exact-head green Vulkan lane is therefore a *scoped* integration result,
+not completion of [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291).
+
+## Native historical RenderFlow execution proof
+
+The hosted Vulkan native-window lane runs the opt-in
+`RUNENWERK_NATIVE_HISTORICAL_GPU_SMOKE=1` mode of
+`engine/tests/native_host_smoke.rs` on Mesa Vulkan under Xvfb. It constructs a
+real App/RenderPlugin and an ordinary composed RenderFlow with a G3-owned
+initially zeroed retained counter, independently captured heterogeneous
+producer uniforms and fixed-time controls, and a real WGSL compute mutation.
+The test requires exact G5 producer/frame receipt correspondence, terminal
+physical success and the absence of duplicated admission. A second actual
+fullscreen GPU pass reads the retained counter and colors the captured surface
+pixel green iff the original heterogeneous step values sum to exactly 6; the
+test requires that exact green RGBA pixel and only then commits the
+producer's semantic tick 3. **While the first three-step G5 batch is
+accepted but semantically unverified**, the producer captures historical step
+4 in its bounded queue and deliberately attempts a fifth input. Admission of
+that fifth input must return typed `CapacityExceeded` and the exact immutable
+unconsumed payload, without advancing the requested or verified cursor,
+consuming queued history or submitting duplicate G5 work. After the first
+terminal GPU pixel oracle succeeds, the producer first *deliberately refuses*
+semantic verification and requires the exact accepted batch and queued tick 4
+to remain unchanged. Only an independent successful verification callback
+may advance the completed cursor. After first-batch verification, step 4 (captured *before* completion) proves *a new, separately
+G5-accepted GPU submission* continues retained state from 6 to 10 (exact
+blue RGBA pixel), before committing tick 4. Progressed GPU observations must reach ordinary ECS
+`RenderCapturedTextureState` for source-owned semantic verification **without**
+acquiring another surface image or duplicating either batch. The native
+producer test reads that ECS state, not renderer internals. Publication also
+survives a primary host frame's failed surface acquisition, preparation or
+G5 admission, without turning the failed frame into a submitted frame or
+Present. Secondary-surface success/error delivery and multi-surface capture
+isolation remain unqualified. Captures include an originating render surface
+in their identity, serialized manifest entries and deterministic image filenames.
+Artifact export also requires a matching `(frame, surface)` for every capture
+before writing; each frame manifest's name and payload contain its source
+surface. A two-surface regression proves collision-free same-ordinal manifests,
+independent images, both run-manifest entries, and fail-closed foreign-source
+rejection. This qualifies export source isolation only, not ECS evidence delivery.
+Pending diagnostic transactions now distinguish (frame, surface) so simultaneous
+window frame ordinals and selector indices cannot route terminal captures to a
+foreign transaction; primary report partitioning also treats a same-frame capture
+from another surface as foreign terminal input. A same-frame/two-surface
+regression covers delayed completion.
+Secondary-surface diagnostics creation, surface-keyed ECS transport, bounded
+multi-surface readback retirement and exact G5 result delivery remain unqualified.
+It rejects shader fallback rather than permitting a no-op simulation.
+
+This is a **hosted software Vulkan execution proof**, not a native end-user
+hardware/driver qualification, a raw storage-buffer readback, a proof of
+reconstruction after partial GPU failure, or original and
+`--species` boids at 120+ visible frames. Those remain #1291 acceptance work.
+
 ## Supplemental RunenRender GPU execution proof
 
 Current Runenwerk CI also runs `RunenRender Vulkan execution proofs` for pull-request feature heads, merge-group integration revisions, accepted-main pushes, and manual dispatch. It resolves and proves the selected repository revision, restricts Vulkan loading to the installed Mesa software Vulkan implementation, and runs maintained native integration, direct standalone public-consumer, founding-direct, and Render Lab temporal-quality evidence.
@@ -149,3 +230,48 @@ Report focused checks, `cargo validate`, exact-head CI, and anything not run. Do
 The accepted base, reviewed feature head, merge-group integration revision, queue/squash transition, and accepted-main push result are separate evidence stages or records. Separate stages may reference the same commit object, so each transition is verified explicitly rather than inferred from SHA equality or inequality.
 
 This file owns Runenwerk-local validation semantics. Organization-wide GitHub, review, and validation-evidence rules are owned by [`dornglut/engineering`](https://github.com/dornglut/engineering).
+
+## RW-1291-SURF07 — derived capture delivery (draft)
+
+Terminal capture/selector observations now drain from renderer lifecycle exactly
+once after primary success, deferral or failure and after secondary success,
+deferral or failure. Observations for earlier source `(frame_index,surface_id)`
+are routed to **existing** diagnostic transactions, without fabricating
+a transaction for a deferred/unsubmitted frame. The derived ECS capture view
+retains up to 64 records and 64 MiB across source identities. Overflow (old-record eviction or oversized incoming capture rejection)
+increments `dropped_observations` and retains `last_dropped_identity`;
+unscoped matching captures on multiple surfaces are refused, while
+`find_from_source` requires exact origin. Unit tests check independent
+same-ordinal surfaces and observable bounded eviction.
+
+This is **not** producer-semantic proof or lossless delivery: losing a capture
+cannot advance a producer verification cursor. Complete new-secondary
+diagnostic/report initiation, end-to-end native sustained deferral/capture
+stress, exact G5 capture-to-submission evidence, partially executed GPU state
+restoration, unrelated same-surface progress and real original/species boids
+120+ visible frames still require their own qualification.
+
+## RW-1291-G5CAP08 — exact accepted readback/producer receipt correlation (draft)
+
+Renderer terminal capture observations originating from an accepted public G5
+submission carry `RenderCaptureSubmissionReceipt`, with **that submission's
+ID, context/device-generation affinity, and exact GpuReadbackId**. A producer
+holding its own immutable accepted `GpuSubmission` must verify
+`RenderCapturedTexture::matches_completed_submission(submission)` before
+considering captured bytes: the method requires a completed capture, present
+RGBA payload, matching submission ID and affinity, that submission's physical
+`Completed` status, and the exact readback's `Ready` status.
+Preaccept/unsupported capture failures cannot synthesize a receipt.
+
+The native historical fixed-step smoke tracks observation loss separately
+for each accepted G5 producer interval. Eviction while that exact interval
+awaits semantic verification invalidates its diagnostic evidence; once the
+producer commits the interval, later permitted diagnostic history eviction
+does not retroactively invalidate the committed state. Real green and blue
+pixel verification still requires the exact accepted producer submission's
+readback receipt. Pixel comparison and producer-owned `commit_verified`
+remain **separate** operations. No field or method here asserts Present,
+validated pixel meaning, zero-gap delivery, or successful retained-state
+reconstruction. This is a source/provenance API and one native smoke assertion,
+not a general lossless producer verification queue or end-to-end
+cross-surface/recovery qualification.

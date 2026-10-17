@@ -1211,6 +1211,7 @@ mod tests {
         let capture_point = selector.stable_point_fallback();
         let identity = RenderCaptureIdentity {
             frame_index: 42,
+            surface_id: 1,
             pass_label: "resolve".to_string(),
             capture_point: capture_point.clone(),
         };

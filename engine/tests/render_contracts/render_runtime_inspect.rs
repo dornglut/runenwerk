@@ -1148,6 +1148,7 @@ fn render_runtime_inspect_pass_provenance_state_preserves_required_human_fields(
 fn render_runtime_inspect_deterministic_capture_filename_uses_required_identity_tuple() {
     let identity = RenderCaptureIdentity {
         frame_index: 9,
+        surface_id: 1,
         pass_label: "runenwerk.editor.main.ui".to_string(),
         capture_point: RenderCapturePointIdentity {
             flow_id: "runenwerk.editor.main".to_string(),
@@ -1161,7 +1162,7 @@ fn render_runtime_inspect_deterministic_capture_filename_uses_required_identity_
     let name = deterministic_capture_filename(&identity, "png");
     assert_eq!(
         name,
-        "frame_9__flow_runenwerk_editor_main__pass_runenwerk_editor_main_ui__stage_before__resource_surface_color.png"
+        "frame_9__surface_1__flow_runenwerk_editor_main__pass_runenwerk_editor_main_ui__stage_before__resource_surface_color.png"
     );
 }
 

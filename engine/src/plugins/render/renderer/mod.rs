@@ -849,6 +849,8 @@ pub struct Renderer {
     last_capture_selector_results: Vec<RenderCaptureSelectorResult>,
     last_captured_textures: Vec<RenderCapturedTexture>,
     gpu_observations: render_flow::RendererGpuObservationState,
+    submission_lifecycle: render_flow::RendererSubmissionLifecycle,
+    retained_submission_trace: render_flow::RetainedSubmissionTrace,
     pending_gpu_observation_output: render_flow::RendererGpuObservationOutput,
     /// Terminal GPU/Present observations retained until the Engine's UiPlugin
     /// integration explicitly drains them. A failed render may not discard them.
@@ -856,6 +858,12 @@ pub struct Renderer {
     runenui_gpu_presented: Vec<RunenUiPublicationId>,
     runenui_gpu_rejected: Vec<(RunenUiPublicationId, &'static str)>,
 }
+
+pub use render_flow::{
+    RenderGpuFrameInvocationReceipt, RenderGpuFramePostAcceptAssociationFailure,
+    RenderGpuFrameSubmissionReceipt, RenderGpuFrameTerminalBatch,
+    RenderGpuFrameTerminalDisposition, RenderGpuFrameTerminalOutcome,
+};
 
 #[derive(Debug, runen_ecs::Component, runen_ecs::Resource)]
 pub struct Gfx {
@@ -902,6 +910,25 @@ impl Gfx {
         Vec<(RunenUiPublicationId, &'static str)>,
     ) {
         self.renderer.take_runenui_terminal_publications()
+    }
+
+    /// Exact RunenGPU accepted-submission handles correlated to ordinary
+    /// renderer frames and surfaces; statuses are read from RunenGPU itself.
+    pub fn pending_gpu_frame_submissions(&self) -> Vec<RenderGpuFrameSubmissionReceipt> {
+        self.renderer.pending_gpu_frame_submissions()
+    }
+
+    /// Opt into bounded terminal-outcome delivery before the relevant GPU
+    /// submission. Default is off to avoid accumulating unused per-frame
+    /// diagnostic history; mandatory pending submission tracking stays on.
+    pub fn set_gpu_frame_terminal_delivery(&mut self, enabled: bool) {
+        self.renderer.set_gpu_frame_terminal_delivery(enabled);
+    }
+
+    /// Consume terminal GPU outcomes without mistaking them for published
+    /// domain simulation steps or visible presentation.
+    pub fn take_gpu_frame_terminal_outcomes(&mut self) -> RenderGpuFrameTerminalBatch {
+        self.renderer.take_gpu_frame_terminal_outcomes()
     }
 
     pub fn attach_surface(
@@ -956,6 +983,7 @@ impl Gfx {
     pub fn render(
         &mut self,
         prepared_frame: &PreparedRenderFrame,
+        gpu_step_streams: &mut crate::plugins::render::RenderGpuFlowStepStreams,
         deterministic_contributions: &[crate::plugins::render::RenderDeterministicFrameContribution],
         target_requests: &crate::plugins::render::RenderDynamicTextureTargetRequestRegistryResource,
         shader_registry: &mut ShaderRegistryResource,
@@ -980,17 +1008,39 @@ impl Gfx {
         let mut timings = GfxFrameTimings::default();
         self.renderer
             .begin_frame_gpu_observation(self.ctx.context())?;
+        // Earlier terminal GPU evidence must remain publishable even when
+        // validation or surface acquisition rejects this new host frame.
+        self.renderer.publish_progressed_gpu_observations();
         let surface_contributions = deterministic_contributions_for_surface(
             deterministic_contributions,
             prepared_frame.surface.render_surface_id,
         );
+        // A registered GPU producer's idle frame may still *read* the same
+        // retained state for display. G5 reserves read-only participants too.
+        // An exact earlier composed receipt with this selected flow therefore
+        // defers a new frame even when no semantic step batch is accepted.
+        // This is conservative same-flow pacing, not G5 resource arbitration;
+        // shared resources across different flows still need G5 validation.
+        let pending_registered_flow = prepared_frame.flow_invocations.iter().any(|invocation| {
+            gpu_step_streams.stream(invocation.flow_id).is_some()
+                && self
+                    .renderer
+                    .submission_lifecycle
+                    .has_pending_flow(invocation.flow_id)
+        });
         if should_defer_deterministic_surface(
             !surface_contributions.is_empty(),
             self.renderer
                 .has_in_flight_deterministic_producer(&surface_contributions),
-        ) {
+        ) || gpu_step_streams.should_defer(prepared_frame)
+            || pending_registered_flow
+        {
+            // Progressed observations were published before deferral. This
+            // frame did not submit or acquire a surface image.
             return Ok(timings);
         }
+        // Check exact producer snapshots before leasing a G7A surface image.
+        gpu_step_streams.validate_prepared(prepared_frame)?;
         let render_surface_id = prepared_frame.surface.render_surface_id;
         let acquire_start = Instant::now();
         let acquired = self.ctx.acquire_surface_image(render_surface_id)?;
@@ -1012,8 +1062,9 @@ impl Gfx {
         );
         self.renderer.last_gpu_timing_capability = gpu_timing_capability;
         let context = self.ctx.context();
-        timings.renderer = self.renderer.render(
+        let render_result = self.renderer.render(
             context,
+            gpu_step_streams,
             acquired.texture(),
             acquired.default_view(),
             (acquired_extent.width(), acquired_extent.height()),
@@ -1034,7 +1085,11 @@ impl Gfx {
             debug_config,
             gpu_timing_capability,
             composed_gpu_timing_capability,
-        )?;
+        );
+        // G5 rejection or later renderer error must not strand terminal
+        // observations from unrelated, previously accepted GPU work.
+        self.renderer.publish_progressed_gpu_observations();
+        timings.renderer = render_result?;
         if std::env::var("GROTTO_RENDER_REALIZATION_LOG").is_ok() {
             let stats = context.program_binding_realization_stats();
             eprintln!(
@@ -1047,8 +1102,6 @@ impl Gfx {
                 stats.bind_groups()
             );
         }
-        self.renderer.publish_progressed_gpu_observations();
-
         // The one terminal Present is part of the accepted RunenGPU submission above.
         timings.submitted = true;
         timings.present_ms = 0.0;
@@ -1181,6 +1234,8 @@ mod tests {
     };
     use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::render::inspect::{
+        CaptureStage, CaptureTextureClass, RenderCaptureIdentity, RenderCapturePointIdentity,
+        RenderCaptureTerminal, RenderCapturedTexture, RenderCapturedTextureState,
         RenderComposedFrameGpuTimingEvidence, RenderGpuTimingCapability, RenderPassTimingEvidence,
     };
 
@@ -1271,6 +1326,30 @@ mod tests {
                 "compute",
                 0.5,
             ));
+        let completed_capture = RenderCapturedTexture {
+            identity: RenderCaptureIdentity {
+                frame_index: 12,
+                surface_id: 1,
+                pass_label: "pass".into(),
+                capture_point: RenderCapturePointIdentity {
+                    flow_id: "flow".into(),
+                    pass_id: "pass".into(),
+                    stage: CaptureStage::After,
+                    resource_id: "state".into(),
+                    texture_class: CaptureTextureClass::ColorTarget,
+                },
+            },
+            submission_receipt: None,
+            width: 1,
+            height: 1,
+            format: "rgba8".into(),
+            bytes_rgba8: Some(vec![6, 0, 0, 255]),
+            terminal: RenderCaptureTerminal::completed(),
+        };
+        renderer
+            .pending_gpu_observation_output
+            .captured_textures
+            .push(completed_capture.clone());
         renderer
             .pending_gpu_observation_output
             .composed_timing_evidence
@@ -1288,16 +1367,87 @@ mod tests {
         renderer.publish_progressed_gpu_observations();
         assert_eq!(renderer.last_gpu_pass_timing_evidence.len(), 1);
         assert_eq!(renderer.last_composed_gpu_timing_evidence.len(), 1);
+        assert_eq!(
+            renderer.last_captured_textures,
+            vec![completed_capture.clone()]
+        );
         assert!(
             renderer
                 .pending_gpu_observation_output
                 .timing_evidence
                 .is_empty()
         );
+        assert!(
+            renderer
+                .pending_gpu_observation_output
+                .captured_textures
+                .is_empty()
+        );
+        // Idempotent publication is required when a frame subsequently
+        // errors before acquiring or submitting fresh GPU work.
         renderer.publish_progressed_gpu_observations();
         assert_eq!(renderer.last_gpu_pass_timing_evidence.len(), 1);
+        assert_eq!(renderer.last_captured_textures, vec![completed_capture]);
         renderer.clear_published_gpu_observations();
         assert!(renderer.last_gpu_pass_timing_evidence.is_empty());
         assert!(renderer.last_composed_gpu_timing_evidence.is_empty());
+        assert!(renderer.last_captured_textures.is_empty());
+    }
+
+    #[test]
+    fn repeated_secondary_capture_handoffs_retire_renderer_bytes_and_bound_ecs_view() {
+        let mut renderer = Renderer::new();
+        let mut view = RenderCapturedTextureState::default();
+        // Pure observation-lifetime proof: no native GPU or surface is synthesized.
+        // Each completed secondary source is drained while no primary publication occurs.
+        for frame_index in 1..=96 {
+            renderer
+                .pending_gpu_observation_output
+                .captured_textures
+                .push(RenderCapturedTexture {
+                    identity: RenderCaptureIdentity {
+                        frame_index,
+                        surface_id: 2,
+                        pass_label: "pass".into(),
+                        capture_point: RenderCapturePointIdentity {
+                            flow_id: "secondary".into(),
+                            pass_id: "pass".into(),
+                            stage: CaptureStage::After,
+                            resource_id: "output".into(),
+                            texture_class: CaptureTextureClass::ColorTarget,
+                        },
+                    },
+                    submission_receipt: None,
+                    width: 1,
+                    height: 1,
+                    format: "rgba8".into(),
+                    bytes_rgba8: Some(vec![frame_index as u8, 0, 0, 255]),
+                    terminal: RenderCaptureTerminal::completed(),
+                });
+            renderer.publish_progressed_gpu_observations();
+            let terminal = renderer.take_published_captured_textures();
+            assert_eq!(terminal.len(), 1);
+            view.observe_frame(frame_index, &terminal);
+            assert!(renderer.last_captured_textures().is_empty());
+            // A later idempotent progress publication cannot redeliver drained bytes.
+            renderer.publish_progressed_gpu_observations();
+            assert!(renderer.take_published_captured_textures().is_empty());
+        }
+        assert_eq!(view.captures.len(), 64);
+        assert_eq!(view.dropped_observations, 32);
+        assert_eq!(
+            view.last_dropped_identity
+                .as_ref()
+                .map(|identity| identity.frame_index),
+            Some(32)
+        );
+        assert!(
+            view.find_from_source(96, 2, "secondary", "pass", CaptureStage::After, "output")
+                .is_some()
+        );
+        assert!(
+            view.find_from_source(1, 2, "secondary", "pass", CaptureStage::After, "output")
+                .is_none()
+        );
     }
 }

@@ -46,12 +46,14 @@ impl SelectorRuntimeState {
 #[derive(Debug, Clone)]
 pub struct FrameCaptureRuntime {
     pub frame_index: u64,
+    pub surface_id: u64,
     selectors: Vec<SelectorRuntimeState>,
 }
 
 impl FrameCaptureRuntime {
     pub fn new(
         frame_index: u64,
+        surface_id: u64,
         debug_control: &RenderDebugControlResource,
         selectors: &[RenderCaptureSelector],
     ) -> Self {
@@ -81,6 +83,7 @@ impl FrameCaptureRuntime {
 
         Self {
             frame_index,
+            surface_id,
             selectors: states,
         }
     }
@@ -411,13 +414,15 @@ mod tests {
             readback_enabled: true,
             ..RenderDebugControlResource::default()
         };
-        let mut runtime = FrameCaptureRuntime::new(37, &control, std::slice::from_ref(&selector));
+        let mut runtime =
+            FrameCaptureRuntime::new(37, 2, &control, std::slice::from_ref(&selector));
         let capture_point = selector.stable_point_fallback();
         runtime.set_matched_identity(
             0,
             capture_point.clone(),
             RenderCaptureIdentity {
                 frame_index: 37,
+                surface_id: 2,
                 pass_label: "pass".to_string(),
                 capture_point,
             },
