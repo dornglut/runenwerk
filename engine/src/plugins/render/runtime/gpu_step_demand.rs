@@ -4,7 +4,9 @@
 //! GPU resource reservation system, or a replacement for RunenGPU's G3/G5.
 //! Only the producer can certify that a prepared GPU graph faithfully lowers
 //! every captured step. An accepted submission is not a completed simulation.
-use crate::plugins::render::inspect::{RenderCaptureIdentity, RenderCaptureSubmissionReceipt};
+use crate::plugins::render::inspect::{
+    CaptureStage, RenderCaptureIdentity, RenderCaptureSelector, RenderCaptureSubmissionReceipt,
+};
 use crate::plugins::render::{PreparedRenderFrame, RenderFixedStepIterationUniform, RenderFlowId};
 use runen_gpu::{
     GpuContextAffinity, GpuReadbackId, GpuReadbackStatus, GpuSubmission, GpuSubmissionStatus,
@@ -519,6 +521,7 @@ struct AcceptedCaptureReadbacks {
 #[derive(Debug, Default, runen_ecs::Resource)]
 pub struct RenderGpuFlowStepStreams {
     streams: BTreeMap<RenderFlowId, RenderGpuStepDemand<RenderGpuFixedStepInput>>,
+    required_capture_selectors: BTreeMap<RenderFlowId, Vec<RenderCaptureSelector>>,
     accepted_capture_readbacks: BTreeMap<RenderFlowId, AcceptedCaptureReadbacks>,
 }
 
@@ -552,6 +555,69 @@ impl RenderGpuFlowStepStreams {
         flow: RenderFlowId,
     ) -> Option<&RenderGpuStepDemand<RenderGpuFixedStepInput>> {
         self.streams.get(&flow)
+    }
+
+    /// Require a canonical texture readback for this producer's semantic
+    /// verification. This is independent of optional debug capture controls.
+    /// Only exact pass/stage/source selectors can be required, and a producer
+    /// cannot change requirements while an accepted interval is unverified.
+    pub fn require_capture(
+        &mut self,
+        flow: RenderFlowId,
+        selector: RenderCaptureSelector,
+    ) -> anyhow::Result<()> {
+        let stream = self
+            .streams
+            .get(&flow)
+            .ok_or_else(|| anyhow::anyhow!("GPU result capture requires a registered source flow"))?;
+        anyhow::ensure!(
+            stream.accepted_submission().is_none(),
+            "cannot change GPU result capture while its producer submission is accepted"
+        );
+        anyhow::ensure!(
+            selector.flow_id.as_deref() == Some(flow.to_string().as_str())
+                && selector.pass_id.as_ref().is_some_and(|value| !value.is_empty())
+                && matches!(selector.stage, CaptureStage::Before | CaptureStage::After)
+                && !selector.resource_id.is_empty(),
+            "producer-required GPU capture must identify its exact flow, pass, stage and resource"
+        );
+        let required = self.required_capture_selectors.entry(flow).or_default();
+        anyhow::ensure!(
+            required.len() < MAX_ACCEPTED_PRODUCER_READBACKS,
+            "producer GPU capture requirement capacity exceeded"
+        );
+        anyhow::ensure!(
+            !required.contains(&selector),
+            "producer GPU capture requirement is already registered"
+        );
+        required.push(selector);
+        Ok(())
+    }
+
+    /// Requested readbacks follow immutable source history only on frames that
+    /// actually carry candidate producer work. No new GPU queue is introduced.
+    pub(crate) fn required_capture_selectors_for_frame(
+        &self,
+        frame: &PreparedRenderFrame,
+    ) -> Vec<RenderCaptureSelector> {
+        frame
+            .flow_invocations
+            .iter()
+            .filter(|invocation| {
+                self.streams
+                    .get(&invocation.flow_id)
+                    .is_some_and(|stream| {
+                        stream.pending_len() > 0 && stream.accepted_submission().is_none()
+                    })
+            })
+            .flat_map(|invocation| {
+                self.required_capture_selectors
+                    .get(&invocation.flow_id)
+                    .into_iter()
+                    .flatten()
+                    .cloned()
+            })
+            .collect()
     }
 
     /// The capture readback IDs of the currently accepted producer interval.

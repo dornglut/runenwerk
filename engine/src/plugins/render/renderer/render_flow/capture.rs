@@ -47,6 +47,7 @@ impl SelectorRuntimeState {
 pub struct FrameCaptureRuntime {
     pub frame_index: u64,
     pub surface_id: u64,
+    diagnostic_selector_count: usize,
     selectors: Vec<SelectorRuntimeState>,
 }
 
@@ -57,14 +58,26 @@ impl FrameCaptureRuntime {
         debug_control: &RenderDebugControlResource,
         selectors: &[RenderCaptureSelector],
     ) -> Self {
-        let mut states = selectors
+        Self::new_with_required(frame_index, surface_id, debug_control, selectors, &[])
+    }
+
+    pub fn new_with_required(
+        frame_index: u64,
+        surface_id: u64,
+        debug_control: &RenderDebugControlResource,
+        diagnostic_selectors: &[RenderCaptureSelector],
+        required_selectors: &[RenderCaptureSelector],
+    ) -> Self {
+        let mut states = diagnostic_selectors
             .iter()
+            .chain(required_selectors)
             .cloned()
             .map(SelectorRuntimeState::new)
             .collect::<Vec<_>>();
 
+        // Diagnostic switches cannot disable producer-required G5 readbacks.
         if !debug_control.capture_enabled {
-            for state in &mut states {
+            for state in states.iter_mut().take(diagnostic_selectors.len()) {
                 state.terminal = Some(RenderCaptureTerminal::with_reason(
                     RenderCaptureTerminalCode::Disabled,
                     "capture_disabled",
@@ -72,7 +85,7 @@ impl FrameCaptureRuntime {
                 ));
             }
         } else if !debug_control.readback_enabled {
-            for state in &mut states {
+            for state in states.iter_mut().take(diagnostic_selectors.len()) {
                 state.terminal = Some(RenderCaptureTerminal::with_reason(
                     RenderCaptureTerminalCode::Disabled,
                     "readback_disabled",
@@ -84,8 +97,29 @@ impl FrameCaptureRuntime {
         Self {
             frame_index,
             surface_id,
+            diagnostic_selector_count: diagnostic_selectors.len(),
             selectors: states,
         }
+    }
+
+    pub fn is_required(&self, selector_index: usize) -> bool {
+        selector_index >= self.diagnostic_selector_count
+            && selector_index < self.selectors.len()
+    }
+
+    /// Reject unrealizable producer evidence before G5 accepts any stateful
+    /// steps. Terminal-missing or multiply matched requirements are errors,
+    /// never optional-debug observations that can be ignored after G5.
+    pub fn validate_required(&self) -> Result<()> {
+        for state in self.selectors.iter().skip(self.diagnostic_selector_count) {
+            anyhow::ensure!(
+                state.frame_identity.is_some() && state.terminal.is_none(),
+                "producer-required G5 capture '{}' was not uniquely realized: {:?}",
+                state.selector.describe(),
+                state.terminal
+            );
+        }
+        Ok(())
     }
 
     pub fn selectors_len(&self) -> usize {
@@ -197,7 +231,12 @@ impl FrameCaptureRuntime {
         };
         let mut results = Vec::<RenderCaptureSelectorResult>::with_capacity(self.selectors.len());
 
-        for (selector_index, state) in self.selectors.into_iter().enumerate() {
+        for (selector_index, state) in self
+            .selectors
+            .into_iter()
+            .take(self.diagnostic_selector_count)
+            .enumerate()
+        {
             let terminal = state.terminal.or_else(|| {
                 (!state.readback_pending).then(|| {
                     RenderCaptureTerminal::with_reason(

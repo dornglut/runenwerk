@@ -119,6 +119,8 @@ impl Renderer {
         let flow_encode_start = Instant::now();
         // Phase one: all G4C1/G4C2/G4C3 realization plus renderer-owned logical G5 operation
         // formation completes without a raw device/queue loan.
+        let producer_required_captures =
+            gpu_step_streams.required_capture_selectors_for_frame(prepared_frame);
         let mut batch = self.realize_render_batch(
             context,
             surface_texture,
@@ -130,8 +132,12 @@ impl Renderer {
             shader_registry,
             debug_control,
             debug_config,
+            &producer_required_captures,
             gpu_timing_capability,
         )?;
+        // No source step can be physically accepted without its required
+        // verification readback being unambiguously authored in the same graph.
+        batch.capture_runtime.validate_required()?;
 
         let canonical_resolutions = batch
             .invocations
@@ -413,13 +419,19 @@ impl Renderer {
                 capture.source_format,
             );
         }
+        // Required source proof is read straight from the producer's retained
+        // G5 submission; never funnel its bytes into bounded debug history.
+        let diagnostic_captures = capture_readbacks
+            .into_iter()
+            .filter(|capture| !batch.capture_runtime.is_required(capture.selector_index))
+            .collect();
         let mut observation_output = self.gpu_observations.accept(
             context,
             submission,
             super::observation::AcceptedFrameObservations {
                 timings: timing_frames,
                 composed_timing: composed_gpu_timing.map(PreparedComposedGpuTiming::into_frame),
-                captures: capture_readbacks,
+                captures: diagnostic_captures,
                 runenui: runenui_witnesses,
             },
             &mut batch.capture_runtime,
@@ -560,6 +572,7 @@ impl Renderer {
         shader_registry: &ShaderRegistryResource,
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
+        producer_required_captures: &[RenderCaptureSelector],
         gpu_timing_capability: RenderGpuTimingCapability,
     ) -> Result<RendererRealizationBatch<'a>> {
         let dynamic_target_history_signatures =
@@ -603,11 +616,12 @@ impl Renderer {
             .collect::<Vec<_>>();
 
         let frame_index = prepared_frame.context.frame_index;
-        let mut capture_runtime = FrameCaptureRuntime::new(
+        let mut capture_runtime = FrameCaptureRuntime::new_with_required(
             frame_index,
             prepared_frame.surface.render_surface_id.raw(),
             debug_control,
             &debug_config.capture_selectors,
+            producer_required_captures,
         );
         let mut flow_runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
         let realization_result = (|| -> Result<RealizedFrameInvocations<'a>> {

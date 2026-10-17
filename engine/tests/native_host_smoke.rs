@@ -1652,19 +1652,24 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         .pass_id("native.historical.surface")
         .ok_or_else(|| anyhow::anyhow!("native historical display pass missing"))?
         .to_string();
-    app.update_render_debug_config(|config| {
-        config.capture_selectors = vec![RenderCaptureSelector::named_pass_surface_color(
-            flow_id.to_string(),
-            display_pass.clone(),
-        )];
-    });
+    // Producer-authored result requirements must not need debug controls.
+    // The source-required readback is realized in the same G5 graph even when
+    // capture/readback telemetry is disabled.
+    app.update_render_debug_config(|config| config.capture_selectors.clear());
     app.update_render_debug_control(|control| {
-        control.capture_enabled = true;
-        control.readback_enabled = true;
+        control.capture_enabled = false;
+        control.readback_enabled = false;
         control.artifact_export_enabled = false;
     });
     let mut sources = RenderGpuFlowStepStreams::default();
     sources.register(flow_id, 0, 4)?;
+    sources.require_capture(
+        flow_id,
+        RenderCaptureSelector::named_pass_surface_color(
+            flow_id.to_string(),
+            display_pass.clone(),
+        ),
+    )?;
     let input = |value: u32| RenderGpuFixedStepInput {
         uniforms: BTreeMap::from([(
             uniform.diagnostic_identity(),
