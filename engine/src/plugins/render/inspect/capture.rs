@@ -1,3 +1,8 @@
+use runen_gpu::{
+    GpuContextAffinity, GpuReadbackId, GpuReadbackStatus, GpuSubmission, GpuSubmissionId,
+    GpuSubmissionStatus,
+};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum CaptureStage {
     Before,
@@ -161,9 +166,55 @@ impl RenderCaptureTerminal {
     }
 }
 
+/// Exact G5 identity attached only to a renderer-observed accepted readback.
+/// A source frame/surface alone is not sufficient to correlate GPU work.
+/// This is evidence association, not a simulator's semantic completion.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderCaptureSubmissionReceipt {
+    submission_id: GpuSubmissionId,
+    affinity: GpuContextAffinity,
+    readback_id: GpuReadbackId,
+}
+
+impl RenderCaptureSubmissionReceipt {
+    pub(crate) fn accepted(submission: &GpuSubmission, readback_id: GpuReadbackId) -> Self {
+        Self {
+            submission_id: submission.id(),
+            affinity: submission.affinity(),
+            readback_id,
+        }
+    }
+
+    pub const fn submission_id(&self) -> GpuSubmissionId {
+        self.submission_id
+    }
+
+    pub const fn affinity(&self) -> GpuContextAffinity {
+        self.affinity
+    }
+
+    pub const fn readback_id(&self) -> GpuReadbackId {
+        self.readback_id
+    }
+
+    /// Exact receipt matching plus physical Completed and ready readback.
+    /// Does not establish pixel correctness, producer steps or visible Present.
+    pub fn matches_completed_readback(&self, submission: &GpuSubmission) -> bool {
+        self.submission_id == submission.id()
+            && self.affinity == submission.affinity()
+            && matches!(submission.status(), GpuSubmissionStatus::Completed)
+            && matches!(
+                submission.readback(self.readback_id).map(|readback| readback.status()),
+                Some(GpuReadbackStatus::Ready(_))
+            )
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderCapturedTexture {
     pub identity: RenderCaptureIdentity,
+    /// None when capture did not correspond to an accepted G5 readback.
+    pub submission_receipt: Option<RenderCaptureSubmissionReceipt>,
     pub width: u32,
     pub height: u32,
     pub format: String,
@@ -172,6 +223,17 @@ pub struct RenderCapturedTexture {
 }
 
 impl RenderCapturedTexture {
+    /// Checks that these completed pixels came from the exact expected public
+    /// G5 submission and terminal readback. Domain verification is separate.
+    pub fn matches_completed_submission(&self, submission: &GpuSubmission) -> bool {
+        self.is_completed()
+            && self.bytes_rgba8.is_some()
+            && self
+                .submission_receipt
+                .as_ref()
+                .is_some_and(|receipt| receipt.matches_completed_readback(submission))
+    }
+
     pub fn sample_pixel_rgba8(&self, point: RenderPixelCoordinate) -> Option<[u8; 4]> {
         let bytes = self.bytes_rgba8.as_ref()?;
         if point.x >= self.width || point.y >= self.height {
@@ -377,6 +439,7 @@ mod tests {
                     texture_class: CaptureTextureClass::ImportedTexture,
                 },
             },
+            submission_receipt: None,
             width: 2,
             height: 2,
             format: "Rgba8Unorm".to_string(),

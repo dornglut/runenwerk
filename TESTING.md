@@ -250,3 +250,25 @@ diagnostic/report initiation, end-to-end native sustained deferral/capture
 stress, exact G5 capture-to-submission evidence, partially executed GPU state
 restoration, unrelated same-surface progress and real original/species boids
 120+ visible frames still require their own qualification.
+
+## RW-1291-G5CAP08 — exact accepted readback/producer receipt correlation (draft)
+
+Renderer terminal capture observations originating from an accepted public G5
+submission carry `RenderCaptureSubmissionReceipt`, with **that submission's
+ID, context/device-generation affinity, and exact GpuReadbackId**. A producer
+holding its own immutable accepted `GpuSubmission` must verify
+`RenderCapturedTexture::matches_completed_submission(submission)` before
+considering captured bytes: the method requires a completed capture, present
+RGBA payload, matching submission ID and affinity, that submission's physical
+`Completed` status, and the exact readback's `Ready` status.
+Preaccept/unsupported capture failures cannot synthesize a receipt.
+
+The native historical fixed-step smoke additionally rejects evidence if the
+derived ECS capture window reports lost observations, and pairs real green
+and blue pixel verification with the exact accepted producer submission's
+readback receipt. Pixel comparison and producer-owned `commit_verified`
+remain **separate** operations. No field or method here asserts Present,
+validated pixel meaning, zero-gap delivery, or successful retained-state
+reconstruction. This is a source/provenance API and one native smoke assertion,
+not a general lossless producer verification queue or end-to-end
+cross-surface/recovery qualification.

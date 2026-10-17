@@ -834,6 +834,7 @@ mod tests {
     ) -> RenderCapturedTexture {
         RenderCapturedTexture {
             identity: identity(frame_index, selector),
+            submission_receipt: None,
             width: 1,
             height: 1,
             format: "Rgba8Unorm".to_string(),
@@ -845,6 +846,7 @@ mod tests {
     fn failed_capture(frame_index: u64, selector: &RenderCaptureSelector) -> RenderCapturedTexture {
         RenderCapturedTexture {
             identity: identity(frame_index, selector),
+            submission_receipt: None,
             width: 1,
             height: 1,
             format: "Rgba8Unorm".to_string(),

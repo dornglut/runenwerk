@@ -1,5 +1,6 @@
 use super::*;
 use crate::plugins::render::RunenUiPublicationId;
+use crate::plugins::render::inspect::RenderCaptureSubmissionReceipt;
 use runen_gpu::{
     GpuContext, GpuContextAffinity, GpuExecutionLifecycleState, GpuReadbackId, GpuReadbackStatus,
     GpuSubmission, GpuSubmissionFailure, GpuSubmissionStatus, GpuWorkNodeId,
@@ -38,6 +39,7 @@ struct AcceptedRendererObservation {
 #[derive(Debug)]
 struct CaptureObservation {
     readback_id: GpuReadbackId,
+    submission_receipt: Option<RenderCaptureSubmissionReceipt>,
     selector_index: usize,
     selector: RenderCaptureSelector,
     identity: RenderCaptureIdentity,
@@ -51,6 +53,7 @@ impl CaptureObservation {
     fn from_prepared(prepared: &PreparedCaptureReadback) -> Self {
         Self {
             readback_id: prepared.canonical_operation().id(),
+            submission_receipt: None,
             selector_index: prepared.selector_index,
             selector: prepared.selector.clone(),
             identity: prepared.identity.clone(),
@@ -101,6 +104,7 @@ impl CaptureObservation {
         }
         RenderCapturedTexture {
             identity: self.identity.clone(),
+            submission_receipt: self.submission_receipt,
             width: self.width,
             height: self.height,
             format: format!("{:?}", self.source_format),
@@ -116,6 +120,7 @@ impl CaptureObservation {
     ) -> RenderCapturedTexture {
         RenderCapturedTexture {
             identity: self.identity.clone(),
+            submission_receipt: self.submission_receipt,
             width: self.width,
             height: self.height,
             format: format!("{:?}", self.source_format),
@@ -216,8 +221,12 @@ impl RendererGpuObservationState {
 
         let mut accepted_captures = Vec::with_capacity(captures.len());
         for prepared in captures {
-            let capture = CaptureObservation::from_prepared(&prepared);
+            let mut capture = CaptureObservation::from_prepared(&prepared);
             if submission.readback(capture.readback_id).is_some() {
+                capture.submission_receipt = Some(RenderCaptureSubmissionReceipt::accepted(
+                    &submission,
+                    capture.readback_id,
+                ));
                 capture_runtime.set_readback_pending(capture.selector_index);
                 accepted_captures.push(capture);
             } else {

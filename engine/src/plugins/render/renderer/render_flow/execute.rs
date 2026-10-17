@@ -1486,6 +1486,7 @@ impl Renderer {
                     capture_runtime.set_terminal(selector_index, terminal.clone());
                     self.last_captured_textures.push(RenderCapturedTexture {
                         identity,
+                        submission_receipt: None,
                         width: 0,
                         height: 0,
                         format: "unknown".to_string(),
@@ -1535,6 +1536,7 @@ impl Renderer {
                     capture_runtime.set_terminal(selector_index, terminal.clone());
                     self.last_captured_textures.push(RenderCapturedTexture {
                         identity,
+                        submission_receipt: None,
                         width: capture_size.0,
                         height: capture_size.1,
                         format: format!("{:?}", capture_format),
@@ -1576,6 +1578,7 @@ impl Renderer {
                                 texture_class,
                             },
                         },
+                        submission_receipt: None,
                         width: capture_size.0,
                         height: capture_size.1,
                         format: format!("{:?}", capture_format),
@@ -1647,6 +1650,7 @@ impl Renderer {
                 capture_runtime.set_terminal(selector_index, terminal.clone());
                 self.last_captured_textures.push(RenderCapturedTexture {
                     identity,
+                    submission_receipt: None,
                     width: acquired_surface_extent.0,
                     height: acquired_surface_extent.1,
                     format: format!("{:?}", packet.surface_format),
@@ -1668,6 +1672,7 @@ impl Renderer {
                 capture_runtime.set_terminal(selector_index, terminal.clone());
                 self.last_captured_textures.push(RenderCapturedTexture {
                     identity,
+                    submission_receipt: None,
                     width: acquired_surface_extent.0,
                     height: acquired_surface_extent.1,
                     format: format!("{:?}", packet.surface_format),
@@ -1710,6 +1715,7 @@ impl Renderer {
                                 texture_class: selector.texture_class,
                             },
                         },
+                        submission_receipt: None,
                         width: acquired_surface_extent.0,
                         height: acquired_surface_extent.1,
                         format: format!("{:?}", packet.surface_format),

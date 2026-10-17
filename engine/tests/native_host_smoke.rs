@@ -1364,6 +1364,13 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                             .first_capture_frame
                             .is_none_or(|first| capture.identity.frame_index > first))
             };
+        anyhow::ensure!(
+            world
+                .resource::<RenderCapturedTextureState>()?
+                .dropped_observations
+                == 0,
+            "native producer diagnostic capture observation history has a delivery gap"
+        );
         // Normal producer code can read ECS observation; it must not need
         // privileged access to the renderer or create another GPU progress
         // loop just because the previous accepted frame is deferred.
@@ -1381,10 +1388,11 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                             capture.identity.frame_index,
                             capture.terminal.clone(),
                             capture.sample_center_rgba8(),
+                            capture.submission_receipt,
                         )
                     })
             });
-        if let Some((capture_surface, capture_frame, terminal, pixel)) = capture {
+        if let Some((capture_surface, capture_frame, terminal, pixel, receipt)) = capture {
             anyhow::ensure!(
                 capture_surface == RenderSurfaceId::primary().raw(),
                 "native producer capture came from wrong prepared surface {capture_surface}"
@@ -1393,6 +1401,17 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
                 terminal.code
                     == engine::plugins::render::inspect::RenderCaptureTerminalCode::Completed,
                 "native historical GPU result capture failed: {terminal:?}"
+            );
+            // Do not infer a producer's completed G5 work from an unqualified
+            // diagnostic pixel, even when its source frame and surface match.
+            let source_submission = world
+                .resource::<RenderGpuFlowStepStreams>()?
+                .stream(self.flow)
+                .and_then(|stream| stream.accepted_submission())
+                .ok_or_else(|| anyhow::anyhow!("GPU pixel has no retained producer G5 receipt"))?;
+            anyhow::ensure!(
+                receipt.is_some_and(|origin| origin.matches_completed_readback(source_submission)),
+                "GPU pixel readback is not bound to the producer's exact completed G5 submission"
             );
             let expected = if self.semantic_committed {
                 [0, 0, 255, 255] // 6 + 4 = 10

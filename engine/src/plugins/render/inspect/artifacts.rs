@@ -287,6 +287,7 @@ mod tests {
         };
         let first_capture = RenderCapturedTexture {
             identity: identity.clone(),
+            submission_receipt: None,
             width: 1,
             height: 1,
             format: "Rgba8Unorm".into(),
@@ -373,6 +374,7 @@ mod tests {
                     texture_class: CaptureTextureClass::ImportedTexture,
                 },
             },
+            submission_receipt: None,
             width: 1,
             height: 1,
             format: "Rgba8Unorm".to_string(),

@@ -436,8 +436,19 @@ and records `last_dropped_identity` without silently implying verification. `fin
 origin lookup, while unscoped `find(...)` refuses matching captures from different
 surfaces. This ECS view is **not** a lossless semantic producer queue. Secondary
 success still does not create its own full diagnostics transaction/report.
-Exact G5 receipt association, producer verification and partial-write recovery
-remain separate requirements.
+Accepted GPU readbacks now carry a typed `submission_receipt` containing the
+exact G5 submission ID, context/device affinity and readback ID. A producer
+may compare this receipt with its own retained `GpuSubmission` using
+`matches_completed_readback`, or use
+`RenderCapturedTexture::matches_completed_submission` for completed pixels.
+This proves **association with a physically completed GPU submission and a
+ready readback**, not correct simulation state, state restoration or Present.
+Pre-G5 capture failures have no receipt, and postaccept failures remain
+explicitly failed. Because the bounded ECS view can lose evidence, an
+application requiring producer verification MUST fail closed on any delivery
+gap and separately maintain its accepted simulation inputs and exact G5
+handle. Lossless producer verification and partial-write recovery remain
+separate requirements.
 
 Physical `Completed` and successful Present remain distinct from producer
 semantic verification. Native-window original/species boids, unknown partial
