@@ -1465,9 +1465,8 @@ impl NativeHistoricalGpuHook {
             );
             // Do not infer a producer's completed G5 work from an unqualified
             // diagnostic pixel, even when its source frame and surface match.
-            let source_submission = accepted_submission.ok_or_else(|| {
-                anyhow::anyhow!("correlated pixel has no producer G5 submission")
-            })?;
+            let source_submission = accepted_submission
+                .ok_or_else(|| anyhow::anyhow!("correlated pixel has no producer G5 submission"))?;
             anyhow::ensure!(
                 receipt.is_some_and(|origin| origin.matches_completed_readback(source_submission)),
                 "GPU pixel readback is not bound to the producer's exact completed G5 submission"
