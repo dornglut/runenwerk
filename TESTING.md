@@ -230,3 +230,23 @@ Report focused checks, `cargo validate`, exact-head CI, and anything not run. Do
 The accepted base, reviewed feature head, merge-group integration revision, queue/squash transition, and accepted-main push result are separate evidence stages or records. Separate stages may reference the same commit object, so each transition is verified explicitly rather than inferred from SHA equality or inequality.
 
 This file owns Runenwerk-local validation semantics. Organization-wide GitHub, review, and validation-evidence rules are owned by [`dornglut/engineering`](https://github.com/dornglut/engineering).
+
+## RW-1291-SURF07 — derived capture delivery (draft)
+
+Terminal capture/selector observations now drain from renderer lifecycle exactly
+once after primary success, deferral or failure and after secondary success,
+deferral or failure. Observations for earlier source `(frame_index,surface_id)`
+are routed to **existing** diagnostic transactions, without fabricating
+a transaction for a deferred/unsubmitted frame. The derived ECS capture view
+retains up to 64 records and 64 MiB across source identities. Overflow
+increments `dropped_observations` and retains `last_dropped_identity`;
+unscoped matching captures on multiple surfaces are refused, while
+`find_from_source` requires exact origin. Unit tests check independent
+same-ordinal surfaces and observable bounded eviction.
+
+This is **not** producer-semantic proof or lossless delivery: losing a capture
+cannot advance a producer verification cursor. Complete new-secondary
+diagnostic/report initiation, end-to-end native sustained deferral/capture
+stress, exact G5 capture-to-submission evidence, partially executed GPU state
+restoration, unrelated same-surface progress and real original/species boids
+120+ visible frames still require their own qualification.

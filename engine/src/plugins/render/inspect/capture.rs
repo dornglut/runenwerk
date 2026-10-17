@@ -202,45 +202,82 @@ impl RenderCapturedTexture {
     }
 }
 
-#[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
+const MAX_CAPTURE_RECORDS: usize = 64;
+const MAX_CAPTURE_BYTES: usize = 64 * 1024 * 1024;
+
+/// Derived, bounded observation view. Not producer-owned GPU state proof.
+#[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderCapturedTextureState {
+    /// Most recent host handoff; source frames live in each capture identity.
     pub frame_index: u64,
     pub captures: Vec<RenderCapturedTexture>,
+    /// Monotonic loss signal: evicted evidence MUST NOT imply verification.
+    pub dropped_observations: u64,
+    pub last_dropped_identity: Option<RenderCaptureIdentity>,
+    max_records: usize,
+    max_bytes: usize,
 }
-
+impl Default for RenderCapturedTextureState {
+    fn default() -> Self {
+        Self { frame_index: 0, captures: Vec::new(), dropped_observations: 0,
+            last_dropped_identity: None, max_records: MAX_CAPTURE_RECORDS,
+            max_bytes: MAX_CAPTURE_BYTES }
+    }
+}
 impl RenderCapturedTextureState {
     pub fn observe_frame(&mut self, frame_index: u64, captures: &[RenderCapturedTexture]) {
         self.frame_index = frame_index;
-        self.captures.clear();
-        self.captures.extend_from_slice(captures);
+        for capture in captures {
+            self.captures.push(capture.clone());
+            while self.captures.len() > self.max_records
+                || self.captures.iter().filter_map(|c| c.bytes_rgba8.as_ref())
+                    .map(Vec::len).fold(0usize, usize::saturating_add) > self.max_bytes
+            {
+                let evicted = self.captures.remove(0);
+                self.dropped_observations = self.dropped_observations.saturating_add(1);
+                self.last_dropped_identity = Some(evicted.identity);
+            }
+        }
     }
-
-    pub fn find(
-        &self,
-        flow_id: &str,
-        pass_id: &str,
-        stage: CaptureStage,
-        resource_id: &str,
+    /// Exact source lookup; this is observation, not semantic verification.
+    pub fn find_from_source(&self, frame_index: u64, surface_id: u64,
+        flow_id: &str, pass_id: &str, stage: CaptureStage, resource_id: &str
     ) -> Option<&RenderCapturedTexture> {
-        self.captures.iter().find(|capture| {
-            let identity = &capture.identity;
-            identity.flow_id() == flow_id
-                && identity.pass_id() == pass_id
-                && identity.stage() == stage
-                && identity.resource_id() == resource_id
+        self.captures.iter().rev().find(|c| {
+            let i = &c.identity;
+            i.frame_index == frame_index && i.surface_id() == surface_id
+                && i.flow_id() == flow_id && i.pass_id() == pass_id
+                && i.stage() == stage && i.resource_id() == resource_id
         })
     }
-
-    pub fn sample_pixel(
-        &self,
-        flow_id: &str,
-        pass_id: &str,
-        stage: CaptureStage,
-        resource_id: &str,
-        point: RenderPixelCoordinate,
+    /// Single-surface convenience; ambiguous matching surfaces fail closed.
+    pub fn find(&self, flow_id: &str, pass_id: &str,
+        stage: CaptureStage, resource_id: &str
+    ) -> Option<&RenderCapturedTexture> {
+        let mut latest = None;
+        let mut surface = None;
+        for capture in self.captures.iter().filter(|c| {
+            let i = &c.identity;
+            i.flow_id() == flow_id && i.pass_id() == pass_id
+                && i.stage() == stage && i.resource_id() == resource_id
+        }) {
+            if surface.is_some_and(|id| id != capture.identity.surface_id()) {
+                return None;
+            }
+            surface = Some(capture.identity.surface_id());
+            latest = Some(capture);
+        }
+        latest
+    }
+    pub fn sample_pixel(&self, flow_id: &str, pass_id: &str,
+        stage: CaptureStage, resource_id: &str, point: RenderPixelCoordinate
     ) -> Option<[u8; 4]> {
         self.find(flow_id, pass_id, stage, resource_id)?
             .sample_pixel_rgba8(point)
+    }
+    #[cfg(test)]
+    fn with_limits(max_records: usize, max_bytes: usize) -> Self {
+        Self { max_records, max_bytes, ..Self::default() }
     }
 }
 
@@ -314,6 +351,42 @@ mod tests {
 
         assert_eq!(sampled, [4, 5, 6, 255]);
         assert_eq!(state.frame_index, 7);
+    }
+
+    #[test]
+    fn captures_from_two_surfaces_do_not_overwrite_or_alias() {
+        let first = capture_with_test_pixels();
+        let mut second = first.clone();
+        second.identity.surface_id = 2;
+        second.bytes_rgba8 = Some(vec![99; 16]);
+        let mut state = RenderCapturedTextureState::default();
+        state.observe_frame(8, &[first]);
+        state.observe_frame(8, &[second]);
+        assert_eq!(state.captures.len(), 2);
+        assert_eq!(state.dropped_observations, 0);
+        assert!(state.find("flow.main", "pass.compose",
+            CaptureStage::After, "surface.color").is_none());
+        assert_eq!(state.find_from_source(1, 1, "flow.main", "pass.compose",
+            CaptureStage::After, "surface.color").unwrap().sample_center_rgba8(),
+            Some([10, 11, 12, 255]));
+        assert_eq!(state.find_from_source(1, 2, "flow.main", "pass.compose",
+            CaptureStage::After, "surface.color").unwrap().sample_center_rgba8(),
+            Some([99; 4]));
+    }
+
+    #[test]
+    fn bounded_capture_window_reports_explicit_loss() {
+        let mut state = RenderCapturedTextureState::with_limits(2, 32);
+        for frame in 1..=3 {
+            let mut capture = capture_with_test_pixels();
+            capture.identity.frame_index = frame;
+            state.observe_frame(frame, &[capture]);
+        }
+        assert_eq!(state.captures.len(), 2);
+        assert_eq!(state.dropped_observations, 1);
+        assert_eq!(state.last_dropped_identity.unwrap().frame_index, 1);
+        assert!(state.find_from_source(1, 1, "flow.main", "pass.compose",
+            CaptureStage::After, "surface.color").is_none());
     }
 
     #[test]

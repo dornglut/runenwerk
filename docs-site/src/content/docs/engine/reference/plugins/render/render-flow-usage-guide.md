@@ -427,9 +427,17 @@ frame. Artifact export additionally validates that all capture identities match
 the requested frame and surface before writing, and uses source-qualified frame
 manifest names and manifest payloads. This prevents a second surface with the same
 frame ordinal from overwriting the first surface's manifest. These are export
-identity and isolation guarantees only: ECS capture publication and diagnostics
-transactions are not yet complete per-surface lifetime/delivery contracts, and
-an exact G5 submission receipt remains independent of a capture identity.
+identity and isolation guarantees only. Terminal capture readbacks are drained once
+on primary success/deferral/error and secondary success/deferral/error into
+bounded derived ECS observations and any already-pending source-keyed diagnostics.
+ECS retains up to 64 observations and 64 MiB across sources; evictions increment
+`dropped_observations` and record `last_dropped_identity` rather than silently
+implying verification. `find_from_source(frame,surface,...)` provides exact
+origin lookup, while unscoped `find(...)` refuses matching captures from different
+surfaces. This ECS view is **not** a lossless semantic producer queue. Secondary
+success still does not create its own full diagnostics transaction/report.
+Exact G5 receipt association, producer verification and partial-write recovery
+remain separate requirements.
 
 Physical `Completed` and successful Present remain distinct from producer
 semantic verification. Native-window original/species boids, unknown partial

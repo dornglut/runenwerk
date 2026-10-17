@@ -819,7 +819,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             Ok(timings) if !timings.submitted => {
                 publish_progressed_gpu_captures(
                     &mut world,
-                    &gfx,
+                    &mut gfx,
                     prepared_frame.context.frame_index,
                 );
                 primary_contribution_state = PrimaryContributionState::Deferred;
@@ -881,17 +881,15 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                     );
                 }
 
-                let published_capture_results =
-                    gfx.renderer.take_published_capture_selector_results();
-                let published_captures = gfx.renderer.take_published_captured_textures();
-                if let Ok(captured_textures) = world.resource_mut::<RenderCapturedTextureState>() {
-                    captured_textures
-                        .observe_frame(prepared_frame.context.frame_index, &published_captures);
-                }
-
-                if let Ok(texture_inspector) = world.resource_mut::<RenderTextureInspectorState>() {
-                    texture_inspector.observe_captures(&published_captures);
-                }
+                // Hand off previous terminal observations exactly once while
+                // retaining this primary source's captures for its own transaction.
+                let (current_captures, current_capture_results, mut completed_reports) =
+                    drain_progressed_gpu_captures(
+                        &mut world,
+                        &mut gfx,
+                        prepared_frame.context.frame_index,
+                        Some((prepared_frame.context.frame_index, render_surface_id.raw())),
+                    );
 
                 let total_ms = timings.acquire_ms
                     + timings.renderer.prepare_ui_ms
@@ -923,25 +921,9 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
                 let diagnostics_start = std::time::Instant::now();
                 let semantic_frame_index = prepared_frame.context.frame_index;
-                let (current_captures, delayed_captures): (Vec<_>, Vec<_>) =
-                    published_captures.into_iter().partition(|capture| {
-                        capture.identity.frame_index == semantic_frame_index
-                            && capture.identity.surface_id() == render_surface_id.raw()
-                    });
-                let (current_capture_results, delayed_capture_results): (Vec<_>, Vec<_>) =
-                    published_capture_results.into_iter().partition(|result| {
-                        result.frame_identity.as_ref().is_none_or(|identity| {
-                            identity.frame_index == semantic_frame_index
-                                && identity.surface_id() == render_surface_id.raw()
-                        })
-                    });
-
                 let mut diagnostics_transactions = world
                     .remove_resource::<RenderFrameDiagnosticsTransactionState>()
                     .unwrap_or_default();
-                let mut completed_reports: Vec<CompletedRenderFrameDiagnostics> =
-                    diagnostics_transactions
-                        .observe_terminal_captures(delayed_captures, delayed_capture_results);
                 if full_diagnostics {
                     completed_reports.extend(
                         diagnostics_transactions.begin_frame(
@@ -964,27 +946,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 }
                 world.insert_resource(diagnostics_transactions);
 
-                for completed in completed_reports {
-                    let simulation_tick = completed.simulation_tick;
-                    let mut frame_report = completed.report;
-                    frame_report
-                        .errors
-                        .extend(frame_report.validate_invariants());
-                    if let Err(err) = submit_render_frame_report_to_diagnostics(
-                        &mut world,
-                        &frame_report,
-                        simulation_tick,
-                    ) {
-                        tracing::warn!(
-                            frame = frame_report.frame_index,
-                            error = %err,
-                            "failed submitting render diagnostics report to canonical diagnostics core"
-                        );
-                    }
-                    if let Ok(report_state) = world.resource_mut::<RenderDebugFrameReportState>() {
-                        report_state.observe_frame(frame_report);
-                    }
-                }
+                publish_completed_render_frame_reports(&mut world, completed_reports);
                 let diagnostics_mode = if full_diagnostics {
                     "full"
                 } else {
@@ -1129,7 +1091,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 // primary surface cannot acquire, prepare, or submit.
                 publish_progressed_gpu_captures(
                     &mut world,
-                    &gfx,
+                    &mut gfx,
                     prepared_frame.context.frame_index,
                 );
                 if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
@@ -1221,21 +1183,79 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     detached_result
 }
 
-/// Publish terminal GPU evidence to ECS when a primary frame defers or
-/// errors, or when an additional surface defers. The renderer retains the
-/// original capture and selector results for later diagnostic retirement.
-/// Delivery does not advance physical or semantic state.
-fn publish_progressed_gpu_captures(world: &mut WorldMut, gfx: &Gfx, frame_index: u64) {
-    let captures = gfx.renderer.last_captured_textures();
-    if captures.is_empty() {
-        return;
+/// Once-only handoff from renderer-owned readback lifecycle to derived ECS
+/// observations and already-existing source-keyed diagnostic transactions.
+fn drain_progressed_gpu_captures(
+    world: &mut WorldMut,
+    gfx: &mut Gfx,
+    host_frame_index: u64,
+    current_source: Option<(u64, u64)>,
+) -> (
+    Vec<crate::plugins::render::inspect::RenderCapturedTexture>,
+    Vec<crate::plugins::render::inspect::RenderCaptureSelectorResult>,
+    Vec<CompletedRenderFrameDiagnostics>,
+) {
+    let captures = gfx.renderer.take_published_captured_textures();
+    let results = gfx.renderer.take_published_capture_selector_results();
+    if !captures.is_empty() {
+        if let Ok(state) = world.resource_mut::<RenderCapturedTextureState>() {
+            state.observe_frame(host_frame_index, &captures);
+        }
+        if let Ok(inspector) = world.resource_mut::<RenderTextureInspectorState>() {
+            inspector.observe_captures(&captures);
+        }
     }
-    if let Ok(state) = world.resource_mut::<RenderCapturedTextureState>() {
-        state.observe_frame(frame_index, captures);
+    let (current, delayed): (Vec<_>, Vec<_>) = captures.into_iter().partition(|capture| {
+        current_source.is_some_and(|source| {
+            (capture.identity.frame_index, capture.identity.surface_id()) == source
+        })
+    });
+    let (current_results, delayed_results): (Vec<_>, Vec<_>) =
+        results.into_iter().partition(|result| {
+            current_source.is_some_and(|source| {
+                result.frame_identity.as_ref().is_none_or(|identity| {
+                    (identity.frame_index, identity.surface_id()) == source
+                })
+            })
+        });
+    let mut transactions = world
+        .remove_resource::<RenderFrameDiagnosticsTransactionState>()
+        .unwrap_or_default();
+    let completed = transactions.observe_terminal_captures(delayed, delayed_results);
+    world.insert_resource(transactions);
+    (current, current_results, completed)
+}
+
+fn publish_completed_render_frame_reports(
+    world: &mut WorldMut,
+    completed_reports: Vec<CompletedRenderFrameDiagnostics>,
+) {
+    for completed in completed_reports {
+        let simulation_tick = completed.simulation_tick;
+        let mut frame_report = completed.report;
+        frame_report
+            .errors
+            .extend(frame_report.validate_invariants());
+        if let Err(err) =
+            submit_render_frame_report_to_diagnostics(world, &frame_report, simulation_tick)
+        {
+            tracing::warn!(
+                frame = frame_report.frame_index,
+                error = %err,
+                "failed submitting render diagnostics report to canonical diagnostics core"
+            );
+        }
+        if let Ok(report_state) = world.resource_mut::<RenderDebugFrameReportState>() {
+            report_state.observe_frame(frame_report);
+        }
     }
-    if let Ok(inspector) = world.resource_mut::<RenderTextureInspectorState>() {
-        inspector.observe_captures(captures);
-    }
+}
+
+/// Also retire older observations if the current frame defers or fails.
+/// No current-surface diagnostics or semantic completion are synthesized.
+fn publish_progressed_gpu_captures(world: &mut WorldMut, gfx: &mut Gfx, frame_index: u64) {
+    let (_, _, completed) = drain_progressed_gpu_captures(world, gfx, frame_index, None);
+    publish_completed_render_frame_reports(world, completed);
 }
 
 fn defer_unsubmitted_after_error(
@@ -1460,6 +1480,8 @@ fn render_additional_surfaces(
                 AdditionalSurfaceRenderOutcome::Deferred
             }
             Ok(timings) => {
+                // Secondary success is also a terminal observation drain point.
+                publish_progressed_gpu_captures(world, gfx, prepared_frame.context.frame_index);
                 let history_enabled = observe_submitted_frame_history(
                     world,
                     prepared_frame,
@@ -1478,6 +1500,8 @@ fn render_additional_surfaces(
                 AdditionalSurfaceRenderOutcome::Submitted
             }
             Err(err) => {
+                // Gfx may have progressed an earlier GPU submission before error.
+                publish_progressed_gpu_captures(world, gfx, prepared_frame.context.frame_index);
                 if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                     match surface_error {
                         RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
