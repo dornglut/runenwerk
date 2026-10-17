@@ -147,7 +147,9 @@ pub fn export_captured_textures(
         captures: manifest_entries,
     };
 
-    let manifest_path = output_root.join(format!("frame_{frame_index}__surface_{surface_id}__manifest.json"));
+    let manifest_path = output_root.join(format!(
+        "frame_{frame_index}__surface_{surface_id}__manifest.json"
+    ));
     let payload = serde_json::to_vec_pretty(&manifest)?;
     fs::write(&manifest_path, payload)
         .with_context(|| format!("failed to write capture manifest {:?}", manifest_path))?;
@@ -318,8 +320,16 @@ mod tests {
         let second = export_captured_textures(&root, 42, 2, &[second_capture])
             .expect("secondary surface export");
         assert_ne!(first.manifest_path, second.manifest_path);
-        assert!(first.manifest_path.ends_with("frame_42__surface_1__manifest.json"));
-        assert!(second.manifest_path.ends_with("frame_42__surface_2__manifest.json"));
+        assert!(
+            first
+                .manifest_path
+                .ends_with("frame_42__surface_1__manifest.json")
+        );
+        assert!(
+            second
+                .manifest_path
+                .ends_with("frame_42__surface_2__manifest.json")
+        );
         assert!(first.manifest_path.exists() && second.manifest_path.exists());
         let primary_manifest = std::fs::read(&first.manifest_path).expect("primary manifest");
         let secondary_manifest = std::fs::read(&second.manifest_path).expect("secondary manifest");
@@ -372,8 +382,8 @@ mod tests {
 
         let first = export_captured_textures(&temp, 1, 1, std::slice::from_ref(&capture))
             .expect("first export should succeed");
-        let second =
-            export_captured_textures(&temp, 1, 1, &[capture]).expect("second export should succeed");
+        let second = export_captured_textures(&temp, 1, 1, &[capture])
+            .expect("second export should succeed");
 
         assert_eq!(first.run_manifest_path, second.run_manifest_path);
         let _ = std::fs::remove_dir_all(temp);
