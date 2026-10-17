@@ -10,12 +10,12 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
     use runen_gpu::{
         GpuBufferDescriptor, GpuBufferHandle, GpuBufferInitialization, GpuBufferRange,
         GpuBufferRegion, GpuBufferUsage, GpuBufferUsages, GpuCapabilityFeature,
-        GpuCapabilityRequirement, GpuCapabilityRequirements, GpuContext,
-        GpuContextDescriptor, GpuContextRequestErrorCategory, GpuExecutionPreference,
-        GpuMemoryIntent, GpuReadbackOperation, GpuReconstruction, GpuResourceCommon,
-        GpuResourceLabel, GpuResourceLifetime, GpuResourceProvenance, GpuUploadOperation,
-        GpuWorkFragment, GpuWorkFragmentBuilder, GpuWorkNodeId, GpuWorkOperation,
-        GpuWorkResourceIdAllocator, PreparedGpuData, TransferData,
+        GpuCapabilityRequirement, GpuCapabilityRequirements, GpuContext, GpuContextDescriptor,
+        GpuContextRequestErrorCategory, GpuExecutionPreference, GpuMemoryIntent,
+        GpuReadbackOperation, GpuReconstruction, GpuResourceCommon, GpuResourceLabel,
+        GpuResourceLifetime, GpuResourceProvenance, GpuUploadOperation, GpuWorkFragment,
+        GpuWorkFragmentBuilder, GpuWorkNodeId, GpuWorkOperation, GpuWorkResourceIdAllocator,
+        PreparedGpuData, TransferData,
     };
     use std::time::{Duration, Instant};
 
@@ -28,7 +28,9 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
     fn request_context(name: &str) -> Option<GpuContext> {
         let mut requirements = GpuCapabilityRequirements::new();
         requirements
-            .insert(GpuCapabilityRequirement::Required(GpuCapabilityFeature::Copy))
+            .insert(GpuCapabilityRequirement::Required(
+                GpuCapabilityFeature::Copy,
+            ))
             .expect("copy capability");
         let descriptor = GpuContextDescriptor::new(requirements).with_label(name);
         match pollster::block_on(GpuContext::request(descriptor)) {
@@ -51,8 +53,7 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
         values: &[u32; 2],
         name: &str,
     ) -> (GpuWorkFragment, GpuReadbackId, GpuWorkNodeId) {
-        let region =
-            GpuBufferRegion::new(target, GpuBufferRange::whole(target).unwrap()).unwrap();
+        let region = GpuBufferRegion::new(target, GpuBufferRange::whole(target).unwrap()).unwrap();
         let payload = PreparedGpuData::<TransferData>::from_pod_transfer(
             format!("{name} checkpoint bytes"),
             values,
