@@ -1048,7 +1048,7 @@ mod tests {
         );
         let pending = state
             .pending
-            .get(&12)
+            .get(&RenderFrameDiagnosticsKey::new(12, 1))
             .expect("frame report should await the unrelated selector");
         assert!(pending.pixel_probes[0].result.is_some());
         assert_eq!(pending.retained_capture_bytes(), 0);
