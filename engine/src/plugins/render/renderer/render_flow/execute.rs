@@ -589,8 +589,12 @@ impl Renderer {
             .collect::<Vec<_>>();
 
         let frame_index = prepared_frame.context.frame_index;
-        let mut capture_runtime =
-            FrameCaptureRuntime::new(frame_index, debug_control, &debug_config.capture_selectors);
+        let mut capture_runtime = FrameCaptureRuntime::new(
+            frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
+            debug_control,
+            &debug_config.capture_selectors,
+        );
         let mut flow_runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
         let realization_result = (|| -> Result<RealizedFrameInvocations<'a>> {
             let active_flow_ids = compiled_flows
@@ -1430,6 +1434,7 @@ impl Renderer {
             }
             let identity = RenderCaptureIdentity {
                 frame_index: capture_runtime.frame_index,
+                surface_id: capture_runtime.surface_id,
                 pass_label: pass_label.clone(),
                 capture_point: capture_point.clone(),
             };
@@ -1561,6 +1566,7 @@ impl Renderer {
                     self.last_captured_textures.push(RenderCapturedTexture {
                         identity: RenderCaptureIdentity {
                             frame_index: capture_runtime.frame_index,
+                            surface_id: capture_runtime.surface_id,
                             pass_label: pass_label.clone(),
                             capture_point: RenderCapturePointIdentity {
                                 flow_id: flow.flow_id.to_string(),
@@ -1627,6 +1633,7 @@ impl Renderer {
             }
             let identity = RenderCaptureIdentity {
                 frame_index: capture_runtime.frame_index,
+                surface_id: capture_runtime.surface_id,
                 pass_label: "frame.final".to_string(),
                 capture_point: capture_point.clone(),
             };
@@ -1693,6 +1700,7 @@ impl Renderer {
                     self.last_captured_textures.push(RenderCapturedTexture {
                         identity: RenderCaptureIdentity {
                             frame_index: capture_runtime.frame_index,
+                            surface_id: capture_runtime.surface_id,
                             pass_label: "frame.final".to_string(),
                             capture_point: RenderCapturePointIdentity {
                                 flow_id: "frame".to_string(),

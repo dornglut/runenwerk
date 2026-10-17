@@ -284,6 +284,7 @@ mod tests {
             selector,
             frame_identity: Some(RenderCaptureIdentity {
                 frame_index: 7,
+                surface_id: 1,
                 pass_label: "pass.label".to_string(),
                 capture_point: capture_point.clone(),
             }),
@@ -369,6 +370,7 @@ mod tests {
                     capture_point: capture_point.clone(),
                     frame_identity: RenderCaptureIdentity {
                         frame_index: 9,
+                        surface_id: 1,
                         pass_label: "pass.pending".to_string(),
                         capture_point,
                     },

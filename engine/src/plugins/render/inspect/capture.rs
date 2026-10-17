@@ -52,11 +52,17 @@ pub struct RenderCapturePointIdentity {
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RenderCaptureIdentity {
     pub frame_index: u64,
+    /// Originating prepared render surface; a frame ordinal is not globally unique.
+    pub surface_id: u64,
     pub pass_label: String,
     pub capture_point: RenderCapturePointIdentity,
 }
 
 impl RenderCaptureIdentity {
+    pub const fn surface_id(&self) -> u64 {
+        self.surface_id
+    }
+
     pub fn flow_id(&self) -> &str {
         self.capture_point.flow_id.as_str()
     }
@@ -270,6 +276,7 @@ mod tests {
         RenderCapturedTexture {
             identity: RenderCaptureIdentity {
                 frame_index: 1,
+                surface_id: 1,
                 pass_label: "pass.compose".to_string(),
                 capture_point: RenderCapturePointIdentity {
                     flow_id: "flow.main".to_string(),

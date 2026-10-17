@@ -29,6 +29,7 @@ struct CaptureManifest {
 #[derive(Debug, Serialize)]
 struct CaptureManifestEntry {
     frame_index: u64,
+    surface_id: u64,
     flow_id: String,
     pass_id: String,
     pass_label: String,
@@ -103,6 +104,7 @@ pub fn export_captured_textures(
 
         manifest_entries.push(CaptureManifestEntry {
             frame_index: capture.identity.frame_index,
+            surface_id: capture.identity.surface_id(),
             flow_id: capture.identity.flow_id().to_string(),
             pass_id: capture.identity.pass_id().to_string(),
             pass_label: capture.identity.pass_label.clone(),
@@ -176,8 +178,9 @@ fn upsert_run_manifest(output_root: &Path, frame_manifest: &Path) -> Result<Path
 
 pub fn deterministic_capture_filename(identity: &RenderCaptureIdentity, ext: &str) -> String {
     format!(
-        "frame_{}__flow_{}__pass_{}__stage_{}__resource_{}.{}",
+        "frame_{}__surface_{}__flow_{}__pass_{}__stage_{}__resource_{}.{}",
         identity.frame_index,
+        identity.surface_id(),
         normalize_token(identity.flow_id()),
         normalize_token(identity.pass_id()),
         identity.stage().as_str(),
@@ -218,6 +221,7 @@ mod tests {
     fn deterministic_filename_uses_identity_tuple() {
         let identity = RenderCaptureIdentity {
             frame_index: 4,
+            surface_id: 1,
             pass_label: "runenwerk.editor.viewport.sdf".to_string(),
             capture_point: RenderCapturePointIdentity {
                 flow_id: "runenwerk.editor.main".to_string(),
@@ -231,7 +235,16 @@ mod tests {
         let file = deterministic_capture_filename(&identity, "png");
         assert_eq!(
             file,
-            "frame_4__flow_runenwerk_editor_main__pass_runenwerk_editor_viewport_sdf__stage_after__resource_surface_color.png"
+            "frame_4__surface_1__flow_runenwerk_editor_main__pass_runenwerk_editor_viewport_sdf__stage_after__resource_surface_color.png"
+        );
+        let second_surface = RenderCaptureIdentity {
+            surface_id: 2,
+            ..identity.clone()
+        };
+        assert_ne!(
+            deterministic_capture_filename(&identity, "png"),
+            deterministic_capture_filename(&second_surface, "png"),
+            "two windows with one frame ordinal and capture point must not overwrite each other"
         );
     }
 
@@ -249,6 +262,7 @@ mod tests {
         let capture = RenderCapturedTexture {
             identity: RenderCaptureIdentity {
                 frame_index: 1,
+                surface_id: 1,
                 pass_label: "pass".to_string(),
                 capture_point: RenderCapturePointIdentity {
                     flow_id: "flow".to_string(),

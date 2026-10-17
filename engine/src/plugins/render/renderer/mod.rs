@@ -1329,6 +1329,7 @@ mod tests {
         let completed_capture = RenderCapturedTexture {
             identity: RenderCaptureIdentity {
                 frame_index: 12,
+                surface_id: 1,
                 pass_label: "pass".into(),
                 capture_point: RenderCapturePointIdentity {
                     flow_id: "flow".into(),

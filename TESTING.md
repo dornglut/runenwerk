@@ -115,7 +115,10 @@ producer test reads that ECS state, not renderer internals. Publication also
 survives a primary host frame's failed surface acquisition, preparation or
 G5 admission, without turning the failed frame into a submitted frame or
 Present. Secondary-surface success/error delivery and multi-surface capture
-isolation remain unqualified; capture identities currently lack a surface key.
+isolation remain unqualified. Captures now include an originating render surface
+in their identity, serialized manifest entries and deterministic image filenames,
+but this does **not** establish surface-keyed ECS transport, separate diagnostic
+transactions, bounded multi-surface readback retirement or exact G5 result delivery.
 It rejects shader fallback rather than permitting a no-op simulation.
 
 This is a **hosted software Vulkan execution proof**, not a native end-user

@@ -687,6 +687,7 @@ mod tests {
         RenderCapturedTexture {
             identity: RenderCaptureIdentity {
                 frame_index,
+                surface_id: 1,
                 pass_label: selector
                     .pass_id
                     .clone()

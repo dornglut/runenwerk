@@ -420,6 +420,13 @@ GPU evidence. Subsequent empty histories must not reissue either mutation.
 This is an executable GPU result check, not a general storage-buffer readback
 or a guarantee that ordinary clients enable capture.
 
+Capture identities include the originating rendered surface alongside the
+semantic frame ordinal and capture point. Exported capture image filenames use
+that surface to avoid collisions when two windows render the same flow and
+frame. This is identity evidence only: ECS capture publication and diagnostics
+transactions are not yet complete per-surface lifetime/delivery contracts, and
+an exact G5 submission receipt remains independent of a capture identity.
+
 Physical `Completed` and successful Present remain distinct from producer
 semantic verification. Native-window original/species boids, unknown partial
 write repair, generation loss, independently proven cross-flow/surface
