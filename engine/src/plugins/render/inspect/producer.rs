@@ -241,7 +241,10 @@ fn map_render_report_to_submission(
 
     if let Some(manifest_path) = report.artifact_manifest_path.as_ref() {
         attachments.push(DiagnosticsAttachment {
-            attachment_id: format!("render.manifest.{}.{}", report.frame_index, report.surface_id),
+            attachment_id: format!(
+                "render.manifest.{}.{}",
+                report.frame_index, report.surface_id
+            ),
             kind: "render.capture_manifest".to_string(),
             label: "Render Capture Manifest".to_string(),
             producer_id: RENDER_PRODUCER_ID.to_string(),
@@ -343,7 +346,10 @@ fn map_render_report_to_submission(
         frame_index: report.frame_index,
         simulation_tick,
         entry: DiagnosticsEntry {
-            entry_id: format!("render.inspect.frame.{}.{}", report.frame_index, report.surface_id),
+            entry_id: format!(
+                "render.inspect.frame.{}.{}",
+                report.frame_index, report.surface_id
+            ),
             producer_id: RENDER_PRODUCER_ID.to_string(),
             domain_id: RENDER_DOMAIN_ID.to_string(),
             schema_id: RENDER_SCHEMA_ID.to_string(),

@@ -1510,22 +1510,24 @@ fn render_additional_surfaces(
                     let mut transactions = world
                         .remove_resource::<RenderFrameDiagnosticsTransactionState>()
                         .unwrap_or_default();
-                    completed_reports.extend(transactions.begin_frame(
-                        RenderFrameDiagnosticsSnapshot {
-                            frame_index: prepared_frame.context.frame_index,
-                            surface_id: render_surface_id.raw(),
-                            simulation_tick: diagnostics_simulation_tick,
-                            provenance: gfx.renderer.last_pass_provenance().to_vec(),
-                            capture_plan: gfx.renderer.last_capture_plan().clone(),
-                            pixel_probes: debug_config.pixel_probes.clone(),
-                            texture_diffs: debug_config.texture_diffs.clone(),
-                            artifact_output_dir: debug_control
-                                .artifact_export_enabled
-                                .then(|| debug_control.artifact_output_dir.clone()),
-                        },
-                        current_captures,
-                        current_results,
-                    ));
+                    completed_reports.extend(
+                        transactions.begin_frame(
+                            RenderFrameDiagnosticsSnapshot {
+                                frame_index: prepared_frame.context.frame_index,
+                                surface_id: render_surface_id.raw(),
+                                simulation_tick: diagnostics_simulation_tick,
+                                provenance: gfx.renderer.last_pass_provenance().to_vec(),
+                                capture_plan: gfx.renderer.last_capture_plan().clone(),
+                                pixel_probes: debug_config.pixel_probes.clone(),
+                                texture_diffs: debug_config.texture_diffs.clone(),
+                                artifact_output_dir: debug_control
+                                    .artifact_export_enabled
+                                    .then(|| debug_control.artifact_output_dir.clone()),
+                            },
+                            current_captures,
+                            current_results,
+                        ),
+                    );
                     world.insert_resource(transactions);
                 }
                 publish_completed_render_frame_reports(world, completed_reports);

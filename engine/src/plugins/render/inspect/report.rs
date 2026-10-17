@@ -80,13 +80,10 @@ pub struct RenderDebugFrameReportState {
     texture_diff_results_by_source: BTreeMap<ReportSourceKey, Vec<RenderTextureDiffResult>>,
 }
 
-fn unique_frame_value<T>(
-    records: &BTreeMap<ReportSourceKey, T>,
-    frame_index: u64,
-) -> Option<&T> {
+fn unique_frame_value<T>(records: &BTreeMap<ReportSourceKey, T>, frame_index: u64) -> Option<&T> {
     let mut sources = records.range((frame_index, 0)..=(frame_index, u64::MAX));
-    let value = &sources.next()?.1;
-    sources.next().is_none().then_some(*value)
+    let (_, value) = sources.next()?;
+    sources.next().is_none().then_some(value)
 }
 
 impl RenderDebugFrameReportState {
@@ -98,7 +95,8 @@ impl RenderDebugFrameReportState {
             while self.texture_diff_results_by_source.len()
                 > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY
             {
-                let Some(oldest) = self.texture_diff_results_by_source.keys().next().copied() else {
+                let Some(oldest) = self.texture_diff_results_by_source.keys().next().copied()
+                else {
                     break;
                 };
                 self.texture_diff_results_by_source.remove(&oldest);
@@ -302,7 +300,10 @@ mod tests {
             state.capture_artifact_manifest_for_source(9, 2),
             Some(PathBuf::from("surface-2.json").as_path())
         );
-        assert_eq!(state.latest.as_ref().map(|report| report.surface_id), Some(2));
+        assert_eq!(
+            state.latest.as_ref().map(|report| report.surface_id),
+            Some(2)
+        );
     }
 
     #[test]
