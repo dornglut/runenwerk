@@ -423,7 +423,11 @@ or a guarantee that ordinary clients enable capture.
 Capture identities include the originating rendered surface alongside the
 semantic frame ordinal and capture point. Exported capture image filenames use
 that surface to avoid collisions when two windows render the same flow and
-frame. This is identity evidence only: ECS capture publication and diagnostics
+frame. Artifact export additionally validates that all capture identities match
+the requested frame and surface before writing, and uses source-qualified frame
+manifest names and manifest payloads. This prevents a second surface with the same
+frame ordinal from overwriting the first surface's manifest. These are export
+identity and isolation guarantees only: ECS capture publication and diagnostics
 transactions are not yet complete per-surface lifetime/delivery contracts, and
 an exact G5 submission receipt remains independent of a capture identity.
 

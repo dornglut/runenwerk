@@ -117,6 +117,11 @@ G5 admission, without turning the failed frame into a submitted frame or
 Present. Secondary-surface success/error delivery and multi-surface capture
 isolation remain unqualified. Captures include an originating render surface
 in their identity, serialized manifest entries and deterministic image filenames.
+Artifact export also requires a matching `(frame, surface)` for every capture
+before writing; each frame manifest's name and payload contain its source
+surface. A two-surface regression proves collision-free same-ordinal manifests,
+independent images, both run-manifest entries, and fail-closed foreign-source
+rejection. This qualifies export source isolation only, not ECS evidence delivery.
 Pending diagnostic transactions now distinguish (frame, surface) so simultaneous
 window frame ordinals and selector indices cannot route terminal captures to a
 foreign transaction; primary report partitioning also treats a same-frame capture
