@@ -409,7 +409,10 @@ impl Renderer {
         // accepted immutable step interval. Associate only the source's
         // canonical readback IDs before optional renderer/ECS diagnostic
         // publication, so loss of that derived view cannot lose the proof.
-        for capture in &capture_readbacks {
+        for capture in capture_readbacks
+            .iter()
+            .filter(|capture| batch.capture_runtime.is_required(capture.selector_index))
+        {
             gpu_step_streams.associate_accepted_capture(
                 &submission,
                 capture.identity.clone(),
@@ -1444,6 +1447,12 @@ impl Renderer {
             if !selector.matches_point(&capture_point) {
                 continue;
             }
+            if capture_runtime.is_required(selector_index) && existing_capture_point.is_some() {
+                anyhow::bail!(
+                    "producer-required GPU capture '{}' matched multiple pass occurrences before G5",
+                    selector.describe()
+                );
+            }
             if let Some(existing_capture_point) = existing_capture_point
                 && existing_capture_point != capture_point
             {
@@ -1575,6 +1584,7 @@ impl Renderer {
                 }
             };
 
+            capture_runtime.budget_required_readback(selector_index, capture_size)?;
             match prepare_texture_capture_readback(
                 context,
                 selector_index,

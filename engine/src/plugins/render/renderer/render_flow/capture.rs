@@ -48,6 +48,7 @@ pub struct FrameCaptureRuntime {
     pub frame_index: u64,
     pub surface_id: u64,
     diagnostic_selector_count: usize,
+    required_readback_bytes: u64,
     selectors: Vec<SelectorRuntimeState>,
 }
 
@@ -98,6 +99,7 @@ impl FrameCaptureRuntime {
             frame_index,
             surface_id,
             diagnostic_selector_count: diagnostic_selectors.len(),
+            required_readback_bytes: 0,
             selectors: states,
         }
     }
@@ -105,6 +107,34 @@ impl FrameCaptureRuntime {
     pub fn is_required(&self, selector_index: usize) -> bool {
         selector_index >= self.diagnostic_selector_count
             && selector_index < self.selectors.len()
+    }
+
+    /// Bound producer-required GPU readbacks by actual texture byte size.
+    /// Diagnostic readbacks retain their separate opt-in policy. A rejected
+    /// budget cannot consume an immutable producer step or reach G5.
+    pub fn budget_required_readback(
+        &mut self,
+        selector_index: usize,
+        size: (u32, u32),
+    ) -> Result<()> {
+        if !self.is_required(selector_index) {
+            return Ok(());
+        }
+        const MAX_BYTES: u64 = 64 * 1024 * 1024;
+        let additional = u64::from(size.0.max(1))
+            .checked_mul(u64::from(size.1.max(1)))
+            .and_then(|pixels| pixels.checked_mul(4))
+            .ok_or_else(|| anyhow::anyhow!("producer-required GPU readback size overflow"))?;
+        let proposed = self
+            .required_readback_bytes
+            .checked_add(additional)
+            .ok_or_else(|| anyhow::anyhow!("producer-required GPU readback budget overflow"))?;
+        anyhow::ensure!(
+            proposed <= MAX_BYTES,
+            "producer-required GPU readbacks exceed the 64 MiB per-submission limit"
+        );
+        self.required_readback_bytes = proposed;
+        Ok(())
     }
 
     /// Reject unrealizable producer evidence before G5 accepts any stateful
@@ -471,6 +501,8 @@ mod tests {
             },
         );
         assert!(runtime.validate_required().is_ok());
+        assert!(runtime.budget_required_readback(0, (4096, 4096)).is_ok());
+        assert!(runtime.budget_required_readback(0, (1, 1)).is_err());
         let (plan, results) = runtime.into_plan_and_results();
         assert!(plan.selectors.is_empty());
         assert!(results.is_empty());

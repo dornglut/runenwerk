@@ -484,9 +484,11 @@ streams.require_capture(flow_id, selector)?;
 Call `require_capture` after registering the producer's fixed-step stream
 and before accepting any producer interval. Each required selector identifies
 an exact flow, pass, Before/After stage and resource, with no wildcard flow
-or pass. Requirements are strictly bounded, cannot be changed while an
-accepted interval is unverified, and must uniquely resolve to a supported
-canonical GPU readback before G5 submission. Any absent, ambiguous, unsupported
+or pass. Requirements are strictly bounded (at most 64 readback descriptors and
+64 MiB of aggregate RGBA8-equivalent readback bytes per accepted producer
+submission), cannot be changed while an accepted interval is unverified,
+and must uniquely resolve to one supported canonical pass occurrence and
+GPU readback before G5 submission. Any absent, ambiguous, unsupported
 or unpreparable required readback rejects that frame **before** acceptance;
 the producer retains its immutable pending steps. Required readbacks are
 formed even when `RenderDebugControlResource.capture_enabled` and

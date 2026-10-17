@@ -356,9 +356,10 @@ requirement belongs to the producer's source contract rather than optional
 `RenderDebugConfigResource` selectors or
 `RenderDebugControlResource.{capture_enabled,readback_enabled}`. The producer
 may not mutate requirements while its prior accepted G5 interval is
-unverified. Duplicate, wildcard, unregistered and over-capacity requests
-are rejected at registration; unresolvable, unsupported, multiply resolved or
-failed readback preparation is rejected before submission, without losing
+unverified. Duplicate, wildcard, unregistered and descriptor-capacity requests
+are rejected at registration; unresolvable, unsupported, multiply matched,
+aggregate-readback-budget overflow (>64 MiB RGBA8-equivalent per submission),
+or failed readback preparation is rejected before submission, without losing
 source-owned pending steps. Ordinary optional diagnostics retain their
 existing behavior and reporting indices; producer-required captures do not
 populate diagnostic image history.
