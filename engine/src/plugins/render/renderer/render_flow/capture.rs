@@ -414,7 +414,8 @@ mod tests {
             readback_enabled: true,
             ..RenderDebugControlResource::default()
         };
-        let mut runtime = FrameCaptureRuntime::new(37, 2, &control, std::slice::from_ref(&selector));
+        let mut runtime =
+            FrameCaptureRuntime::new(37, 2, &control, std::slice::from_ref(&selector));
         let capture_point = selector.stable_point_fallback();
         runtime.set_matched_identity(
             0,
