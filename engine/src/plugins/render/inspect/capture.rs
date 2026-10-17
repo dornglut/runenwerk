@@ -204,7 +204,9 @@ impl RenderCaptureSubmissionReceipt {
             && self.affinity == submission.affinity()
             && matches!(submission.status(), GpuSubmissionStatus::Completed)
             && matches!(
-                submission.readback(self.readback_id).map(|readback| readback.status()),
+                submission
+                    .readback(self.readback_id)
+                    .map(|readback| readback.status()),
                 Some(GpuReadbackStatus::Ready(_))
             )
     }
