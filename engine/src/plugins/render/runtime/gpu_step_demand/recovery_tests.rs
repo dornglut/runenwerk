@@ -163,17 +163,20 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
     .unwrap();
     wait(&old_context, &initial);
     assert!(initial.contains_work_node(&initial_node));
-    assert!(bytes_equal(&initial, initial_readback, &verified_checkpoint));
+    assert!(bytes_equal(
+        &initial,
+        initial_readback,
+        &verified_checkpoint
+    ));
 
     let mut producer = RenderGpuStepDemand::<u32>::new(0, 4);
     producer.capture_batch(vec![5, 7]).unwrap();
     let (initial, _, _) = make_work(&target, &unverified_write, "accepted unknown write");
     let accepted = producer
         .submit_with(2, |_| {
-            let submission = pollster::block_on(old_context.submit_work(
-                "accepted unknown source write",
-                [initial],
-            ))
+            let submission = pollster::block_on(
+                old_context.submit_work("accepted unknown source write", [initial]),
+            )
             .unwrap();
             Ok::<_, ()>((submission, ()))
         })
@@ -207,17 +210,19 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
             RenderGpuStepDemandError::SubmissionFailed
         ))
     ));
-    assert_eq!((producer.requested_tick(), producer.completed_tick()), (3, 0));
+    assert_eq!(
+        (producer.requested_tick(), producer.completed_tick()),
+        (3, 0)
+    );
 
     let new_context = request_context("Runenwerk source-checkpoint restoration")
         .expect("GPU available for initial admission must support reconstruction request");
     let invalid_checkpoint = [0xdead_beef_u32, 0xabab_cdcd_u32];
     let (wrong_work, wrong_readback, _) =
         make_work(&target, &invalid_checkpoint, "incorrect checkpoint bytes");
-    let wrong_restore = pollster::block_on(new_context.submit_work(
-        "wrong producer checkpoint restoration",
-        [wrong_work],
-    ))
+    let wrong_restore = pollster::block_on(
+        new_context.submit_work("wrong producer checkpoint restoration", [wrong_work]),
+    )
     .unwrap();
     wait(&new_context, &wrong_restore);
     assert!(bytes_equal(
@@ -238,16 +243,18 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
             }
         },
     );
-    assert!(matches!(refused, Err(RenderGpuStepCommitError::Verification(_))));
+    assert!(matches!(
+        refused,
+        Err(RenderGpuStepCommitError::Verification(_))
+    ));
     assert_eq!(producer.accepted_steps().len(), 2);
     assert_eq!(producer.pending_len(), 1);
 
     let (restore_work, restore_readback, restore_node) =
         make_work(&target, &verified_checkpoint, "explicit source checkpoint");
-    let restore = pollster::block_on(new_context.submit_work(
-        "producer checkpoint upload and readback",
-        [restore_work],
-    ))
+    let restore = pollster::block_on(
+        new_context.submit_work("producer checkpoint upload and readback", [restore_work]),
+    )
     .unwrap();
     // An outstanding reconstruction is not sufficient for replay, even
     // if the producer has the original inputs and the right CPU tick.
@@ -287,7 +294,11 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
     assert_eq!(producer.requested_tick(), 3);
     assert_eq!(producer.accepted_steps().len(), 0);
     assert_eq!(
-        producer.candidate(3).iter().map(|v| (v.tick(), *v.input())).collect::<Vec<_>>(),
+        producer
+            .candidate(3)
+            .iter()
+            .map(|v| (v.tick(), *v.input()))
+            .collect::<Vec<_>>(),
         vec![(1, 5), (2, 7), (3, 9)]
     );
 
@@ -297,12 +308,16 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
         make_work(&target, &unverified_write, "verified historical replay");
     producer
         .submit_with(2, |steps| {
-            assert_eq!(steps.iter().map(|s| (s.tick(), *s.input())).collect::<Vec<_>>(),
-                vec![(1, 5), (2, 7)]);
-            let submission = pollster::block_on(new_context.submit_work(
-                "producer historical replay",
-                [replay_work],
-            ))
+            assert_eq!(
+                steps
+                    .iter()
+                    .map(|s| (s.tick(), *s.input()))
+                    .collect::<Vec<_>>(),
+                vec![(1, 5), (2, 7)]
+            );
+            let submission = pollster::block_on(
+                new_context.submit_work("producer historical replay", [replay_work]),
+            )
             .unwrap();
             Ok::<_, ()>((submission, ()))
         })
@@ -312,13 +327,25 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
     let committed = producer
         .commit_verified(new_context.affinity(), |submission, steps| {
             assert_eq!(submission.id(), replay_receipt.id());
-            assert_eq!(steps.iter().map(|s| s.tick()).collect::<Vec<_>>(), vec![1, 2]);
+            assert_eq!(
+                steps.iter().map(|s| s.tick()).collect::<Vec<_>>(),
+                vec![1, 2]
+            );
             assert!(bytes_equal(submission, replay_readback, &unverified_write));
             Ok::<(), ()>(())
         })
         .unwrap();
     assert_eq!(committed, 2);
-    assert_eq!((producer.requested_tick(), producer.completed_tick()), (3, 2));
-    assert_eq!(producer.candidate(3).iter().map(|s| s.tick()).collect::<Vec<_>>(), vec![3]);
+    assert_eq!(
+        (producer.requested_tick(), producer.completed_tick()),
+        (3, 2)
+    );
+    assert_eq!(
+        producer
+            .candidate(3)
+            .iter()
+            .map(|s| s.tick())
+            .collect::<Vec<_>>(),
+        vec![3]
+    );
 }
-
