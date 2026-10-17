@@ -417,7 +417,12 @@ impl RenderFrameDiagnosticsTransaction {
                     .output_dir
                     .as_ref()
                     .expect("pending artifact export owns its output directory");
-                match export_captured_textures(output_dir, self.frame_index, self.surface_id, &self.captures) {
+                match export_captured_textures(
+                    output_dir,
+                    self.frame_index,
+                    self.surface_id,
+                    &self.captures,
+                ) {
                     Ok(export) => {
                         self.artifact.manifest_path = Some(export.manifest_path);
                         for exported in export.exported_capture_images {

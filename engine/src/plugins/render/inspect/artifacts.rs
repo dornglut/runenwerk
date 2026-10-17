@@ -295,32 +295,42 @@ mod tests {
         second_capture.identity.surface_id = 2;
         second_capture.bytes_rgba8 = Some(vec![0, 255, 0, 255]);
 
-        let mismatched = export_captured_textures(&root, 42, 1, std::slice::from_ref(&second_capture));
-        assert!(mismatched.is_err(), "an unrelated surface cannot enter this manifest");
-        assert!(!root.exists(), "source mismatch must fail before any export side effects");
+        let mismatched =
+            export_captured_textures(&root, 42, 1, std::slice::from_ref(&second_capture));
+        assert!(
+            mismatched.is_err(),
+            "an unrelated surface cannot enter this manifest"
+        );
+        assert!(
+            !root.exists(),
+            "source mismatch must fail before any export side effects"
+        );
 
-        let first = export_captured_textures(&root, 42, 1, &[first_capture])
-            .expect("primary surface export");
+        let first =
+            export_captured_textures(&root, 42, 1, &[first_capture]).expect("primary surface export");
         let second = export_captured_textures(&root, 42, 2, &[second_capture])
             .expect("secondary surface export");
         assert_ne!(first.manifest_path, second.manifest_path);
         assert!(first.manifest_path.ends_with("frame_42__surface_1__manifest.json"));
         assert!(second.manifest_path.ends_with("frame_42__surface_2__manifest.json"));
         assert!(first.manifest_path.exists() && second.manifest_path.exists());
-        let first_json: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(&first.manifest_path).expect("primary manifest"),
-        ).expect("valid primary manifest");
-        let second_json: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(&second.manifest_path).expect("secondary manifest"),
-        ).expect("valid secondary manifest");
+        let first_json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&first.manifest_path).expect("primary manifest"))
+                .expect("valid primary manifest");
+        let second_json: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&second.manifest_path).expect("secondary manifest"))
+                .expect("valid secondary manifest");
         assert_eq!(first_json["surface_id"], 1);
         assert_eq!(second_json["surface_id"], 2);
         assert_eq!(first_json["captures"][0]["surface_id"], 1);
         assert_eq!(second_json["captures"][0]["surface_id"], 2);
-        let run: serde_json::Value = serde_json::from_slice(
-            &std::fs::read(&second.run_manifest_path).expect("run manifest"),
-        ).expect("valid run manifest");
-        assert_eq!(run["frame_manifests"].as_array().unwrap().len(), 2);
+        let run: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&second.run_manifest_path).expect("run manifest"))
+                .expect("valid run manifest");
+        assert_eq!(
+            run["frame_manifests"].as_array().unwrap().len(),
+            2
+        );
         assert_ne!(first.exported_images, second.exported_images);
         let _ = std::fs::remove_dir_all(root);
     }
