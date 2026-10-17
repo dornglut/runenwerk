@@ -1204,7 +1204,11 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
 }
 
 impl NativeHistoricalGpuHook {
-    fn verify_frame(&mut self, window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+    fn verify_frame(
+        &mut self,
+        window: &Window,
+        world: &mut runen_ecs::World,
+    ) -> anyhow::Result<()> {
         self.frames += 1;
         if let Ok(streams) = world.resource::<RenderGpuFlowStepStreams>() {
             let producer = streams
@@ -1384,6 +1388,7 @@ impl NativeHistoricalGpuHook {
             |capture: &engine::plugins::render::inspect::RenderCapturedTexture| {
                 capture.identity.flow_id() == self.flow.to_string()
                     && capture.identity.pass_id() == self.display_pass
+                    && !self.second_committed
                     && (!self.semantic_committed
                         || self
                             .first_capture_frame
@@ -1396,9 +1401,15 @@ impl NativeHistoricalGpuHook {
                 == 0,
             "native producer diagnostic capture observation history has a delivery gap"
         );
-        // Normal producer code can read ECS observation; it must not need
-        // privileged access to the renderer or create another GPU progress
-        // loop just because the previous accepted frame is deferred.
+        // A bounded diagnostics view contains historical captures after a
+        // producer has committed its earlier interval. Those samples are not
+        // evidence for another interval and must not require a live receipt.
+        // Select only observations correlated with the producer's currently
+        // accepted G5 submission; never accept a stale matching pixel.
+        let accepted_submission = world
+            .resource::<RenderGpuFlowStepStreams>()?
+            .stream(self.flow)
+            .and_then(|producer| producer.accepted_submission());
         let capture = world
             .resource::<RenderCapturedTextureState>()
             .ok()
@@ -1406,7 +1417,15 @@ impl NativeHistoricalGpuHook {
                 state
                     .captures
                     .iter()
-                    .find(|capture| matches_capture(capture))
+                    .find(|capture| {
+                        matches_capture(capture)
+                            && capture.submission_receipt.is_some_and(|origin| {
+                                accepted_submission.is_some_and(|gpu| {
+                                    origin.submission_id() == gpu.id()
+                                        && origin.affinity() == gpu.affinity()
+                                })
+                            })
+                    })
                     .map(|capture| {
                         (
                             capture.identity.surface_id(),
@@ -1429,11 +1448,9 @@ impl NativeHistoricalGpuHook {
             );
             // Do not infer a producer's completed G5 work from an unqualified
             // diagnostic pixel, even when its source frame and surface match.
-            let source_submission = world
-                .resource::<RenderGpuFlowStepStreams>()?
-                .stream(self.flow)
-                .and_then(|stream| stream.accepted_submission())
-                .ok_or_else(|| anyhow::anyhow!("GPU pixel has no retained producer G5 receipt"))?;
+            let source_submission = accepted_submission.ok_or_else(|| {
+                anyhow::anyhow!("correlated pixel has no producer G5 submission")
+            })?;
             anyhow::ensure!(
                 receipt.is_some_and(|origin| origin.matches_completed_readback(source_submission)),
                 "GPU pixel readback is not bound to the producer's exact completed G5 submission"
