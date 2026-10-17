@@ -923,21 +923,17 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
                 let diagnostics_start = std::time::Instant::now();
                 let semantic_frame_index = prepared_frame.context.frame_index;
-                let (current_captures, delayed_captures): (Vec<_>, Vec<_>) = published_captures
-                    .into_iter()
-                    .partition(|capture| {
+                let (current_captures, delayed_captures): (Vec<_>, Vec<_>) =
+                    published_captures.into_iter().partition(|capture| {
                         capture.identity.frame_index == semantic_frame_index
                             && capture.identity.surface_id() == render_surface_id.raw()
                     });
                 let (current_capture_results, delayed_capture_results): (Vec<_>, Vec<_>) =
                     published_capture_results.into_iter().partition(|result| {
-                        result
-                            .frame_identity
-                            .as_ref()
-                            .is_none_or(|identity| {
-                                identity.frame_index == semantic_frame_index
-                                    && identity.surface_id() == render_surface_id.raw()
-                            })
+                        result.frame_identity.as_ref().is_none_or(|identity| {
+                            identity.frame_index == semantic_frame_index
+                                && identity.surface_id() == render_surface_id.raw()
+                        })
                     });
 
                 let mut diagnostics_transactions = world

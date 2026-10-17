@@ -1562,8 +1562,7 @@ mod tests {
         second.surface_id = 2;
         second.simulation_tick = 420;
         for entry in &mut second.capture_plan.selectors {
-            if let RenderSelectorResolution::Pending { frame_identity, .. } =
-                &mut entry.resolution
+            if let RenderSelectorResolution::Pending { frame_identity, .. } = &mut entry.resolution
             {
                 frame_identity.surface_id = 2;
             }
@@ -1583,12 +1582,16 @@ mod tests {
         assert_eq!(completed_secondary.len(), 1);
         assert_eq!(completed_secondary[0].simulation_tick, 420);
         assert_eq!(state.pending_count(), 1);
-        assert!(state
-            .pending
-            .contains_key(&RenderFrameDiagnosticsKey::new(41, 1)));
-        assert!(!state
-            .pending
-            .contains_key(&RenderFrameDiagnosticsKey::new(41, 2)));
+        assert!(
+            state
+                .pending
+                .contains_key(&RenderFrameDiagnosticsKey::new(41, 1))
+        );
+        assert!(
+            !state
+                .pending
+                .contains_key(&RenderFrameDiagnosticsKey::new(41, 2))
+        );
 
         let primary_capture = capture(41, &selector, [1, 2, 3, 255]);
         let completed_primary = state.observe_terminal_captures(
