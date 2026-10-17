@@ -471,12 +471,31 @@ evictable ECS image window. At most 64 metadata references are retained for
 an accepted producer interval; overflow is a typed error and never an
 apparently-complete truncated result set. The producer keeps immutable steps
 and the G5 handle until its own semantic verifier explicitly commits.
-The readback must be actually authored and admitted (for example by an
-opt-in supported capture selector): a missing/disabled or failed readback
-cannot prove progress. This is **not** automatic production-grade readback
-authoring for every compute workload, nor recovery after uncertain writes,
-and does not imply successful Present. Those remain separately owned
-requirements.
+A producer can now author the readback independently of debug controls:
+
+```rust
+let selector = RenderCaptureSelector::named_pass_surface_color(
+    flow_id.to_string(),
+    display_pass_id.to_string(),
+);
+streams.require_capture(flow_id, selector)?;
+```
+
+Call `require_capture` after registering the producer's fixed-step stream
+and before accepting any producer interval. Each required selector identifies
+an exact flow, pass, Before/After stage and resource, with no wildcard flow
+or pass. Requirements are strictly bounded, cannot be changed while an
+accepted interval is unverified, and must uniquely resolve to a supported
+canonical GPU readback before G5 submission. Any absent, ambiguous, unsupported
+or unpreparable required readback rejects that frame **before** acceptance;
+the producer retains its immutable pending steps. Required readbacks are
+formed even when `RenderDebugControlResource.capture_enabled` and
+`readback_enabled` are false, and their pixels never depend on the lossy
+diagnostic ECS history. Disabled optional debug captures retain their existing
+policy. This currently supports the renderer's normal texture readback formats
+(RGBA8/BGRA8); it is not a general buffer-readback interface or an
+automatic simulation-state recovery mechanism. It does not imply successful
+Present. Those remain separate qualifications.
 
 Physical `Completed` and successful Present remain distinct from producer
 semantic verification. Native-window original/species boids, unknown partial

@@ -347,3 +347,31 @@ simulation progress, or that a production boids owner has adopted the
 verification policy. Arbitrary cross-flow evidence composition, GPU
 partial-write restoration, native two-surface stress, and 120+ presented
 original/species boids frames remain separately unqualified.
+
+## RW-1291-PROD12 — required producer result readback authoring
+
+A registered fixed-step producer can now `require_capture(flow, selector)`
+using an exact flow, pass, Before/After capture stage and resource. This
+requirement belongs to the producer's source contract rather than optional
+`RenderDebugConfigResource` selectors or
+`RenderDebugControlResource.{capture_enabled,readback_enabled}`. The producer
+may not mutate requirements while its prior accepted G5 interval is
+unverified. Duplicate, wildcard, unregistered and over-capacity requests
+are rejected at registration; unresolvable, unsupported, multiply resolved or
+failed readback preparation is rejected before submission, without losing
+source-owned pending steps. Ordinary optional diagnostics retain their
+existing behavior and reporting indices; producer-required captures do not
+populate diagnostic image history.
+
+The native historical green/blue fixed-step test now disables **both** debug
+capture and readback flags, registers the source-required display-pass texture
+capture, and still verifies its exact G5 readback pixels and source interval
+before `commit_verified`. Focused `FrameCaptureRuntime` tests exercise
+source requirement vs disabled diagnostic controls, omission from diagnostic
+reporting, terminal-failure rejection, and exact/unique registration policy.
+
+This does not generalize automatic readback creation to storage buffers or
+other GPU result classes, recover partially executed retained state, guarantee
+independent rendering of conflicting resources, or qualify real owner-native
+boids/three-species 120+ visible frames. Those remain separate acceptance
+requirements.

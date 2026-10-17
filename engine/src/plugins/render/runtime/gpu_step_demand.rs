@@ -772,3 +772,32 @@ impl RenderGpuFlowStepStreams {
         }
     }
 }
+
+#[cfg(test)]
+mod required_capture_tests {
+    use super::*;
+
+    #[test]
+    fn producer_capture_registration_requires_exact_source_and_bounded_unique_contract() {
+        let flow = RenderFlowId::try_from_raw(71).unwrap();
+        let other = RenderFlowId::try_from_raw(72).unwrap();
+        let mut streams = RenderGpuFlowStepStreams::default();
+        streams.register(flow, 0, 4).unwrap();
+        let selector =
+            RenderCaptureSelector::named_pass_surface_color(flow.to_string(), "display");
+        assert!(streams.require_capture(other, selector.clone()).is_err());
+        assert!(streams.require_capture(flow, selector.clone()).is_ok());
+        assert!(streams.require_capture(flow, selector.clone()).is_err());
+
+        let mut wildcard_flow = selector.clone();
+        wildcard_flow.flow_id = None;
+        assert!(streams.require_capture(flow, wildcard_flow).is_err());
+        let mut wildcard_pass = selector.clone();
+        wildcard_pass.pass_id = None;
+        assert!(streams.require_capture(flow, wildcard_pass).is_err());
+        let mut final_stage = selector;
+        final_stage.stage = CaptureStage::Final;
+        assert!(streams.require_capture(flow, final_stage).is_err());
+        assert_eq!(streams.required_capture_selectors.get(&flow).unwrap().len(), 1);
+    }
+}

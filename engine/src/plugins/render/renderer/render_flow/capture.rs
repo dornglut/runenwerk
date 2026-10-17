@@ -446,6 +446,64 @@ mod tests {
     };
 
     #[test]
+    fn required_source_capture_bypasses_disabled_debug_and_is_not_a_debug_report() {
+        let required = RenderCaptureSelector::named_pass_surface_color("producer", "display");
+        let mut runtime = FrameCaptureRuntime::new_with_required(
+            21,
+            2,
+            &RenderDebugControlResource::default(),
+            &[],
+            std::slice::from_ref(&required),
+        );
+        assert!(runtime.is_required(0));
+        assert!(runtime.should_attempt_stage(CaptureStage::After));
+        assert!(runtime.validate_required().is_err());
+
+        let point = required.stable_point_fallback();
+        runtime.set_matched_identity(
+            0,
+            point.clone(),
+            RenderCaptureIdentity {
+                frame_index: 21,
+                surface_id: 2,
+                pass_label: "display".into(),
+                capture_point: point,
+            },
+        );
+        assert!(runtime.validate_required().is_ok());
+        let (plan, results) = runtime.into_plan_and_results();
+        assert!(plan.selectors.is_empty());
+        assert!(results.is_empty());
+    }
+
+    #[test]
+    fn required_source_capture_rejects_failed_resolution_and_isolates_debug_disable() {
+        let selector = RenderCaptureSelector::named_pass_surface_color("producer", "display");
+        let mut runtime = FrameCaptureRuntime::new_with_required(
+            21,
+            2,
+            &RenderDebugControlResource::default(),
+            std::slice::from_ref(&selector),
+            std::slice::from_ref(&selector),
+        );
+        assert!(!runtime.is_required(0));
+        assert!(runtime.is_required(1));
+        assert!(runtime.selector_snapshot(0).unwrap().1);
+        assert!(!runtime.selector_snapshot(1).unwrap().1);
+        runtime.set_terminal_with_reason(
+            1,
+            RenderCaptureTerminalCode::Unsupported,
+            "bad_format",
+            "required source readback must fail closed",
+        );
+        assert!(runtime.validate_required().is_err());
+        let (plan, results) = runtime.into_plan_and_results();
+        assert_eq!(plan.selectors.len(), 1);
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].selector_index, 0);
+    }
+
+    #[test]
     fn accepted_pending_capture_is_not_finalized_as_skipped() {
         let selector = RenderCaptureSelector::named_pass_surface_color("flow", "pass");
         let control = RenderDebugControlResource {
