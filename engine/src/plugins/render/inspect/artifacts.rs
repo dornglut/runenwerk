@@ -23,6 +23,7 @@ pub struct RenderArtifactExportResult {
 #[derive(Debug, Serialize)]
 struct CaptureManifest {
     frame_index: u64,
+    surface_id: u64,
     captures: Vec<CaptureManifestEntry>,
 }
 
@@ -53,8 +54,19 @@ struct RunManifest {
 pub fn export_captured_textures(
     output_root: &Path,
     frame_index: u64,
+    surface_id: u64,
     captures: &[RenderCapturedTexture],
 ) -> Result<RenderArtifactExportResult> {
+    // Fail before writing an image or manifest: this product is one exact source.
+    if let Some(foreign) = captures.iter().find(|capture| {
+        capture.identity.frame_index != frame_index || capture.identity.surface_id() != surface_id
+    }) {
+        anyhow::bail!(
+            "capture source mismatch: export frame {frame_index} surface {surface_id}, capture frame {} surface {}",
+            foreign.identity.frame_index,
+            foreign.identity.surface_id()
+        );
+    }
     fs::create_dir_all(output_root)
         .with_context(|| format!("failed to create render artifact dir {:?}", output_root))?;
 
@@ -131,10 +143,11 @@ pub fn export_captured_textures(
 
     let manifest = CaptureManifest {
         frame_index,
+        surface_id,
         captures: manifest_entries,
     };
 
-    let manifest_path = output_root.join(format!("frame_{}__manifest.json", frame_index));
+    let manifest_path = output_root.join(format!("frame_{frame_index}__surface_{surface_id}__manifest.json"));
     let payload = serde_json::to_vec_pretty(&manifest)?;
     fs::write(&manifest_path, payload)
         .with_context(|| format!("failed to write capture manifest {:?}", manifest_path))?;
@@ -249,6 +262,70 @@ mod tests {
     }
 
     #[test]
+    fn same_ordinal_surface_exports_are_distinct_and_reject_foreign_capture() {
+        let root = std::env::temp_dir().join(format!(
+            "runenwerk_surface_manifest_{}_{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock should be after epoch")
+                .as_nanos()
+        ));
+        let identity = RenderCaptureIdentity {
+            frame_index: 42,
+            surface_id: 1,
+            pass_label: "pass".into(),
+            capture_point: RenderCapturePointIdentity {
+                flow_id: "flow".into(),
+                pass_id: "pass".into(),
+                stage: CaptureStage::After,
+                resource_id: "surface.color".into(),
+                texture_class: CaptureTextureClass::ColorTarget,
+            },
+        };
+        let first_capture = RenderCapturedTexture {
+            identity: identity.clone(),
+            width: 1,
+            height: 1,
+            format: "Rgba8Unorm".into(),
+            bytes_rgba8: Some(vec![255, 0, 0, 255]),
+            terminal: RenderCaptureTerminal::completed(),
+        };
+        let mut second_capture = first_capture.clone();
+        second_capture.identity.surface_id = 2;
+        second_capture.bytes_rgba8 = Some(vec![0, 255, 0, 255]);
+
+        let mismatched = export_captured_textures(&root, 42, 1, std::slice::from_ref(&second_capture));
+        assert!(mismatched.is_err(), "an unrelated surface cannot enter this manifest");
+        assert!(!root.exists(), "source mismatch must fail before any export side effects");
+
+        let first = export_captured_textures(&root, 42, 1, &[first_capture])
+            .expect("primary surface export");
+        let second = export_captured_textures(&root, 42, 2, &[second_capture])
+            .expect("secondary surface export");
+        assert_ne!(first.manifest_path, second.manifest_path);
+        assert!(first.manifest_path.ends_with("frame_42__surface_1__manifest.json"));
+        assert!(second.manifest_path.ends_with("frame_42__surface_2__manifest.json"));
+        assert!(first.manifest_path.exists() && second.manifest_path.exists());
+        let first_json: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(&first.manifest_path).expect("primary manifest"),
+        ).expect("valid primary manifest");
+        let second_json: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(&second.manifest_path).expect("secondary manifest"),
+        ).expect("valid secondary manifest");
+        assert_eq!(first_json["surface_id"], 1);
+        assert_eq!(second_json["surface_id"], 2);
+        assert_eq!(first_json["captures"][0]["surface_id"], 1);
+        assert_eq!(second_json["captures"][0]["surface_id"], 2);
+        let run: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(&second.run_manifest_path).expect("run manifest"),
+        ).expect("valid run manifest");
+        assert_eq!(run["frame_manifests"].as_array().unwrap().len(), 2);
+        assert_ne!(first.exported_images, second.exported_images);
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn run_manifest_is_deterministic() {
         let temp = std::env::temp_dir().join(format!(
             "runenwerk_render_artifact_test_{}_{}",
@@ -279,10 +356,10 @@ mod tests {
             terminal: RenderCaptureTerminal::completed(),
         };
 
-        let first = export_captured_textures(&temp, 1, std::slice::from_ref(&capture))
+        let first = export_captured_textures(&temp, 1, 1, std::slice::from_ref(&capture))
             .expect("first export should succeed");
         let second =
-            export_captured_textures(&temp, 1, &[capture]).expect("second export should succeed");
+            export_captured_textures(&temp, 1, 1, &[capture]).expect("second export should succeed");
 
         assert_eq!(first.run_manifest_path, second.run_manifest_path);
         let _ = std::fs::remove_dir_all(temp);

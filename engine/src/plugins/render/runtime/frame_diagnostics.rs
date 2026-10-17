@@ -417,7 +417,7 @@ impl RenderFrameDiagnosticsTransaction {
                     .output_dir
                     .as_ref()
                     .expect("pending artifact export owns its output directory");
-                match export_captured_textures(output_dir, self.frame_index, &self.captures) {
+                match export_captured_textures(output_dir, self.frame_index, self.surface_id, &self.captures) {
                     Ok(export) => {
                         self.artifact.manifest_path = Some(export.manifest_path);
                         for exported in export.exported_capture_images {
@@ -1268,7 +1268,7 @@ mod tests {
         let reports = state.begin_frame(frame, vec![ready.clone()], vec![result_for(&ready, 0)]);
         assert_eq!(reports[0].report.frame_index, 20);
         let manifest_path = reports[0].report.artifact_manifest_path.as_ref().unwrap();
-        assert!(manifest_path.ends_with("frame_20__manifest.json"));
+        assert!(manifest_path.ends_with("frame_20__surface_1__manifest.json"));
         let manifest = std::fs::read_to_string(manifest_path).unwrap();
         assert!(manifest.contains("\"frame_index\": 20"));
         assert!(
