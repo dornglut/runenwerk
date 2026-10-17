@@ -735,6 +735,7 @@ mod tests {
     fn identity(frame_index: u64, selector: &RenderCaptureSelector) -> RenderCaptureIdentity {
         RenderCaptureIdentity {
             frame_index,
+            surface_id: 1,
             pass_label: selector
                 .pass_id
                 .clone()
