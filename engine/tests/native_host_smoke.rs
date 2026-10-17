@@ -1154,6 +1154,7 @@ struct NativeHistoricalCounter {
 }
 
 struct NativeHistoricalGpuHook {
+    fatal_error: Arc<std::sync::Mutex<Option<String>>>,
     flow: RenderFlowId,
     uniform_id: runen_gpu::GpuWorkResourceId,
     display_pass: String,
@@ -1180,6 +1181,30 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
     }
 
     fn frame(&mut self, window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+        let result = self.verify_frame(window, world);
+        if let Err(error) = &result {
+            // Native host hooks collect failures as diagnostics rather than
+            // terminating the event loop. A regression fixture must explicitly
+            // close the window and return its first failure to its test runner.
+            let mut recorded = self
+                .fatal_error
+                .lock()
+                .expect("native smoke failure storage poisoned");
+            if recorded.is_none() {
+                *recorded = Some(format!("{error:#}"));
+            }
+            if let Ok(windows) = world.resource_mut::<WindowStateRegistryResource>()
+                && let Some(primary) = windows.record_mut(NativeWindowId::primary())
+            {
+                primary.request_close();
+            }
+        }
+        result
+    }
+}
+
+impl NativeHistoricalGpuHook {
+    fn verify_frame(&mut self, window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
         self.frames += 1;
         if let Ok(streams) = world.resource::<RenderGpuFlowStepStreams>() {
             let producer = streams
@@ -1677,9 +1702,11 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
     app.insert_resource(sources);
     app.add_render_flow(flow);
     app.init_resource::<NativeWindowHookRegistryResource>();
+    let fatal_error = Arc::new(std::sync::Mutex::new(None));
     app.world_mut()
         .resource_mut::<NativeWindowHookRegistryResource>()?
         .register_hook(NativeHistoricalGpuHook {
+            fatal_error: Arc::clone(&fatal_error),
             flow: flow_id,
             uniform_id: uniform.diagnostic_identity(),
             display_pass,
@@ -1700,6 +1727,13 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             second_committed: false,
         });
     app.run()?;
+    if let Some(error) = fatal_error
+        .lock()
+        .map_err(|_| anyhow::anyhow!("native historical GPU test failure storage poisoned"))?
+        .as_ref()
+    {
+        anyhow::bail!("native historical GPU frame assertion failed: {error}");
+    }
     println!("native_historical_gpu_render_flow=pass");
     Ok(())
 }
