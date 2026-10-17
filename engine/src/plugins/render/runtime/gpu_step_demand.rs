@@ -4,12 +4,8 @@
 //! GPU resource reservation system, or a replacement for RunenGPU's G3/G5.
 //! Only the producer can certify that a prepared GPU graph faithfully lowers
 //! every captured step. An accepted submission is not a completed simulation.
-use crate::plugins::render::{
-    PreparedRenderFrame, RenderFixedStepIterationUniform, RenderFlowId,
-};
-use crate::plugins::render::inspect::{
-    RenderCaptureIdentity, RenderCaptureSubmissionReceipt,
-};
+use crate::plugins::render::inspect::{RenderCaptureIdentity, RenderCaptureSubmissionReceipt};
+use crate::plugins::render::{PreparedRenderFrame, RenderFixedStepIterationUniform, RenderFlowId};
 use runen_gpu::{
     GpuContextAffinity, GpuReadbackId, GpuReadbackStatus, GpuSubmission, GpuSubmissionStatus,
     GpuTextureFormat, GpuWorkResourceId,
@@ -479,7 +475,9 @@ impl RenderGpuAcceptedCaptureReadback {
             .checked_mul(width)?
             .checked_add(width / 2)?
             .checked_mul(4)?;
-        let pixel = bytes.as_bytes().get(pixel_offset..pixel_offset.checked_add(4)?)?;
+        let pixel = bytes
+            .as_bytes()
+            .get(pixel_offset..pixel_offset.checked_add(4)?)?;
         let mut rgba = [pixel[0], pixel[1], pixel[2], pixel[3]];
         match self.source_format {
             GpuTextureFormat::Bgra8Unorm | GpuTextureFormat::Bgra8UnormSrgb => rgba.swap(0, 2),
@@ -601,8 +599,7 @@ impl RenderGpuFlowStepStreams {
         for (flow, stream) in &self.streams {
             if identity.flow_id() != flow.to_string()
                 || !stream.accepted_submission().is_some_and(|accepted| {
-                    accepted.id() == submission.id()
-                        && accepted.affinity() == submission.affinity()
+                    accepted.id() == submission.id() && accepted.affinity() == submission.affinity()
                 })
             {
                 continue;

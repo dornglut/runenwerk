@@ -1390,7 +1390,10 @@ impl NativeHistoricalGpuHook {
             .and_then(|producer| producer.accepted_submission());
         let capture = if let Some(submission) = accepted_submission {
             anyhow::ensure!(
-                !matches!(submission.status(), runen_gpu::GpuSubmissionStatus::Failed(_)),
+                !matches!(
+                    submission.status(),
+                    runen_gpu::GpuSubmissionStatus::Failed(_)
+                ),
                 "native source G5 submission failed before semantic verification"
             );
             let readbacks = step_streams.accepted_capture_readbacks(self.flow)?;
@@ -1403,16 +1406,23 @@ impl NativeHistoricalGpuHook {
                             .first_capture_frame
                             .is_none_or(|first| capture.identity.frame_index > first))
             });
-            if matches!(submission.status(), runen_gpu::GpuSubmissionStatus::Completed) {
+            if matches!(
+                submission.status(),
+                runen_gpu::GpuSubmissionStatus::Completed
+            ) {
                 anyhow::ensure!(
                     candidate.is_some(),
                     "completed producer G5 interval has no associated source capture readback"
                 );
             }
             candidate.and_then(|capture| {
-                capture
-                    .sample_center_rgba8(submission)
-                    .map(|pixel| (capture.identity.surface_id(), capture.identity.frame_index, pixel))
+                capture.sample_center_rgba8(submission).map(|pixel| {
+                    (
+                        capture.identity.surface_id(),
+                        capture.identity.frame_index,
+                        pixel,
+                    )
+                })
             })
         } else {
             None
