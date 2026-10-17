@@ -172,6 +172,16 @@ jobs:
             --test render_gpu_fixed_step_continuity \
             --locked -- --nocapture --test-threads=1
 
+      - name: Prove producer checkpoint reimport after G5 context failure
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --lib \
+            accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay \
+            --locked -- --nocapture --test-threads=1
+
   runenrender-r6-vulkan-render-lab:
     name: RunenRender Vulkan Render Lab proofs
     runs-on: ubuntu-24.04

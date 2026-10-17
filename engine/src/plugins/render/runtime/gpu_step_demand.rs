@@ -803,3 +803,6 @@ mod required_capture_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod recovery_tests;

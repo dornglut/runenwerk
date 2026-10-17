@@ -376,3 +376,33 @@ other GPU result classes, recover partially executed retained state, guarantee
 independent rendering of conflicting resources, or qualify real owner-native
 boids/three-species 120+ visible frames. Those remain separate acceptance
 requirements.
+
+## RW-1291-REC13 — actual G5 checkpoint/reconstruction/replay qualification
+
+The focused `gpu_step_demand` recovery test uses the pinned public RunenGPU
+buffer upload, readback, submitted work and context lifecycle, **not**
+fabricated submission statuses or CPU-only verification. It establishes an
+initial source-owned GPU checkpoint from real terminal readback bytes, accepts
+an unverified retained-buffer overwrite with exact historical input ticks,
+queues another immutable input, then drops the original GPU context before
+the overwritten contents can be trusted. The accepted submission becomes
+Failed, cannot commit, and all captured inputs remain owned.
+
+A different GPU context first restores **wrong** producer-checkpoint bytes:
+even though that upload and its readback complete, the producer verifier
+rejects the physical result and preserves the accepted/queued inputs. A later
+distinct source-backed reimport of the producer's original verified checkpoint
+must itself become terminal and return the exact expected bytes before
+`requeue_verified_after_reconstruction` can release the original accepted
+prefix. The test rejects replay while the old write remains pending, while
+reimport is pending, and on wrong bytes. It then resubmits precisely the
+original immutable historical prefix, verifies real GPU readback and commits
+only those steps; the later queued successor remains pending.
+
+This qualifies an executable **owner-supplied recovery contract** with
+real G5 bytes and generation change. It does not claim that ordinary RenderFlow
+automatically persists producer checkpoints, rebuilds the right retained
+buffer graph, repairs all shared graphics resources after a device failure,
+or proves original/three-species boids recovery on owner hardware. The
+source/application must provide and verify checkpoint data; zero-filled
+new GPU resources do not count as restoration.
