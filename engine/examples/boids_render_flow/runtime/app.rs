@@ -30,7 +30,7 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
         source.flow_id(),
         RenderCaptureSelector {
             flow_id: Some(source.flow_id().to_string()),
-            pass_id: Some("boids.draw".to_string()),
+            pass_id: Some(source.draw_pass_id().to_string()),
             stage: CaptureStage::After,
             resource_id: "boids.color".to_string(),
             texture_class: CaptureTextureClass::ColorTarget,
@@ -81,7 +81,8 @@ fn advance_boids_simulation_system(
             GpuSubmissionStatus::Completed => {
                 let evidence = streams.accepted_capture_readbacks(flow)?;
                 anyhow::ensure!(
-                    evidence.len() == 1 && evidence[0].identity.pass_id() == "boids.draw",
+                    evidence.len() == 1
+                        && evidence[0].identity.pass_id() == source.draw_pass_id().to_string(),
                     "Boids GPU result has no exact source-correlated draw capture"
                 );
                 let capture = &evidence[0];

@@ -29,6 +29,7 @@ pub(crate) struct BoidsGpuStepSchema {
     flow_id: RenderFlowId,
     uniforms: [GpuWorkResourceId; 8],
     passes: [RenderPassId; 8],
+    draw_pass: RenderPassId,
 }
 
 impl BoidsGpuStepSchema {
@@ -47,17 +48,25 @@ impl BoidsGpuStepSchema {
             passes.push(pass);
             uniforms.push(uniform);
         }
+        let draw_pass = flow
+            .pass_id("boids.draw")
+            .context("missing Boids graph terminal draw pass for required GPU evidence")?;
         Ok(Self {
             flow_id: flow.id(),
             uniforms: uniforms
                 .try_into()
                 .expect("eight checked Boids uniform IDs"),
             passes: passes.try_into().expect("eight checked Boids pass IDs"),
+            draw_pass,
         })
     }
 
     pub(crate) const fn flow_id(&self) -> RenderFlowId {
         self.flow_id
+    }
+
+    pub(crate) const fn draw_pass_id(&self) -> RenderPassId {
+        self.draw_pass
     }
 
     /// source_tick is zero-based: first source tick 0 seeds the initial GPU
@@ -138,6 +147,7 @@ mod tests {
         let flow = build_render_flow();
         let schema = BoidsGpuStepSchema::from_flow(&flow).expect("all eight authored stages");
         assert_eq!(schema.flow_id(), flow.id());
+        assert_eq!(schema.draw_pass_id(), flow.pass_id("boids.draw").unwrap());
         let state = BoidsRenderState::default();
         let step0 = schema.capture(&state, 0).expect("seed step");
         let step1 = schema.capture(&state, 1).expect("subsequent step");
