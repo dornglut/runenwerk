@@ -6,7 +6,7 @@ use engine::plugins::render::{
 };
 use engine::plugins::{DebugMetricsPlugin, RenderPlugin, ScenePlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt, FixedTimeState, Res, ResMut, Update};
-use runen_gpu::{GpuReadbackStatus, GpuSubmissionStatus, GpuTextureFormat};
+use runen_gpu::{GpuContextAffinity, GpuReadbackStatus, GpuSubmissionStatus, GpuTextureFormat};
 
 /// Diagnostic evidence only: a GPU-rendered image is not a retained Boids
 /// storage checkpoint or a numerical oracle. Track visual change independently
@@ -28,7 +28,7 @@ impl BoidsVisualContinuityEvidence {
         let pixels_rgba = pixels.as_chunks::<4>().0;
         let stride = pixels_rgba.len().div_ceil(8_192).max(1);
         let mut hash = HASH_OFFSET;
-        for value in extent {
+        for value in [extent.0, extent.1] {
             hash = (hash ^ u64::from(value)).wrapping_mul(HASH_MULTIPLIER);
         }
         for rgba in pixels_rgba.iter().step_by(stride) {
@@ -36,7 +36,10 @@ impl BoidsVisualContinuityEvidence {
                 hash = (hash ^ u64::from(*byte)).wrapping_mul(HASH_MULTIPLIER);
             }
         }
-        if self.previous_fingerprint.is_some_and(|previous| previous != hash) {
+        if self
+            .previous_fingerprint
+            .is_some_and(|previous| previous != hash)
+        {
             self.changed_frames = self.changed_frames.saturating_add(1);
         }
         self.previous_fingerprint = Some(hash);
@@ -49,6 +52,29 @@ impl BoidsVisualContinuityEvidence {
 
     pub(super) const fn changed_frames(&self) -> u64 {
         self.changed_frames
+    }
+}
+
+/// Source-owner recovery contract: when a GPU generation is replaced after
+/// verified work, the previous retained boid buffers cannot be considered
+/// reconstructed. Stop before admitting newer tick snapshots; a clean app
+/// restart starts an entirely new source epoch at tick zero and reseeds.
+#[derive(Debug, Default, runen_ecs::Resource)]
+struct BoidsVerifiedGpuGeneration {
+    last_verified: Option<GpuContextAffinity>,
+}
+
+impl BoidsVerifiedGpuGeneration {
+    fn validate(&self, current: GpuContextAffinity) -> Result<()> {
+        anyhow::ensure!(
+            self.last_verified.is_none_or(|previous| previous == current),
+            "Boids previously verified GPU contents belong to a different context/generation;              stop and clean-restart to reseed from source tick zero. Reusing previous              completed ticks against zeroed GPU buffers is prohibited"
+        );
+        Ok(())
+    }
+
+    fn note_verified(&mut self, generation: GpuContextAffinity) {
+        self.last_verified = Some(generation);
     }
 }
 
@@ -87,6 +113,7 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     app.insert_resource(source);
     app.insert_resource(streams);
     app.insert_resource(BoidsVisualContinuityEvidence::default());
+    app.insert_resource(BoidsVerifiedGpuGeneration::default());
     app.add_systems(Update, advance_boids_simulation_system);
     app.add_render_flow(flow);
     let smoke = if std::env::var("RUNENWERK_BOIDS_NATIVE_SMOKE").as_deref() == Ok("1") {
@@ -108,8 +135,10 @@ fn advance_boids_simulation_system(
     gfx: Res<Gfx>,
     mut streams: ResMut<RenderGpuFlowStepStreams>,
     mut visual: ResMut<BoidsVisualContinuityEvidence>,
+    mut generation: ResMut<BoidsVerifiedGpuGeneration>,
 ) -> Result<()> {
     let current_affinity = gfx.gpu_context_affinity();
+    generation.validate(current_affinity)?;
     let flow = source.flow_id();
 
     // A completed physical G5 submission is never semantic completion by
@@ -155,6 +184,7 @@ fn advance_boids_simulation_system(
                                 ),
                             "Boids completed capture does not match its exact G5 source"
                         );
+                        let capture_extent = (capture.width, capture.height);
                         let expected_len = u64::from(capture.width)
                             .checked_mul(u64::from(capture.height))
                             .and_then(|pixels| pixels.checked_mul(4))
@@ -185,7 +215,8 @@ fn advance_boids_simulation_system(
                             );
                             Ok::<(), anyhow::Error>(())
                         }).map_err(|error| anyhow::anyhow!("Boids source semantic verification rejected: {error}"))?;
-                        visual.observe(bytes.as_bytes(), (capture.width, capture.height));
+                        generation.note_verified(affinity);
+                        visual.observe(bytes.as_bytes(), capture_extent);
                         tracing::debug!(
                             verified_tick,
                             "Boids exact G5 readback and visible result admitted source step prefix"
@@ -242,7 +273,11 @@ mod visual_continuity_tests {
         witness.observe(&pixels, (16, 16));
         witness.observe(&pixels, (16, 16));
         assert_eq!(witness.sampled_frames(), 2);
-        assert_eq!(witness.changed_frames(), 0, "two static frames prove no visual motion");
+        assert_eq!(
+            witness.changed_frames(),
+            0,
+            "two static frames prove no visual motion"
+        );
 
         let mut moved = pixels.clone();
         moved[0] = 128;
