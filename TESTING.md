@@ -352,7 +352,7 @@ readback bytes until the producer releases that submission.
 The native historical smoke has been changed to verify its green/blue
 semantic counter pixels through this producer-held G5 readback, rather
 than looking up potentially evicted diagnostic ECS images. It still
-checks two successive accepted intervals, 1+2+3=6 and 6+4=10, bounded
+checks two successive accepted intervals, 1+2+3=6 and 6+4+5=15, bounded
 historical input capture, explicit producer verification refusal,
 non-duplicate admission, and correct source/surface identity.
 
@@ -383,7 +383,11 @@ populate diagnostic image history.
 The native historical green/blue fixed-step test now disables **both** debug
 capture and readback flags, registers the source-required display-pass texture
 capture, and still verifies its exact G5 readback pixels and source interval
-before `commit_verified`. Focused `FrameCaptureRuntime` tests exercise
+before `commit_verified`. The required selector remains active after its first
+match to detect a later matching pass occurrence before G5. A selector aimed
+at a pass repeated by a multi-substep region without a distinct substep
+identity must fail closed rather than treating the first substep's texture as
+an unambiguous final result. Focused `FrameCaptureRuntime` tests exercise
 source requirement vs disabled diagnostic controls, omission from diagnostic
 reporting, terminal-failure rejection, and exact/unique registration policy.
 

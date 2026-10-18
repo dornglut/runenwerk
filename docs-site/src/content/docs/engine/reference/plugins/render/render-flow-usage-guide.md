@@ -495,7 +495,12 @@ or pass. Requirements are strictly bounded (at most 64 readback descriptors and
 64 MiB of aggregate RGBA8-equivalent readback bytes per accepted producer
 submission), cannot be changed while an accepted interval is unverified,
 and must uniquely resolve to one supported canonical pass occurrence and
-GPU readback before G5 submission. Any absent, ambiguous, unsupported
+GPU readback before G5 submission. A selector that matches a pass executed
+multiple times in one fixed-step interval is ambiguous without a substep
+identity: it is rejected rather than silently accepting the first occurrence
+as proof of the final simulation state. Use a unique post-region display
+pass for result verification under the current selector model.
+Any absent, ambiguous, unsupported
 or unpreparable required readback rejects that frame **before** acceptance;
 the producer retains its immutable pending steps. Required readbacks are
 formed even when `RenderDebugControlResource.capture_enabled` and

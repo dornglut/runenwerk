@@ -164,10 +164,14 @@ impl FrameCaptureRuntime {
     }
 
     pub fn should_attempt_stage(&self, stage: CaptureStage) -> bool {
-        self.selectors.iter().any(|state| {
+        self.selectors.iter().enumerate().any(|(index, state)| {
             state.selector.stage == stage
                 && state.terminal.is_none()
-                && state.frame_identity.is_none()
+                // Diagnostic selectors only need their first match. A producer
+                // requires exactly one match: keep inspecting subsequent pass
+                // occurrences so a repeated fixed-step pass cannot silently
+                // supply only its first substep as unambiguous source evidence.
+                && (state.frame_identity.is_none() || self.is_required(index))
         })
     }
 
@@ -493,11 +497,59 @@ mod tests {
             },
         );
         assert!(runtime.validate_required().is_ok());
+        assert!(
+            runtime.should_attempt_stage(CaptureStage::After),
+            "a previously matched producer selector must still observe later pass occurrences"
+        );
         assert!(runtime.budget_required_readback(0, (4096, 4096)).is_ok());
         assert!(runtime.budget_required_readback(0, (1, 1)).is_err());
         let (plan, results) = runtime.into_plan_and_results();
         assert!(plan.selectors.is_empty());
         assert!(results.is_empty());
+    }
+
+    #[test]
+    fn diagnostic_first_match_does_not_hide_later_required_capture_duplicates() {
+        let selector = RenderCaptureSelector::named_pass_surface_color("flow", "sim.pass");
+        let control = RenderDebugControlResource {
+            capture_enabled: true,
+            readback_enabled: true,
+            ..RenderDebugControlResource::default()
+        };
+        let mut runtime = FrameCaptureRuntime::new_with_required(
+            5,
+            1,
+            &control,
+            std::slice::from_ref(&selector),
+            std::slice::from_ref(&selector),
+        );
+        assert!(runtime.should_attempt_stage(CaptureStage::After));
+        let point = selector.stable_point_fallback();
+        for index in 0..2 {
+            runtime.set_matched_identity(
+                index,
+                point.clone(),
+                RenderCaptureIdentity {
+                    frame_index: 5,
+                    surface_id: 1,
+                    pass_label: "sim.pass".to_string(),
+                    capture_point: point.clone(),
+                },
+            );
+            runtime.set_readback_pending(index);
+        }
+        assert!(
+            runtime.should_attempt_stage(CaptureStage::After),
+            "only required selector must remain active to reject a duplicate on later substeps"
+        );
+        let (_, diagnostic_done, _) = runtime.selector_snapshot(0).unwrap();
+        assert!(!diagnostic_done);
+        let (_, required_done, required_point) = runtime.selector_snapshot(1).unwrap();
+        assert!(!required_done);
+        assert!(runtime.is_required(1) && required_point.is_some());
+        // prepare_pass_texture_captures compares this retained point with
+        // later matching passes and rejects multiple required matches before G5.
+        assert!(selector.matches_point(required_point.as_ref().unwrap()));
     }
 
     #[test]
