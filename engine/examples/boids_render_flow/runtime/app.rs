@@ -240,7 +240,8 @@ fn advance_boids_simulation_system(
                             anyhow::ensure!(
                                 bytes.as_bytes().len() == expected_len
                                     && bytes.as_bytes().as_chunks::<4>().0.iter().any(|rgba| {
-                                        rgba[3] == 255 && rgba[..3].iter().any(|channel| *channel > 65)
+                                        rgba[3] == 255
+                                            && rgba[..3].iter().any(|channel| *channel > 65)
                                     }),
                                 "Boids draw readback is missing visible non-background particle pixels"
                             );
@@ -327,9 +328,11 @@ fn capture_fixed_steps(
         let history = (start..end)
             .map(|tick| source.capture(state, tick))
             .collect::<Result<Vec<_>>>()?;
-        stream.capture_batch(history).map_err(|(error, _unconsumed)| {
-            anyhow::anyhow!("Boids immutable source admission rejected: {error}")
-        })?;
+        stream
+            .capture_batch(history)
+            .map_err(|(error, _unconsumed)| {
+                anyhow::anyhow!("Boids immutable source admission rejected: {error}")
+            })?;
     }
     Ok(())
 }
