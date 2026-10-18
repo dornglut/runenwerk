@@ -261,12 +261,9 @@ impl NativeBoidsSmoke {
         state.peak_uncaptured_cpu_ticks = state.peak_uncaptured_cpu_ticks.max(uncaptured);
         if presented > state.presented_opportunities {
             let previous_count = state.presented_opportunities;
-            state.cpu_renderer_samples_ms.extend(
-                cpu_samples
-                    .iter()
-                    .skip(previous_count)
-                    .copied(),
-            );
+            state
+                .cpu_renderer_samples_ms
+                .extend(cpu_samples.iter().skip(previous_count).copied());
             let now = Instant::now();
             if let Some(previous) = state.last_present {
                 state.present_intervals.push(now.duration_since(previous));
