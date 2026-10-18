@@ -92,8 +92,12 @@ The hosted Vulkan native-window lane runs the opt-in
 real App/RenderPlugin and an ordinary composed RenderFlow with a G3-owned
 initially zeroed retained counter, independently captured heterogeneous
 producer uniforms and fixed-time controls, and a real WGSL compute mutation.
-The test requires exact G5 producer/frame receipt correspondence, terminal
-physical success and the absence of duplicated admission. A second actual
+The test requires exact G5 source receipt identity, terminal physical
+success and the absence of duplicated admission. Since a fast GPU may retire
+a renderer's pending-only receipt before the native hook runs, the native
+proof also corroborates successful primary and secondary submissions through
+surface-keyed submitted-frame history, never by mistaking mere preparation
+or native-window attachment for successful GPU admission. A second actual
 fullscreen GPU pass reads the retained counter and colors the captured surface
 pixel green iff the original heterogeneous step values sum to exactly 6; the
 test requires that exact green RGBA pixel and only then commits the

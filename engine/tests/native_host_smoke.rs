@@ -1294,22 +1294,32 @@ impl NativeHistoricalGpuHook {
         }
         if let Some(surface) = self.secondary_surface
             && let Ok(history) = world.resource::<RenderFrameHistoryState>()
-            && self.first_submission.is_some()
-            && !self.semantic_committed
         {
             let primary_count = history
                 .observations()
                 .filter(|entry| entry.key.render_surface_id == RenderSurfaceId::primary().raw())
                 .count();
-            anyhow::ensure!(
-                primary_count <= 1,
-                "primary flow submitted again before semantic verification"
-            );
-            if history
-                .observations()
-                .any(|entry| entry.key.render_surface_id == surface.raw())
-            {
-                self.secondary_submitted_while_primary_deferred = true;
+            if self.first_submission.is_some() && !self.semantic_committed {
+                anyhow::ensure!(
+                    primary_count <= 1,
+                    "primary flow submitted again before semantic verification"
+                );
+                if history
+                    .observations()
+                    .any(|entry| entry.key.render_surface_id == surface.raw())
+                {
+                    self.secondary_submitted_while_primary_deferred = true;
+                }
+            }
+            // A fast Vulkan submission can become terminal before this host
+            // hook samples the renderer's *pending-only* receipt list.
+            // Actual source G5 identity and GPU pixels are checked separately;
+            // submitted-frame history proves the surface was truly admitted.
+            if self.first_submission.is_some() && primary_count >= 1 {
+                self.saw_gpu_frame = true;
+            }
+            if self.second_submission.is_some() && primary_count >= 2 {
+                self.saw_second_gpu_frame = true;
             }
         }
         if let Ok(streams) = world.resource::<RenderGpuFlowStepStreams>() {
