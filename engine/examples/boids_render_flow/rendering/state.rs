@@ -233,7 +233,10 @@ mod tests {
         assert_eq!(first.compute_params().meta[0], 0);
         assert_eq!(second.compute_params().meta[0], 1);
         assert_eq!(second.publish_params().meta[1], super::MODE_PUBLISH);
-        assert_eq!(second.compute_params().sim_a[0], state.fixed_delta_seconds());
+        assert_eq!(
+            second.compute_params().sim_a[0],
+            state.fixed_delta_seconds()
+        );
         assert_eq!(state.compute_params().meta[0], 0);
     }
 
