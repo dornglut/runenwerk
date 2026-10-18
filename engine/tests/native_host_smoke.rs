@@ -1308,6 +1308,14 @@ impl NativeHistoricalGpuHook {
         if let Some(surface) = self.secondary_surface
             && !self.secondary_switched_to_independent
         {
+            anyhow::ensure!(
+                world
+                    .resource::<PreparedRenderFrameRequestResource>()?
+                    .requested_flow_invocations_for_surface(surface)
+                    .iter()
+                    .any(|request| request.flow_id == self.flow),
+                "shared-flow secondary surface must have a live, surface-scoped invocation request"
+            );
             let secondary_submissions = world
                 .resource::<RenderFrameHistoryState>()?
                 .observations()
@@ -1317,7 +1325,10 @@ impl NativeHistoricalGpuHook {
                 secondary_submissions == 0,
                 "shared retained producer was submitted from the second native surface while prior source work remained unverified"
             );
-            if self.shared_secondary_start_frame.is_some_and(|start| self.frames >= start + 4) {
+            if self
+                .shared_secondary_start_frame
+                .is_some_and(|start| self.frames >= start + 4)
+            {
                 self.shared_secondary_deferral_verified = true;
                 world
                     .resource_mut::<PreparedRenderFrameRequestResource>()?
