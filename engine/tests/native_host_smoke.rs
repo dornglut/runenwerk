@@ -11,8 +11,8 @@ use engine::plugins::render::inspect::{
 };
 use engine::plugins::render::{
     Gfx, GpuParams, GpuStorage, GpuUniform, PreparedFlowInvocationRequest,
-    PreparedRenderFrameRequestResource, RenderFixedStepIterationUniform, RenderFlow,
-    RenderFlowId, RenderFrameProducerId, RenderGpuFixedStepInput, RenderGpuFlowStepStreams,
+    PreparedRenderFrameRequestResource, RenderFixedStepIterationUniform, RenderFlow, RenderFlowId,
+    RenderFrameProducerId, RenderGpuFixedStepInput, RenderGpuFlowStepStreams,
     RenderGpuStepDemandError, ShaderRegistryResource, SurfaceFrameSubmissionOrder,
 };
 use engine::plugins::ui::{
@@ -1299,17 +1299,16 @@ impl NativeHistoricalGpuHook {
         {
             let primary_count = history
                 .observations()
-                .filter(|entry| {
-                    entry.key.render_surface_id == RenderSurfaceId::primary().raw()
-                })
+                .filter(|entry| entry.key.render_surface_id == RenderSurfaceId::primary().raw())
                 .count();
             anyhow::ensure!(
                 primary_count <= 1,
                 "primary flow submitted again before semantic verification"
             );
-            if history.observations().any(|entry| {
-                entry.key.render_surface_id == surface.raw()
-            }) {
+            if history
+                .observations()
+                .any(|entry| entry.key.render_surface_id == surface.raw())
+            {
                 self.secondary_submitted_while_primary_deferred = true;
             }
         }
@@ -1705,7 +1704,23 @@ impl NativeHistoricalGpuHook {
                     && self.secondary_submitted_while_primary_deferred
                     && self.overflow_rejected_without_loss
                     && self.semantic_verification_refusal_preserved,
-                "native RenderFlow must verify two distinct G5 batches, historical retained state and exact semantic commits"
+                "native RenderFlow must verify two distinct G5 batches, historical retained state and independent secondary admission: first={:?}, terminal={}, first_pixel={}, committed={}, second={:?}, second_terminal={}, second_pixel={}, second_committed={}, queued={}, two_host_frames={}, terminal_hold={}, overflow={}, refusal={}, secondary_requested={}, secondary_surface={:?}, secondary_submitted={}",
+                self.first_submission,
+                self.saw_terminal,
+                self.verified_pixel,
+                self.semantic_committed,
+                self.second_submission,
+                self.saw_second_terminal,
+                self.verified_second_pixel,
+                self.second_committed,
+                self.queued_while_in_flight,
+                self.second_queued_during_deferral,
+                self.terminal_hold_frames,
+                self.overflow_rejected_without_loss,
+                self.semantic_verification_refusal_preserved,
+                self.secondary_requested,
+                self.secondary_surface,
+                self.secondary_submitted_while_primary_deferred,
             );
             // The renderer may already have retired its observation receipt at
             // terminal; source-owned G5 handles remain the execution truth.
@@ -1848,8 +1863,7 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
     app.world_mut()
         .resource_mut::<PreparedRenderFrameRequestResource>()?
         .replace_surface_contribution_with_automatic_main_replacements(
-            RenderFrameProducerId::try_from_raw(901)
-                .expect("primary request producer is nonzero"),
+            RenderFrameProducerId::try_from_raw(901).expect("primary request producer is nonzero"),
             RenderSurfaceId::primary(),
             [],
             [PreparedFlowInvocationRequest::new(
