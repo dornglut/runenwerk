@@ -566,6 +566,12 @@ fn prepare_resolved_render_gpu_work(
         imports,
     } = external;
     let nodes = nodes.into_iter().collect::<Vec<_>>();
+    let _graph_span = tracing::trace_span!(
+        target: "runenwerk_profile",
+        "render.g3.graph_build",
+        occurrences = nodes.len()
+    )
+    .entered();
     validate_occurrences(&nodes)?;
 
     let graph_provenance = GpuResourceProvenance::new(graph_label.clone(), None, None);
@@ -608,7 +614,10 @@ fn prepare_resolved_render_gpu_work(
         )?;
         let fragments =
             compose_frame_fragments(producer_fragments, &authored.fragment, timing_bracket);
+        let _provisional_span =
+            tracing::trace_span!(target: "runenwerk_profile", "render.g3.provisional").entered();
         let provisional_graph = prepare_graph(graph_label.clone(), fragments, Vec::new())?;
+        drop(_provisional_span);
         // One logical UiComposite may lower to multiple GPU nodes. Incoming
         // pass/capture controls MUST precede its first work node; outgoing
         // controls MUST follow its last work node. Using one occurrence as both
@@ -675,6 +684,8 @@ fn prepare_resolved_render_gpu_work(
         let graph = if graph_orders.is_empty() {
             provisional_graph
         } else {
+            let _final_span =
+                tracing::trace_span!(target: "runenwerk_profile", "render.g3.final").entered();
             prepare_graph(
                 graph_label,
                 compose_frame_fragments(producer_fragments, &authored.fragment, timing_bracket),
@@ -701,7 +712,10 @@ fn prepare_resolved_render_gpu_work(
     )?;
     let provisional_fragments =
         compose_frame_fragments(producer_fragments, &provisional.fragment, timing_bracket);
+    let _provisional_span =
+        tracing::trace_span!(target: "runenwerk_profile", "render.g3.provisional").entered();
     let provisional_graph = prepare_graph(graph_label.clone(), provisional_fragments, Vec::new())?;
+    drop(_provisional_span);
     let provisional_occurrences =
         map_prepared_occurrences(&provisional_graph, &provisional.occurrence_nodes)?;
     let required_explicit_orders = normalize_control_orders(
@@ -725,6 +739,8 @@ fn prepare_resolved_render_gpu_work(
             &provisional.fragment,
             bracket,
         )?;
+        let _timing_span =
+            tracing::trace_span!(target: "runenwerk_profile", "render.g3.timing_final").entered();
         let graph = prepare_graph(
             graph_label,
             compose_frame_fragments(producer_fragments, &provisional.fragment, Some(bracket)),
@@ -749,11 +765,14 @@ fn prepare_resolved_render_gpu_work(
     )?;
     let present_node =
         present_occurrence.and_then(|id| final_fragment.occurrence_nodes.get(&id).cloned());
+    let _boundary_span =
+        tracing::trace_span!(target: "runenwerk_profile", "render.g3.final").entered();
     let boundary_graph = prepare_graph(
         graph_label.clone(),
         compose_frame_fragments(producer_fragments, &final_fragment.fragment, timing_bracket),
         Vec::new(),
     )?;
+    drop(_boundary_span);
     let Some(bracket) = timing_bracket else {
         return Ok(PreparedRenderGpuWorkFrame {
             graph: boundary_graph,
@@ -767,6 +786,8 @@ fn prepare_resolved_render_gpu_work(
         &final_fragment.fragment,
         bracket,
     )?;
+    let _timing_span =
+        tracing::trace_span!(target: "runenwerk_profile", "render.g3.timing_final").entered();
     let graph = prepare_graph(
         graph_label,
         compose_frame_fragments(producer_fragments, &final_fragment.fragment, Some(bracket)),

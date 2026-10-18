@@ -21,6 +21,8 @@ Navigation hub for crate-level engine documentation.
   - normal workflows for building and running engine apps
 - [`reference/advanced-guide.md`](reference/advanced-guide.md)
   - extensibility patterns, scheduling details, and tuning knobs
+- [`reference/tracy-profiling.md`](reference/tracy-profiling.md)
+  - opt-in Tracy CPU profiling for native Engine applications
 - [`reference/architecture.md`](reference/architecture.md)
   - internal runtime contracts, ownership boundaries, and execution model
 - [`reference/plugins/index.md`](reference/plugins/index.md)

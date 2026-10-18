@@ -2,23 +2,48 @@ use std::path::Path;
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
-#[cfg(feature = "tracy")]
 const TRACY_ENV_VAR: &str = "ENGINE_TRACY";
-#[cfg(feature = "tracy")]
 const TRACY_ENV_VAR_LEGACY: &str = "ENGINE_V2_TRACY";
 const DEFAULT_TRACING_FILTER: &str = "info,wgpu_core=warn,wgpu_hal=warn,naga=warn";
 
-#[cfg(feature = "tracy")]
-fn tracy_enabled() -> bool {
+fn tracy_flag_enabled(value: &str) -> bool {
+    matches!(
+        value.trim().to_ascii_lowercase().as_str(),
+        "1" | "true" | "yes" | "on"
+    )
+}
+
+fn tracy_requested() -> bool {
     std::env::var(TRACY_ENV_VAR)
         .or_else(|_| std::env::var(TRACY_ENV_VAR_LEGACY))
-        .map(|value| {
-            matches!(
-                value.trim().to_ascii_lowercase().as_str(),
-                "1" | "true" | "yes" | "on"
-            )
-        })
+        .map(|value| tracy_flag_enabled(&value))
         .unwrap_or(false)
+}
+
+/// Initializes the process-global tracing subscriber only when Tracy is
+/// explicitly requested by the application environment.
+///
+/// The caller owns the returned file-appender guard for the whole process
+/// lifetime. If Tracy was requested without the Cargo feature, or a subscriber
+/// was already installed, this reports the failure instead of claiming a capture.
+/// Applications that need ordinary tracing without Tracy use `setup_tracing`.
+pub fn setup_tracing_if_requested() -> Option<WorkerGuard> {
+    if !tracy_requested() {
+        return None;
+    }
+
+    #[cfg(feature = "tracy")]
+    {
+        setup_tracing()
+    }
+
+    #[cfg(not(feature = "tracy"))]
+    {
+        eprintln!(
+            "Tracy requested by ENGINE_TRACY, but the Engine 'tracy' Cargo feature is disabled"
+        );
+        None
+    }
 }
 
 pub fn setup_tracing() -> Option<WorkerGuard> {
@@ -39,7 +64,7 @@ pub fn setup_tracing() -> Option<WorkerGuard> {
 
     #[cfg(feature = "tracy")]
     {
-        let enable_tracy = tracy_enabled();
+        let enable_tracy = tracy_requested();
         let subscriber = tracing_subscriber::registry()
             .with(filter)
             .with(stdout_layer)
@@ -82,6 +107,21 @@ pub fn setup_tracing() -> Option<WorkerGuard> {
                 eprintln!("failed to initialize tracing subscriber: {err}");
                 None
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::tracy_flag_enabled;
+
+    #[test]
+    fn tracy_runtime_opt_in_accepts_only_explicit_truthy_values() {
+        for value in ["1", "true", "YES", " On "] {
+            assert!(tracy_flag_enabled(value), "{value:?} should enable Tracy");
+        }
+        for value in ["", "0", "false", "off", "disabled", "2"] {
+            assert!(!tracy_flag_enabled(value), "{value:?} should disable Tracy");
         }
     }
 }

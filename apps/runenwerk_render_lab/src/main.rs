@@ -19,6 +19,9 @@ use runenwerk_render_lab::automation::{
 };
 
 fn main() -> anyhow::Result<()> {
+    // The CLI owns the single process-global subscriber; ordinary runs install
+    // no tracing layer unless profiling is explicitly requested.
+    let _tracy_guard = engine::utils::setup_tracing_if_requested();
     match parse_command(env::args_os().skip(1))? {
         Command::Native => runenwerk_render_lab::run_native(),
         Command::Comparison {
