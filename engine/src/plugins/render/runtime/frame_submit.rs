@@ -491,6 +491,46 @@ mod contribution_deferral_tests {
     }
 
     #[test]
+    fn stale_primary_deferral_does_not_consume_independent_secondary_work() {
+        let primary = RenderSurfaceId::primary();
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let stale_primary = prepared_frame(primary, 50);
+        let mut current_secondary = prepared_frame(secondary, 51);
+        current_secondary.context.flow_registry_revision = 8;
+        let current_registry_revision = 8;
+        assert_ne!(
+            stale_primary.context.flow_registry_revision,
+            current_registry_revision,
+            "primary preparation must really be stale"
+        );
+        assert_eq!(
+            current_secondary.context.flow_registry_revision,
+            current_registry_revision,
+            "secondary preparation must independently remain admissible"
+        );
+
+        let contributions = vec![contribution(21, primary), contribution(22, secondary)];
+        let mut deferred = Vec::new();
+        defer_contributions_for_surface(&mut deferred, &contributions, primary);
+        apply_additional_surface_render_outcome(
+            &mut deferred,
+            &contributions,
+            std::slice::from_ref(&current_secondary),
+            0,
+            AdditionalSurfaceRenderOutcome::Submitted,
+        )
+        .expect("valid secondary surface must not inherit stale-primary deferral");
+
+        assert_eq!(deferred.len(), 1);
+        assert_eq!(deferred[0].producer_id, contributions[0].producer_id);
+        assert_eq!(deferred[0].output, contributions[0].output);
+        assert!(
+            deferred[0].request.contains_output(&contributions[0].output),
+            "stale primary retained exact unsubmitted semantic output"
+        );
+    }
+
+    #[test]
     fn fatal_surface_failure_preserves_deferred_work_from_previous_surface() {
         let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
         let tertiary = RenderSurfaceId::try_from_raw(3).expect("tertiary surface id");
@@ -780,43 +820,54 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 }
             };
             if flow_registry.revision() != prepared_frame.context.flow_registry_revision {
-                deferred_deterministic_contributions
-                    .extend(deterministic_contributions.iter().cloned());
-                return Ok(());
+                // This prepared primary is stale, but another surface may have
+                // been prepared against the current registry. Do not abort the
+                // entire batch or restore already-submittable secondary work.
+                None
+            } else {
+                let compiled_flows = flow_registry.compiled_flows();
+
+                let ui_rect_shader: Option<ShaderHandle> = prepared_frame
+                    .ui()
+                    .and_then(|ui| ui.first_rect_shader_asset_id())
+                    .and_then(|id| shader_registry.handle(id));
+
+                let composed_gpu_timing_requested = world
+                    .resource::<RenderFrameObservationPolicyResource>()
+                    .ok()
+                    .copied()
+                    .unwrap_or_default()
+                    .retains_frame(prepared_frame.context.frame_index);
+
+                Some(gfx.render(
+                    &prepared_frame,
+                    &mut gpu_step_streams,
+                    &deterministic_contributions,
+                    world.resource::<RenderDynamicTextureTargetRequestRegistryResource>()?,
+                    &mut shader_registry,
+                    compiled_flows,
+                    ui_rect_shader,
+                    &ui_font_atlas,
+                    &prepared_frame.viewport_surface_bindings,
+                    preflight_config,
+                    &debug_control,
+                    &debug_config,
+                    composed_gpu_timing_requested,
+                ))
             }
-            let compiled_flows = flow_registry.compiled_flows();
-
-            let ui_rect_shader: Option<ShaderHandle> = prepared_frame
-                .ui()
-                .and_then(|ui| ui.first_rect_shader_asset_id())
-                .and_then(|id| shader_registry.handle(id));
-
-            let composed_gpu_timing_requested = world
-                .resource::<RenderFrameObservationPolicyResource>()
-                .ok()
-                .copied()
-                .unwrap_or_default()
-                .retains_frame(prepared_frame.context.frame_index);
-
-            gfx.render(
-                &prepared_frame,
-                &mut gpu_step_streams,
-                &deterministic_contributions,
-                world.resource::<RenderDynamicTextureTargetRequestRegistryResource>()?,
-                &mut shader_registry,
-                compiled_flows,
-                ui_rect_shader,
-                &ui_font_atlas,
-                &prepared_frame.viewport_surface_bindings,
-                preflight_config,
-                &debug_control,
-                &debug_config,
-                composed_gpu_timing_requested,
-            )
         };
 
         let result = match render_result {
-            Ok(timings) if !timings.submitted => {
+            None => {
+                // No G5 work was accepted and no surface image was acquired.
+                // Only the stale primary's contributions need deferral; later
+                // prepared surfaces must still independently reach Gfx.
+                primary_contribution_state = PrimaryContributionState::Deferred;
+                deferred_deterministic_contributions
+                    .extend(primary_deterministic_contributions.iter().cloned());
+                Ok(())
+            }
+            Some(Ok(timings)) if !timings.submitted => {
                 publish_progressed_gpu_captures(
                     &mut world,
                     &mut gfx,
@@ -833,7 +884,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 );
                 Ok(())
             }
-            Ok(timings) => {
+            Some(Ok(timings)) => {
                 primary_contribution_state = PrimaryContributionState::Submitted;
                 world.resource_mut::<DebugMetricsState>()?.last_timings = Some(timings);
 
@@ -1086,7 +1137,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 gfx.renderer.clear_published_gpu_observations();
                 Ok(())
             }
-            Err(err) => {
+            Some(Err(err)) => {
                 // Earlier GPU work may have completed even when this new
                 // primary surface cannot acquire, prepare, or submit.
                 publish_progressed_gpu_captures(
