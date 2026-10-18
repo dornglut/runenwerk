@@ -302,6 +302,57 @@ mod source_interval_tests {
     }
 
     #[test]
+    fn clean_restart_reseeds_new_epoch_without_reusing_old_producer_history() {
+        for rule in [
+            crate::rendering::BoidsRuleFamily::Flocking,
+            crate::rendering::BoidsRuleFamily::SpeciesInteraction,
+        ] {
+            let previous_flow = build_render_flow();
+            let previous_schema = BoidsGpuStepSchema::from_flow(&previous_flow).unwrap();
+            let state = BoidsRenderState::with_rule(rule);
+            // Previous verified source tick six is an illustrative producer
+            // checkpoint. Following an unknown/partial GPU write, retaining
+            // any newer pending inputs is NOT proof of reconstructed buffers.
+            let mut quarantined = RenderGpuStepDemand::new(6, 8);
+            let prior_input = previous_schema.capture(&state, 6).unwrap();
+            quarantined.capture(prior_input).unwrap();
+            assert_eq!(quarantined.requested_tick(), 7);
+            assert_eq!(quarantined.completed_tick(), 6);
+            assert_eq!(quarantined.pending_len(), 1);
+
+            // A clean application restart must form a different RenderFlow and
+            // NEW source epoch. It does not mutate or requeue the stale state.
+            let restarted_flow = build_render_flow();
+            let restarted_schema = BoidsGpuStepSchema::from_flow(&restarted_flow).unwrap();
+            assert_ne!(previous_schema.flow_id(), restarted_schema.flow_id());
+            let mut restarted = RenderGpuStepDemand::new(0, 8);
+            capture_fixed_steps(&mut restarted, &restarted_schema, &state, fixed(1, 1))
+                .unwrap();
+            assert_eq!(restarted.completed_tick(), 0);
+            assert_eq!(restarted.requested_tick(), 1);
+            let restarted_first = restarted.candidate(1);
+            let first = restarted_first[0].input();
+            // The new source tick zero carries the exact deterministic
+            // shader-seed and per-law compute uniforms, not the old tick six.
+            let expected = previous_schema.capture(&state, 0).unwrap();
+            assert_eq!(
+                first.uniforms.values().collect::<Vec<_>>(),
+                expected.uniforms.values().collect::<Vec<_>>()
+            );
+            assert_eq!(
+                first.dispatch_workgroups.values().collect::<Vec<_>>(),
+                expected.dispatch_workgroups.values().collect::<Vec<_>>()
+            );
+            assert_ne!(
+                first.uniforms.values().collect::<Vec<_>>(),
+                quarantined.candidate(1)[0].input().uniforms.values().collect::<Vec<_>>()
+            );
+            assert_eq!(quarantined.pending_len(), 1);
+            assert_eq!(quarantined.completed_tick(), 6);
+        }
+    }
+
+    #[test]
     fn zero_one_many_and_backpressure_preserve_unsubmitted_boids_inputs() {
         let flow = build_render_flow();
         let schema = BoidsGpuStepSchema::from_flow(&flow).unwrap();
