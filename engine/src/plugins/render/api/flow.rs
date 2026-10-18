@@ -716,6 +716,10 @@ impl RenderFlow {
         T: GpuParams + 'static,
     {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
+            let existing = self.buffer_handle(id)?;
+            if existing.descriptor().initialization() != &initialization {
+                return Err(RenderFlowAuthoringError::ConflictingStorageInitialization { label });
+            }
             return Ok(id);
         }
 
@@ -1037,6 +1041,59 @@ mod tests {
                 if *resource_id == foreign_id
         )));
         drop(first_flow);
+    }
+
+    #[test]
+    fn retained_storage_initialization_redeclaration_rejects_conflicts() {
+        let (flow, ordinary) = RenderFlow::new("storage.initialization.default")
+            .storage_array::<TestCell>("cells", 4)
+            .expect("default retained storage");
+        assert_eq!(
+            ordinary.descriptor().initialization(),
+            &GpuBufferInitialization::Uninitialized
+        );
+
+        let (flow, same) = flow
+            .storage_array_with_initialization::<TestCell>(
+                "cells",
+                4,
+                GpuBufferInitialization::Uninitialized,
+            )
+            .expect("identical initialization may reuse the same retained storage");
+        assert_eq!(ordinary.diagnostic_identity(), same.diagnostic_identity());
+
+        let error = flow
+            .storage_array_with_initialization::<TestCell>(
+                "cells",
+                4,
+                GpuBufferInitialization::Zeroed,
+            )
+            .expect_err("an explicit initialization cannot silently reuse uninitialized storage");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageInitialization { label }
+                if label == "cells"
+        ));
+
+        let (flow, zeroed) = RenderFlow::new("storage.initialization.explicit")
+            .storage_array_with_initialization::<TestCell>(
+                "cells",
+                4,
+                GpuBufferInitialization::Zeroed,
+            )
+            .expect("explicit zeroed retained storage");
+        assert_eq!(
+            zeroed.descriptor().initialization(),
+            &GpuBufferInitialization::Zeroed
+        );
+        let error = flow
+            .storage_array::<TestCell>("cells", 4)
+            .expect_err("implicit uninitialized redeclaration must not override zeroed storage");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageInitialization { label }
+                if label == "cells"
+        ));
     }
 
     #[test]
