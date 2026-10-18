@@ -191,3 +191,16 @@ Tests:
 ```bash
 cargo test -p engine --example boids_render_flow
 ```
+
+### Sustained native performance qualification
+
+The native smoke defaults to 120 submitted Presents. For a longer bounded
+release-build run, set `RUNENWERK_BOIDS_NATIVE_PRESENT_TARGET=600` together
+with `RUNENWERK_BOIDS_NATIVE_SMOKE=1`; the valid target is 120–1200. The test
+retains enough native frame observations for that target and still enforces its
+existing 180-second fail-closed deadline. Compare normal no-readback execution
+(`RUNENWERK_BOIDS_NATIVE_NO_READBACK=1`) with the capture-enabled diagnostic
+mode at the same resolution, adapter and law. The report additionally prints
+averages of the existing renderer CPU-stage sum, flow encode and encode/submit
+timings; the sum does not include the complete ECS Update or GPU execution.
+Host-observed submitted-Present pacing is not display scanout latency.

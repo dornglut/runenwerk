@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 use winit::window::Window;
 
 const REQUIRED_PRESENT_SUBMISSIONS: usize = 120;
+const MAX_NATIVE_PRESENT_TARGET: usize = 1_200;
 const REQUIRED_VERIFIED_TICKS: u64 = 4;
 const REQUIRED_TERMINAL_FRAMES: usize = 2;
 const REQUIRED_CHANGED_GPU_IMAGES: u64 = 3;
@@ -39,21 +40,45 @@ pub(crate) struct NativeBoidsSmokeStatus {
     first_present: Option<Instant>,
     last_present: Option<Instant>,
     present_intervals: Vec<Duration>,
+    cpu_renderer_samples_ms: Vec<[f32; 3]>,
+    required_present_submissions: usize,
     succeeded: bool,
     error: Option<String>,
 }
 
 type SharedStatus = Arc<Mutex<NativeBoidsSmokeStatus>>;
 
+fn parse_native_present_target(value: Option<&str>) -> Result<usize> {
+    let Some(value) = value else {
+        return Ok(REQUIRED_PRESENT_SUBMISSIONS);
+    };
+    let target = value
+        .parse::<usize>()
+        .context("invalid RUNENWERK_BOIDS_NATIVE_PRESENT_TARGET")?;
+    anyhow::ensure!(
+        (REQUIRED_PRESENT_SUBMISSIONS..=MAX_NATIVE_PRESENT_TARGET).contains(&target),
+        "native Boids Present target must be between {REQUIRED_PRESENT_SUBMISSIONS} and {MAX_NATIVE_PRESENT_TARGET}"
+    );
+    Ok(target)
+}
+
 pub(crate) fn install(
     app: &mut App,
     flow: RenderFlowId,
     require_visual_readback: bool,
 ) -> Result<SharedStatus> {
-    app.insert_resource(RenderFrameObservationPolicyResource::enabled(512));
+    let present_target = parse_native_present_target(
+        std::env::var("RUNENWERK_BOIDS_NATIVE_PRESENT_TARGET")
+            .ok()
+            .as_deref(),
+    )?;
+    app.insert_resource(RenderFrameObservationPolicyResource::enabled(
+        present_target,
+    ));
     app.init_resource::<NativeWindowHookRegistryResource>();
     let status = Arc::new(Mutex::new(NativeBoidsSmokeStatus {
         require_visual_readback,
+        required_present_submissions: present_target,
         ..NativeBoidsSmokeStatus::default()
     }));
     app.world_mut()
@@ -103,9 +128,21 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         let index = (intervals.len() * 95).div_ceil(100).saturating_sub(1);
         intervals[index].as_secs_f64() * 1000.0
     };
+    let mean_cpu_ms = |index: usize| -> f64 {
+        if status.cpu_renderer_samples_ms.is_empty() {
+            return 0.0;
+        }
+        status
+            .cpu_renderer_samples_ms
+            .iter()
+            .map(|sample| f64::from(sample[index]))
+            .sum::<f64>()
+            / status.cpu_renderer_samples_ms.len() as f64
+    };
     println!(
-        "native_boids_gpu_smoke=pass frames={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={}",
+        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={}",
         status.frames,
+        status.required_present_submissions,
         status.presented_opportunities,
         status.terminal_gpu_frames,
         status.verified_ticks,
@@ -114,6 +151,10 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         status.require_visual_readback,
         present_submit_fps,
         p95_ms,
+        mean_cpu_ms(0),
+        mean_cpu_ms(1),
+        mean_cpu_ms(2),
+        status.cpu_renderer_samples_ms.len(),
         status.peak_outstanding_steps,
         status.peak_uncaptured_cpu_ticks
     );
@@ -157,14 +198,22 @@ impl NativeWindowHook for NativeBoidsSmoke {
 
 impl NativeBoidsSmoke {
     fn observe(&mut self, world: &mut World) -> Result<()> {
-        let presented = world
+        let cpu_samples = world
             .resource::<RenderFrameHistoryState>()?
             .observations()
             .filter(|observation| {
                 observation.key.render_surface_id == RenderSurfaceId::primary().raw()
                     && observation.presentation.present_operation_submitted
             })
-            .count();
+            .map(|observation| {
+                [
+                    observation.cpu.observed_stage_sum_with_acquire_ms(),
+                    observation.cpu.renderer.flow_encode_ms,
+                    observation.cpu.renderer.encode_submit_ms,
+                ]
+            })
+            .collect::<Vec<_>>();
+        let presented = cpu_samples.len();
         let source = world
             .resource::<RenderGpuFlowStepStreams>()?
             .stream(self.flow)
@@ -211,6 +260,13 @@ impl NativeBoidsSmoke {
         state.peak_outstanding_steps = state.peak_outstanding_steps.max(outstanding);
         state.peak_uncaptured_cpu_ticks = state.peak_uncaptured_cpu_ticks.max(uncaptured);
         if presented > state.presented_opportunities {
+            let previous_count = state.presented_opportunities;
+            state.cpu_renderer_samples_ms.extend(
+                cpu_samples
+                    .iter()
+                    .skip(previous_count)
+                    .copied(),
+            );
             let now = Instant::now();
             if let Some(previous) = state.last_present {
                 state.present_intervals.push(now.duration_since(previous));
@@ -224,7 +280,7 @@ impl NativeBoidsSmoke {
         state.verified_ticks = verified;
         state.sampled_gpu_images = sampled_gpu_images;
         state.changed_gpu_images = changed_gpu_images;
-        if state.presented_opportunities >= REQUIRED_PRESENT_SUBMISSIONS
+        if state.presented_opportunities >= state.required_present_submissions
             && state.terminal_gpu_frames >= REQUIRED_TERMINAL_FRAMES
             && state.verified_ticks >= REQUIRED_VERIFIED_TICKS
             && (!state.require_visual_readback
@@ -244,5 +300,21 @@ impl NativeBoidsSmoke {
             );
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod present_target_tests {
+    use super::*;
+
+    #[test]
+    fn native_target_is_bounded_and_defaults_to_120() {
+        assert_eq!(parse_native_present_target(None).unwrap(), 120);
+        assert_eq!(parse_native_present_target(Some("120")).unwrap(), 120);
+        assert_eq!(parse_native_present_target(Some("600")).unwrap(), 600);
+        assert_eq!(parse_native_present_target(Some("1200")).unwrap(), 1_200);
+        for invalid in ["", "0", "119", "1201", "abc", "-5"] {
+            assert!(parse_native_present_target(Some(invalid)).is_err());
+        }
     }
 }
