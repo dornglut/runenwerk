@@ -215,7 +215,11 @@ mod source_interval_tests {
         assert!(capture_fixed_steps(&mut demand, &schema, &state, fixed(6, 2)).is_err());
         assert_eq!((demand.requested_tick(), demand.pending_len()), (4, 4));
         assert!(capture_fixed_steps(&mut demand, &schema, &state, fixed(4, 1)).is_err());
-        let ticks = demand.candidate(8).iter().map(|input| input.tick()).collect::<Vec<_>>();
+        let ticks = demand
+            .candidate(8)
+            .iter()
+            .map(|input| input.tick())
+            .collect::<Vec<_>>();
         assert_eq!(ticks, vec![1, 2, 3, 4]);
     }
 }
