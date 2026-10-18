@@ -1466,7 +1466,11 @@ impl NativeHistoricalGpuHook {
                 "first G5 interval changed before in-flight backlog capture"
             );
             producer
-                .capture(native_historical_input(self.uniform_id, self.dispatch_pass, 4))
+                .capture(native_historical_input(
+                    self.uniform_id,
+                    self.dispatch_pass,
+                    4,
+                ))
                 .map_err(|(err, _)| {
                     anyhow::anyhow!("first backlogged native step capture failed: {err}")
                 })?;
@@ -1497,7 +1501,11 @@ impl NativeHistoricalGpuHook {
                 "first batch was lost or committed before the next deferred host frame"
             );
             producer
-                .capture(native_historical_input(self.uniform_id, self.dispatch_pass, 5))
+                .capture(native_historical_input(
+                    self.uniform_id,
+                    self.dispatch_pass,
+                    5,
+                ))
                 .map_err(|(err, _)| {
                     anyhow::anyhow!("second deferred native step capture failed: {err}")
                 })?;
@@ -1803,9 +1811,7 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             },
         )
         .bind_storage(GpuBindingKey::try_new(0, 1)?, counter.clone())
-        .dispatch_from_state(|source: &NativeHistoricalSource| {
-            [source.latest[1], 1, 1]
-        })
+        .dispatch_from_state(|source: &NativeHistoricalSource| [source.latest[1], 1, 1])
         .finish()
         .fixed_step_region(
             "native.historical.region",
@@ -1847,7 +1853,8 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         flow_id,
         RenderCaptureSelector::named_pass_surface_color(flow_id.to_string(), display_pass.clone()),
     )?;
-    let input = |value| native_historical_input(uniform.diagnostic_identity(), dispatch_pass, value);
+    let input =
+        |value| native_historical_input(uniform.diagnostic_identity(), dispatch_pass, value);
     sources
         .stream_mut(flow_id)
         .unwrap()
