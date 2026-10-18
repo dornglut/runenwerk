@@ -255,6 +255,31 @@ mod contribution_deferral_tests {
     }
 
     #[test]
+    fn unmatched_selector_results_never_change_their_originating_surface() {
+        let selector = crate::plugins::render::inspect::RenderCaptureSelector::named_pass_surface_color(
+            "source.flow",
+            "source.pass",
+        );
+        let primary = crate::plugins::render::inspect::RenderCaptureSelectorResult::for_unmatched(
+            0, selector.clone(), 22, 1,
+        );
+        let secondary = crate::plugins::render::inspect::RenderCaptureSelectorResult::for_unmatched(
+            0, selector, 22, 2,
+        );
+
+        let (current, delayed) = super::partition_source_capture_results(
+            vec![secondary.clone(), primary.clone()],
+            Some((22, 1)),
+        );
+        assert_eq!(current, vec![primary.clone()]);
+        assert_eq!(delayed, vec![secondary.clone()]);
+        let (current, delayed) =
+            super::partition_source_capture_results(vec![primary, secondary], None);
+        assert!(current.is_empty());
+        assert_eq!(delayed.len(), 2);
+    }
+
+    #[test]
     fn unsubmitted_surface_never_publishes_frame_history() {
         let policy = RenderFrameObservationPolicyResource::enabled(8);
         let mut history = RenderFrameHistoryState::default();
@@ -1187,6 +1212,23 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
 /// Once-only handoff from renderer-owned readback lifecycle to derived ECS
 /// observations and already-existing source-keyed diagnostic transactions.
+/// Attribute every terminal selector outcome, including unmatched selectors,
+/// to its explicit source before transaction publication. Missing readback
+/// identity is not permission to claim the current render surface.
+fn partition_source_capture_results(
+    results: Vec<crate::plugins::render::inspect::RenderCaptureSelectorResult>,
+    current_source: Option<(u64, u64)>,
+) -> (
+    Vec<crate::plugins::render::inspect::RenderCaptureSelectorResult>,
+    Vec<crate::plugins::render::inspect::RenderCaptureSelectorResult>,
+) {
+    results.into_iter().partition(|result| {
+        current_source.is_some_and(|source| {
+            (result.source_frame_index, result.source_surface_id) == source
+        })
+    })
+}
+
 fn drain_progressed_gpu_captures(
     world: &mut WorldMut,
     gfx: &mut Gfx,
@@ -1212,15 +1254,8 @@ fn drain_progressed_gpu_captures(
             (capture.identity.frame_index, capture.identity.surface_id()) == source
         })
     });
-    let (current_results, delayed_results): (Vec<_>, Vec<_>) =
-        results.into_iter().partition(|result| {
-            current_source.is_some_and(|source| {
-                result
-                    .frame_identity
-                    .as_ref()
-                    .is_none_or(|identity| (identity.frame_index, identity.surface_id()) == source)
-            })
-        });
+    let (current_results, delayed_results) =
+        partition_source_capture_results(results, current_source);
     let mut transactions = world
         .remove_resource::<RenderFrameDiagnosticsTransactionState>()
         .unwrap_or_default();

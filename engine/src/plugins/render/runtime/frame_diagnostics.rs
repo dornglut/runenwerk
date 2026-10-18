@@ -135,10 +135,10 @@ impl RenderFrameDiagnosticsTransactionState {
         }
 
         for result in results {
-            let Some(identity) = result.frame_identity.as_ref() else {
-                continue;
-            };
-            let key = RenderFrameDiagnosticsKey::new(identity.frame_index, identity.surface_id());
+            let key = RenderFrameDiagnosticsKey::new(
+                result.source_frame_index,
+                result.source_surface_id,
+            );
             if let Some(transaction) = self.pending.get_mut(&key) {
                 transaction.observe_capture_result(result);
             }
@@ -336,9 +336,19 @@ impl RenderFrameDiagnosticsTransaction {
     }
 
     fn observe_capture_result(&mut self, result: RenderCaptureSelectorResult) {
+        if result.source_frame_index != self.frame_index
+            || result.source_surface_id != self.surface_id
+        {
+            return;
+        }
         if result.frame_identity.as_ref().is_some_and(|identity| {
-            identity.frame_index != self.frame_index || identity.surface_id() != self.surface_id
+            identity.frame_index != result.source_frame_index
+                || identity.surface_id() != result.source_surface_id
         }) {
+            self.errors.push(format!(
+                "selector {} has a readback identity outside its originating source",
+                result.selector_index
+            ));
             return;
         }
         if self.capture_results.contains_key(&result.selector_index) {
@@ -874,6 +884,8 @@ mod tests {
                 texture_class: capture.identity.texture_class(),
             },
             capture_point: capture.identity.capture_point.clone(),
+            source_frame_index: capture.identity.frame_index,
+            source_surface_id: capture.identity.surface_id,
             frame_identity: Some(capture.identity.clone()),
             terminal: capture.terminal.clone(),
             artifact_path: None,
@@ -884,11 +896,12 @@ mod tests {
         frame_index: u64,
         selector: RenderCaptureSelector,
     ) -> RenderCaptureSelectorResult {
-        let _ = frame_index;
         RenderCaptureSelectorResult {
             selector_index: 0,
             capture_point: selector.stable_point_fallback(),
             selector,
+            source_frame_index: frame_index,
+            source_surface_id: 1,
             frame_identity: None,
             terminal: RenderCaptureTerminal::with_reason(
                 RenderCaptureTerminalCode::Unmatched,

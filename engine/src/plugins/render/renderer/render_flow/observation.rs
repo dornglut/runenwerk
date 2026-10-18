@@ -138,6 +138,8 @@ impl CaptureObservation {
             selector_index: self.selector_index,
             selector: self.selector.clone(),
             capture_point: self.identity.capture_point.clone(),
+            source_frame_index: self.identity.frame_index,
+            source_surface_id: self.identity.surface_id,
             frame_identity: Some(self.identity.clone()),
             terminal: capture.terminal.clone(),
             artifact_path: None,

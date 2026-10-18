@@ -190,18 +190,32 @@ pub struct RenderDebugFrameReport {
 
 impl RenderDebugFrameReport {
     pub fn validate_invariants(&self) -> Vec<String> {
-        match validate_selector_terminal_invariant(&self.capture_plan, &self.capture_results) {
-            Ok(()) => Vec::new(),
-            Err(violations) => violations
-                .into_iter()
-                .map(|violation| {
-                    format!(
-                        "selector invariant violation at index {}: {}",
-                        violation.selector_index, violation.message
-                    )
-                })
-                .collect(),
+        let mut errors = Vec::new();
+        for result in &self.capture_results {
+            if result.source_frame_index != self.frame_index
+                || result.source_surface_id != self.surface_id
+            {
+                errors.push(format!(
+                    "selector {} belongs to source ({}, {}), not report ({}, {})",
+                    result.selector_index,
+                    result.source_frame_index,
+                    result.source_surface_id,
+                    self.frame_index,
+                    self.surface_id
+                ));
+            }
         }
+        if let Err(violations) =
+            validate_selector_terminal_invariant(&self.capture_plan, &self.capture_results)
+        {
+            errors.extend(violations.into_iter().map(|violation| {
+                format!(
+                    "selector invariant violation at index {}: {}",
+                    violation.selector_index, violation.message
+                )
+            }));
+        }
+        errors
     }
 }
 
@@ -215,11 +229,15 @@ mod tests {
     fn selector_result(
         selector_index: usize,
         selector: RenderCaptureSelector,
+        source_frame_index: u64,
+        source_surface_id: u64,
     ) -> RenderCaptureSelectorResult {
         RenderCaptureSelectorResult {
             selector_index,
             capture_point: selector.stable_point_fallback(),
             selector,
+            source_frame_index,
+            source_surface_id,
             frame_identity: None,
             terminal: RenderCaptureTerminal::completed(),
             artifact_path: None,
@@ -240,7 +258,7 @@ mod tests {
 
         state.observe_frame(RenderDebugFrameReport {
             frame_index: 1,
-            capture_results: vec![selector_result(0, selector)],
+            capture_results: vec![selector_result(0, selector, 1, 0)],
             artifact_manifest_path: Some(manifest.clone()),
             ..RenderDebugFrameReport::default()
         });
@@ -277,7 +295,12 @@ mod tests {
             state.observe_frame(RenderDebugFrameReport {
                 frame_index: 9,
                 surface_id,
-                capture_results: vec![selector_result(surface_id as usize, selector.clone())],
+                capture_results: vec![selector_result(
+                    surface_id as usize,
+                    selector.clone(),
+                    9,
+                    surface_id,
+                )],
                 artifact_manifest_path: Some(PathBuf::from(format!("surface-{surface_id}.json"))),
                 ..RenderDebugFrameReport::default()
             });

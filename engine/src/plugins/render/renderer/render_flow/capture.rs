@@ -366,6 +366,8 @@ impl FrameCaptureRuntime {
                     selector_index,
                     selector: state.selector,
                     capture_point,
+                    source_frame_index: self.frame_index,
+                    source_surface_id: self.surface_id,
                     frame_identity: state.frame_identity,
                     terminal,
                     artifact_path: None,

@@ -531,7 +531,7 @@ fn render_runtime_inspect_readiness_report_aggregates_existing_source_reports() 
                 },
             }],
         },
-        capture_results: vec![RenderCaptureSelectorResult::for_unmatched(0, selector)],
+        capture_results: vec![RenderCaptureSelectorResult::for_unmatched(0, selector, 12, 0)],
         ..RenderDebugFrameReport::default()
     };
     let budget_report = evaluate_render_readiness_budgets(

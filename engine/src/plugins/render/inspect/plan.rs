@@ -162,18 +162,29 @@ pub struct RenderCaptureSelectorResult {
     pub selector_index: usize,
     pub selector: RenderCaptureSelector,
     pub capture_point: RenderCapturePointIdentity,
+    /// Origin of this selector result even when no capture point matched.
+    /// A source frame index alone is not unique across render surfaces.
+    pub source_frame_index: u64,
+    pub source_surface_id: u64,
     pub frame_identity: Option<RenderCaptureIdentity>,
     pub terminal: RenderCaptureTerminal,
     pub artifact_path: Option<PathBuf>,
 }
 
 impl RenderCaptureSelectorResult {
-    pub fn for_unmatched(selector_index: usize, selector: RenderCaptureSelector) -> Self {
+    pub fn for_unmatched(
+        selector_index: usize,
+        selector: RenderCaptureSelector,
+        source_frame_index: u64,
+        source_surface_id: u64,
+    ) -> Self {
         let capture_point = selector.stable_point_fallback();
         Self {
             selector_index,
             selector,
             capture_point,
+            source_frame_index,
+            source_surface_id,
             frame_identity: None,
             terminal: RenderCaptureTerminal::new(
                 RenderCaptureTerminalCode::Unmatched,
@@ -201,12 +212,17 @@ pub fn validate_selector_terminal_invariant(
     let mut violations = Vec::<RenderCaptureInvariantViolation>::new();
 
     for result in results {
-        let result_frame = result
-            .frame_identity
-            .as_ref()
-            .map(|identity| identity.frame_index)
-            .unwrap_or(plan.frame_index);
-        if result_frame != plan.frame_index {
+        if result.frame_identity.as_ref().is_some_and(|identity| {
+            identity.frame_index != result.source_frame_index
+                || identity.surface_id != result.source_surface_id
+        }) {
+            violations.push(RenderCaptureInvariantViolation {
+                selector_index: result.selector_index,
+                message: "capture readback identity disagrees with terminal result source".into(),
+            });
+            continue;
+        }
+        if result.source_frame_index != plan.frame_index {
             continue;
         }
         if result.selector_index >= plan.selectors.len() {
@@ -282,6 +298,8 @@ mod tests {
         RenderCaptureSelectorResult {
             selector_index,
             selector,
+            source_frame_index: 7,
+            source_surface_id: 1,
             frame_identity: Some(RenderCaptureIdentity {
                 frame_index: 7,
                 surface_id: 1,
