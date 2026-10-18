@@ -1396,7 +1396,9 @@ impl NativeHistoricalGpuHook {
         }
         if self.queued_while_in_flight
             && !self.second_queued_during_deferral
-            && self.first_queued_frame.is_some_and(|frame| self.frames > frame)
+            && self
+                .first_queued_frame
+                .is_some_and(|frame| self.frames > frame)
         {
             let producer = world
                 .resource_mut::<RenderGpuFlowStepStreams>()?
