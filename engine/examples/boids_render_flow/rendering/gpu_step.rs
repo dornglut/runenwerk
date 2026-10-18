@@ -1,6 +1,7 @@
 //! Immutable, source-tick-specific GPU inputs for all eight existing Boids compute stages.
 //! This is a producer-local projection, not a new scheduling or physical-admission authority.
 use crate::rendering::{BoidsComputeParams, BoidsRenderState};
+use runen_ecs::Resource;
 use anyhow::{Context, Result};
 use engine::plugins::render::{
     GpuParams, RenderFixedStepIterationUniform, RenderFlow, RenderFlowId, RenderGpuFixedStepInput,
@@ -23,7 +24,7 @@ const REGION_MAX_SUBSTEPS: u32 = 4;
 
 /// The IDs come from the validated ordinary RenderFlow, not independently allocated
 /// copies of its GPU resources. Every authored state uniform must be captured.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Resource)]
 pub(crate) struct BoidsGpuStepSchema {
     flow_id: RenderFlowId,
     uniforms: [GpuWorkResourceId; 8],
@@ -119,7 +120,7 @@ impl BoidsGpuStepSchema {
                 0,
                 1,
                 REGION_MAX_SUBSTEPS,
-                source_tick,
+                0,
                 state.fixed_delta_seconds(),
                 0.0,
             ),

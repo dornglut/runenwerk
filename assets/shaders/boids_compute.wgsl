@@ -355,7 +355,7 @@ fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
         // Distinguish repeated substeps inside one app frame. The iteration uniform
         // must be shader-visible, not just added to the RenderFlow bind group.
         boids_b[index] = simulate_boid(
-            index, boid_count, tick + fixed_step_iteration.substep_index
+            index, boid_count, tick
         );
         return;
     }

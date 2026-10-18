@@ -895,6 +895,12 @@ impl Gfx {
         self.ctx.context().adapter_facts()
     }
 
+    /// Current physical GPU device/context generation, for consumers verifying
+    /// exact accepted G5 source submissions. This is an observation only.
+    pub fn gpu_context_affinity(&self) -> runen_gpu::GpuContextAffinity {
+        self.ctx.context().affinity()
+    }
+
     pub fn temporal_execution_evidence(
         &self,
         frame_index: u64,
