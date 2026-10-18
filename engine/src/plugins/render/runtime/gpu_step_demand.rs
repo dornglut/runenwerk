@@ -914,10 +914,7 @@ mod accepted_capture_validation_tests {
         );
         let other_selector = RenderCaptureSelector::named_pass_surface_color("flow", "other");
         assert_eq!(
-            validate_required_capture_identities(
-                &[selector, other_selector],
-                [&identity, &wrong]
-            ),
+            validate_required_capture_identities(&[selector, other_selector], [&identity, &wrong]),
             Ok(())
         );
     }
