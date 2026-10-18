@@ -1,6 +1,7 @@
 use engine::plugins::render::{
     GpuStorage, GpuUniform, ProceduralCamera2d, ProceduralCamera2dError, ProceduralSpriteSizing,
 };
+use engine::runtime::FixedTimeState;
 
 pub(crate) const DEFAULT_BOID_COUNT: u32 = 384;
 pub(crate) const DEFAULT_SIMULATION_FPS: f32 = 60.0;
@@ -9,6 +10,30 @@ pub(crate) const DEFAULT_GRID_CELLS_Y: u32 = 10;
 pub(crate) const DEFAULT_WORLD_CENTER: [f32; 2] = [0.5, 0.5];
 pub(crate) const DEFAULT_VISIBLE_WORLD_HEIGHT: f32 = 1.0;
 pub(crate) const DEFAULT_SPRITE_HALF_EXTENTS_WORLD: [f32; 2] = [0.0084, 0.01575];
+
+/// Example-local interaction law. Neither variant is a world-state authority.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub(crate) enum BoidsRuleFamily {
+    #[default]
+    Flocking,
+    SpeciesInteraction,
+}
+
+impl BoidsRuleFamily {
+    pub(crate) const fn shader_mode(self) -> f32 {
+        match self {
+            Self::Flocking => 0.0,
+            Self::SpeciesInteraction => 1.0,
+        }
+    }
+
+    pub(crate) const fn window_title(self) -> &'static str {
+        match self {
+            Self::Flocking => "Boids Render Flow - Public API Example",
+            Self::SpeciesInteraction => "Particle Rule Experiment - Species Interactions",
+        }
+    }
+}
 
 const MODE_SEED: u32 = 0;
 const MODE_CLEAR_COUNTS: u32 = 1;
@@ -45,9 +70,9 @@ pub(crate) struct BoidsDrawParams {
 
 #[derive(Debug, Clone, runen_ecs::Resource)]
 pub(crate) struct BoidsRenderState {
+    rule: BoidsRuleFamily,
     tick: u32,
     boid_count: u32,
-    initialized: bool,
     simulation_fps: f32,
     fixed_delta_seconds: f32,
     last_frame_delta_seconds: f32,
@@ -60,9 +85,9 @@ impl Default for BoidsRenderState {
     fn default() -> Self {
         let fixed_delta_seconds = 1.0 / DEFAULT_SIMULATION_FPS;
         Self {
+            rule: BoidsRuleFamily::default(),
             tick: 0,
             boid_count: DEFAULT_BOID_COUNT,
-            initialized: false,
             simulation_fps: DEFAULT_SIMULATION_FPS,
             fixed_delta_seconds,
             last_frame_delta_seconds: fixed_delta_seconds,
@@ -80,14 +105,28 @@ impl Default for BoidsRenderState {
 }
 
 impl BoidsRenderState {
-    pub(crate) fn advance_by_frame_delta(&mut self, delta_seconds: f32) {
-        self.last_frame_delta_seconds = delta_seconds.clamp(0.0, 1.0 / 15.0).max(1.0 / 240.0);
-        if !self.initialized {
-            self.initialized = true;
-            return;
-        }
+    pub(crate) fn at_source_tick(&self, tick: u32) -> Self {
+        let mut snapshot = self.clone();
+        snapshot.tick = tick;
+        snapshot
+    }
 
-        self.tick = self.tick.saturating_add(1);
+    pub(crate) fn with_rule(rule: BoidsRuleFamily) -> Self {
+        Self {
+            rule,
+            ..Self::default()
+        }
+    }
+
+    pub(crate) fn synchronize_fixed_frame(&mut self, delta_seconds: f32, fixed: FixedTimeState) {
+        self.last_frame_delta_seconds = delta_seconds.clamp(0.0, 1.0 / 15.0).max(1.0 / 240.0);
+        // Update runs after this frame's FixedUpdate schedule, before its
+        // render-flow substeps. The shader consumes the START of that interval.
+        // A zero-substep frame never skips the seed or invents a simulation tick.
+        let start_step = fixed
+            .total_completed_steps
+            .saturating_sub(u64::from(fixed.steps_ran_last_frame));
+        self.tick = u32::try_from(start_step).unwrap_or(u32::MAX);
     }
 
     pub(crate) fn compute_params(&self) -> BoidsComputeParams {
@@ -124,6 +163,11 @@ impl BoidsRenderState {
 
     fn params_for_mode(&self, mode: u32) -> BoidsComputeParams {
         let cell_count = self.grid_cell_count();
+        let jitter_strength = if self.rule == BoidsRuleFamily::SpeciesInteraction {
+            0.04
+        } else {
+            0.12
+        };
         BoidsComputeParams {
             meta: [self.tick, mode, self.boid_count, cell_count],
             grid: [self.grid_cells[0], self.grid_cells[1], cell_count, 0],
@@ -141,9 +185,9 @@ impl BoidsRenderState {
             ],
             sim_c: [
                 0.16, // center_weight
-                0.12, // jitter_strength
+                jitter_strength,
                 self.simulation_fps,
-                0.0,
+                self.rule.shader_mode(),
             ],
         }
     }
@@ -158,7 +202,9 @@ impl BoidsRenderState {
         surface_size: (u32, u32),
     ) -> Result<BoidsDrawParams, ProceduralCamera2dError> {
         let camera = self.camera.uniform_for_surface(surface_size)?;
-        let sprite = self.sprite_sizing.to_uniform_sprite(camera)?;
+        let mut sprite = self.sprite_sizing.to_uniform_sprite(camera)?;
+        // The example's fourth sprite slot is unused by geometry projection.
+        sprite[3] = self.rule.shader_mode();
         Ok(BoidsDrawParams {
             world_to_clip: camera.world_to_clip,
             viewport: camera.viewport,
@@ -202,11 +248,20 @@ impl BoidsRenderState {
 #[cfg(test)]
 mod tests {
     use super::BoidsRenderState;
+    use engine::runtime::FixedTimeState;
+
+    fn fixed(total_completed_steps: u64, steps_ran_last_frame: u32) -> FixedTimeState {
+        FixedTimeState {
+            total_completed_steps,
+            steps_ran_last_frame,
+            ..FixedTimeState::default()
+        }
+    }
 
     #[test]
     fn first_update_keeps_seed_tick() {
         let mut state = BoidsRenderState::default();
-        state.advance_by_frame_delta(1.0 / 120.0);
+        state.synchronize_fixed_frame(1.0 / 120.0, fixed(1, 1));
         let params = state.compute_params();
         assert_eq!(params.meta[0], 0);
         assert_eq!(params.meta[1], super::MODE_SIMULATE_GRID);
@@ -214,10 +269,28 @@ mod tests {
     }
 
     #[test]
+    fn zero_substep_frames_do_not_consume_initial_gpu_seed() {
+        let mut state = BoidsRenderState::default();
+        state.synchronize_fixed_frame(1.0 / 1000.0, fixed(0, 0));
+        state.synchronize_fixed_frame(1.0 / 1000.0, fixed(0, 0));
+        assert_eq!(state.submitted_step_count(), 0);
+
+        state.synchronize_fixed_frame(1.0 / 60.0, fixed(1, 1));
+        assert_eq!(state.submitted_step_count(), 0);
+        state.synchronize_fixed_frame(1.0 / 1000.0, fixed(1, 0));
+        assert_eq!(state.submitted_step_count(), 1);
+
+        state.synchronize_fixed_frame(1.0 / 60.0, fixed(4, 3));
+        assert_eq!(state.submitted_step_count(), 1);
+        state.synchronize_fixed_frame(1.0 / 60.0, fixed(5, 1));
+        assert_eq!(state.submitted_step_count(), 4);
+    }
+
+    #[test]
     fn second_update_steps_and_publish_params_select_render_buffer_copy() {
         let mut state = BoidsRenderState::default();
-        state.advance_by_frame_delta(1.0 / 120.0);
-        state.advance_by_frame_delta(1.0 / 120.0);
+        state.synchronize_fixed_frame(1.0 / 120.0, fixed(1, 1));
+        state.synchronize_fixed_frame(1.0 / 120.0, fixed(2, 1));
         let compute = state.compute_params();
         assert_eq!(compute.meta[0], 1);
         assert_eq!(compute.meta[1], super::MODE_SIMULATE_GRID);
@@ -234,7 +307,7 @@ mod tests {
     #[test]
     fn frame_delta_is_evidence_only_for_fixed_step_simulation() {
         let mut state = BoidsRenderState::default();
-        state.advance_by_frame_delta(1.0 / 30.0);
+        state.synchronize_fixed_frame(1.0 / 30.0, fixed(1, 1));
 
         assert_eq!(
             state.compute_params().sim_a[0],
@@ -272,6 +345,17 @@ mod tests {
     fn draw_params_reject_empty_surface_instead_of_silent_fallback() {
         let state = BoidsRenderState::default();
         assert!(state.try_draw_params((0, 900)).is_err());
+    }
+
+    #[test]
+    fn species_interactions_select_distinct_simulation_and_presentation_law() {
+        let flock = BoidsRenderState::default();
+        let species = BoidsRenderState::with_rule(super::BoidsRuleFamily::SpeciesInteraction);
+        assert_eq!(flock.compute_params().sim_c[3], 0.0);
+        assert_eq!(species.compute_params().sim_c[3], 1.0);
+        assert_eq!(flock.draw_params((1280, 720)).sprite[3], 0.0);
+        assert_eq!(species.draw_params((1280, 720)).sprite[3], 1.0);
+        assert_eq!(flock.compute_params().sim_a, species.compute_params().sim_a);
     }
 
     #[test]

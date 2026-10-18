@@ -6,7 +6,7 @@ use engine::plugins::render::{
     ProceduralBufferBinding, ProceduralPassDescriptor, ProceduralTargetDescriptor, RenderFlow,
     RenderVertexBufferLayout, RenderVertexFormat, U32Counter, U32ScanElement,
 };
-use runen_gpu::GpuBindingKey;
+use runen_gpu::{GpuBindingKey, GpuBufferInitialization};
 
 pub(crate) fn build_render_flow() -> RenderFlow {
     let grid_cell_count = (DEFAULT_GRID_CELLS_X * DEFAULT_GRID_CELLS_Y) as u64;
@@ -16,22 +16,39 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .expect("render flow authoring should succeed")
         .with_color_target("boids.color")
         .expect("render flow authoring should succeed")
-        .double_buffer_storage_array_with_handle::<BoidAgent>(
+        .double_buffer_storage_array_with_handle_and_initialization::<BoidAgent>(
             "boids.instances",
             DEFAULT_BOID_COUNT as u64,
+            GpuBufferInitialization::Zeroed,
         )
         .expect("render flow authoring should succeed");
     let (flow, grid_cell_counts) = flow
-        .storage_array::<U32Counter>("boids.grid.cell_counts", grid_cell_count)
+        .storage_array_with_initialization::<U32Counter>(
+            "boids.grid.cell_counts",
+            grid_cell_count,
+            GpuBufferInitialization::Zeroed,
+        )
         .expect("render flow authoring should succeed");
     let (flow, grid_cell_offsets) = flow
-        .storage_array::<U32ScanElement>("boids.grid.cell_offsets", grid_cell_count)
+        .storage_array_with_initialization::<U32ScanElement>(
+            "boids.grid.cell_offsets",
+            grid_cell_count,
+            GpuBufferInitialization::Zeroed,
+        )
         .expect("render flow authoring should succeed");
     let (flow, grid_scatter_cursors) = flow
-        .storage_array::<U32Counter>("boids.grid.scatter_cursors", grid_cell_count)
+        .storage_array_with_initialization::<U32Counter>(
+            "boids.grid.scatter_cursors",
+            grid_cell_count,
+            GpuBufferInitialization::Zeroed,
+        )
         .expect("render flow authoring should succeed");
     let (flow, grid_sorted_indices) = flow
-        .storage_array::<U32ScanElement>("boids.grid.sorted_indices", DEFAULT_BOID_COUNT as u64)
+        .storage_array_with_initialization::<U32ScanElement>(
+            "boids.grid.sorted_indices",
+            DEFAULT_BOID_COUNT as u64,
+            GpuBufferInitialization::Zeroed,
+        )
         .expect("render flow authoring should succeed");
     let grid_plan = BoundedUniformGrid2dBuildPlan::new(
         "boids.grid",
@@ -332,6 +349,34 @@ mod tests {
     }
 
     #[test]
+    fn declared_storage_has_real_first_frame_initialization_coverage() {
+        let flow = build_render_flow();
+        for label in [
+            "boids.instances.a",
+            "boids.instances.b",
+            "boids.grid.cell_counts",
+            "boids.grid.cell_offsets",
+            "boids.grid.scatter_cursors",
+            "boids.grid.sorted_indices",
+        ] {
+            let id = flow.resource_id(label).expect("declared storage identity");
+            let resource = flow
+                .graph()
+                .resources
+                .resources
+                .iter()
+                .find(|resource| *resource.id() == id)
+                .expect("declared resource");
+            let handle = resource.buffer_handle().expect("storage buffer handle");
+            assert_eq!(
+                handle.descriptor().initialization(),
+                &GpuBufferInitialization::Zeroed,
+                "{label} must have guaranteed first-frame coverage",
+            );
+        }
+    }
+
+    #[test]
     fn flow_does_not_keep_history_copy_without_history_consumer() {
         let flow = build_render_flow();
         assert!(
@@ -456,6 +501,66 @@ mod tests {
         assert!(shader.contains("cell_offsets"));
         assert!(shader.contains("sorted_indices"));
         assert!(!shader.contains("i < boid_count"));
+    }
+
+    #[test]
+    fn compute_shader_declares_all_runtime_graph_bindings_including_fixed_step() {
+        let module = naga::front::wgsl::parse_str(include_str!(
+            "../../../../assets/shaders/boids_compute.wgsl"
+        ))
+        .expect("boids compute shader should parse");
+
+        let declarations = module
+            .global_variables
+            .iter()
+            .filter_map(|(_, variable)| {
+                variable
+                    .binding
+                    .as_ref()
+                    .map(|binding| (binding.group, binding.binding))
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+
+        // This is a runtime bind-group compatibility contract, not just WGSL
+        // syntax validation: fixed_step_region() injects slot (0, 7).
+        let flow = build_render_flow();
+        for pass in flow
+            .graph()
+            .passes
+            .passes
+            .iter()
+            .filter(|pass| pass.kind == RenderPassKind::Compute)
+        {
+            let graph_bindings = pass
+                .shader_bindings
+                .iter()
+                .map(|binding| (binding.key().group(), binding.key().binding()))
+                .collect::<std::collections::BTreeSet<_>>();
+            assert_eq!(
+                graph_bindings, declarations,
+                "compute pass '{}' must bind exactly its shader declarations",
+                pass.label
+            );
+        }
+
+        assert_eq!(declarations.len(), 8);
+        let iteration = module
+            .global_variables
+            .iter()
+            .find(|(_, variable)| {
+                variable
+                    .binding
+                    .as_ref()
+                    .is_some_and(|binding| binding.group == 0 && binding.binding == 7)
+            })
+            .expect("fixed-step iteration shader binding must exist")
+            .1;
+        assert_eq!(iteration.space, naga::AddressSpace::Uniform);
+        assert_eq!(
+            std::mem::size_of::<engine::plugins::render::RenderFixedStepIterationUniformRaw>(),
+            32,
+            "fixed-step shader uniform must match the existing host ABI"
+        );
     }
 
     #[test]

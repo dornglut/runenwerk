@@ -2,8 +2,10 @@
 
 mod evidence;
 mod graph;
+mod gpu_step;
 mod state;
 
 pub(crate) use evidence::*;
 pub(crate) use graph::*;
+pub(crate) use gpu_step::*;
 pub(crate) use state::*;
