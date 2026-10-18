@@ -362,3 +362,87 @@ fn render_parameter_layouts_expose_allocation_and_declared_type_checks_separatel
     assert!(!first.declares_same_params_type_as(&other_type));
     assert!(first.declares_same_params_type_as(&same_type));
 }
+
+#[test]
+fn retained_ping_pong_initialization_requires_both_matching_physical_declarations() {
+    fn zeroed_pair() -> RenderFlow {
+        RenderFlow::new("initialized.pair")
+            .double_buffer_storage_array_with_handle_and_initialization::<StorageResourceTestParams>(
+                "test.pair",
+                8,
+                GpuBufferInitialization::Zeroed,
+            )
+            .expect("first-generation zeroed ping-pong buffers")
+            .0
+    }
+
+    let flow = zeroed_pair();
+    let a = flow.resource_id("test.pair.a").expect("A descriptor");
+    let b = flow.resource_id("test.pair.b").expect("B descriptor");
+    assert_ne!(a, b);
+    for id in [a, b] {
+        let resource = flow
+            .graph()
+            .resources
+            .resources
+            .iter()
+            .find(|resource| *resource.id() == id)
+            .expect("exact physical pair descriptor");
+        let RenderResourceDeclaration::Storage(storage) = resource else {
+            panic!("pair was not storage");
+        };
+        assert_eq!(
+            storage.handle().descriptor().initialization(),
+            &GpuBufferInitialization::Zeroed
+        );
+        assert_eq!(
+            storage.handle().descriptor().common().lifetime(),
+            GpuResourceLifetime::Retained
+        );
+        assert_eq!(storage.element_count(), 8);
+    }
+
+    let (same, handles) = flow
+        .double_buffer_storage_array_with_handle_and_initialization::<StorageResourceTestParams>(
+            "test.pair", 8, GpuBufferInitialization::Zeroed,
+        )
+        .expect("identical repeated declaration must preserve identity");
+    assert_eq!(handles.a().diagnostic_identity(), a);
+    assert_eq!(handles.b().diagnostic_identity(), b);
+    assert_eq!(same.resource_id("test.pair.a"), Some(a));
+    assert_eq!(same.resource_id("test.pair.b"), Some(b));
+
+    assert!(
+        zeroed_pair()
+            .double_buffer_storage_array_with_handle::<StorageResourceTestParams>("test.pair", 8)
+            .is_err(),
+        "default Uninitialized must not weaken a previously initialized pair"
+    );
+    assert!(
+        zeroed_pair()
+            .double_buffer_storage_array_with_handle_and_initialization::<StorageResourceTestParams>(
+                "test.pair", 9, GpuBufferInitialization::Zeroed
+            )
+            .is_err(),
+        "incompatible length must be rejected for BOTH buffers"
+    );
+    assert!(
+        zeroed_pair()
+            .double_buffer_storage_array_with_handle_and_initialization::<ResourceTestParams>(
+                "test.pair", 8, GpuBufferInitialization::Zeroed
+            )
+            .is_err(),
+        "incompatible element TypeId must be rejected for BOTH buffers"
+    );
+    let (collision, _) = RenderFlow::new("initialized.pair")
+        .storage_array::<StorageResourceTestParams>("test.pair.b", 8)
+        .unwrap();
+    assert!(
+        collision
+            .double_buffer_storage_array_with_handle_and_initialization::<StorageResourceTestParams>(
+                "test.pair", 8, GpuBufferInitialization::Zeroed
+            )
+            .is_err(),
+        "an occupied physical suffix may not be reused by a pair"
+    );
+}
