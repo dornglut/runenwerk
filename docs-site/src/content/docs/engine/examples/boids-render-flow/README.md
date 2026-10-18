@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-18
 publication: primary
 ---
 
@@ -111,11 +111,26 @@ it does **not** simulate a real device loss, partially executed shader write,
 or in-place recreation of a GPU context.
 
 Native hosted Mesa/Vulkan smoke is opt-in with `RUNENWERK_BOIDS_NATIVE_SMOKE=1`
-for both executable modes. It checks at least 120 **submitted Present
-opportunities**, correlated terminal G5 receipts, semantically verified GPU
-steps, and changing GPU-rendered boid images, then closes its window. This is
-not hardware display scanout timing, a complete Boids-buffer proof, or a
-substitute for owner-native original/species acceptance.
+for both executable modes. Its default capture-enabled mode checks at least
+120 **submitted Present opportunities**, correlated terminal G5 receipts,
+semantically verified GPU steps, and changing GPU-rendered boid images, then
+closes its window. Set `RUNENWERK_BOIDS_NATIVE_NO_READBACK=1` *alongside*
+the smoke flag to test the actual GPU-resident normal-execution path without
+the mandatory RGBA capture. In that mode the test requires 120 Present
+submissions and terminal source progress but does **not** assert pixel content
+or motion. Hosted CI runs both variants on each Boids law.
+
+Each native smoke prints the host-observed submitted-Present rate, its
+95th-percentile interval, maximum immutable steps outstanding, and maximum
+CPU fixed-time ticks not yet captured into the GPU producer. Rates exclude
+startup prior to the first submitted Present and are **not** GPU execution
+times, actual monitor scanout, or stable benchmark measurements. Run the
+no-readback mode in a **release build** on the owner GPU for the comparison
+against the capture-enabled diagnostic mode. The hosted software Vulkan
+figures cannot qualify RX 7900 XTX responsiveness.
+
+This is not a complete Boids-buffer proof or a substitute for owner-native
+original/species acceptance.
 
 The draw pass uses a producer-owned `ProceduralCamera2d` with
 `FillViewport { fixed_axis: Vertical }`. Renderer procedural code derives the

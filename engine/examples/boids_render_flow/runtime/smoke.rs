@@ -9,7 +9,7 @@ use engine::plugins::render::inspect::{
 };
 use engine::plugins::render::renderer::RenderGpuFrameTerminalDisposition;
 use engine::plugins::render::{Gfx, RenderFlowId, RenderGpuFlowStepStreams};
-use engine::prelude::App;
+use engine::prelude::{App, FixedTimeState};
 use engine::runtime::{
     NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, WindowStateRegistryResource,
 };
@@ -33,16 +33,29 @@ pub(crate) struct NativeBoidsSmokeStatus {
     verified_ticks: u64,
     sampled_gpu_images: u64,
     changed_gpu_images: u64,
+    require_visual_readback: bool,
+    peak_outstanding_steps: usize,
+    peak_uncaptured_cpu_ticks: u64,
+    first_present: Option<Instant>,
+    last_present: Option<Instant>,
+    present_intervals: Vec<Duration>,
     succeeded: bool,
     error: Option<String>,
 }
 
 type SharedStatus = Arc<Mutex<NativeBoidsSmokeStatus>>;
 
-pub(crate) fn install(app: &mut App, flow: RenderFlowId) -> Result<SharedStatus> {
+pub(crate) fn install(
+    app: &mut App,
+    flow: RenderFlowId,
+    require_visual_readback: bool,
+) -> Result<SharedStatus> {
     app.insert_resource(RenderFrameObservationPolicyResource::enabled(512));
     app.init_resource::<NativeWindowHookRegistryResource>();
-    let status = SharedStatus::default();
+    let status = Arc::new(Mutex::new(NativeBoidsSmokeStatus {
+        require_visual_readback,
+        ..NativeBoidsSmokeStatus::default()
+    }));
     app.world_mut()
         .resource_mut::<NativeWindowHookRegistryResource>()?
         .register_hook(NativeBoidsSmoke {
@@ -71,14 +84,38 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
             .as_deref()
             .unwrap_or("native window stopped before evidence completed")
     );
+    // Measures host-observed Present submissions, not display scanout or GPU
+    // shader duration. Exclude shader startup from the first-to-last interval.
+    let elapsed_seconds = match (status.first_present, status.last_present) {
+        (Some(first), Some(last)) => last.duration_since(first).as_secs_f64(),
+        _ => 0.0,
+    };
+    let present_submit_fps = if elapsed_seconds > 0.0 {
+        (status.presented_opportunities.saturating_sub(1) as f64) / elapsed_seconds
+    } else {
+        0.0
+    };
+    let mut intervals = status.present_intervals.clone();
+    intervals.sort_unstable();
+    let p95_ms = if intervals.is_empty() {
+        0.0
+    } else {
+        let index = (intervals.len() * 95).div_ceil(100).saturating_sub(1);
+        intervals[index].as_secs_f64() * 1000.0
+    };
     println!(
-        "native_boids_gpu_smoke=pass frames={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={}",
+        "native_boids_gpu_smoke=pass frames={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={}",
         status.frames,
         status.presented_opportunities,
         status.terminal_gpu_frames,
         status.verified_ticks,
         status.sampled_gpu_images,
-        status.changed_gpu_images
+        status.changed_gpu_images,
+        status.require_visual_readback,
+        present_submit_fps,
+        p95_ms,
+        status.peak_outstanding_steps,
+        status.peak_uncaptured_cpu_ticks
     );
     Ok(())
 }
@@ -128,11 +165,16 @@ impl NativeBoidsSmoke {
                     && observation.presentation.present_operation_submitted
             })
             .count();
-        let verified = world
+        let source = world
             .resource::<RenderGpuFlowStepStreams>()?
             .stream(self.flow)
-            .context("Boids GPU source stream missing while rendering")?
-            .completed_tick();
+            .context("Boids GPU source stream missing while rendering")?;
+        let verified = source.completed_tick();
+        let outstanding = source.outstanding();
+        let uncaptured = world
+            .resource::<FixedTimeState>()?
+            .total_completed_steps
+            .saturating_sub(source.requested_tick());
         let mut terminal = 0;
         if let Ok(gfx) = world.resource_mut::<Gfx>() {
             if !self.terminal_delivery_enabled {
@@ -166,6 +208,17 @@ impl NativeBoidsSmoke {
             .lock()
             .map_err(|_| anyhow::anyhow!("Boids native smoke status poisoned"))?;
         state.frames += 1;
+        state.peak_outstanding_steps = state.peak_outstanding_steps.max(outstanding);
+        state.peak_uncaptured_cpu_ticks = state.peak_uncaptured_cpu_ticks.max(uncaptured);
+        if presented > state.presented_opportunities {
+            let now = Instant::now();
+            if let Some(previous) = state.last_present {
+                state.present_intervals.push(now.duration_since(previous));
+            } else {
+                state.first_present = Some(now);
+            }
+            state.last_present = Some(now);
+        }
         state.presented_opportunities = presented;
         state.terminal_gpu_frames += terminal;
         state.verified_ticks = verified;
@@ -174,17 +227,19 @@ impl NativeBoidsSmoke {
         if state.presented_opportunities >= REQUIRED_PRESENT_SUBMISSIONS
             && state.terminal_gpu_frames >= REQUIRED_TERMINAL_FRAMES
             && state.verified_ticks >= REQUIRED_VERIFIED_TICKS
-            && state.changed_gpu_images >= REQUIRED_CHANGED_GPU_IMAGES
+            && (!state.require_visual_readback
+                || state.changed_gpu_images >= REQUIRED_CHANGED_GPU_IMAGES)
         {
             state.succeeded = true;
         } else {
             anyhow::ensure!(
                 state.frames < MAX_WINDOW_OPPORTUNITIES && self.started.elapsed() < MAX_DURATION,
-                "native Boids missed 120 accepted Present opportunities, GPU image motion or source-verified G5 progress (opportunities={}, completed GPU frames={}, verified ticks={}, changed images={}, elapsed={:?})",
+                "native Boids missed 120 Present opportunities, required GPU image motion or G5 source progress (opportunities={}, completed GPU frames={}, verified ticks={}, changed images={}, visual_readback={}, elapsed={:?})",
                 state.presented_opportunities,
                 state.terminal_gpu_frames,
                 state.verified_ticks,
                 state.changed_gpu_images,
+                state.require_visual_readback,
                 self.started.elapsed()
             );
         }

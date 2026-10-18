@@ -109,12 +109,14 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     let source = BoidsGpuStepSchema::from_flow(&flow)?;
     let source_flow = source.flow_id();
     let native_smoke = std::env::var("RUNENWERK_BOIDS_NATIVE_SMOKE").as_deref() == Ok("1");
+    let require_visual_readback = native_smoke
+        && std::env::var("RUNENWERK_BOIDS_NATIVE_NO_READBACK").as_deref() != Ok("1");
     let mut streams = RenderGpuFlowStepStreams::default();
     streams.register(source.flow_id(), 0, MAX_OUTSTANDING_BOIDS_STEPS)?;
     // Visual conformance deliberately samples the GPU-rendered image. Normal
     // execution requires only terminal G5 success and exact source lineage:
     // staging an entire surface on the CPU is not a Boids simulation invariant.
-    if native_smoke {
+    if require_visual_readback {
         streams.require_capture(
             source.flow_id(),
             RenderCaptureSelector {
@@ -149,12 +151,16 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     app.insert_resource(BoidsVerifiedGpuGeneration {
         last_verified: None,
         native_fault_at_verified_tick,
-        require_visual_readback: native_smoke,
+        require_visual_readback,
     });
     app.add_systems(Update, advance_boids_simulation_system);
     app.add_render_flow(flow);
     let smoke = if native_smoke {
-        Some(super::smoke::install(&mut app, source_flow)?)
+        Some(super::smoke::install(
+            &mut app,
+            source_flow,
+            require_visual_readback,
+        )?)
     } else {
         None
     };
