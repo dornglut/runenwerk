@@ -137,7 +137,10 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
         None
     };
     if let Some(threshold) = native_fault_at_verified_tick {
-        anyhow::ensure!(threshold > 0, "native Boids source-fault threshold must be nonzero");
+        anyhow::ensure!(
+            threshold > 0,
+            "native Boids source-fault threshold must be nonzero"
+        );
     }
     app.insert_resource(BoidsVerifiedGpuGeneration {
         last_verified: None,
