@@ -498,6 +498,7 @@ pub enum RenderGpuAcceptedCaptureError {
     CapacityExceeded,
     MissingRequiredReadback,
     AmbiguousRequiredReadback,
+    UnexpectedRequiredReadback,
     SubmissionMismatch,
 }
 
@@ -522,6 +523,20 @@ fn validate_required_capture_identities<'a>(
         match count {
             1 => {}
             0 => return Err(RenderGpuAcceptedCaptureError::MissingRequiredReadback),
+            _ => return Err(RenderGpuAcceptedCaptureError::AmbiguousRequiredReadback),
+        }
+    }
+    // A complete result is a one-to-one mapping, not merely the presence of
+    // every requested capture. An unrequested source must never be exposed as
+    // producer-required semantic evidence.
+    for identity in identities {
+        match required
+            .iter()
+            .filter(|selector| selector.matches_point(&identity.capture_point))
+            .count()
+        {
+            1 => {}
+            0 => return Err(RenderGpuAcceptedCaptureError::UnexpectedRequiredReadback),
             _ => return Err(RenderGpuAcceptedCaptureError::AmbiguousRequiredReadback),
         }
     }
@@ -883,8 +898,27 @@ mod accepted_capture_validation_tests {
         let mut wrong = identity.clone();
         wrong.capture_point.pass_id = "other".to_string();
         assert_eq!(
-            validate_required_capture_identities(&[selector], [&wrong]),
+            validate_required_capture_identities(std::slice::from_ref(&selector), [&wrong]),
             Err(RenderGpuAcceptedCaptureError::MissingRequiredReadback)
+        );
+        assert_eq!(
+            validate_required_capture_identities(
+                std::slice::from_ref(&selector),
+                [&identity, &wrong]
+            ),
+            Err(RenderGpuAcceptedCaptureError::UnexpectedRequiredReadback)
+        );
+        assert_eq!(
+            validate_required_capture_identities(&[], [&identity]),
+            Err(RenderGpuAcceptedCaptureError::UnexpectedRequiredReadback)
+        );
+        let other_selector = RenderCaptureSelector::named_pass_surface_color("flow", "other");
+        assert_eq!(
+            validate_required_capture_identities(
+                &[selector, other_selector],
+                [&identity, &wrong]
+            ),
+            Ok(())
         );
     }
 }
