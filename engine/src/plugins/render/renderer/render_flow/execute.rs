@@ -71,6 +71,7 @@ struct RealizedScheduledPass<'a> {
     occurrence: RenderGpuWorkOccurrenceId,
     control_order_after: Vec<RenderGpuWorkOccurrenceId>,
     fixed_step_uploads: Vec<RealizedLogicalBufferUpload>,
+    historical_dispatch: Option<[u32; 3]>,
     execution: RealizedPassExecution<'a>,
 }
 
@@ -851,6 +852,7 @@ impl Renderer {
                         let mut realized_passes = Vec::new();
                         for (ordinal, occurrence) in occurrences.into_iter().enumerate() {
                             let mut fixed_step_uploads = Vec::new();
+                            let mut historical_dispatch = None;
                             if let Some(iteration) = occurrence.fixed_step_iteration {
                                 let source_control = if let Some(history) =
                                     invocation.inputs.fixed_step_history.as_ref()
@@ -891,6 +893,8 @@ impl Renderer {
                                             anyhow::anyhow!("GPU historical step missing")
                                         })?;
                                     let pass_id = execution_pass_id(occurrence.pass);
+                                    historical_dispatch = snapshot.input.dispatch_workgroups
+                                        .get(&pass_id).copied();
                                     let pass_node = flow
                                         .render_passes
                                         .iter()
@@ -1012,6 +1016,7 @@ impl Renderer {
                                 occurrence: occurrence.occurrence_id,
                                 control_order_after: occurrence.control_order_after,
                                 fixed_step_uploads,
+                                historical_dispatch,
                                 execution: RealizedPassExecution {
                                     pass,
                                     timestamp_indices,
@@ -1030,6 +1035,7 @@ impl Renderer {
                                 pipeline: scheduled.execution.pipeline.as_ref(),
                                 timestamp_indices: scheduled.execution.timestamp_indices,
                                 fixed_step_uploads: &scheduled.fixed_step_uploads,
+                                historical_dispatch: scheduled.historical_dispatch,
                                 before_captures: &scheduled.execution.before_captures,
                                 after_captures: &scheduled.execution.after_captures,
                             })

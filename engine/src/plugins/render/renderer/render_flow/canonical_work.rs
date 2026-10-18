@@ -29,6 +29,7 @@ pub(super) struct CanonicalPassProjection<'a> {
     pub(super) pipeline: Option<&'a PreparedPipelinePass>,
     pub(super) timestamp_indices: Option<GpuPassTimestampIndices>,
     pub(super) fixed_step_uploads: &'a [RealizedLogicalBufferUpload],
+    pub(super) historical_dispatch: Option<[u32; 3]>,
     pub(super) before_captures: &'a [PreparedCaptureReadback],
     pub(super) after_captures: &'a [PreparedCaptureReadback],
 }
@@ -206,7 +207,13 @@ pub(super) fn resolve_canonical_invocation(
                     )
                 })?;
                 let timing = timestamp_projection(timing, projected.timestamp_indices)?;
-                project_compute_operation(pass, flow_inputs, pipeline, timing)?
+                project_compute_operation(
+                    pass,
+                    flow_inputs,
+                    projected.historical_dispatch,
+                    pipeline,
+                    timing,
+                )?
             }
             CompiledPassExecutionPlan::Fullscreen(_) | CompiledPassExecutionPlan::Graphics(_) => {
                 let pipeline = projected.pipeline.ok_or_else(|| {

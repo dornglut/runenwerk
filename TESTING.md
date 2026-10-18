@@ -429,3 +429,19 @@ success. An empty result remains valid only for a stream with no required
 captures. These checks do not replace the producer's semantic pixel/content
 verification or create another GPU completion authority. Pure regression
 cases cover missing, exact and duplicate capture-point identities.
+
+## RW-1291-DISP23 — per-tick compute dispatch source integrity (draft)
+
+Ordinary historical RenderFlow input snapshots include `dispatch_workgroups` keyed
+by every state-driven compute pass in the fixed-step region, in addition to
+source uniform bytes and iteration control. Frame preparation rejects absent,
+extra or mismatched dispatch identities before G5, never allowing the latest
+ECS-projected workgroup dimensions to replace a delayed tick's source value.
+Fixed authored dispatches remain invariant. The frame-preparation regression
+uses three distinct captured workgroup counts while latest ECS projects a
+fourth value; the canonical pass projection binds each source count to the
+corresponding actual compute occurrence rather than applying one latest
+value across historical ticks. This does not change source clock, physical
+RunenGPU admission or semantic completion ownership. This test is not native
+Boids consumer acceptance; #1290 still must capture all eight state-driven
+compute dispatch values at each producer tick.

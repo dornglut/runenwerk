@@ -1171,6 +1171,7 @@ fn native_historical_input(
             )
             .to_vec(),
         )]),
+        dispatch_workgroups: BTreeMap::new(),
         iteration: RenderFixedStepIterationUniform::new(
             0,
             1,

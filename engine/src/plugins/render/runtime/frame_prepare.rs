@@ -403,6 +403,20 @@ fn apply_historical_step_inputs(
                 .map(|binding| *binding.uniform_id())
         })
         .collect::<BTreeSet<_>>();
+    // Dynamic dispatch is another GPU input that must be captured at the
+    // source tick, never re-projected from the latest mutable ECS state.
+    let required_dispatches = flow
+        .render_passes
+        .iter()
+        .filter(|pass| {
+            region.pass_ids.contains(&pass.pass_id())
+                && matches!(
+                    pass.node().compute_dispatch.as_ref(),
+                    Some(ComputeDispatchDescriptor::State(_))
+                )
+        })
+        .map(|pass| pass.pass_id())
+        .collect::<BTreeSet<_>>();
     anyhow::ensure!(
         !required.contains(&region.iteration_uniform),
         "flow {:?} reuses its iteration-control uniform as producer state",
@@ -437,6 +451,17 @@ fn apply_historical_step_inputs(
             anyhow::ensure!(
                 provided == required,
                 "flow {:?} step {} does not capture exactly the region's projected uniform inputs",
+                flow.flow_id,
+                intent.tick()
+            );
+            let dispatches = input
+                .dispatch_workgroups
+                .keys()
+                .copied()
+                .collect::<BTreeSet<_>>();
+            anyhow::ensure!(
+                dispatches == required_dispatches,
+                "flow {:?} step {} does not capture exactly the region's state-driven compute dispatch inputs",
                 flow.flow_id,
                 intent.tick()
             );
@@ -1567,7 +1592,9 @@ mod tests {
                 },
             )
             .expect("projected stateful shader uniform")
-            .dispatch([1, 1, 1])
+            .dispatch_from_state(|state: &HistoricalProducerState| {
+                [state.latest_value, 1, 1]
+            })
             .finish()
             .fixed_step_region(
                 "historical.simulation",
@@ -1581,11 +1608,13 @@ mod tests {
         let compiled = compile_flow_plan(&flow.validate().expect("valid RenderFlow"))
             .expect("compiled GPU flow");
         let uniform_id = *compiled.render_passes[0].node().uniform_bindings[0].uniform_id();
+        let pass_id = compiled.render_passes[0].pass_id();
         let input = |value| RenderGpuFixedStepInput {
             uniforms: BTreeMap::from([(
                 uniform_id,
                 bytemuck::bytes_of(&HistoricalUniform { value }.to_gpu()).to_vec(),
             )]),
+            dispatch_workgroups: BTreeMap::from([(pass_id, [value, 1, 1])]),
             iteration: RenderFixedStepIterationUniform::new(
                 0,
                 1,
@@ -1655,6 +1684,19 @@ mod tests {
                 .map(|sample| sample.uniforms[&uniform_id].clone())
                 .collect::<Vec<_>>()
         );
+        assert_eq!(
+            prepared.projected_dispatch_workgroups[&pass_id],
+            [999, 1, 1],
+            "latest ECS dispatch is distinct from all captured historical values"
+        );
+        assert_eq!(
+            history
+                .steps
+                .iter()
+                .map(|step| step.input.dispatch_workgroups[&pass_id])
+                .collect::<Vec<_>>(),
+            vec![[11, 1, 1], [27, 1, 1], [8, 1, 1]]
+        );
         let region = &compiled.execution.fixed_step_regions[0];
         let schedule = RenderFixedStepIterationUniform::from_uniform_bytes(
             &prepared.projected_uniform_bytes[&region.iteration_uniform],
@@ -1680,6 +1722,7 @@ mod tests {
 
         let incomplete = RenderGpuFixedStepInput {
             uniforms: BTreeMap::new(),
+            dispatch_workgroups: BTreeMap::new(),
             iteration: RenderFixedStepIterationUniform::new(0, 1, 4, 0, 1.0 / 60.0, 0.0),
         };
         let mut bad = RenderGpuFlowStepStreams::default();
@@ -1702,6 +1745,29 @@ mod tests {
         )
         .expect_err("selected GPU step with missing source input must fail before G5");
         assert!(error.to_string().contains("does not capture exactly"));
+
+        // Even a complete immutable uniform snapshot is insufficient when
+        // its state-driven dispatch dimension was projected only from ECS.
+        let mut missing_dispatch = RenderGpuFlowStepStreams::default();
+        missing_dispatch.register(compiled.flow_id, 0, 4).unwrap();
+        let mut source = input(11);
+        source.dispatch_workgroups.clear();
+        missing_dispatch
+            .stream_mut(compiled.flow_id)
+            .unwrap()
+            .capture(source)
+            .unwrap();
+        let error = build_prepared_flow_invocations(
+            RenderSurfaceId::primary(),
+            std::slice::from_ref(&compiled),
+            &extracted,
+            &projected_bad,
+            &[],
+            &PreparedRenderFrameRequestResource::default(),
+            Some(&missing_dispatch),
+        )
+        .expect_err("latest ECS dispatch may not substitute missing historical dispatch");
+        assert!(error.to_string().contains("state-driven compute dispatch inputs"));
     }
 
     #[test]
@@ -1750,6 +1816,7 @@ mod tests {
                     shared.diagnostic_identity(),
                     bytemuck::bytes_of(&HistoricalUniform { value: 3 }.to_gpu()).to_vec(),
                 )]),
+                dispatch_workgroups: BTreeMap::new(),
                 iteration: RenderFixedStepIterationUniform::new(0, 1, 4, 0, 1.0 / 60.0, 0.0),
             })
             .unwrap();

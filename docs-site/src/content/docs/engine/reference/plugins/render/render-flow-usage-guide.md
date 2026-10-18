@@ -369,15 +369,22 @@ is not automatically a simulation-verified result.
 `RenderGpuFlowStepStreams` owns a bounded source stream keyed by the selected
 `RenderFlowId`. The semantic producer registers its stream and captures a
 `RenderGpuFixedStepInput` for every requested tick **before** irreversible
-domain progression. Each input contains exact per-step uniform bytes and its
-source-time `RenderFixedStepIterationUniform`; the latest ECS projection is
-never reconstructed as missing history. The selected flow must have exactly
-one fixed-step region, the input must cover precisely its authored pass
-uniforms, and the history must not share a uniform buffer with an ordinary
-pass outside the region. All violations reject preparation before G5.
+domain progression. Each input contains exact per-step uniform bytes, source-time
+`RenderFixedStepIterationUniform`, and
+`dispatch_workgroups: BTreeMap<RenderPassId, [u32; 3]>` for **each
+state-driven compute dispatch** in the authored fixed-step region. Fixed
+dispatch declarations remain invariant and must not appear in this map.
+Latest ECS uniform or state-driven dispatch projections are never
+reconstructed as historical inputs. The selected flow must have exactly
+one fixed-step region; each input must cover precisely the region's authored
+pass uniforms and dynamic dispatches, without extra keys. The history must
+not share a uniform buffer with an ordinary pass outside the region.
+All violations reject preparation before G5.
 
 Ordinary RenderFlow expands those snapshots into actual repeated compute
-occurrences with source-specific ordered uploads. A producer whose previous
+occurrences with source-specific ordered uploads **and per-occurrence captured
+dispatch dimensions**. The latest ECS dispatch can still prepare metadata,
+but it is never used to execute a historical state-driven dispatch. A producer whose previous
 accepted interval has not been semantically verified is deferred without
 acquiring a new surface image. Even after all producer steps are verified,
 an idle presentation pass can still read retained storage. G5 reserves

@@ -7,7 +7,9 @@
 use crate::plugins::render::inspect::{
     CaptureStage, RenderCaptureIdentity, RenderCaptureSelector, RenderCaptureSubmissionReceipt,
 };
-use crate::plugins::render::{PreparedRenderFrame, RenderFixedStepIterationUniform, RenderFlowId};
+use crate::plugins::render::{
+    PreparedRenderFrame, RenderFixedStepIterationUniform, RenderFlowId, RenderPassId,
+};
 use runen_gpu::{
     GpuContextAffinity, GpuReadbackId, GpuReadbackStatus, GpuSubmission, GpuSubmissionStatus,
     GpuTextureFormat, GpuWorkResourceId,
@@ -438,6 +440,9 @@ mod tests {
 #[derive(Debug, Clone, PartialEq)]
 pub struct RenderGpuFixedStepInput {
     pub uniforms: BTreeMap<GpuWorkResourceId, Vec<u8>>,
+    /// Historical dispatch for each state-projected compute pass within the
+    /// fixed-step region. Fixed dispatch declarations remain invariant.
+    pub dispatch_workgroups: BTreeMap<RenderPassId, [u32; 3]>,
     /// Immutable source-time control. The renderer supplies only the actual
     /// selected batch count/index, never a replacement latest-frame CPU time.
     pub iteration: RenderFixedStepIterationUniform,
