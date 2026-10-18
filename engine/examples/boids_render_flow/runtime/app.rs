@@ -103,7 +103,7 @@ fn advance_boids_simulation_system(
                             .context("Boids GPU capture dimensions overflow")?;
                         anyhow::ensure!(
                             bytes.as_bytes().len() == expected_len
-                                && bytes.as_bytes().chunks_exact(4).any(|rgba| {
+                                && bytes.as_bytes().as_chunks::<4>().0.iter().any(|rgba| {
                                     rgba[3] == 255 && rgba[..3].iter().any(|channel| *channel > 65)
                                 }),
                             "Boids draw readback is missing visible non-background particle pixels"

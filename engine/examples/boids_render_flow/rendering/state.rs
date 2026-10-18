@@ -1,8 +1,6 @@
 use engine::plugins::render::{
     GpuStorage, GpuUniform, ProceduralCamera2d, ProceduralCamera2dError, ProceduralSpriteSizing,
 };
-use engine::runtime::FixedTimeState;
-
 pub(crate) const DEFAULT_BOID_COUNT: u32 = 384;
 pub(crate) const DEFAULT_SIMULATION_FPS: f32 = 60.0;
 pub(crate) const DEFAULT_GRID_CELLS_X: u32 = 10;
@@ -75,7 +73,6 @@ pub(crate) struct BoidsRenderState {
     boid_count: u32,
     simulation_fps: f32,
     fixed_delta_seconds: f32,
-    last_frame_delta_seconds: f32,
     grid_cells: [u32; 2],
     camera: ProceduralCamera2d,
     sprite_sizing: ProceduralSpriteSizing,
@@ -90,7 +87,6 @@ impl Default for BoidsRenderState {
             boid_count: DEFAULT_BOID_COUNT,
             simulation_fps: DEFAULT_SIMULATION_FPS,
             fixed_delta_seconds,
-            last_frame_delta_seconds: fixed_delta_seconds,
             grid_cells: [DEFAULT_GRID_CELLS_X, DEFAULT_GRID_CELLS_Y],
             camera: ProceduralCamera2d::fill_viewport_vertical(
                 DEFAULT_WORLD_CENTER,
@@ -116,17 +112,6 @@ impl BoidsRenderState {
             rule,
             ..Self::default()
         }
-    }
-
-    pub(crate) fn synchronize_fixed_frame(&mut self, delta_seconds: f32, fixed: FixedTimeState) {
-        self.last_frame_delta_seconds = delta_seconds.clamp(0.0, 1.0 / 15.0).max(1.0 / 240.0);
-        // Update runs after this frame's FixedUpdate schedule, before its
-        // render-flow substeps. The shader consumes the START of that interval.
-        // A zero-substep frame never skips the seed or invents a simulation tick.
-        let start_step = fixed
-            .total_completed_steps
-            .saturating_sub(u64::from(fixed.steps_ran_last_frame));
-        self.tick = u32::try_from(start_step).unwrap_or(u32::MAX);
     }
 
     pub(crate) fn compute_params(&self) -> BoidsComputeParams {
@@ -229,15 +214,6 @@ impl BoidsRenderState {
         self.fixed_delta_seconds
     }
 
-    #[cfg(test)]
-    pub(crate) fn last_frame_delta_seconds(&self) -> f32 {
-        self.last_frame_delta_seconds
-    }
-
-    pub(crate) fn submitted_step_count(&self) -> u32 {
-        self.tick
-    }
-
     pub(crate) fn grid_cell_count(&self) -> u32 {
         self.grid_cells[0]
             .checked_mul(self.grid_cells[1])
@@ -248,72 +224,33 @@ impl BoidsRenderState {
 #[cfg(test)]
 mod tests {
     use super::BoidsRenderState;
-    use engine::runtime::FixedTimeState;
-
-    fn fixed(total_completed_steps: u64, steps_ran_last_frame: u32) -> FixedTimeState {
-        FixedTimeState {
-            total_completed_steps,
-            steps_ran_last_frame,
-            ..FixedTimeState::default()
-        }
+    #[test]
+    fn source_tick_projection_is_explicit_and_does_not_mutate_latest_state() {
+        let state = BoidsRenderState::default();
+        assert_eq!(state.compute_params().meta[0], 0);
+        let first = state.at_source_tick(0);
+        let second = state.at_source_tick(1);
+        assert_eq!(first.compute_params().meta[0], 0);
+        assert_eq!(second.compute_params().meta[0], 1);
+        assert_eq!(second.publish_params().meta[1], super::MODE_PUBLISH);
+        assert_eq!(second.compute_params().sim_a[0], state.fixed_delta_seconds());
+        assert_eq!(state.compute_params().meta[0], 0);
     }
 
     #[test]
-    fn first_update_keeps_seed_tick() {
-        let mut state = BoidsRenderState::default();
-        state.synchronize_fixed_frame(1.0 / 120.0, fixed(1, 1));
-        let params = state.compute_params();
-        assert_eq!(params.meta[0], 0);
-        assert_eq!(params.meta[1], super::MODE_SIMULATE_GRID);
-        assert_eq!(params.meta[2], super::DEFAULT_BOID_COUNT);
-    }
-
-    #[test]
-    fn zero_substep_frames_do_not_consume_initial_gpu_seed() {
-        let mut state = BoidsRenderState::default();
-        state.synchronize_fixed_frame(1.0 / 1000.0, fixed(0, 0));
-        state.synchronize_fixed_frame(1.0 / 1000.0, fixed(0, 0));
-        assert_eq!(state.submitted_step_count(), 0);
-
-        state.synchronize_fixed_frame(1.0 / 60.0, fixed(1, 1));
-        assert_eq!(state.submitted_step_count(), 0);
-        state.synchronize_fixed_frame(1.0 / 1000.0, fixed(1, 0));
-        assert_eq!(state.submitted_step_count(), 1);
-
-        state.synchronize_fixed_frame(1.0 / 60.0, fixed(4, 3));
-        assert_eq!(state.submitted_step_count(), 1);
-        state.synchronize_fixed_frame(1.0 / 60.0, fixed(5, 1));
-        assert_eq!(state.submitted_step_count(), 4);
-    }
-
-    #[test]
-    fn second_update_steps_and_publish_params_select_render_buffer_copy() {
-        let mut state = BoidsRenderState::default();
-        state.synchronize_fixed_frame(1.0 / 120.0, fixed(1, 1));
-        state.synchronize_fixed_frame(1.0 / 120.0, fixed(2, 1));
-        let compute = state.compute_params();
-        assert_eq!(compute.meta[0], 1);
-        assert_eq!(compute.meta[1], super::MODE_SIMULATE_GRID);
-        assert_eq!(compute.meta[2], super::DEFAULT_BOID_COUNT);
+    fn distinct_source_timestamps_preserve_immutable_rules_and_grid_projection() {
+        let state = BoidsRenderState::default();
+        let first = state.at_source_tick(5).compute_params();
+        let second = state.at_source_tick(6).compute_params();
+        assert_eq!(first.meta[0], 5);
+        assert_eq!(second.meta[0], 6);
+        assert_eq!(first.meta[2], super::DEFAULT_BOID_COUNT);
         assert_eq!(
-            compute.meta[3],
+            first.meta[3],
             super::DEFAULT_GRID_CELLS_X * super::DEFAULT_GRID_CELLS_Y
         );
-        assert_eq!(compute.sim_a[0], state.fixed_delta_seconds());
-        let publish = state.publish_params();
-        assert_eq!(publish.meta[1], super::MODE_PUBLISH);
-    }
-
-    #[test]
-    fn frame_delta_is_evidence_only_for_fixed_step_simulation() {
-        let mut state = BoidsRenderState::default();
-        state.synchronize_fixed_frame(1.0 / 30.0, fixed(1, 1));
-
-        assert_eq!(
-            state.compute_params().sim_a[0],
-            1.0 / super::DEFAULT_SIMULATION_FPS
-        );
-        assert!(state.last_frame_delta_seconds() > state.fixed_delta_seconds());
+        assert_eq!(first.sim_a, second.sim_a);
+        assert_eq!(first.sim_b, second.sim_b);
     }
 
     #[test]
