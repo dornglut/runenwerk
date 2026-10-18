@@ -98,23 +98,24 @@ fullscreen GPU pass reads the retained counter and colors the captured surface
 pixel green iff the original heterogeneous step values sum to exactly 6; the
 test requires that exact green RGBA pixel and only then commits the
 producer's semantic tick 3. **While the first three-step G5 batch is
-accepted but semantically unverified**, the producer captures historical step
-4 in its bounded queue and deliberately attempts a fifth input. Admission of
-that fifth input must return typed `CapacityExceeded` and the exact immutable
-unconsumed payload, without advancing the requested or verified cursor,
-consuming queued history or submitting duplicate G5 work. After the first
-terminal GPU pixel oracle succeeds, the producer first *deliberately refuses*
-semantic verification and requires the exact accepted batch and queued tick 4
-to remain unchanged. Only an independent successful verification callback
-may advance the completed cursor. After first-batch verification, step 4 (captured *before* completion) proves *a new, separately
-G5-accepted GPU submission* continues retained state from 6 to 10 (exact
-blue RGBA pixel), before committing tick 4. Progressed GPU observations must reach ordinary ECS
-`RenderCapturedTextureState` for source-owned semantic verification **without**
-acquiring another surface image or duplicating either batch. The native
-producer test reads that ECS state, not renderer internals. Publication also
-survives a primary host frame's failed surface acquisition, preparation or
-G5 admission, without turning the failed frame into a submitted frame or
-Present. Secondary-surface success/error delivery and multi-surface capture
+accepted but semantically unverified**, the producer separately captures
+historical ticks 4 and 5 on two different host redraws. The bounded demand
+holds three accepted plus two pending inputs; a sixth input must return typed
+`CapacityExceeded` and its exact unchanged payload. The test deliberately
+retains the *physically completed* predecessor for four further native
+redraws after the first verified result, proving that CPU-frame progression cannot secretly
+re-admit or consume these historical steps. The first terminal green pixel is
+verified, but semantic verification is deliberately refused once and must
+leave the accepted batch and both pending inputs unchanged. After an explicit
+successful commit to tick 3, the original tick-4 and tick-5 inputs form a
+fresh two-step G5 batch. Its fullscreen shader must expose exactly 15
+(1+2+3+4+5) as a blue RGBA pixel before semantic tick 5 is committed. Required source results are associated with the exact accepted G5
+submission in the producer's `RenderGpuFlowStepStreams`. The native producer
+tests that G5 receipt and its readback bytes with optional diagnostic captures
+disabled; derived `RenderCapturedTextureState` is not continuity authority.
+Separately, ordinary progressed GPU diagnostic publication can survive a
+primary frame's failed surface acquisition, preparation or G5 admission,
+without turning the failed frame into a submitted frame or Present. Secondary-surface success/error delivery and multi-surface capture
 isolation remain unqualified. Captures include an originating render surface
 in their identity, serialized manifest entries and deterministic image filenames.
 Artifact export also requires a matching `(frame, surface)` for every capture

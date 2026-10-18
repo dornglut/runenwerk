@@ -1153,6 +1153,32 @@ struct NativeHistoricalCounter {
     value: u32,
 }
 
+fn native_historical_input(
+    uniform_id: runen_gpu::GpuWorkResourceId,
+    value: u32,
+) -> RenderGpuFixedStepInput {
+    RenderGpuFixedStepInput {
+        uniforms: BTreeMap::from([(
+            uniform_id,
+            engine::plugins::render::bytemuck::bytes_of(
+                &NativeHistoricalUniform {
+                    meta: [value, 0, 0, 0],
+                }
+                .to_gpu(),
+            )
+            .to_vec(),
+        )]),
+        iteration: RenderFixedStepIterationUniform::new(
+            0,
+            1,
+            4,
+            value as u64,
+            1.0 / (value as f32),
+            0.0,
+        ),
+    }
+}
+
 struct NativeHistoricalGpuHook {
     fatal_error: Arc<std::sync::Mutex<Option<String>>>,
     flow: RenderFlowId,
@@ -1169,6 +1195,9 @@ struct NativeHistoricalGpuHook {
     verified_second_pixel: bool,
     first_capture_frame: Option<u64>,
     queued_while_in_flight: bool,
+    first_queued_frame: Option<u32>,
+    second_queued_during_deferral: bool,
+    terminal_hold_frames: u32,
     overflow_rejected_without_loss: bool,
     semantic_verification_refusal_preserved: bool,
     semantic_committed: bool,
@@ -1215,10 +1244,17 @@ impl NativeHistoricalGpuHook {
                 .stream(self.flow)
                 .ok_or_else(|| anyhow::anyhow!("historical GPU producer disappeared"))?;
             anyhow::ensure!(
-                producer.requested_tick() == if self.queued_while_in_flight { 4 } else { 3 }
+                producer.requested_tick()
+                    == if self.second_queued_during_deferral {
+                        5
+                    } else if self.queued_while_in_flight {
+                        4
+                    } else {
+                        3
+                    }
                     && producer.completed_tick()
                         == if self.second_committed {
-                            4
+                            5
                         } else if self.semantic_committed {
                             3
                         } else {
@@ -1231,7 +1267,9 @@ impl NativeHistoricalGpuHook {
                     == if self.second_committed {
                         0
                     } else if self.semantic_committed {
-                        1
+                        2
+                    } else if self.second_queued_during_deferral {
+                        5
                     } else if self.queued_while_in_flight {
                         4
                     } else {
@@ -1255,7 +1293,7 @@ impl NativeHistoricalGpuHook {
                     *expected = Some(gpu_id);
                 }
                 let expected_steps = if self.semantic_committed {
-                    vec![4]
+                    vec![4, 5]
                 } else {
                     vec![1, 2, 3]
                 };
@@ -1328,10 +1366,10 @@ impl NativeHistoricalGpuHook {
             }
         }
 
-        // Queue additional *immutable* work while the predecessor is still
-        // G5-admitted but semantically unverified. The total bound includes
-        // both accepted (3) and pending (1) steps. A fifth input must be
-        // returned unchanged rather than lost, overwritten or submitted.
+        // Capture one immutable successor on each of two distinct host frames
+        // while the previous G5 batch remains semantically unverified. Neither
+        // the CPU's latest ECS projection nor a terminal physical GPU status
+        // may replace these historical inputs.
         if self.first_submission.is_some() && !self.queued_while_in_flight {
             let producer = world
                 .resource_mut::<RenderGpuFlowStepStreams>()?
@@ -1341,43 +1379,56 @@ impl NativeHistoricalGpuHook {
                 producer.accepted_steps().len() == 3 && producer.pending_len() == 0,
                 "first G5 interval changed before in-flight backlog capture"
             );
-            let input = |value: u32| RenderGpuFixedStepInput {
-                uniforms: BTreeMap::from([(
-                    self.uniform_id,
-                    engine::plugins::render::bytemuck::bytes_of(
-                        &NativeHistoricalUniform {
-                            meta: [value, 0, 0, 0],
-                        }
-                        .to_gpu(),
-                    )
-                    .to_vec(),
-                )]),
-                iteration: RenderFixedStepIterationUniform::new(
-                    0,
-                    1,
-                    4,
-                    value as u64,
-                    1.0 / (value as f32),
-                    0.0,
-                ),
-            };
-            producer.capture(input(4)).map_err(|(err, _)| {
-                anyhow::anyhow!("backlogged native step capture failed: {err}")
-            })?;
-            let overflow = input(99);
-            let (failure, returned) = producer
-                .capture(overflow.clone())
-                .expect_err("fifth native input must exceed the four-step total capacity");
+            producer
+                .capture(native_historical_input(self.uniform_id, 4))
+                .map_err(|(err, _)| {
+                    anyhow::anyhow!("first backlogged native step capture failed: {err}")
+                })?;
             anyhow::ensure!(
-                failure == RenderGpuStepDemandError::CapacityExceeded
-                    && returned == overflow
-                    && producer.requested_tick() == 4
+                producer.requested_tick() == 4
                     && producer.completed_tick() == 0
                     && producer.pending_len() == 1
                     && producer.accepted_steps().len() == 3,
-                "capacity rejection changed immutable pending or accepted native GPU history"
+                "first deferred host frame changed historical GPU demand"
             );
             self.queued_while_in_flight = true;
+            self.first_queued_frame = Some(self.frames);
+        }
+        if self.queued_while_in_flight
+            && !self.second_queued_during_deferral
+            && self.first_queued_frame.is_some_and(|frame| self.frames > frame)
+        {
+            let producer = world
+                .resource_mut::<RenderGpuFlowStepStreams>()?
+                .stream_mut(self.flow)
+                .ok_or_else(|| anyhow::anyhow!("second native GPU input stream disappeared"))?;
+            anyhow::ensure!(
+                producer.accepted_steps().len() == 3
+                    && producer.pending_len() == 1
+                    && producer.completed_tick() == 0,
+                "first batch was lost or committed before the next deferred host frame"
+            );
+            producer
+                .capture(native_historical_input(self.uniform_id, 5))
+                .map_err(|(err, _)| {
+                    anyhow::anyhow!("second deferred native step capture failed: {err}")
+                })?;
+            // The capacity includes the three G5-accepted steps and both
+            // later historical requests. Overflow cannot consume CPU input.
+            let overflow = native_historical_input(self.uniform_id, 99);
+            let (failure, returned) = producer
+                .capture(overflow.clone())
+                .expect_err("sixth native input must exceed five-step total capacity");
+            anyhow::ensure!(
+                failure == RenderGpuStepDemandError::CapacityExceeded
+                    && returned == overflow
+                    && producer.requested_tick() == 5
+                    && producer.completed_tick() == 0
+                    && producer.pending_len() == 2
+                    && producer.accepted_steps().len() == 3,
+                "capacity rejection changed second-frame immutable GPU history"
+            );
+            self.second_queued_during_deferral = true;
             self.overflow_rejected_without_loss = true;
         }
 
@@ -1433,7 +1484,7 @@ impl NativeHistoricalGpuHook {
                 "native producer capture came from wrong prepared surface {capture_surface}"
             );
             let expected = if self.semantic_committed {
-                [0, 0, 255, 255] // 6 + 4 = 10
+                [0, 0, 255, 255] // 6 + 4 + 5 = 15
             } else {
                 [0, 255, 0, 255] // 1 + 2 + 3 = 6
             };
@@ -1454,6 +1505,17 @@ impl NativeHistoricalGpuHook {
         // lineage have both been verified; a failed/missing capture leaves
         // the accepted interval intact.
         if self.verified_pixel && self.saw_terminal && !self.semantic_committed {
+            self.terminal_hold_frames += 1;
+        }
+        // Keep the *completed* GPU receipt semantically unverified for several
+        // further native redraws. Fresh RenderPrepare must defer the same
+        // retained flow, preserving both independently captured successors.
+        if self.verified_pixel
+            && self.saw_terminal
+            && !self.semantic_committed
+            && self.second_queued_during_deferral
+            && self.terminal_hold_frames >= 5
+        {
             let producer = world
                 .resource_mut::<RenderGpuFlowStepStreams>()?
                 .stream_mut(self.flow)
@@ -1467,7 +1529,7 @@ impl NativeHistoricalGpuHook {
                 .ok_or_else(|| anyhow::anyhow!("native source admission was never observed"))?;
             // A physically completed G5 submission must remain uncommitted
             // when the *producer's* semantic verifier refuses the result.
-            // The second pending step and the original accepted prefix must
+            // Both pending steps and the original accepted prefix must
             // survive the negative decision, without a new GPU admission.
             let refused = producer
                 .commit_verified(affinity, |_submission, _steps| {
@@ -1481,8 +1543,8 @@ impl NativeHistoricalGpuHook {
                     refused,
                     engine::plugins::render::RenderGpuStepCommitError::Verification(_)
                 ) && producer.completed_tick() == 0
-                    && producer.requested_tick() == 4
-                    && producer.pending_len() == 1
+                    && producer.requested_tick() == 5
+                    && producer.pending_len() == 2
                     && producer.accepted_steps().len() == 3
                     && producer
                         .accepted_submission()
@@ -1504,15 +1566,17 @@ impl NativeHistoricalGpuHook {
                     anyhow::anyhow!("native producer GPU verification failed: {error}")
                 })?;
             anyhow::ensure!(completed == 3, "native source committed wrong GPU tick");
-            // The already captured tick-4 input is still pending, without a
-            // second G5 admission or any recreation from latest ECS data.
+            // The distinct tick-4 and tick-5 inputs are still pending, without
+            // a second G5 admission or any recreation from latest ECS data.
             anyhow::ensure!(
                 self.queued_while_in_flight
+                    && self.second_queued_during_deferral
+                    && self.terminal_hold_frames >= 5
                     && self.overflow_rejected_without_loss
-                    && producer.requested_tick() == 4
+                    && producer.requested_tick() == 5
                     && producer.completed_tick() == 3
-                    && producer.pending_len() == 1
-                    && producer.outstanding() == 1,
+                    && producer.pending_len() == 2
+                    && producer.outstanding() == 2,
                 "first verification must expose the unchanged queued historical successor"
             );
             self.semantic_committed = true;
@@ -1534,13 +1598,13 @@ impl NativeHistoricalGpuHook {
                 .commit_verified(affinity, |submission, steps| {
                     anyhow::ensure!(
                         submission.id() == exact_id
-                            && steps.iter().map(|step| step.tick()).collect::<Vec<_>>() == vec![4],
+                            && steps.iter().map(|step| step.tick()).collect::<Vec<_>() == vec![4, 5],
                         "second native GPU verification has incorrect exact history"
                     );
                     Ok::<(), anyhow::Error>(())
                 })
                 .map_err(|err| anyhow::anyhow!("second semantic GPU commit failed: {err}"))?;
-            anyhow::ensure!(last == 4, "second native GPU interval committed wrong tick");
+            anyhow::ensure!(last == 5, "second native GPU interval committed wrong tick");
             self.second_committed = true;
         }
 
@@ -1557,6 +1621,8 @@ impl NativeHistoricalGpuHook {
                     && self.verified_second_pixel
                     && self.second_committed
                     && self.queued_while_in_flight
+                    && self.second_queued_during_deferral
+                    && self.terminal_hold_frames >= 5
                     && self.overflow_rejected_without_loss
                     && self.semantic_verification_refusal_preserved,
                 "native RenderFlow must verify two distinct G5 batches, historical retained state and exact semantic commits"
@@ -1662,31 +1728,12 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         control.artifact_export_enabled = false;
     });
     let mut sources = RenderGpuFlowStepStreams::default();
-    sources.register(flow_id, 0, 4)?;
+    sources.register(flow_id, 0, 5)?;
     sources.require_capture(
         flow_id,
         RenderCaptureSelector::named_pass_surface_color(flow_id.to_string(), display_pass.clone()),
     )?;
-    let input = |value: u32| RenderGpuFixedStepInput {
-        uniforms: BTreeMap::from([(
-            uniform.diagnostic_identity(),
-            engine::plugins::render::bytemuck::bytes_of(
-                &NativeHistoricalUniform {
-                    meta: [value, 0, 0, 0],
-                }
-                .to_gpu(),
-            )
-            .to_vec(),
-        )]),
-        iteration: RenderFixedStepIterationUniform::new(
-            0,
-            1,
-            4,
-            value as u64,
-            1.0 / (value as f32),
-            0.0,
-        ),
-    };
+    let input = |value| native_historical_input(uniform.diagnostic_identity(), value);
     sources
         .stream_mut(flow_id)
         .unwrap()
@@ -1717,6 +1764,9 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             verified_second_pixel: false,
             first_capture_frame: None,
             queued_while_in_flight: false,
+            first_queued_frame: None,
+            second_queued_during_deferral: false,
+            terminal_hold_frames: 0,
             overflow_rejected_without_loss: false,
             semantic_verification_refusal_preserved: false,
             semantic_committed: false,
