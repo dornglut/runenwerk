@@ -1212,6 +1212,9 @@ struct NativeHistoricalGpuHook {
     secondary_requested: bool,
     secondary_surface: Option<RenderSurfaceId>,
     secondary_submitted_while_primary_deferred: bool,
+    shared_secondary_start_frame: Option<u32>,
+    shared_secondary_deferral_verified: bool,
+    secondary_switched_to_independent: bool,
 }
 
 impl NativeWindowHook for NativeHistoricalGpuHook {
@@ -1254,7 +1257,7 @@ impl NativeHistoricalGpuHook {
         if self.first_submission.is_some() && !self.secondary_requested {
             world
                 .resource_mut::<WindowStateRegistryResource>()?
-                .request_window("Native independent GPU secondary", (320, 240));
+                .request_window("Native shared then independent GPU secondary", (320, 240));
             self.secondary_requested = true;
         }
         if self.secondary_requested && self.secondary_surface.is_none() {
@@ -1285,14 +1288,52 @@ impl NativeHistoricalGpuHook {
                             surface,
                             [],
                             [PreparedFlowInvocationRequest::new(
-                                "native.history.secondary",
-                                self.independent_secondary_flow,
+                                "native.history.shared.secondary",
+                                self.flow,
                                 "main",
                             )],
                             [],
                         )?;
                     self.secondary_surface = Some(surface);
+                    self.shared_secondary_start_frame = Some(self.frames);
                 }
+            }
+        }
+        // The second *real attached native surface* first requests the same
+        // retained producer. Until its accepted batch is producer-verified,
+        // both surfaces must defer this flow; G5 must not admit a second
+        // retained-state participant under a different surface identity.
+        // After several host opportunities switch to an unrelated flow and
+        // prove the secondary can still submit independently.
+        if let Some(surface) = self.secondary_surface
+            && !self.secondary_switched_to_independent
+        {
+            let secondary_submissions = world
+                .resource::<RenderFrameHistoryState>()?
+                .observations()
+                .filter(|entry| entry.key.render_surface_id == surface.raw())
+                .count();
+            anyhow::ensure!(
+                secondary_submissions == 0,
+                "shared retained producer was submitted from the second native surface while prior source work remained unverified"
+            );
+            if self.shared_secondary_start_frame.is_some_and(|start| self.frames >= start + 4) {
+                self.shared_secondary_deferral_verified = true;
+                world
+                    .resource_mut::<PreparedRenderFrameRequestResource>()?
+                    .replace_surface_contribution_with_automatic_main_replacements(
+                        RenderFrameProducerId::try_from_raw(902)
+                            .expect("secondary request producer is nonzero"),
+                        surface,
+                        [],
+                        [PreparedFlowInvocationRequest::new(
+                            "native.history.independent.secondary",
+                            self.independent_secondary_flow,
+                            "main",
+                        )],
+                        [],
+                    )?;
+                self.secondary_switched_to_independent = true;
             }
         }
         if let Some(surface) = self.secondary_surface
@@ -1307,9 +1348,10 @@ impl NativeHistoricalGpuHook {
                     primary_count <= 1,
                     "primary flow submitted again before semantic verification"
                 );
-                if history
-                    .observations()
-                    .any(|entry| entry.key.render_surface_id == surface.raw())
+                if self.secondary_switched_to_independent
+                    && history
+                        .observations()
+                        .any(|entry| entry.key.render_surface_id == surface.raw())
                 {
                     self.secondary_submitted_while_primary_deferred = true;
                 }
@@ -1723,9 +1765,11 @@ impl NativeHistoricalGpuHook {
                     && self.second_queued_during_deferral
                     && self.terminal_hold_frames >= 5
                     && self.secondary_submitted_while_primary_deferred
+                    && self.shared_secondary_deferral_verified
+                    && self.secondary_switched_to_independent
                     && self.overflow_rejected_without_loss
                     && self.semantic_verification_refusal_preserved,
-                "native RenderFlow must verify two distinct G5 batches, historical retained state and independent secondary admission: first={:?}, terminal={}, first_pixel={}, committed={}, second={:?}, second_terminal={}, second_pixel={}, second_committed={}, queued={}, two_host_frames={}, terminal_hold={}, overflow={}, refusal={}, secondary_requested={}, secondary_surface={:?}, secondary_submitted={}",
+                "native RenderFlow must verify two G5 history batches, shared-state secondary deferral and independent secondary admission: first={:?}, terminal={}, first_pixel={}, committed={}, second={:?}, second_terminal={}, second_pixel={}, second_committed={}, queued={}, two_host_frames={}, terminal_hold={}, overflow={}, refusal={}, secondary_requested={}, secondary_surface={:?}, shared_deferral={}, independent_switch={}, secondary_submitted={}",
                 self.first_submission,
                 self.saw_terminal,
                 self.verified_pixel,
@@ -1741,6 +1785,8 @@ impl NativeHistoricalGpuHook {
                 self.semantic_verification_refusal_preserved,
                 self.secondary_requested,
                 self.secondary_surface,
+                self.shared_secondary_deferral_verified,
+                self.secondary_switched_to_independent,
                 self.secondary_submitted_while_primary_deferred,
             );
             // The renderer may already have retired its observation receipt at
@@ -1866,8 +1912,9 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
     app.insert_resource(sources);
     app.add_render_flow(flow);
 
-    // Explicit requests isolate the primary stateful producer from an
-    // independent secondary graphics flow on a distinct native surface.
+    // First request the same retained producer on a distinct native surface
+    // while its G5 interval remains unverified, then swap to an independent
+    // secondary graphics flow to qualify both denial and independent admission.
     let independent = RenderFlow::new("native.historical.independent")
         .explicit_invocations_only()
         .with_surface_color()?
@@ -1930,6 +1977,9 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             secondary_requested: false,
             secondary_surface: None,
             secondary_submitted_while_primary_deferred: false,
+            shared_secondary_start_frame: None,
+            shared_secondary_deferral_verified: false,
+            secondary_switched_to_independent: false,
         });
     app.run()?;
     if let Some(error) = fatal_error
