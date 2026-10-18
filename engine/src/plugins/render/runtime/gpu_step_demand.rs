@@ -674,13 +674,18 @@ impl RenderGpuFlowStepStreams {
         if associated.references.iter().any(|reference| {
             reference.receipt.submission_id() != submission.id()
                 || reference.receipt.affinity() != submission.affinity()
-                || submission.readback(reference.receipt.readback_id()).is_none()
+                || submission
+                    .readback(reference.receipt.readback_id())
+                    .is_none()
         }) {
             return Err(RenderGpuAcceptedCaptureError::SubmissionMismatch);
         }
         validate_required_capture_identities(
             required,
-            associated.references.iter().map(|reference| &reference.identity),
+            associated
+                .references
+                .iter()
+                .map(|reference| &reference.identity),
         )?;
         Ok(&associated.references)
     }
@@ -877,4 +882,3 @@ mod accepted_capture_validation_tests {
         );
     }
 }
-
