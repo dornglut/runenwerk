@@ -1600,7 +1600,7 @@ impl NativeHistoricalGpuHook {
                 .commit_verified(affinity, |submission, steps| {
                     anyhow::ensure!(
                         submission.id() == exact_id
-                            && steps.iter().map(|step| step.tick()).collect::<Vec<_>() == vec![4, 5],
+                            && steps.iter().map(|step| step.tick()).collect::<Vec<_>>() == vec![4, 5],
                         "second native GPU verification has incorrect exact history"
                     );
                     Ok::<(), anyhow::Error>(())
