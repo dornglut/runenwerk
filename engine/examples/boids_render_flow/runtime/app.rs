@@ -1,7 +1,9 @@
 use crate::rendering::{BoidsGpuStepSchema, BoidsRenderState, BoidsRuleFamily, build_render_flow};
 use anyhow::{Context, Result};
 use engine::plugins::render::inspect::{CaptureStage, CaptureTextureClass, RenderCaptureSelector};
-use engine::plugins::render::{Gfx, RenderGpuFlowStepStreams};
+use engine::plugins::render::{
+    Gfx, RenderGpuFixedStepInput, RenderGpuFlowStepStreams, RenderGpuStepDemand,
+};
 use engine::plugins::{DebugMetricsPlugin, RenderPlugin, ScenePlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt, FixedTimeState, Res, ResMut, Update};
 use runen_gpu::{GpuReadbackStatus, GpuSubmissionStatus, GpuTextureFormat};
@@ -147,27 +149,73 @@ fn advance_boids_simulation_system(
         }
     }
 
+    let stream = streams
+        .stream_mut(flow)
+        .context("Boids source stream not registered")?;
+    capture_fixed_steps(stream, &source, &state, *fixed)?;
+    Ok(())
+}
+
+fn capture_fixed_steps(
+    stream: &mut RenderGpuStepDemand<RenderGpuFixedStepInput>,
+    source: &BoidsGpuStepSchema,
+    state: &BoidsRenderState,
+    fixed: FixedTimeState,
+) -> Result<()> {
     let start = fixed
         .total_completed_steps
         .checked_sub(u64::from(fixed.steps_ran_last_frame))
         .context("Boids FixedTimeState completed fewer ticks than its current interval")?;
-    let stream = streams
-        .stream_mut(flow)
-        .context("Boids source stream not registered")?;
     anyhow::ensure!(
         stream.requested_tick() == start,
         "Boids CPU fixed tick source skipped or duplicated work: source {}, host {start}",
         stream.requested_tick()
     );
     let history = (start..fixed.total_completed_steps)
-        .map(|tick| source.capture(&state, tick))
+        .map(|tick| source.capture(state, tick))
         .collect::<Result<Vec<_>>>()?;
     if !history.is_empty() {
-        stream
-            .capture_batch(history)
-            .map_err(|(error, _unconsumed)| {
-                anyhow::anyhow!("Boids immutable GPU step queue rejected new CPU source ticks: {error}; application must pause rather than lose steps")
-            })?;
+        stream.capture_batch(history).map_err(|(error, _unconsumed)| {
+            anyhow::anyhow!(
+                "Boids immutable GPU step queue rejected new CPU source ticks: {error}; application must pause rather than lose steps"
+            )
+        })?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod source_interval_tests {
+    use super::*;
+
+    fn fixed(total: u64, count: u32) -> FixedTimeState {
+        FixedTimeState {
+            total_completed_steps: total,
+            steps_ran_last_frame: count,
+            ..FixedTimeState::default()
+        }
+    }
+
+    #[test]
+    fn zero_one_many_and_backpressure_preserve_unsubmitted_boids_inputs() {
+        let flow = build_render_flow();
+        let schema = BoidsGpuStepSchema::from_flow(&flow).unwrap();
+        let state = BoidsRenderState::default();
+        let mut demand = RenderGpuStepDemand::new(0, 5);
+
+        capture_fixed_steps(&mut demand, &schema, &state, fixed(0, 0)).unwrap();
+        assert_eq!((demand.requested_tick(), demand.pending_len()), (0, 0));
+        capture_fixed_steps(&mut demand, &schema, &state, fixed(1, 1)).unwrap();
+        assert_eq!((demand.requested_tick(), demand.pending_len()), (1, 1));
+        capture_fixed_steps(&mut demand, &schema, &state, fixed(1, 0)).unwrap();
+        assert_eq!((demand.requested_tick(), demand.pending_len()), (1, 1));
+        capture_fixed_steps(&mut demand, &schema, &state, fixed(4, 3)).unwrap();
+        assert_eq!((demand.requested_tick(), demand.pending_len()), (4, 4));
+
+        assert!(capture_fixed_steps(&mut demand, &schema, &state, fixed(6, 2)).is_err());
+        assert_eq!((demand.requested_tick(), demand.pending_len()), (4, 4));
+        assert!(capture_fixed_steps(&mut demand, &schema, &state, fixed(4, 1)).is_err());
+        let ticks = demand.candidate(8).iter().map(|input| input.tick()).collect::<Vec<_>>();
+        assert_eq!(ticks, vec![1, 2, 3, 4]);
+    }
 }

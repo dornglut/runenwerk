@@ -99,12 +99,11 @@ impl NativeWindowHook for NativeBoidsSmoke {
         }
         let finished = status.succeeded || status.error.is_some();
         drop(status);
-        if finished {
-            if let Ok(windows) = world.resource_mut::<WindowStateRegistryResource>()
-                && let Some(primary) = windows.record_mut(NativeWindowId::primary())
-            {
-                primary.request_close();
-            }
+        if finished
+            && let Ok(windows) = world.resource_mut::<WindowStateRegistryResource>()
+            && let Some(primary) = windows.record_mut(NativeWindowId::primary())
+        {
+            primary.request_close();
         }
         // Native hooks are diagnostic observers. Preserve failures in the
         // shared result checked after the host actually closes.
