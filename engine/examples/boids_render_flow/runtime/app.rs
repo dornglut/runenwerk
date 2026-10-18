@@ -109,8 +109,8 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     let source = BoidsGpuStepSchema::from_flow(&flow)?;
     let source_flow = source.flow_id();
     let native_smoke = std::env::var("RUNENWERK_BOIDS_NATIVE_SMOKE").as_deref() == Ok("1");
-    let require_visual_readback = native_smoke
-        && std::env::var("RUNENWERK_BOIDS_NATIVE_NO_READBACK").as_deref() != Ok("1");
+    let require_visual_readback =
+        native_smoke && std::env::var("RUNENWERK_BOIDS_NATIVE_NO_READBACK").as_deref() != Ok("1");
     let mut streams = RenderGpuFlowStepStreams::default();
     streams.register(source.flow_id(), 0, MAX_OUTSTANDING_BOIDS_STEPS)?;
     // Visual conformance deliberately samples the GPU-rendered image. Normal
