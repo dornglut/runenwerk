@@ -134,8 +134,8 @@ diagnostics entries now carry exact (frame, surface) identity. Every terminal
 capture selector result, including unmatched/disabled outcomes without GPU
 readback identity, preserves its originating frame and surface. Routing and
 transaction admission reject foreign-source results rather than assigning
-them to the currently submitting surface. Source-keyed bounded ECS delivery and accepted G5 readback association have separate
-proofs; full native concurrent/deferred-primary stress and lossless producer
+them to the currently submitting surface. Source-keyed bounded ECS delivery
+and accepted G5 readback association have separate proofs; full native concurrent/deferred-primary stress and lossless producer
 result delivery remain unqualified.
 It rejects shader fallback rather than permitting a no-op simulation.
 

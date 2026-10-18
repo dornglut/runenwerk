@@ -1189,10 +1189,7 @@ mod tests {
         assert_eq!(transaction.capture_results.get(&0), Some(&exact_source));
 
         let mut wrong_readback = exact_source;
-        wrong_readback.frame_identity = Some(identity(
-            70,
-            &wrong_readback.selector,
-        ));
+        wrong_readback.frame_identity = Some(identity(70, &wrong_readback.selector));
         transaction.observe_capture_result(wrong_readback);
         assert_eq!(transaction.capture_results.len(), 1);
     }
