@@ -404,7 +404,9 @@ fn retained_ping_pong_initialization_requires_both_matching_physical_declaration
 
     let (same, handles) = flow
         .double_buffer_storage_array_with_handle_and_initialization::<StorageResourceTestParams>(
-            "test.pair", 8, GpuBufferInitialization::Zeroed,
+            "test.pair",
+            8,
+            GpuBufferInitialization::Zeroed,
         )
         .expect("identical repeated declaration must preserve identity");
     assert_eq!(handles.a().diagnostic_identity(), a);
@@ -429,7 +431,9 @@ fn retained_ping_pong_initialization_requires_both_matching_physical_declaration
     assert!(
         zeroed_pair()
             .double_buffer_storage_array_with_handle_and_initialization::<ResourceTestParams>(
-                "test.pair", 8, GpuBufferInitialization::Zeroed
+                "test.pair",
+                8,
+                GpuBufferInitialization::Zeroed
             )
             .is_err(),
         "incompatible element TypeId must be rejected for BOTH buffers"

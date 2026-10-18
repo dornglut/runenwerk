@@ -865,28 +865,28 @@ impl RenderFlow {
                 label: base_label,
             });
         }
-        let a = RenderResourceDeclaration::declare_storage_array_with_lifetime_and_initialization::<T>(
-            &mut self.next_resource_id,
-            a_label.clone(),
-            len,
-            GpuResourceLifetime::Retained,
-            initialization.clone(),
-        )?;
+        let a =
+            RenderResourceDeclaration::declare_storage_array_with_lifetime_and_initialization::<T>(
+                &mut self.next_resource_id,
+                a_label.clone(),
+                len,
+                GpuResourceLifetime::Retained,
+                initialization.clone(),
+            )?;
         let a_id = *a.id();
-        let b = RenderResourceDeclaration::declare_storage_array_with_lifetime_and_initialization::<T>(
-            &mut self.next_resource_id,
-            b_label.clone(),
-            len,
-            GpuResourceLifetime::Retained,
-            initialization,
-        )?;
+        let b =
+            RenderResourceDeclaration::declare_storage_array_with_lifetime_and_initialization::<T>(
+                &mut self.next_resource_id,
+                b_label.clone(),
+                len,
+                GpuResourceLifetime::Retained,
+                initialization,
+            )?;
         let b_id = *b.id();
         self.upsert_labeled_resource(a_label, a_id, a);
         self.upsert_labeled_resource(b_label, b_id, b);
-        self.ping_pong_storage.insert(
-            base_label,
-            PingPongStorageRegistration { a_id, b_id },
-        );
+        self.ping_pong_storage
+            .insert(base_label, PingPongStorageRegistration { a_id, b_id });
         Ok((a_id, b_id))
     }
 
