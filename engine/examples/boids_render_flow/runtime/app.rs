@@ -187,6 +187,10 @@ fn approve_boids_window_close(windows: &mut WindowStateRegistryResource) -> bool
     true
 }
 
+// All eight parameters are distinct ECS resource contracts; keeping the
+// fail-stop close check in this system prevents another GPU source admission
+// after the window's close intent is observed.
+#[allow(clippy::too_many_arguments)]
 fn advance_boids_simulation_system(
     mut windows: ResMut<WindowStateRegistryResource>,
     fixed: Res<FixedTimeState>,
