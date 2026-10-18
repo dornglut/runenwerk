@@ -1,6 +1,7 @@
 //! Native, bounded validation of the *actual* Boids example in both modes.
 //! Counts accepted surface Present operations and terminal RunenGPU frame
 //! receipts separately; neither is mistaken for hardware scanout timing.
+use super::app::BoidsVisualContinuityEvidence;
 use anyhow::{Context, Result};
 use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::inspect::{
@@ -20,6 +21,7 @@ use winit::window::Window;
 const REQUIRED_PRESENT_SUBMISSIONS: usize = 120;
 const REQUIRED_VERIFIED_TICKS: u64 = 4;
 const REQUIRED_TERMINAL_FRAMES: usize = 2;
+const REQUIRED_CHANGED_GPU_IMAGES: u64 = 3;
 const MAX_WINDOW_OPPORTUNITIES: u32 = 3_000;
 const MAX_DURATION: Duration = Duration::from_secs(180);
 
@@ -29,6 +31,8 @@ pub(crate) struct NativeBoidsSmokeStatus {
     presented_opportunities: usize,
     terminal_gpu_frames: usize,
     verified_ticks: u64,
+    sampled_gpu_images: u64,
+    changed_gpu_images: u64,
     succeeded: bool,
     error: Option<String>,
 }
@@ -56,22 +60,25 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         .map_err(|_| anyhow::anyhow!("Boids native smoke status poisoned"))?;
     anyhow::ensure!(
         status.succeeded && status.error.is_none(),
-        "Boids native smoke failed or stopped early (frames={}, present-submitted={}, terminal={}, verified={}): {}",
+        "Boids native smoke failed or stopped early (frames={}, present-submitted={}, terminal={}, verified={}, image_changes={}): {}",
         status.frames,
         status.presented_opportunities,
         status.terminal_gpu_frames,
         status.verified_ticks,
+        status.changed_gpu_images,
         status
             .error
             .as_deref()
             .unwrap_or("native window stopped before evidence completed")
     );
     println!(
-        "native_boids_gpu_smoke=pass frames={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={}",
+        "native_boids_gpu_smoke=pass frames={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={}",
         status.frames,
         status.presented_opportunities,
         status.terminal_gpu_frames,
-        status.verified_ticks
+        status.verified_ticks,
+        status.sampled_gpu_images,
+        status.changed_gpu_images
     );
     Ok(())
 }
@@ -151,6 +158,9 @@ impl NativeBoidsSmoke {
                 }
             }
         }
+        let image_evidence = world.resource::<BoidsVisualContinuityEvidence>()?;
+        let sampled_gpu_images = image_evidence.sampled_frames();
+        let changed_gpu_images = image_evidence.changed_frames();
         let mut state = self
             .status
             .lock()
@@ -159,18 +169,22 @@ impl NativeBoidsSmoke {
         state.presented_opportunities = presented;
         state.terminal_gpu_frames += terminal;
         state.verified_ticks = verified;
+        state.sampled_gpu_images = sampled_gpu_images;
+        state.changed_gpu_images = changed_gpu_images;
         if state.presented_opportunities >= REQUIRED_PRESENT_SUBMISSIONS
             && state.terminal_gpu_frames >= REQUIRED_TERMINAL_FRAMES
             && state.verified_ticks >= REQUIRED_VERIFIED_TICKS
+            && state.changed_gpu_images >= REQUIRED_CHANGED_GPU_IMAGES
         {
             state.succeeded = true;
         } else {
             anyhow::ensure!(
                 state.frames < MAX_WINDOW_OPPORTUNITIES && self.started.elapsed() < MAX_DURATION,
-                "native Boids missed 120 accepted Present opportunities or source-verified G5 progress                  (opportunities={}, completed GPU frames={}, verified ticks={}, elapsed={:?})",
+                "native Boids missed 120 accepted Present opportunities, GPU image motion or source-verified G5 progress (opportunities={}, completed GPU frames={}, verified ticks={}, changed images={}, elapsed={:?})",
                 state.presented_opportunities,
                 state.terminal_gpu_frames,
                 state.verified_ticks,
+                state.changed_gpu_images,
                 self.started.elapsed()
             );
         }
