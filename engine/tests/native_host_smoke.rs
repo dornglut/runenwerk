@@ -6,9 +6,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use engine::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
-use engine::plugins::render::inspect::RenderCaptureSelector;
+use engine::plugins::render::inspect::{
+    RenderCaptureSelector, RenderFrameHistoryState, RenderFrameObservationPolicyResource,
+};
 use engine::plugins::render::{
-    Gfx, GpuParams, GpuStorage, GpuUniform, RenderFixedStepIterationUniform, RenderFlow,
+    Gfx, GpuParams, GpuStorage, GpuUniform, PreparedFlowInvocationRequest,
+    PreparedRenderFrameRequestResource, RenderFixedStepIterationUniform, RenderFlow,
     RenderFlowId, RenderFrameProducerId, RenderGpuFixedStepInput, RenderGpuFlowStepStreams,
     RenderGpuStepDemandError, ShaderRegistryResource, SurfaceFrameSubmissionOrder,
 };
@@ -1202,6 +1205,10 @@ struct NativeHistoricalGpuHook {
     semantic_verification_refusal_preserved: bool,
     semantic_committed: bool,
     second_committed: bool,
+    independent_secondary_flow: RenderFlowId,
+    secondary_requested: bool,
+    secondary_surface: Option<RenderSurfaceId>,
+    secondary_submitted_while_primary_deferred: bool,
 }
 
 impl NativeWindowHook for NativeHistoricalGpuHook {
@@ -1239,6 +1246,73 @@ impl NativeHistoricalGpuHook {
         world: &mut runen_ecs::World,
     ) -> anyhow::Result<()> {
         self.frames += 1;
+        // Request the second window after initial GPU acceptance; create its
+        // scoped invocation only once it has a real attached render surface.
+        if self.first_submission.is_some() && !self.secondary_requested {
+            world
+                .resource_mut::<WindowStateRegistryResource>()?
+                .request_window("Native independent GPU secondary", (320, 240));
+            self.secondary_requested = true;
+        }
+        if self.secondary_requested && self.secondary_surface.is_none() {
+            let secondary_window = world
+                .resource::<WindowStateRegistryResource>()?
+                .records()
+                .find(|record| {
+                    record.native_window_id != NativeWindowId::primary()
+                        && record.lifecycle_state == NativeWindowLifecycleState::Created
+                })
+                .map(|record| record.native_window_id);
+            if let Some(native) = secondary_window {
+                let surface = world
+                    .resource::<RenderSurfaceRegistryResource>()?
+                    .surface_for_native_window(native);
+                if let Some(surface) = surface
+                    && verify_secondary_render_attachment(world, native).is_ok()
+                {
+                    anyhow::ensure!(
+                        surface != RenderSurfaceId::primary(),
+                        "independent secondary must not alias the primary surface"
+                    );
+                    world
+                        .resource_mut::<PreparedRenderFrameRequestResource>()?
+                        .replace_surface_contribution_with_automatic_main_replacements(
+                            RenderFrameProducerId::try_from_raw(902)
+                                .expect("secondary request producer is nonzero"),
+                            surface,
+                            [],
+                            [PreparedFlowInvocationRequest::new(
+                                "native.history.secondary",
+                                self.independent_secondary_flow,
+                                "main",
+                            )],
+                            [],
+                        )?;
+                    self.secondary_surface = Some(surface);
+                }
+            }
+        }
+        if let Some(surface) = self.secondary_surface
+            && let Ok(history) = world.resource::<RenderFrameHistoryState>()
+            && self.first_submission.is_some()
+            && !self.semantic_committed
+        {
+            let primary_count = history
+                .observations()
+                .filter(|entry| {
+                    entry.key.render_surface_id == RenderSurfaceId::primary().raw()
+                })
+                .count();
+            anyhow::ensure!(
+                primary_count <= 1,
+                "primary flow submitted again before semantic verification"
+            );
+            if history.observations().any(|entry| {
+                entry.key.render_surface_id == surface.raw()
+            }) {
+                self.secondary_submitted_while_primary_deferred = true;
+            }
+        }
         if let Ok(streams) = world.resource::<RenderGpuFlowStepStreams>() {
             let producer = streams
                 .stream(self.flow)
@@ -1516,6 +1590,7 @@ impl NativeHistoricalGpuHook {
             && self.saw_terminal
             && !self.semantic_committed
             && self.second_queued_during_deferral
+            && self.secondary_submitted_while_primary_deferred
             && self.terminal_hold_frames >= 5
         {
             let producer = world
@@ -1574,6 +1649,7 @@ impl NativeHistoricalGpuHook {
                 self.queued_while_in_flight
                     && self.second_queued_during_deferral
                     && self.terminal_hold_frames >= 5
+                    && self.secondary_submitted_while_primary_deferred
                     && self.overflow_rejected_without_loss
                     && producer.requested_tick() == 5
                     && producer.completed_tick() == 3
@@ -1626,6 +1702,7 @@ impl NativeHistoricalGpuHook {
                     && self.queued_while_in_flight
                     && self.second_queued_during_deferral
                     && self.terminal_hold_frames >= 5
+                    && self.secondary_submitted_while_primary_deferred
                     && self.overflow_rejected_without_loss
                     && self.semantic_verification_refusal_preserved,
                 "native RenderFlow must verify two distinct G5 batches, historical retained state and exact semantic commits"
@@ -1678,6 +1755,7 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
     );
 
     let (flow, uniform) = RenderFlow::new("native.historical.gpu")
+        .explicit_invocations_only()
         .with_state::<NativeHistoricalSource>()
         .with_surface_color()?
         .uniform_buffer::<NativeHistoricalUniform>("native.historical.uniform")?;
@@ -1747,6 +1825,40 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
     });
     app.insert_resource(sources);
     app.add_render_flow(flow);
+
+    // Explicit requests isolate the primary stateful producer from an
+    // independent secondary graphics flow on a distinct native surface.
+    let independent = RenderFlow::new("native.historical.independent")
+        .explicit_invocations_only()
+        .with_surface_color()?
+        .fullscreen_pass("native.historical.independent.clear")
+        .main_surface_only()
+        .clear_color([0.25, 0.0, 0.0, 1.0])
+        .write_surface_color()?
+        .finish()
+        .present_pass("native.historical.independent.present")?
+        .main_surface_only()
+        .surface_color()?
+        .finish()
+        .validate()?;
+    let independent_secondary_flow = independent.id();
+    app.add_render_flow(independent);
+    app.insert_resource(RenderFrameObservationPolicyResource::enabled(256));
+    app.init_resource::<PreparedRenderFrameRequestResource>();
+    app.world_mut()
+        .resource_mut::<PreparedRenderFrameRequestResource>()?
+        .replace_surface_contribution_with_automatic_main_replacements(
+            RenderFrameProducerId::try_from_raw(901)
+                .expect("primary request producer is nonzero"),
+            RenderSurfaceId::primary(),
+            [],
+            [PreparedFlowInvocationRequest::new(
+                "native.history.primary",
+                flow_id,
+                "main",
+            )],
+            [],
+        )?;
     app.init_resource::<NativeWindowHookRegistryResource>();
     let fatal_error = Arc::new(std::sync::Mutex::new(None));
     app.world_mut()
@@ -1774,6 +1886,10 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             semantic_verification_refusal_preserved: false,
             semantic_committed: false,
             second_committed: false,
+            independent_secondary_flow,
+            secondary_requested: false,
+            secondary_surface: None,
+            secondary_submitted_while_primary_deferred: false,
         });
     app.run()?;
     if let Some(error) = fatal_error
