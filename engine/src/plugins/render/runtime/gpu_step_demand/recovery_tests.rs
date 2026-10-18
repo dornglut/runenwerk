@@ -172,8 +172,7 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
 
     let mut producer = RenderGpuStepDemand::<u32>::new(0, 4);
     producer.capture_batch(vec![5, 7]).unwrap();
-    let (unverified_work, _, _) =
-        make_work(&target, &unverified_write, "accepted unknown write");
+    let (unverified_work, _, _) = make_work(&target, &unverified_write, "accepted unknown write");
     let accepted = producer
         .submit_with(2, |_| {
             let submission = pollster::block_on(
