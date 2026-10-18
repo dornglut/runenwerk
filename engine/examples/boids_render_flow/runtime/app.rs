@@ -326,8 +326,7 @@ mod source_interval_tests {
             let restarted_schema = BoidsGpuStepSchema::from_flow(&restarted_flow).unwrap();
             assert_ne!(previous_schema.flow_id(), restarted_schema.flow_id());
             let mut restarted = RenderGpuStepDemand::new(0, 8);
-            capture_fixed_steps(&mut restarted, &restarted_schema, &state, fixed(1, 1))
-                .unwrap();
+            capture_fixed_steps(&mut restarted, &restarted_schema, &state, fixed(1, 1)).unwrap();
             assert_eq!(restarted.completed_tick(), 0);
             assert_eq!(restarted.requested_tick(), 1);
             let restarted_first = restarted.candidate(1);
@@ -345,7 +344,11 @@ mod source_interval_tests {
             );
             assert_ne!(
                 first.uniforms.values().collect::<Vec<_>>(),
-                quarantined.candidate(1)[0].input().uniforms.values().collect::<Vec<_>>()
+                quarantined.candidate(1)[0]
+                    .input()
+                    .uniforms
+                    .values()
+                    .collect::<Vec<_>>()
             );
             assert_eq!(quarantined.pending_len(), 1);
             assert_eq!(quarantined.completed_tick(), 6);
