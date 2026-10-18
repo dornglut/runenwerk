@@ -5,6 +5,16 @@ use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberI
 const TRACY_ENV_VAR: &str = "ENGINE_TRACY";
 const TRACY_ENV_VAR_LEGACY: &str = "ENGINE_V2_TRACY";
 const DEFAULT_TRACING_FILTER: &str = "info,wgpu_core=warn,wgpu_hal=warn,naga=warn";
+const DEFAULT_TRACY_FILTER: &str =
+    "info,wgpu_core=warn,wgpu_hal=warn,naga=warn,runenwerk_profile=trace";
+
+fn fallback_tracing_filter(tracy_active: bool) -> &'static str {
+    if tracy_active {
+        DEFAULT_TRACY_FILTER
+    } else {
+        DEFAULT_TRACING_FILTER
+    }
+}
 
 fn tracy_flag_enabled(value: &str) -> bool {
     matches!(
@@ -47,8 +57,11 @@ pub fn setup_tracing_if_requested() -> Option<WorkerGuard> {
 }
 
 pub fn setup_tracing() -> Option<WorkerGuard> {
+    // The explicit RUST_LOG filter remains authoritative. Without one, enabling
+    // Tracy also admits the Engine's opt-in profile spans at TRACE level.
+    let tracy_active = cfg!(feature = "tracy") && tracy_requested();
     let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new(DEFAULT_TRACING_FILTER));
+        .unwrap_or_else(|_| EnvFilter::new(fallback_tracing_filter(tracy_active)));
     let log_dir = Path::new("logs");
     if let Err(err) = std::fs::create_dir_all(log_dir) {
         eprintln!("failed creating log directory {}: {err}", log_dir.display());
@@ -113,7 +126,13 @@ pub fn setup_tracing() -> Option<WorkerGuard> {
 
 #[cfg(test)]
 mod tests {
-    use super::tracy_flag_enabled;
+    use super::{fallback_tracing_filter, tracy_flag_enabled};
+
+    #[test]
+    fn tracy_default_filter_admits_profile_spans_only_when_enabled() {
+        assert!(!fallback_tracing_filter(false).contains("runenwerk_profile=trace"));
+        assert!(fallback_tracing_filter(true).contains("runenwerk_profile=trace"));
+    }
 
     #[test]
     fn tracy_runtime_opt_in_accepts_only_explicit_truthy_values() {

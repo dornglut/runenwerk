@@ -59,6 +59,25 @@ and preparation. `render.g3.provisional`, `render.g3.final` and
 path; not every frame requires every preparation. The `occurrences` field
 counts resolved work nodes, not GPU shader executions.
 
+The explicit `RUST_LOG` filter above is useful when comparing captures, but
+is not required: if `ENGINE_TRACY=1` and no `RUST_LOG` is specified, the
+Engine automatically admits its `runenwerk_profile=trace` zones without
+making all other TRACE-level events globally active. If `RUST_LOG` is set,
+it remains authoritative; include `runenwerk_profile=trace` to see G3 spans.
+
+The existing native Draw application is another subscriber consumer: its
+main entrypoint already calls `engine::utils::setup_tracing()`. To profile
+Draw independently, enable the same Engine feature and runtime environment:
+
+```powershell
+$env:ENGINE_TRACY = "1"
+cargo +stable run --release -p runenwerk_draw --features engine/tracy --locked
+```
+
+Draw always initializes ordinary stdout/file tracing even without Tracy; the
+feature and environment control whether it additionally connects to Tracy.
+This source-level integration is not itself a native Draw capture result.
+
 The Engine must initialize exactly one process-global `tracing` subscriber.
 Application entry points may call `setup_tracing_if_requested()` once, before
 starting the runtime, and retain its returned guard for the application lifetime.
