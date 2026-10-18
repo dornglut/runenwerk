@@ -105,7 +105,12 @@ producer's semantic tick 3. **While the first three-step G5 batch is
 accepted but semantically unverified**, the producer separately captures
 historical ticks 4 and 5 on two different host redraws. The bounded demand
 holds three accepted plus two pending inputs; a sixth input must return typed
-`CapacityExceeded` and its exact unchanged payload. The test deliberately retains the *physically completed* predecessor
+`CapacityExceeded` and its exact unchanged payload. The native shader's compute workgroups are state-driven: latest ECS projects
+**zero** workgroups, while each immutable source tick explicitly requests
+`[1, 1, 1]`. Only the per-occurrence historical dispatch can mutate
+retained state to the exact required pixel 6 and later 15; accidentally
+lowering latest ECS dispatch instead would leave the counter unchanged.
+The test deliberately retains the *physically completed* predecessor
 for at least four further native redraws after the first verified result.
 An independently resourced and explicitly surface-scoped second flow must
 submit a real native secondary-surface frame while the primary is deferred;

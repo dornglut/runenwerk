@@ -893,8 +893,8 @@ impl Renderer {
                                             anyhow::anyhow!("GPU historical step missing")
                                         })?;
                                     let pass_id = execution_pass_id(occurrence.pass);
-                                    historical_dispatch = snapshot.input.dispatch_workgroups
-                                        .get(&pass_id).copied();
+                                    historical_dispatch =
+                                        snapshot.input.dispatch_workgroups.get(&pass_id).copied();
                                     let pass_node = flow
                                         .render_passes
                                         .iter()

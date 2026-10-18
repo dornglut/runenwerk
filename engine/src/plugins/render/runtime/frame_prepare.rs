@@ -1592,9 +1592,7 @@ mod tests {
                 },
             )
             .expect("projected stateful shader uniform")
-            .dispatch_from_state(|state: &HistoricalProducerState| {
-                [state.latest_value, 1, 1]
-            })
+            .dispatch_from_state(|state: &HistoricalProducerState| [state.latest_value, 1, 1])
             .finish()
             .fixed_step_region(
                 "historical.simulation",
@@ -1767,7 +1765,11 @@ mod tests {
             Some(&missing_dispatch),
         )
         .expect_err("latest ECS dispatch may not substitute missing historical dispatch");
-        assert!(error.to_string().contains("state-driven compute dispatch inputs"));
+        assert!(
+            error
+                .to_string()
+                .contains("state-driven compute dispatch inputs")
+        );
     }
 
     #[test]

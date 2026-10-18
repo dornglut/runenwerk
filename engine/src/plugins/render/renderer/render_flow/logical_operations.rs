@@ -33,7 +33,12 @@ pub(super) fn project_compute_operation(
         );
     };
     let dispatch = historical_dispatch
-        .or_else(|| flow_inputs.projected_dispatch_workgroups.get(&pass.pass_id).copied())
+        .or_else(|| {
+            flow_inputs
+                .projected_dispatch_workgroups
+                .get(&pass.pass_id)
+                .copied()
+        })
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "compute pass '{}' is missing its prepared dispatch projection",

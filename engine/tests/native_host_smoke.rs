@@ -1158,6 +1158,7 @@ struct NativeHistoricalCounter {
 
 fn native_historical_input(
     uniform_id: runen_gpu::GpuWorkResourceId,
+    dispatch_pass: engine::plugins::render::RenderPassId,
     value: u32,
 ) -> RenderGpuFixedStepInput {
     RenderGpuFixedStepInput {
@@ -1171,7 +1172,7 @@ fn native_historical_input(
             )
             .to_vec(),
         )]),
-        dispatch_workgroups: BTreeMap::new(),
+        dispatch_workgroups: BTreeMap::from([(dispatch_pass, [1, 1, 1])]),
         iteration: RenderFixedStepIterationUniform::new(
             0,
             1,
@@ -1187,6 +1188,7 @@ struct NativeHistoricalGpuHook {
     fatal_error: Arc<std::sync::Mutex<Option<String>>>,
     flow: RenderFlowId,
     uniform_id: runen_gpu::GpuWorkResourceId,
+    dispatch_pass: engine::plugins::render::RenderPassId,
     display_pass: String,
     frames: u32,
     first_submission: Option<runen_gpu::GpuSubmissionId>,
@@ -1464,7 +1466,7 @@ impl NativeHistoricalGpuHook {
                 "first G5 interval changed before in-flight backlog capture"
             );
             producer
-                .capture(native_historical_input(self.uniform_id, 4))
+                .capture(native_historical_input(self.uniform_id, self.dispatch_pass, 4))
                 .map_err(|(err, _)| {
                     anyhow::anyhow!("first backlogged native step capture failed: {err}")
                 })?;
@@ -1495,13 +1497,13 @@ impl NativeHistoricalGpuHook {
                 "first batch was lost or committed before the next deferred host frame"
             );
             producer
-                .capture(native_historical_input(self.uniform_id, 5))
+                .capture(native_historical_input(self.uniform_id, self.dispatch_pass, 5))
                 .map_err(|(err, _)| {
                     anyhow::anyhow!("second deferred native step capture failed: {err}")
                 })?;
             // The capacity includes the three G5-accepted steps and both
             // later historical requests. Overflow cannot consume CPU input.
-            let overflow = native_historical_input(self.uniform_id, 99);
+            let overflow = native_historical_input(self.uniform_id, self.dispatch_pass, 99);
             let (failure, returned) = producer
                 .capture(overflow.clone())
                 .expect_err("sixth native input must exceed five-step total capacity");
@@ -1801,7 +1803,9 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             },
         )
         .bind_storage(GpuBindingKey::try_new(0, 1)?, counter.clone())
-        .dispatch([1, 1, 1])
+        .dispatch_from_state(|source: &NativeHistoricalSource| {
+            [source.latest[1], 1, 1]
+        })
         .finish()
         .fixed_step_region(
             "native.historical.region",
@@ -1821,6 +1825,9 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         .finish()
         .validate()?;
     let flow_id = flow.id();
+    let dispatch_pass = flow
+        .pass_id("native.historical.step")
+        .ok_or_else(|| anyhow::anyhow!("native historical dispatch pass missing"))?;
     let display_pass = flow
         .pass_id("native.historical.surface")
         .ok_or_else(|| anyhow::anyhow!("native historical display pass missing"))?
@@ -1840,7 +1847,7 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
         flow_id,
         RenderCaptureSelector::named_pass_surface_color(flow_id.to_string(), display_pass.clone()),
     )?;
-    let input = |value| native_historical_input(uniform.diagnostic_identity(), value);
+    let input = |value| native_historical_input(uniform.diagnostic_identity(), dispatch_pass, value);
     sources
         .stream_mut(flow_id)
         .unwrap()
@@ -1892,6 +1899,7 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             fatal_error: Arc::clone(&fatal_error),
             flow: flow_id,
             uniform_id: uniform.diagnostic_identity(),
+            dispatch_pass,
             display_pass,
             frames: 0,
             first_submission: None,
