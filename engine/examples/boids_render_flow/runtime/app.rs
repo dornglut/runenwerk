@@ -3,8 +3,7 @@ use anyhow::{Context, Result};
 use engine::plugins::render::inspect::{CaptureStage, CaptureTextureClass, RenderCaptureSelector};
 use engine::plugins::render::{Gfx, RenderGpuFlowStepStreams};
 use engine::plugins::{DebugMetricsPlugin, RenderPlugin, ScenePlugin, default_plugins};
-use engine::prelude::{App, AppRenderExt, FixedTimeState, Update};
-use engine::runtime::WorldMut;
+use engine::prelude::{App, AppRenderExt, FixedTimeState, Res, ResMut, Update};
 use runen_gpu::{GpuReadbackStatus, GpuSubmissionStatus, GpuTextureFormat};
 
 /// Bounded source-owned historical steps. Exhaustion is an explicit host failure;
@@ -45,15 +44,14 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     app.run()
 }
 
-fn advance_boids_simulation_system(mut world: WorldMut) -> Result<()> {
-    let fixed = *world.resource::<FixedTimeState>()?;
-    let state = world.resource::<BoidsRenderState>()?.clone();
-    let source = world.resource::<BoidsGpuStepSchema>()?.clone();
-    let current_affinity = world
-        .resource::<Gfx>()
-        .ok()
-        .map(|gfx| gfx.gpu_context_affinity());
-    let streams = world.resource_mut::<RenderGpuFlowStepStreams>()?;
+fn advance_boids_simulation_system(
+    fixed: Res<FixedTimeState>,
+    state: Res<BoidsRenderState>,
+    source: Res<BoidsGpuStepSchema>,
+    gfx: Res<Gfx>,
+    mut streams: ResMut<RenderGpuFlowStepStreams>,
+) -> Result<()> {
+    let current_affinity = gfx.gpu_context_affinity();
     let flow = source.flow_id();
 
     // A completed physical G5 submission is never semantic completion by
@@ -110,9 +108,7 @@ fn advance_boids_simulation_system(mut world: WorldMut) -> Result<()> {
                                 }),
                             "Boids draw readback is missing visible non-background particle pixels"
                         );
-                        let affinity = current_affinity.context(
-                            "Boids accepted result has no live current device-generation authority",
-                        )?;
+                        let affinity = current_affinity;
                         let stream = streams
                             .stream_mut(flow)
                             .context("Boids source disappeared")?;
@@ -129,7 +125,7 @@ fn advance_boids_simulation_system(mut world: WorldMut) -> Result<()> {
                                 "Boids source/G5 receipt is inconsistent with its immutable step prefix"
                             );
                             Ok::<(), anyhow::Error>(())
-                        })?;
+                        }).map_err(|error| anyhow::anyhow!("Boids source semantic verification rejected: {error}"))?;
                         tracing::debug!(
                             verified_tick,
                             "Boids exact G5 readback and visible result admitted source step prefix"
