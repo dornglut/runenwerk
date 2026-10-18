@@ -406,3 +406,15 @@ buffer graph, repairs all shared graphics resources after a device failure,
 or proves original/three-species boids recovery on owner hardware. The
 source/application must provide and verify checkpoint data; zero-filled
 new GPU resources do not count as restoration.
+
+## RW-1291-PROD14 — fail-closed producer readback cardinality
+
+The producer-facing `accepted_capture_readbacks(flow)` now checks that every
+registered required selector has **exactly one** associated capture in the
+currently accepted G5 batch. No required result, a duplicate matching result,
+or a descriptor pointing at a different submission/affinity or missing G5
+readback causes a typed error rather than an empty or apparently complete
+success. An empty result remains valid only for a stream with no required
+captures. These checks do not replace the producer's semantic pixel/content
+verification or create another GPU completion authority. Pure regression
+cases cover missing, exact and duplicate capture-point identities.

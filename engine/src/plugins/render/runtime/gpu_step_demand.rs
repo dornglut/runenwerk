@@ -496,6 +496,9 @@ impl RenderGpuAcceptedCaptureReadback {
 pub enum RenderGpuAcceptedCaptureError {
     NoAcceptedBatch,
     CapacityExceeded,
+    MissingRequiredReadback,
+    AmbiguousRequiredReadback,
+    SubmissionMismatch,
 }
 
 impl std::fmt::Display for RenderGpuAcceptedCaptureError {
@@ -505,6 +508,25 @@ impl std::fmt::Display for RenderGpuAcceptedCaptureError {
 }
 
 impl std::error::Error for RenderGpuAcceptedCaptureError {}
+
+fn validate_required_capture_identities<'a>(
+    required: &[RenderCaptureSelector],
+    actual: impl IntoIterator<Item = &'a RenderCaptureIdentity>,
+) -> Result<(), RenderGpuAcceptedCaptureError> {
+    let identities = actual.into_iter().collect::<Vec<_>>();
+    for selector in required {
+        let count = identities
+            .iter()
+            .filter(|identity| selector.matches_point(&identity.capture_point))
+            .count();
+        match count {
+            1 => {}
+            0 => return Err(RenderGpuAcceptedCaptureError::MissingRequiredReadback),
+            _ => return Err(RenderGpuAcceptedCaptureError::AmbiguousRequiredReadback),
+        }
+    }
+    Ok(())
+}
 
 const MAX_ACCEPTED_PRODUCER_READBACKS: usize = 64;
 
@@ -634,16 +656,32 @@ impl RenderGpuFlowStepStreams {
         let Some(submission) = stream.accepted_submission() else {
             return Err(RenderGpuAcceptedCaptureError::NoAcceptedBatch);
         };
+        let required = self
+            .required_capture_selectors
+            .get(&flow)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
         let Some(associated) = self.accepted_capture_readbacks.get(&flow) else {
-            return Ok(&[]);
+            return if required.is_empty() {
+                Ok(&[])
+            } else {
+                Err(RenderGpuAcceptedCaptureError::MissingRequiredReadback)
+            };
         };
         if associated.truncated {
             return Err(RenderGpuAcceptedCaptureError::CapacityExceeded);
         }
-        debug_assert!(associated.references.iter().all(|reference| {
-            reference.receipt.submission_id() == submission.id()
-                && reference.receipt.affinity() == submission.affinity()
-        }));
+        if associated.references.iter().any(|reference| {
+            reference.receipt.submission_id() != submission.id()
+                || reference.receipt.affinity() != submission.affinity()
+                || submission.readback(reference.receipt.readback_id()).is_none()
+        }) {
+            return Err(RenderGpuAcceptedCaptureError::SubmissionMismatch);
+        }
+        validate_required_capture_identities(
+            required,
+            associated.references.iter().map(|reference| &reference.identity),
+        )?;
         Ok(&associated.references)
     }
 
@@ -806,3 +844,37 @@ mod required_capture_tests {
 
 #[cfg(test)]
 mod recovery_tests;
+#[cfg(test)]
+mod accepted_capture_validation_tests {
+    use super::*;
+
+    #[test]
+    fn required_identity_must_exist_exactly_once() {
+        let selector = RenderCaptureSelector::named_pass_surface_color("flow", "draw");
+        let identity = RenderCaptureIdentity {
+            frame_index: 8,
+            surface_id: 2,
+            pass_label: "draw".to_string(),
+            capture_point: selector.stable_point_fallback(),
+        };
+        assert_eq!(
+            validate_required_capture_identities(&[selector.clone()], std::iter::empty()),
+            Err(RenderGpuAcceptedCaptureError::MissingRequiredReadback)
+        );
+        assert_eq!(
+            validate_required_capture_identities(&[selector.clone()], [&identity]),
+            Ok(())
+        );
+        assert_eq!(
+            validate_required_capture_identities(&[selector.clone()], [&identity, &identity]),
+            Err(RenderGpuAcceptedCaptureError::AmbiguousRequiredReadback)
+        );
+        let mut wrong = identity.clone();
+        wrong.capture_point.pass_id = "other".to_string();
+        assert_eq!(
+            validate_required_capture_identities(&[selector], [&wrong]),
+            Err(RenderGpuAcceptedCaptureError::MissingRequiredReadback)
+        );
+    }
+}
+
