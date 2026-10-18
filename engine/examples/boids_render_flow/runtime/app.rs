@@ -524,7 +524,10 @@ mod native_close_policy_tests {
             .expect("registered primary window");
         assert!(!primary.close_intent_pending);
         assert!(primary.close_requested);
-        assert_eq!(primary.lifecycle_state, NativeWindowLifecycleState::CloseApproved);
+        assert_eq!(
+            primary.lifecycle_state,
+            NativeWindowLifecycleState::CloseApproved
+        );
         assert!(!approve_boids_window_close(&mut windows));
     }
 }

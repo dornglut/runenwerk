@@ -334,8 +334,7 @@ impl Renderer {
                 .collect::<Vec<_>>();
             (authored.graph, witnesses)
         };
-        timings.gpu_graph_build_ms =
-            gpu_graph_build_start.elapsed().as_secs_f32() * 1000.0;
+        timings.gpu_graph_build_ms = gpu_graph_build_start.elapsed().as_secs_f32() * 1000.0;
         // Diagnostic-only, opt-in observation. RunenGPU remains the only retained
         // continuity and actual submission-admission authority. No gating here.
         let retained_trace = self.retained_submission_trace.before_submission(
@@ -347,8 +346,7 @@ impl Renderer {
         gpu_step_streams.validate_prepared(prepared_frame)?;
         let gpu_prepare_start = Instant::now();
         let prepared = pollster::block_on(context.prepare_submission(graph))?;
-        timings.gpu_prepare_submission_ms =
-            gpu_prepare_start.elapsed().as_secs_f32() * 1000.0;
+        timings.gpu_prepare_submission_ms = gpu_prepare_start.elapsed().as_secs_f32() * 1000.0;
         // Preserve RunenGPU's typed public rejection rather than flattening it into
         // a diagnostic string. Runenwerk policy may inspect the actual rejection
         // kind, but G5 still owns the validity and retryability distinction.
@@ -363,8 +361,7 @@ impl Renderer {
             let (_prepared, reason) = rejection.into_parts();
             runen_gpu::GpuWorkSubmissionError::SubmissionRejected(reason)
         })?;
-        timings.gpu_submit_prepared_ms =
-            gpu_submit_start.elapsed().as_secs_f32() * 1000.0;
+        timings.gpu_submit_prepared_ms = gpu_submit_start.elapsed().as_secs_f32() * 1000.0;
         // Infallibly bind the exact historical source interval immediately at
         // the real G5 admission boundary, before later renderer bookkeeping.
         gpu_step_streams.accepted(prepared_frame, &submission);
