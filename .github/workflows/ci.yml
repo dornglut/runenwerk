@@ -131,6 +131,18 @@ jobs:
                 --test native_host_smoke \
                 --locked
 
+      - name: Run real original and species Boids native GPU continuity proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            cargo +stable run -p engine --example boids_render_flow --locked
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            cargo +stable run -p engine --example boids_render_flow --locked -- --species
+
       - name: Run maintained arena presentation GPU proof
         env:
           RUST_BACKTRACE: '1'

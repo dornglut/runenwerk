@@ -20,6 +20,7 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
 
     let flow = build_render_flow();
     let source = BoidsGpuStepSchema::from_flow(&flow)?;
+    let source_flow = source.flow_id();
     let mut streams = RenderGpuFlowStepStreams::default();
     streams.register(source.flow_id(), 0, MAX_OUTSTANDING_BOIDS_STEPS)?;
     // This is a bounded initial source-owned GPU result witness, not proof of
@@ -41,7 +42,16 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     app.insert_resource(streams);
     app.add_systems(Update, advance_boids_simulation_system);
     app.add_render_flow(flow);
-    app.run()
+    let smoke = if std::env::var("RUNENWERK_BOIDS_NATIVE_SMOKE").as_deref() == Ok("1") {
+        Some(super::smoke::install(&mut app, source_flow)?)
+    } else {
+        None
+    };
+    app.run()?;
+    if let Some(proof) = smoke {
+        super::smoke::assert_finished(&proof)?;
+    }
+    Ok(())
 }
 
 fn advance_boids_simulation_system(
