@@ -444,7 +444,14 @@ pub struct RendererFrameTimings {
     pub world_prepare_ms: f32,
     pub preflight_ms: f32,
     pub flow_encode_ms: f32,
+    /// Nested inside flow_encode_ms (not an additive CPU stage).
     pub encode_submit_ms: f32,
+    /// Formation of the canonical RunenGPU graph inside encode_submit_ms.
+    pub gpu_graph_build_ms: f32,
+    /// Awaited preparation of that graph on the public RunenGPU boundary.
+    pub gpu_prepare_submission_ms: f32,
+    /// Synchronous public G5 admission call only, not GPU completion.
+    pub gpu_submit_prepared_ms: f32,
     pub mesh_hot_path: MeshPrepareHotPath,
 }
 

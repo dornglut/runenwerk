@@ -204,3 +204,24 @@ mode at the same resolution, adapter and law. The report additionally prints
 averages of the existing renderer CPU-stage sum, flow encode and encode/submit
 timings; the sum does not include the complete ECS Update or GPU execution.
 Host-observed submitted-Present pacing is not display scanout latency.
+
+### Native window closure and GPU stage profiling
+
+The Boids example has no unsaved state. Its Update policy approves a pending
+native primary-window close intent, allowing winit to exit on the next host
+effect application; it does not request further GPU step work after that
+decision. This is example-local and does not weaken Engine/editor product close
+policies. An external console interrupt (Windows `STATUS_CONTROL_C_EXIT`) is
+not equivalent to native-window closure. The native smoke also has a separate
+bounded `Present` completion policy, so manually closing the smoke before
+its requested frame target is not a successful qualification.
+
+The native report's existing `cpu_flow_encode_ms_avg` encompasses
+`cpu_encode_submit_ms_avg` and **must not be added to it**. New,
+nonoverlapping nested GPU graph-stage measurements distinguish
+`gpu_graph_build_ms_avg`, `gpu_prepare_submission_ms_avg` (including the
+awaited RunenGPU preparation), and `gpu_submit_prepared_ms_avg`. The
+difference between `cpu_encode_submit_ms_avg` and those three values
+includes source validation and post-G5 renderer bookkeeping. None is a GPU
+shader-duration, GPU terminal-latency or display-scanout measurement. Profile
+both modes on the owner adapter in release before inferring bottleneck causes.

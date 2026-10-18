@@ -40,7 +40,7 @@ pub(crate) struct NativeBoidsSmokeStatus {
     first_present: Option<Instant>,
     last_present: Option<Instant>,
     present_intervals: Vec<Duration>,
-    cpu_renderer_samples_ms: Vec<[f32; 3]>,
+    cpu_renderer_samples_ms: Vec<[f32; 6]>,
     required_present_submissions: usize,
     succeeded: bool,
     error: Option<String>,
@@ -140,7 +140,7 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
             / status.cpu_renderer_samples_ms.len() as f64
     };
     println!(
-        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={}",
+        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} gpu_graph_build_ms_avg={:.2} gpu_prepare_submission_ms_avg={:.2} gpu_submit_prepared_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={}",
         status.frames,
         status.required_present_submissions,
         status.presented_opportunities,
@@ -154,6 +154,9 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         mean_cpu_ms(0),
         mean_cpu_ms(1),
         mean_cpu_ms(2),
+        mean_cpu_ms(3),
+        mean_cpu_ms(4),
+        mean_cpu_ms(5),
         status.cpu_renderer_samples_ms.len(),
         status.peak_outstanding_steps,
         status.peak_uncaptured_cpu_ticks
@@ -210,6 +213,9 @@ impl NativeBoidsSmoke {
                     observation.cpu.observed_stage_sum_with_acquire_ms(),
                     observation.cpu.renderer.flow_encode_ms,
                     observation.cpu.renderer.encode_submit_ms,
+                    observation.cpu.renderer.gpu_graph_build_ms,
+                    observation.cpu.renderer.gpu_prepare_submission_ms,
+                    observation.cpu.renderer.gpu_submit_prepared_ms,
                 ]
             })
             .collect::<Vec<_>>();

@@ -6,6 +6,7 @@ use engine::plugins::render::{
 };
 use engine::plugins::{DebugMetricsPlugin, RenderPlugin, ScenePlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt, FixedTimeState, Res, ResMut, Update};
+use engine::runtime::WindowStateRegistryResource;
 use runen_gpu::{GpuContextAffinity, GpuReadbackStatus, GpuSubmissionStatus, GpuTextureFormat};
 
 /// Diagnostic evidence only: a GPU-rendered image is not a retained Boids
@@ -171,7 +172,23 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     Ok(())
 }
 
+/// This interactive example has no unsaved-work close confirmation.
+fn approve_boids_window_close(windows: &mut WindowStateRegistryResource) -> bool {
+    let Some(primary_id) = windows.primary_window_id() else {
+        return false;
+    };
+    let Some(primary) = windows.record_mut(primary_id) else {
+        return false;
+    };
+    if !primary.close_intent_pending {
+        return false;
+    }
+    primary.approve_close();
+    true
+}
+
 fn advance_boids_simulation_system(
+    mut windows: ResMut<WindowStateRegistryResource>,
     fixed: Res<FixedTimeState>,
     state: Res<BoidsRenderState>,
     source: Res<BoidsGpuStepSchema>,
@@ -180,6 +197,12 @@ fn advance_boids_simulation_system(
     mut visual: ResMut<BoidsVisualContinuityEvidence>,
     mut generation: ResMut<BoidsVerifiedGpuGeneration>,
 ) -> Result<()> {
+    // Winit's CloseRequested is deliberately an intent, not an automatic
+    // Engine exit. Boids owns the decision to approve it. Do not schedule
+    // another simulation batch after that decision.
+    if approve_boids_window_close(&mut windows) {
+        return Ok(());
+    }
     let current_affinity = gfx.gpu_context_affinity();
     let flow = source.flow_id();
     let completed_tick = streams
@@ -476,5 +499,32 @@ mod source_interval_tests {
             .map(|input| input.tick())
             .collect::<Vec<_>>();
         assert_eq!(ticks, vec![1, 2, 3, 4, 5]);
+    }
+}
+
+#[cfg(test)]
+mod native_close_policy_tests {
+    use super::*;
+    use engine::runtime::{NativeWindowId, NativeWindowLifecycleState};
+
+    #[test]
+    fn boids_native_close_intent_is_approved_without_continuing_gpu_source_work() {
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Boids", (1280, 720), 1.0, true);
+        assert!(!approve_boids_window_close(&mut windows));
+        let primary = windows
+            .record_mut(NativeWindowId::primary())
+            .expect("registered primary window");
+        primary.receive_close_intent();
+        assert!(primary.close_intent_pending);
+        assert!(!primary.close_requested);
+        assert!(approve_boids_window_close(&mut windows));
+        let primary = windows
+            .record(NativeWindowId::primary())
+            .expect("registered primary window");
+        assert!(!primary.close_intent_pending);
+        assert!(primary.close_requested);
+        assert_eq!(primary.lifecycle_state, NativeWindowLifecycleState::CloseApproved);
+        assert!(!approve_boids_window_close(&mut windows));
     }
 }
