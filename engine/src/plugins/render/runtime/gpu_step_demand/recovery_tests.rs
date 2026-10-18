@@ -43,7 +43,7 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
                     Some("1"),
                     "GPU-required validation must not silently skip recovery"
                 );
-                return None;
+                None
             }
             Err(error) => panic!("recovery GPU context creation: {error}"),
         }
