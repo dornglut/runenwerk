@@ -716,8 +716,25 @@ impl RenderFlow {
         T: GpuParams + 'static,
     {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
-            let existing = self.buffer_handle(id)?;
-            if existing.descriptor().initialization() != &initialization {
+            let Some(RenderResourceDeclaration::Storage(existing)) = self
+                .graph
+                .resources
+                .resources
+                .iter()
+                .find(|resource| *resource.id() == id)
+            else {
+                return Err(RenderFlowAuthoringError::ConflictingStorageDeclaration { label });
+            };
+            // A label is one physical declaration. Reusing it with a different
+            // type (even one with identical byte size), element count or
+            // lifetime must not return a misleading GPU buffer handle.
+            if existing.params_type_id() != core::any::TypeId::of::<T>()
+                || existing.element_count() != len
+                || existing.handle().descriptor().common().lifetime() != lifetime
+            {
+                return Err(RenderFlowAuthoringError::ConflictingStorageDeclaration { label });
+            }
+            if existing.handle().descriptor().initialization() != &initialization {
                 return Err(RenderFlowAuthoringError::ConflictingStorageInitialization { label });
             }
             return Ok(id);
@@ -908,6 +925,11 @@ mod tests {
         value: u32,
     }
 
+    #[derive(Debug, Clone, Copy, GpuStorage)]
+    struct OtherTestCell {
+        value: u32,
+    }
+
     #[derive(Debug, Clone, Copy, GpuUniform)]
     struct TestParams {
         value: u32,
@@ -1093,6 +1115,56 @@ mod tests {
             error,
             RenderFlowAuthoringError::ConflictingStorageInitialization { label }
                 if label == "cells"
+        ));
+    }
+
+    #[test]
+    fn retained_storage_redeclaration_rejects_conflicting_type_count_kind_and_lifetime() {
+        let (flow, first) = RenderFlow::new("storage.layout.invariant")
+            .storage_array::<TestCell>("cells", 4)
+            .expect("first retained storage");
+        let (flow, same) = flow
+            .storage_array::<TestCell>("cells", 4)
+            .expect("identical declaration may reuse retained storage");
+        assert_eq!(first.diagnostic_identity(), same.diagnostic_identity());
+
+        let error = flow
+            .storage_array::<TestCell>("cells", 8)
+            .expect_err("larger storage must not reuse a four-element descriptor");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageDeclaration { label } if label == "cells"
+        ));
+        let error = flow
+            .storage_array::<OtherTestCell>("cells", 4)
+            .expect_err("same-size different params type must not alias the existing storage");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageDeclaration { label } if label == "cells"
+        ));
+        let mut flow = flow;
+        let error = flow
+            .register_transient_storage_array::<TestCell>(
+                "cells".to_string(),
+                4,
+                GpuBufferInitialization::Uninitialized,
+            )
+            .expect_err("transient storage must not reuse retained lifetime");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageDeclaration { label } if label == "cells"
+        ));
+
+        let flow = RenderFlow::new("storage.kind.invariant")
+            .uniform_buffer::<TestParams>("cells")
+            .expect("uniform buffer")
+            .0;
+        let error = flow
+            .storage_array::<TestCell>("cells", 4)
+            .expect_err("uniform descriptor must not be treated as a storage array");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageDeclaration { label } if label == "cells"
         ));
     }
 

@@ -30,6 +30,11 @@ pub enum RenderFlowAuthoringError {
     ConflictingStorageInitialization { label: String },
 
     #[error(
+        "declare GPU storage '{label}': an existing resource has a different kind, element type, element count, or lifetime"
+    )]
+    ConflictingStorageDeclaration { label: String },
+
+    #[error(
         "validate render buffer layout for resource '{resource_id:?}': expected {expected}, found {actual}; retain the declaration-matching GPU buffer handle"
     )]
     BufferLayoutMismatch {
