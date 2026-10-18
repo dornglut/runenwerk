@@ -69,9 +69,14 @@ impl BoidsGpuStepSchema {
         self.draw_pass
     }
 
+    pub(crate) const fn max_substeps(&self) -> u32 {
+        REGION_MAX_SUBSTEPS
+    }
+
     /// source_tick is zero-based: first source tick 0 seeds the initial GPU
-    /// buffers. Capture before later ECS mutations; never derive an older
-    /// step's bytes from a newer host-frame projection.
+    /// buffers. This example's simulation law is fixed at construction, allowing
+    /// exact late projection of time-debt ticks from their original identities.
+    /// Mutable sources must snapshot their changing inputs at source time instead.
     pub(crate) fn capture(
         &self,
         state: &BoidsRenderState,

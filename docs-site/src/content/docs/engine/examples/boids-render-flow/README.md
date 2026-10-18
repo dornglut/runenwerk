@@ -55,8 +55,10 @@ captures immutable source-time uniforms and dispatch sizes for all eight compute
 passes using exact IDs from the authored `RenderFlow`. The ECS fixed-time
 counter describes **requested** source steps, never proof that GPU state has
 advanced. The Engine admits an ordered, bounded prefix to RunenGPU G5 and
-retains accepted source steps until its exact completed submission and required
-producer-owned texture readback pass verification.
+retains accepted source steps until its exact completed submission and producer-owned
+source interval verification. GPU-resident normal simulation does not require a
+GPU-to-CPU color readback. The native smoke explicitly opts into the full-frame
+texture witness to test rendered pixels and motion.
 
 On the first accepted source step, the shader seeds the retained boid population;
 later source steps advance their own captured ticks, not a reconstructed host
@@ -64,19 +66,32 @@ frame delta. Both retained boid buffers and grid scratch resources use explicit
 GPU descriptor `Zeroed` initialization for strict read-before-write admission.
 Zero bytes are only safe descriptor coverage; they are **not** populated boids.
 
-The current producer verifies the exact G5 receipt, byte format/length,
-nonbackground draw result, and ordered tick lineage before advancing
-`completed_tick`. It retains a bounded producer-owned history (512 outstanding
-fixed steps) and rejects admission when that history is full rather than
-silently skipping input. This is **fail-stop**, not a scheduler that pauses or
-drops CPU fixed-time ticks: a long GPU stall currently terminates the example.
+In ordinary execution the example accepts GPU progress after the exact G5
+submission has terminated successfully, with its original device affinity
+and immutable ordered source-tick interval verified. It does **not** claim
+a CPU-side numerical oracle or full retained Boids-buffer verification.
+A failed/unknown GPU write remains quarantined and requires fail-stop and
+clean restart, never speculative replay.
 
-A source-owned visual observer also fingerprints a deterministic sample of each
-verified GPU draw readback. The native qualification requires the fingerprint
-to change across multiple frames so a constant non-background image cannot
-pass for moving Boids. Neither this image change nor a completed G5 receipt
-proves the numerical contents of all retained agent/grid buffers. Full buffer
-checkpointing and verified contents restoration remain unqualified.
+The fixed-time counter remains the target for requested source ticks. The
+producer captures at most one render-region batch (four steps) per Update
+and never exceeds 512 outstanding inputs, including accepted/unverified work.
+If GPU execution stalls, CPU fixed time may advance, but source capture is
+**paused at capacity**: the uncaptured tick range remains an explicit
+difference between the CPU target and the producer's requested cursor.
+Once capacity returns the same tick identities are captured in order.
+The example's simulation law and tick-dependent inputs are fixed at startup,
+making this deferred generation equivalent to source-time generation.
+A consumer with changing inputs must retain actual historical snapshots
+instead. This is bounded, lossless tick-debt pacing, **not** a promise to
+synchronize with wall time under sustained GPU overload.
+
+Only the opt-in native conformance mode requires a full GPU draw readback.
+It checks the exact G5 source receipt, byte format/length and nonbackground
+image, then fingerprints deterministic pixel samples. Moving fingerprints
+are visual evidence, not an agent/grid numerical oracle or checkpoint.
+Normal Boids rendering does not request these mandatory pixel transfers.
+Full buffer checkpointing and verified contents restoration remain unqualified.
 
 Following a successfully verified batch, the source records its exact GPU
 context/device generation. A subsequent generation mismatch **fails closed

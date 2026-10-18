@@ -65,6 +65,8 @@ struct BoidsVerifiedGpuGeneration {
     // Only installed for the opt-in native fault fixture. This represents a
     // producer refusing further source work, not an injected physical GPU loss.
     native_fault_at_verified_tick: Option<u64>,
+    // A full-frame pixel readback is required only by the opt-in visual conformance fixture.
+    require_visual_readback: bool,
 }
 
 impl BoidsVerifiedGpuGeneration {
@@ -106,27 +108,29 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     let flow = build_render_flow();
     let source = BoidsGpuStepSchema::from_flow(&flow)?;
     let source_flow = source.flow_id();
+    let native_smoke = std::env::var("RUNENWERK_BOIDS_NATIVE_SMOKE").as_deref() == Ok("1");
     let mut streams = RenderGpuFlowStepStreams::default();
     streams.register(source.flow_id(), 0, MAX_OUTSTANDING_BOIDS_STEPS)?;
-    // This is a bounded initial source-owned GPU result witness, not proof of
-    // every boid-buffer invariant. Replace full-frame capture with a compact
-    // authoritative state check before production acceptance.
-    streams.require_capture(
-        source.flow_id(),
-        RenderCaptureSelector {
-            flow_id: Some(source.flow_id().to_string()),
-            pass_id: Some(source.draw_pass_id().to_string()),
-            stage: CaptureStage::After,
-            resource_id: "boids.color".to_string(),
-            texture_class: CaptureTextureClass::ColorTarget,
-        },
-    )?;
+    // Visual conformance deliberately samples the GPU-rendered image. Normal
+    // execution requires only terminal G5 success and exact source lineage:
+    // staging an entire surface on the CPU is not a Boids simulation invariant.
+    if native_smoke {
+        streams.require_capture(
+            source.flow_id(),
+            RenderCaptureSelector {
+                flow_id: Some(source.flow_id().to_string()),
+                pass_id: Some(source.draw_pass_id().to_string()),
+                stage: CaptureStage::After,
+                resource_id: "boids.color".to_string(),
+                texture_class: CaptureTextureClass::ColorTarget,
+            },
+        )?;
+    }
 
     app.insert_resource(BoidsRenderState::with_rule(rule));
     app.insert_resource(source);
     app.insert_resource(streams);
     app.insert_resource(BoidsVisualContinuityEvidence::default());
-    let native_smoke = std::env::var("RUNENWERK_BOIDS_NATIVE_SMOKE").as_deref() == Ok("1");
     let native_fault_at_verified_tick = if native_smoke {
         std::env::var("RUNENWERK_BOIDS_NATIVE_SOURCE_FAULT_AFTER_TICK")
             .ok()
@@ -145,6 +149,7 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     app.insert_resource(BoidsVerifiedGpuGeneration {
         last_verified: None,
         native_fault_at_verified_tick,
+        require_visual_readback: native_smoke,
     });
     app.add_systems(Update, advance_boids_simulation_system);
     app.add_render_flow(flow);
@@ -192,72 +197,88 @@ fn advance_boids_simulation_system(
                 );
             }
             GpuSubmissionStatus::Completed => {
-                let evidence = streams.accepted_capture_readbacks(flow)?;
-                anyhow::ensure!(
-                    evidence.len() == 1
-                        && evidence[0].identity.pass_id() == source.draw_pass_id().to_string(),
-                    "Boids GPU result has no exact source-correlated draw capture"
-                );
-                let capture = &evidence[0];
-                let readback = accepted
-                    .readback(capture.receipt.readback_id())
-                    .context("Boids accepted G5 submission omitted required GPU readback")?;
-                match readback.status() {
-                    GpuReadbackStatus::Pending => {}
-                    GpuReadbackStatus::Failed(failure) => {
-                        anyhow::bail!("Boids source GPU readback failed: {failure:?}");
+                // Physical G5 success proves completion of the submitted graph.
+                // Boids retains immutable source inputs and checks the exact tick
+                // interval before admitting it; only native visual conformance
+                // additionally demands a full RGBA readback.
+                let mut ready = !generation.require_visual_readback;
+                if generation.require_visual_readback {
+                    let evidence = streams.accepted_capture_readbacks(flow)?;
+                    anyhow::ensure!(
+                        evidence.len() == 1
+                            && evidence[0].identity.pass_id() == source.draw_pass_id().to_string(),
+                        "Boids GPU result has no exact source-correlated draw capture"
+                    );
+                    let capture = &evidence[0];
+                    let readback = accepted
+                        .readback(capture.receipt.readback_id())
+                        .context("Boids accepted G5 submission omitted required GPU readback")?;
+                    match readback.status() {
+                        GpuReadbackStatus::Pending => {}
+                        GpuReadbackStatus::Failed(failure) => {
+                            anyhow::bail!("Boids source GPU readback failed: {failure:?}");
+                        }
+                        GpuReadbackStatus::Ready(bytes) => {
+                            anyhow::ensure!(
+                                capture.receipt.matches_completed_readback(&accepted)
+                                    && bytes.texture_format() == Some(capture.source_format)
+                                    && matches!(
+                                        capture.source_format,
+                                        GpuTextureFormat::Rgba8Unorm
+                                            | GpuTextureFormat::Rgba8UnormSrgb
+                                            | GpuTextureFormat::Bgra8Unorm
+                                            | GpuTextureFormat::Bgra8UnormSrgb
+                                    ),
+                                "Boids completed capture does not match its exact G5 source"
+                            );
+                            let capture_extent = (capture.width, capture.height);
+                            let expected_len = u64::from(capture.width)
+                                .checked_mul(u64::from(capture.height))
+                                .and_then(|pixels| pixels.checked_mul(4))
+                                .and_then(|len| usize::try_from(len).ok())
+                                .context("Boids GPU capture dimensions overflow")?;
+                            anyhow::ensure!(
+                                bytes.as_bytes().len() == expected_len
+                                    && bytes.as_bytes().as_chunks::<4>().0.iter().any(|rgba| {
+                                        rgba[3] == 255 && rgba[..3].iter().any(|channel| *channel > 65)
+                                    }),
+                                "Boids draw readback is missing visible non-background particle pixels"
+                            );
+                            // Diagnostics do not authorize semantic advancement:
+                            // the exact G5 receipt and immutable tick check below do.
+                            visual.observe(bytes.as_bytes(), capture_extent);
+                            ready = true;
+                        }
                     }
-                    GpuReadbackStatus::Ready(bytes) => {
-                        anyhow::ensure!(
-                            capture.receipt.matches_completed_readback(&accepted)
-                                && bytes.texture_format() == Some(capture.source_format)
-                                && matches!(
-                                    capture.source_format,
-                                    GpuTextureFormat::Rgba8Unorm
-                                        | GpuTextureFormat::Rgba8UnormSrgb
-                                        | GpuTextureFormat::Bgra8Unorm
-                                        | GpuTextureFormat::Bgra8UnormSrgb
-                                ),
-                            "Boids completed capture does not match its exact G5 source"
-                        );
-                        let capture_extent = (capture.width, capture.height);
-                        let expected_len = u64::from(capture.width)
-                            .checked_mul(u64::from(capture.height))
-                            .and_then(|pixels| pixels.checked_mul(4))
-                            .and_then(|len| usize::try_from(len).ok())
-                            .context("Boids GPU capture dimensions overflow")?;
-                        anyhow::ensure!(
-                            bytes.as_bytes().len() == expected_len
-                                && bytes.as_bytes().as_chunks::<4>().0.iter().any(|rgba| {
-                                    rgba[3] == 255 && rgba[..3].iter().any(|channel| *channel > 65)
-                                }),
-                            "Boids draw readback is missing visible non-background particle pixels"
-                        );
-                        let affinity = current_affinity;
-                        let stream = streams
-                            .stream_mut(flow)
-                            .context("Boids source disappeared")?;
-                        let previous_tick = stream.completed_tick();
-                        let submission_id = accepted.id();
-                        let verified_tick = stream.commit_verified(affinity, |submission, steps| {
+                }
+                if ready {
+                    let affinity = current_affinity;
+                    let stream = streams
+                        .stream_mut(flow)
+                        .context("Boids source disappeared")?;
+                    let previous_tick = stream.completed_tick();
+                    let submission_id = accepted.id();
+                    let verified_tick = stream
+                        .commit_verified(affinity, |submission, steps| {
                             anyhow::ensure!(
                                 submission.id() == submission_id
                                     && !steps.is_empty()
-                                    && steps
-                                        .iter()
-                                        .enumerate()
-                                        .all(|(index, step)| step.tick() == previous_tick + index as u64 + 1),
+                                    && steps.iter().enumerate().all(|(index, step)| {
+                                        step.tick() == previous_tick + index as u64 + 1
+                                    }),
                                 "Boids source/G5 receipt is inconsistent with its immutable step prefix"
                             );
                             Ok::<(), anyhow::Error>(())
-                        }).map_err(|error| anyhow::anyhow!("Boids source semantic verification rejected: {error}"))?;
-                        generation.note_verified(affinity);
-                        visual.observe(bytes.as_bytes(), capture_extent);
-                        tracing::debug!(
-                            verified_tick,
-                            "Boids exact G5 readback and visible result admitted source step prefix"
-                        );
-                    }
+                        })
+                        .map_err(|error| {
+                            anyhow::anyhow!("Boids source semantic verification rejected: {error}")
+                        })?;
+                    generation.note_verified(affinity);
+                    tracing::debug!(
+                        verified_tick,
+                        native_visual_check = generation.require_visual_readback,
+                        "Boids terminal G5 submission and source step prefix committed"
+                    );
                 }
             }
         }
@@ -276,23 +297,38 @@ fn capture_fixed_steps(
     state: &BoidsRenderState,
     fixed: FixedTimeState,
 ) -> Result<()> {
-    let start = fixed
-        .total_completed_steps
-        .checked_sub(u64::from(fixed.steps_ran_last_frame))
-        .context("Boids FixedTimeState completed fewer ticks than its current interval")?;
     anyhow::ensure!(
-        stream.requested_tick() == start,
-        "Boids CPU fixed tick source skipped or duplicated work: source {}, host {start}",
-        stream.requested_tick()
+        fixed.total_completed_steps >= u64::from(fixed.steps_ran_last_frame),
+        "Boids FixedTimeState completed fewer ticks than its current interval"
     );
-    let history = (start..fixed.total_completed_steps)
-        .map(|tick| source.capture(state, tick))
-        .collect::<Result<Vec<_>>>()?;
-    if !history.is_empty() {
+    let start = stream.requested_tick();
+    anyhow::ensure!(
+        start <= fixed.total_completed_steps,
+        "Boids fixed-time source reset behind its existing GPU history: requested {start}, host {}",
+        fixed.total_completed_steps
+    );
+    // This example's law and input parameters are immutable after construction:
+    // any delayed source tick can be projected exactly from its original tick.
+    // Do not apply this policy to a mutable-input producer without preserving
+    // that producer's exact historical snapshots at their source time.
+    //
+    // A saturated GPU no longer causes CapacityExceeded in ordinary operation:
+    // leave unrequested CPU ticks as time debt, capture them in order when
+    // capacity becomes available, and never drop/relabel an accepted interval.
+    let outstanding_source_ticks = fixed.total_completed_steps - start;
+    let count = usize::try_from(outstanding_source_ticks)
+        .unwrap_or(usize::MAX)
+        .min(stream.remaining_capacity())
+        .min(source.max_substeps() as usize);
+    let end = start
+        .checked_add(u64::try_from(count).context("Boids capture count overflow")?)
+        .context("Boids requested tick identity exhausted")?;
+    if start != end {
+        let history = (start..end)
+            .map(|tick| source.capture(state, tick))
+            .collect::<Result<Vec<_>>>()?;
         stream.capture_batch(history).map_err(|(error, _unconsumed)| {
-            anyhow::anyhow!(
-                "Boids immutable GPU step queue rejected new CPU source ticks: {error}; application must pause rather than lose steps"
-            )
+            anyhow::anyhow!("Boids immutable source admission rejected: {error}")
         })?;
     }
     Ok(())
@@ -395,6 +431,7 @@ mod source_interval_tests {
         let guard = BoidsVerifiedGpuGeneration {
             last_verified: None,
             native_fault_at_verified_tick: Some(12),
+            require_visual_readback: true,
         };
         assert!(!guard.should_fail_source(11));
         assert!(guard.should_fail_source(12));
@@ -418,14 +455,17 @@ mod source_interval_tests {
         capture_fixed_steps(&mut demand, &schema, &state, fixed(4, 3)).unwrap();
         assert_eq!((demand.requested_tick(), demand.pending_len()), (4, 4));
 
-        assert!(capture_fixed_steps(&mut demand, &schema, &state, fixed(6, 2)).is_err());
-        assert_eq!((demand.requested_tick(), demand.pending_len()), (4, 4));
+        capture_fixed_steps(&mut demand, &schema, &state, fixed(6, 2)).unwrap();
+        assert_eq!((demand.requested_tick(), demand.pending_len()), (5, 5));
+        // A long stall is bounded and never consumes source tick 6 or 7.
+        capture_fixed_steps(&mut demand, &schema, &state, fixed(1000, 4)).unwrap();
+        assert_eq!((demand.requested_tick(), demand.pending_len()), (5, 5));
         assert!(capture_fixed_steps(&mut demand, &schema, &state, fixed(4, 1)).is_err());
         let ticks = demand
             .candidate(8)
             .iter()
             .map(|input| input.tick())
             .collect::<Vec<_>>();
-        assert_eq!(ticks, vec![1, 2, 3, 4]);
+        assert_eq!(ticks, vec![1, 2, 3, 4, 5]);
     }
 }

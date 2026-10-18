@@ -116,6 +116,13 @@ impl<T> RenderGpuStepDemand<T> {
         self.pending.len() + self.accepted.as_ref().map_or(0, |a| a.steps.len())
     }
 
+    /// Capacity available for further immutable source inputs, including those
+    /// held by an already accepted but unverified GPU submission.
+    /// This is producer pacing, not RunenGPU retained-resource admission.
+    pub fn remaining_capacity(&self) -> usize {
+        self.maximum_outstanding - self.outstanding()
+    }
+
     pub fn pending_len(&self) -> usize {
         self.pending.len()
     }
@@ -393,6 +400,7 @@ mod tests {
         assert_eq!(steps.capture_batch(vec![8, 9]), Ok((1, 3)));
         assert_eq!(steps.requested_tick(), 3);
         assert_eq!(steps.pending_len(), 3);
+        assert_eq!(steps.remaining_capacity(), 0);
     }
 
     #[test]
@@ -430,6 +438,7 @@ mod tests {
             Err((RenderGpuStepDemandError::TickIdentityExhausted, 1))
         );
         assert_eq!(steps.outstanding(), 0);
+        assert_eq!(steps.remaining_capacity(), 2);
         assert_eq!(steps.requested_tick(), u64::MAX);
     }
 }
