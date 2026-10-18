@@ -16,6 +16,28 @@ spans to the external [Tracy profiler](https://github.com/wolfpld/tracy).
 Tracy does not own the native frame scheduler, Render's frame history, RunenGPU
 submissions, GPU shader timings, or on-screen presentation measurements.
 
+## Compatible profiler and bindings
+
+Runenwerk targets [Tracy v0.14.1](https://github.com/wolfpld/tracy/releases/tag/v0.14.1)
+([Windows ZIP](https://github.com/wolfpld/tracy/releases/download/v0.14.1/windows-0.14.1.zip)).
+The reproducible Rust dependency set in `Cargo.lock` is:
+
+| Dependency | Locked version |
+| --- | --- |
+| `tracing-tracy` | 0.12.0 |
+| `tracy-client` | 0.19.0 |
+| `tracy-client-sys` | 0.30.0 |
+
+The Tracy client and desktop UI use a versioned protocol; do not assume a
+newer or older profiler is compatible. The
+[upstream correspondence table](https://github.com/nagisa/rust_tracy_client#version-support-table)
+maps these library versions to Tracy v0.14.1.
+
+The `engine/tracy` feature preserves the previous Tracy capture configuration.
+New v0.12 default opt-ins (`crash-handler` and `wait-stacks`) are deliberately
+not enabled by this dependency upgrade; reviewing those capabilities and their
+overhead is a separate decision.
+
 ## Enable in a native application
 
 Compile with Engine's opt-in feature and keep the debug symbols for source-level

@@ -22,7 +22,7 @@ runen-input.workspace = true
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["fmt", "env-filter"] }
 tracing-appender = "0.2.3"
-tracing-tracy = { version = "0.11.4", optional = true }
+tracing-tracy = { version = "0.12.0", optional = true, default-features = false, features = ["enable", "system-tracing", "context-switch-tracing", "sampling", "code-transfer", "broadcast", "callstack-inlines"] }
 winit = "0.30.9"
 rusttype = "0.9.3"
 image = { version = "0.25.8", default-features = false, features = ["png"] }
