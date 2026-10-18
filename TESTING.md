@@ -112,11 +112,19 @@ retained state to the exact required pixel 6 and later 15; accidentally
 lowering latest ECS dispatch instead would leave the counter unchanged.
 The test deliberately retains the *physically completed* predecessor
 for at least four further native redraws after the first verified result.
-An independently resourced and explicitly surface-scoped second flow must
-submit a real native secondary-surface frame while the primary is deferred;
+A second genuinely attached native surface first requests the **same**
+retained stateful flow, with the fixture verifying the live surface-scoped
+invocation request and requiring **zero secondary submissions** over four
+subsequent host redraw opportunities while its original G5 interval remains
+semantically unverified. This checks that changing the requested surface
+cannot bypass same-flow retained-state deferral, even after physical G5
+completion. The secondary then switches to an independently resourced flow,
+which must submit a real native frame while the primary remains deferred;
 there must be no extra primary submission before semantic verification.
-This proves independence from actual submitted frame history, not merely
-window attachment. The first terminal green pixel is
+Actual submitted-frame history, not mere preparation or window attachment,
+establishes independent secondary progress. This is **same-flow** sharing,
+not proof of arbitrary cross-flow shared-retained participation. The first
+terminal green pixel is
 verified, but semantic verification is deliberately refused once and must
 leave the accepted batch and both pending inputs unchanged. After an explicit
 successful commit to tick 3, the original tick-4 and tick-5 inputs form a
