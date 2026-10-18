@@ -6,6 +6,6 @@ mod graph;
 mod state;
 
 pub(crate) use evidence::*;
-pub(crate) use graph::*;
 pub(crate) use gpu_step::*;
+pub(crate) use graph::*;
 pub(crate) use state::*;

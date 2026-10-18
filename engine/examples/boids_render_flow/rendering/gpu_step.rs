@@ -1,12 +1,12 @@
 //! Immutable, source-tick-specific GPU inputs for all eight existing Boids compute stages.
 //! This is a producer-local projection, not a new scheduling or physical-admission authority.
 use crate::rendering::{BoidsComputeParams, BoidsRenderState};
-use runen_ecs::Resource;
 use anyhow::{Context, Result};
 use engine::plugins::render::{
     GpuParams, RenderFixedStepIterationUniform, RenderFlow, RenderFlowId, RenderGpuFixedStepInput,
     RenderPassId,
 };
+use runen_ecs::Resource;
 use runen_gpu::GpuWorkResourceId;
 use std::collections::BTreeMap;
 

@@ -110,9 +110,12 @@ fn advance_boids_simulation_system(mut world: WorldMut) -> Result<()> {
                                 }),
                             "Boids draw readback is missing visible non-background particle pixels"
                         );
-                        let affinity = current_affinity
-                            .context("Boids accepted result has no live current device-generation authority")?;
-                        let stream = streams.stream_mut(flow).context("Boids source disappeared")?;
+                        let affinity = current_affinity.context(
+                            "Boids accepted result has no live current device-generation authority",
+                        )?;
+                        let stream = streams
+                            .stream_mut(flow)
+                            .context("Boids source disappeared")?;
                         let previous_tick = stream.completed_tick();
                         let submission_id = accepted.id();
                         let verified_tick = stream.commit_verified(affinity, |submission, steps| {
@@ -141,7 +144,9 @@ fn advance_boids_simulation_system(mut world: WorldMut) -> Result<()> {
         .total_completed_steps
         .checked_sub(u64::from(fixed.steps_ran_last_frame))
         .context("Boids FixedTimeState completed fewer ticks than its current interval")?;
-    let stream = streams.stream_mut(flow).context("Boids source stream not registered")?;
+    let stream = streams
+        .stream_mut(flow)
+        .context("Boids source stream not registered")?;
     anyhow::ensure!(
         stream.requested_tick() == start,
         "Boids CPU fixed tick source skipped or duplicated work: source {}, host {start}",
