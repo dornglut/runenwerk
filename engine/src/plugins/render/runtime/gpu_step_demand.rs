@@ -863,7 +863,10 @@ mod accepted_capture_validation_tests {
             capture_point: selector.stable_point_fallback(),
         };
         assert_eq!(
-            validate_required_capture_identities(std::slice::from_ref(&selector), std::iter::empty()),
+            validate_required_capture_identities(
+                std::slice::from_ref(&selector),
+                std::iter::empty()
+            ),
             Err(RenderGpuAcceptedCaptureError::MissingRequiredReadback)
         );
         assert_eq!(
@@ -871,7 +874,10 @@ mod accepted_capture_validation_tests {
             Ok(())
         );
         assert_eq!(
-            validate_required_capture_identities(std::slice::from_ref(&selector), [&identity, &identity]),
+            validate_required_capture_identities(
+                std::slice::from_ref(&selector),
+                [&identity, &identity]
+            ),
             Err(RenderGpuAcceptedCaptureError::AmbiguousRequiredReadback)
         );
         let mut wrong = identity.clone();
