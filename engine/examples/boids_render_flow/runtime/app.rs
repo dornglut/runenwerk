@@ -62,16 +62,28 @@ impl BoidsVisualContinuityEvidence {
 #[derive(Debug, Default, runen_ecs::Resource)]
 struct BoidsVerifiedGpuGeneration {
     last_verified: Option<GpuContextAffinity>,
+    // Only installed for the opt-in native fault fixture. This represents a
+    // producer refusing further source work, not an injected physical GPU loss.
+    native_fault_at_verified_tick: Option<u64>,
 }
 
 impl BoidsVerifiedGpuGeneration {
-    fn validate(&self, current: GpuContextAffinity) -> Result<()> {
+    fn validate(&self, current: GpuContextAffinity, completed_tick: u64) -> Result<()> {
+        anyhow::ensure!(
+            !self.should_fail_source(completed_tick),
+            "Boids native injected source fault after verified GPU tick {completed_tick}; fail-stop before new GPU source work"
+        );
         anyhow::ensure!(
             self.last_verified
                 .is_none_or(|previous| previous == current),
             "Boids GPU device generation changed after verified steps: stop and perform a clean application restart to reseed tick zero; zeroed retained buffers do not reconstruct previous simulation contents"
         );
         Ok(())
+    }
+
+    fn should_fail_source(&self, completed_tick: u64) -> bool {
+        self.native_fault_at_verified_tick
+            .is_some_and(|threshold| completed_tick >= threshold)
     }
 
     fn note_verified(&mut self, generation: GpuContextAffinity) {
@@ -114,10 +126,26 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     app.insert_resource(source);
     app.insert_resource(streams);
     app.insert_resource(BoidsVisualContinuityEvidence::default());
-    app.insert_resource(BoidsVerifiedGpuGeneration::default());
+    let native_smoke = std::env::var("RUNENWERK_BOIDS_NATIVE_SMOKE").as_deref() == Ok("1");
+    let native_fault_at_verified_tick = if native_smoke {
+        std::env::var("RUNENWERK_BOIDS_NATIVE_SOURCE_FAULT_AFTER_TICK")
+            .ok()
+            .map(|value| value.parse::<u64>())
+            .transpose()
+            .context("invalid native Boids source-fault tick")?
+    } else {
+        None
+    };
+    if let Some(threshold) = native_fault_at_verified_tick {
+        anyhow::ensure!(threshold > 0, "native Boids source-fault threshold must be nonzero");
+    }
+    app.insert_resource(BoidsVerifiedGpuGeneration {
+        last_verified: None,
+        native_fault_at_verified_tick,
+    });
     app.add_systems(Update, advance_boids_simulation_system);
     app.add_render_flow(flow);
-    let smoke = if std::env::var("RUNENWERK_BOIDS_NATIVE_SMOKE").as_deref() == Ok("1") {
+    let smoke = if native_smoke {
         Some(super::smoke::install(&mut app, source_flow)?)
     } else {
         None
@@ -139,8 +167,12 @@ fn advance_boids_simulation_system(
     mut generation: ResMut<BoidsVerifiedGpuGeneration>,
 ) -> Result<()> {
     let current_affinity = gfx.gpu_context_affinity();
-    generation.validate(current_affinity)?;
     let flow = source.flow_id();
+    let completed_tick = streams
+        .stream(flow)
+        .context("Boids source stream not registered")?
+        .completed_tick();
+    generation.validate(current_affinity, completed_tick)?;
 
     // A completed physical G5 submission is never semantic completion by
     // itself. The producer checks its exact readback, captured steps and current
@@ -353,6 +385,18 @@ mod source_interval_tests {
             assert_eq!(quarantined.pending_len(), 1);
             assert_eq!(quarantined.completed_tick(), 6);
         }
+    }
+
+    #[test]
+    fn native_source_fault_threshold_is_strictly_after_verified_work() {
+        let guard = BoidsVerifiedGpuGeneration {
+            last_verified: None,
+            native_fault_at_verified_tick: Some(12),
+        };
+        assert!(!guard.should_fail_source(11));
+        assert!(guard.should_fail_source(12));
+        assert!(guard.should_fail_source(13));
+        assert!(!BoidsVerifiedGpuGeneration::default().should_fail_source(u64::MAX));
     }
 
     #[test]

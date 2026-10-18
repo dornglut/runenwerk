@@ -87,6 +87,14 @@ restore the previous simulation. Device-failure injection and live
 generation-reconstruction still require their own native evidence under
 [#1291](https://github.com/dornglut/runenwerk/issues/1291).
 
+The native CI also runs a **controlled source-owner failure fixture** after
+twelve verified GPU ticks in each mode. It expects the windowed application to
+return an error rather than accepting further source work, then launches a
+fresh process for the ordinary 120-frame success qualification. This proves
+fail-stop propagation and clean-start behavior across two distinct processes;
+it does **not** simulate a real device loss, partially executed shader write,
+or in-place recreation of a GPU context.
+
 Native hosted Mesa/Vulkan smoke is opt-in with `RUNENWERK_BOIDS_NATIVE_SMOKE=1`
 for both executable modes. It checks at least 120 **submitted Present
 opportunities**, correlated terminal G5 receipts, semantically verified GPU

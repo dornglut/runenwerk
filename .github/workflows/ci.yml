@@ -131,6 +131,35 @@ jobs:
                 --test native_host_smoke \
                 --locked
 
+      - name: Prove Boids producer fail-stop before fresh native source epoch
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+          RUNENWERK_BOIDS_NATIVE_SOURCE_FAULT_AFTER_TICK: '12'
+        run: |
+          set -euo pipefail
+          for mode in flocking species; do
+            log="$(mktemp)"
+            args=()
+            if [ "$mode" = species ]; then args=(--species); fi
+            if xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+                 cargo +stable run -p engine --example boids_render_flow --locked -- "${args[@]}" >"$log" 2>&1; then
+              cat "$log"
+              echo "Expected injected Boids source rejection, but the process exited successfully" >&2
+              rm -f "$log"
+              exit 1
+            fi
+            if ! grep -F "Boids native injected source fault after verified GPU tick" "$log"; then
+              cat "$log"
+              echo "Native Boids did not exit for the intended producer fault" >&2
+              rm -f "$log"
+              exit 1
+            fi
+            echo "native_boids_source_fail_stop=pass mode=$mode"
+            rm -f "$log"
+          done
+
       - name: Run real original and species Boids native GPU continuity proof
         env:
           RUST_BACKTRACE: '1'
