@@ -67,8 +67,9 @@ struct BoidsVerifiedGpuGeneration {
 impl BoidsVerifiedGpuGeneration {
     fn validate(&self, current: GpuContextAffinity) -> Result<()> {
         anyhow::ensure!(
-            self.last_verified.is_none_or(|previous| previous == current),
-            "Boids previously verified GPU contents belong to a different context/generation;              stop and clean-restart to reseed from source tick zero. Reusing previous              completed ticks against zeroed GPU buffers is prohibited"
+            self.last_verified
+                .is_none_or(|previous| previous == current),
+            "Boids GPU device generation changed after verified steps: stop and perform a clean application restart to reseed tick zero; zeroed retained buffers do not reconstruct previous simulation contents"
         );
         Ok(())
     }

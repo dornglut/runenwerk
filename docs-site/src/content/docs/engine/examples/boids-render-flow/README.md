@@ -66,17 +66,33 @@ Zero bytes are only safe descriptor coverage; they are **not** populated boids.
 
 The current producer verifies the exact G5 receipt, byte format/length,
 nonbackground draw result, and ordered tick lineage before advancing
-`completed_tick`. This proves bounded source-to-visual integration; a rendered
-image is **not** a full numerical oracle or complete checkpoint of all 384
-agents. Failed or wrong-generation accepted work never silently replays;
-production-quality restored full GPU content and explicit loss/reseed handling
-remain part of [#1291](https://github.com/dornglut/runenwerk/issues/1291).
+`completed_tick`. It retains a bounded producer-owned history (512 outstanding
+fixed steps) and rejects admission when that history is full rather than
+silently skipping input. This is **fail-stop**, not a scheduler that pauses or
+drops CPU fixed-time ticks: a long GPU stall currently terminates the example.
+
+A source-owned visual observer also fingerprints a deterministic sample of each
+verified GPU draw readback. The native qualification requires the fingerprint
+to change across multiple frames so a constant non-background image cannot
+pass for moving Boids. Neither this image change nor a completed G5 receipt
+proves the numerical contents of all retained agent/grid buffers. Full buffer
+checkpointing and verified contents restoration remain unqualified.
+
+Following a successfully verified batch, the source records its exact GPU
+context/device generation. A subsequent generation mismatch **fails closed
+before newer steps are admitted**. The bounded recovery policy is to stop and
+clean-restart the application, beginning a new simulation from tick zero; it
+does not replay prior accepted writes or pretend zero-initialized descriptors
+restore the previous simulation. Device-failure injection and live
+generation-reconstruction still require their own native evidence under
+[#1291](https://github.com/dornglut/runenwerk/issues/1291).
 
 Native hosted Mesa/Vulkan smoke is opt-in with `RUNENWERK_BOIDS_NATIVE_SMOKE=1`
 for both executable modes. It checks at least 120 **submitted Present
-opportunities**, terminal G5 frame receipts and semantically verified GPU steps,
-then closes its window. This is not a hardware display scanout timestamp or a
-substitute for the owner-native original/species acceptance checks.
+opportunities**, correlated terminal G5 receipts, semantically verified GPU
+steps, and changing GPU-rendered boid images, then closes its window. This is
+not hardware display scanout timing, a complete Boids-buffer proof, or a
+substitute for owner-native original/species acceptance.
 
 The draw pass uses a producer-owned `ProceduralCamera2d` with
 `FillViewport { fixed_axis: Vertical }`. Renderer procedural code derives the
