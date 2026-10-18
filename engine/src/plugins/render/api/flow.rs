@@ -1128,21 +1128,21 @@ mod tests {
             .expect("identical declaration may reuse retained storage");
         assert_eq!(first.diagnostic_identity(), same.diagnostic_identity());
 
+        let mut flow = flow;
         let error = flow
-            .storage_array::<TestCell>("cells", 8)
+            .register_storage_array::<TestCell>("cells".to_string(), 8)
             .expect_err("larger storage must not reuse a four-element descriptor");
         assert!(matches!(
             error,
             RenderFlowAuthoringError::ConflictingStorageDeclaration { label } if label == "cells"
         ));
         let error = flow
-            .storage_array::<OtherTestCell>("cells", 4)
+            .register_storage_array::<OtherTestCell>("cells".to_string(), 4)
             .expect_err("same-size different params type must not alias the existing storage");
         assert!(matches!(
             error,
             RenderFlowAuthoringError::ConflictingStorageDeclaration { label } if label == "cells"
         ));
-        let mut flow = flow;
         let error = flow
             .register_transient_storage_array::<TestCell>(
                 "cells".to_string(),
