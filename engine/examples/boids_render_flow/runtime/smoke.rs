@@ -10,8 +10,7 @@ use engine::plugins::render::renderer::RenderGpuFrameTerminalDisposition;
 use engine::plugins::render::{Gfx, RenderFlowId, RenderGpuFlowStepStreams};
 use engine::prelude::App;
 use engine::runtime::{
-    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId,
-    WindowStateRegistryResource,
+    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, WindowStateRegistryResource,
 };
 use runen_ecs::World;
 use std::sync::{Arc, Mutex};
@@ -52,7 +51,9 @@ pub(crate) fn install(app: &mut App, flow: RenderFlowId) -> Result<SharedStatus>
 }
 
 pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
-    let status = status.lock().map_err(|_| anyhow::anyhow!("Boids native smoke status poisoned"))?;
+    let status = status
+        .lock()
+        .map_err(|_| anyhow::anyhow!("Boids native smoke status poisoned"))?;
     anyhow::ensure!(
         status.succeeded && status.error.is_none(),
         "Boids native smoke failed or stopped early (frames={}, present-submitted={}, terminal={}, verified={}): {}",
@@ -60,11 +61,16 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         status.presented_opportunities,
         status.terminal_gpu_frames,
         status.verified_ticks,
-        status.error.as_deref().unwrap_or("native window stopped before evidence completed")
+        status
+            .error
+            .as_deref()
+            .unwrap_or("native window stopped before evidence completed")
     );
     println!(
         "native_boids_gpu_smoke=pass frames={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={}",
-        status.frames, status.presented_opportunities, status.terminal_gpu_frames,
+        status.frames,
+        status.presented_opportunities,
+        status.terminal_gpu_frames,
         status.verified_ticks
     );
     Ok(())
@@ -84,7 +90,9 @@ impl NativeWindowHook for NativeBoidsSmoke {
 
     fn frame(&mut self, _window: &Window, world: &mut World) -> Result<()> {
         let result = self.observe(world);
-        let mut status = self.status.lock()
+        let mut status = self
+            .status
+            .lock()
             .map_err(|_| anyhow::anyhow!("Boids native smoke status poisoned"))?;
         if let Err(error) = result {
             status.error = Some(format!("{error:#}"));
@@ -106,14 +114,16 @@ impl NativeWindowHook for NativeBoidsSmoke {
 
 impl NativeBoidsSmoke {
     fn observe(&mut self, world: &mut World) -> Result<()> {
-        let presented = world.resource::<RenderFrameHistoryState>()?
+        let presented = world
+            .resource::<RenderFrameHistoryState>()?
             .observations()
             .filter(|observation| {
                 observation.key.render_surface_id == RenderSurfaceId::primary().raw()
                     && observation.presentation.present_operation_submitted
             })
             .count();
-        let verified = world.resource::<RenderGpuFlowStepStreams>()?
+        let verified = world
+            .resource::<RenderGpuFlowStepStreams>()?
             .stream(self.flow)
             .context("Boids GPU source stream missing while rendering")?
             .completed_tick();
@@ -129,7 +139,11 @@ impl NativeBoidsSmoke {
                 "native Boids GPU terminal evidence disabled or overflowed"
             );
             for outcome in batch.outcomes() {
-                if !outcome.invocations().iter().any(|invocation| invocation.flow_id() == self.flow) {
+                if !outcome
+                    .invocations()
+                    .iter()
+                    .any(|invocation| invocation.flow_id() == self.flow)
+                {
                     continue;
                 }
                 match outcome.disposition() {
@@ -138,7 +152,9 @@ impl NativeBoidsSmoke {
                 }
             }
         }
-        let mut state = self.status.lock()
+        let mut state = self
+            .status
+            .lock()
             .map_err(|_| anyhow::anyhow!("Boids native smoke status poisoned"))?;
         state.frames += 1;
         state.presented_opportunities = presented;
@@ -153,8 +169,10 @@ impl NativeBoidsSmoke {
             anyhow::ensure!(
                 state.frames < MAX_WINDOW_OPPORTUNITIES && self.started.elapsed() < MAX_DURATION,
                 "native Boids missed 120 accepted Present opportunities or source-verified G5 progress                  (opportunities={}, completed GPU frames={}, verified ticks={}, elapsed={:?})",
-                state.presented_opportunities, state.terminal_gpu_frames,
-                state.verified_ticks, self.started.elapsed()
+                state.presented_opportunities,
+                state.terminal_gpu_frames,
+                state.verified_ticks,
+                self.started.elapsed()
             );
         }
         Ok(())
