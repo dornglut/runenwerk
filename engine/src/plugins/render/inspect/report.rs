@@ -282,6 +282,23 @@ mod tests {
     }
 
     #[test]
+    fn report_invariants_reject_foreign_unmatched_result() {
+        let selector = RenderCaptureSelector::named_pass_surface_color("flow", "pass");
+        let report = RenderDebugFrameReport {
+            frame_index: 9,
+            surface_id: 1,
+            capture_results: vec![selector_result(0, selector, 9, 2)],
+            ..RenderDebugFrameReport::default()
+        };
+        assert!(
+            report
+                .validate_invariants()
+                .iter()
+                .any(|message| message.contains("not report (9, 1)"))
+        );
+    }
+
+    #[test]
     fn same_frame_two_surfaces_retain_separate_reports_and_refuse_ambiguous_lookup() {
         let selector = RenderCaptureSelector {
             flow_id: Some("flow".to_string()),

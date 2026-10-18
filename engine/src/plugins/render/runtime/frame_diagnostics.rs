@@ -1173,6 +1173,31 @@ mod tests {
     }
 
     #[test]
+    fn unmatched_result_cannot_be_attributed_to_a_foreign_surface() {
+        let selector = selector("pass.unmatched.source");
+        let mut source = snapshot(70, unmatched_plan(70, selector.clone()), vec![], vec![]);
+        source.surface_id = 2;
+        let mut transaction = super::RenderFrameDiagnosticsTransaction::new(source);
+
+        let foreign = unmatched_result(70, selector.clone());
+        transaction.observe_capture_result(foreign);
+        assert!(transaction.capture_results.is_empty());
+
+        let mut exact_source = unmatched_result(70, selector);
+        exact_source.source_surface_id = 2;
+        transaction.observe_capture_result(exact_source.clone());
+        assert_eq!(transaction.capture_results.get(&0), Some(&exact_source));
+
+        let mut wrong_readback = exact_source;
+        wrong_readback.frame_identity = Some(identity(
+            70,
+            &wrong_readback.selector,
+        ));
+        transaction.observe_capture_result(wrong_readback);
+        assert_eq!(transaction.capture_results.len(), 1);
+    }
+
+    #[test]
     fn unmatched_original_selector_is_immediate_and_never_waits_for_future_frame() {
         let selector = selector("pass.unmatched");
         let mut state = RenderFrameDiagnosticsTransactionState::default();
