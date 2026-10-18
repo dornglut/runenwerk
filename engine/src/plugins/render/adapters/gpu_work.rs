@@ -614,10 +614,10 @@ fn prepare_resolved_render_gpu_work(
         )?;
         let fragments =
             compose_frame_fragments(producer_fragments, &authored.fragment, timing_bracket);
-        let _provisional_span =
+        let provisional_span =
             tracing::trace_span!(target: "runenwerk_profile", "render.g3.provisional").entered();
         let provisional_graph = prepare_graph(graph_label.clone(), fragments, Vec::new())?;
-        drop(_provisional_span);
+        drop(provisional_span);
         // One logical UiComposite may lower to multiple GPU nodes. Incoming
         // pass/capture controls MUST precede its first work node; outgoing
         // controls MUST follow its last work node. Using one occurrence as both
@@ -712,10 +712,10 @@ fn prepare_resolved_render_gpu_work(
     )?;
     let provisional_fragments =
         compose_frame_fragments(producer_fragments, &provisional.fragment, timing_bracket);
-    let _provisional_span =
+    let provisional_span =
         tracing::trace_span!(target: "runenwerk_profile", "render.g3.provisional").entered();
     let provisional_graph = prepare_graph(graph_label.clone(), provisional_fragments, Vec::new())?;
-    drop(_provisional_span);
+    drop(provisional_span);
     let provisional_occurrences =
         map_prepared_occurrences(&provisional_graph, &provisional.occurrence_nodes)?;
     let required_explicit_orders = normalize_control_orders(
@@ -765,14 +765,14 @@ fn prepare_resolved_render_gpu_work(
     )?;
     let present_node =
         present_occurrence.and_then(|id| final_fragment.occurrence_nodes.get(&id).cloned());
-    let _boundary_span =
+    let boundary_span =
         tracing::trace_span!(target: "runenwerk_profile", "render.g3.final").entered();
     let boundary_graph = prepare_graph(
         graph_label.clone(),
         compose_frame_fragments(producer_fragments, &final_fragment.fragment, timing_bracket),
         Vec::new(),
     )?;
-    drop(_boundary_span);
+    drop(boundary_span);
     let Some(bracket) = timing_bracket else {
         return Ok(PreparedRenderGpuWorkFrame {
             graph: boundary_graph,
