@@ -256,12 +256,16 @@ mod contribution_deferral_tests {
 
     #[test]
     fn unmatched_selector_results_never_change_their_originating_surface() {
-        let selector = crate::plugins::render::inspect::RenderCaptureSelector::named_pass_surface_color(
-            "source.flow",
-            "source.pass",
-        );
+        let selector =
+            crate::plugins::render::inspect::RenderCaptureSelector::named_pass_surface_color(
+                "source.flow",
+                "source.pass",
+            );
         let primary = crate::plugins::render::inspect::RenderCaptureSelectorResult::for_unmatched(
-            0, selector.clone(), 22, 1,
+            0,
+            selector.clone(),
+            22,
+            1,
         );
         let secondary = crate::plugins::render::inspect::RenderCaptureSelectorResult::for_unmatched(
             0, selector, 22, 2,
@@ -1223,9 +1227,8 @@ fn partition_source_capture_results(
     Vec<crate::plugins::render::inspect::RenderCaptureSelectorResult>,
 ) {
     results.into_iter().partition(|result| {
-        current_source.is_some_and(|source| {
-            (result.source_frame_index, result.source_surface_id) == source
-        })
+        current_source
+            .is_some_and(|source| (result.source_frame_index, result.source_surface_id) == source)
     })
 }
 

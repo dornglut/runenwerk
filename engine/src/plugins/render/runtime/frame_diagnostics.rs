@@ -135,10 +135,8 @@ impl RenderFrameDiagnosticsTransactionState {
         }
 
         for result in results {
-            let key = RenderFrameDiagnosticsKey::new(
-                result.source_frame_index,
-                result.source_surface_id,
-            );
+            let key =
+                RenderFrameDiagnosticsKey::new(result.source_frame_index, result.source_surface_id);
             if let Some(transaction) = self.pending.get_mut(&key) {
                 transaction.observe_capture_result(result);
             }
