@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-05-25
+last_reviewed: 2026-10-15
 publication: primary
 ---
 
@@ -17,7 +17,9 @@ procedural population authoring APIs.
 What it demonstrates:
 
 - ECS simulation state (`BoidsRenderState`) projected into flow uniforms.
-- ping-pong storage simulation (`boids.instances`) on a compute pass.
+- ping-pong storage simulation (`boids.instances`) on a compute pass;
+  both retained buffers and all count/scan/scatter scratch arrays opt into
+  descriptor-guaranteed zero initialization for strict GPU read/write admission.
 - procedural-owned draw authoring through `RenderFlow::procedural_pass_builder(...)`.
 - bounded uniform-grid neighbor lookup instead of a production O(n^2) all-boids loop.
 - reusable procedural camera projection through `ProceduralCamera2d`,
@@ -48,18 +50,33 @@ scatter cursors, and sorted indices are explicit flow resources; dense cells
 must not silently overflow or drop neighbors. Spatial hash and chunked
 unbounded populations are intentionally out of scope for this example.
 
-The simulation region is declared as `boids.fixed_step` and derives submitted
-substeps from runtime fixed-time resources. The frame delta is kept as evidence
-input, not a hidden example-local scheduler. For an active flow invocation, preparation rejects a fixed-step
-interval that cannot represent all completed CPU ticks within the current
-catch-up budget and authored region capacity. An unrequested explicit-only flow
-does not run simulation work and does not block independent rendering merely
-because its preliminary fixed-step metadata is bounded.
+The simulation region is declared as `boids.fixed_step`. `BoidsGpuStepSchema`
+captures immutable source-time uniforms and dispatch sizes for all eight compute
+passes using exact IDs from the authored `RenderFlow`. The ECS fixed-time
+counter describes **requested** source steps, never proof that GPU state has
+advanced. The Engine admits an ordered, bounded prefix to RunenGPU G5 and
+retains accepted source steps until its exact completed submission and required
+producer-owned texture readback pass verification.
 
-This safeguard does not provide cross-frame GPU replay: a deferred GPU submission
-still needs producer-owned historical step inputs and a recovery policy. Those
-production guarantees and native 120+ frame original/species qualification remain
-open under [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291).
+On the first accepted source step, the shader seeds the retained boid population;
+later source steps advance their own captured ticks, not a reconstructed host
+frame delta. Both retained boid buffers and grid scratch resources use explicit
+GPU descriptor `Zeroed` initialization for strict read-before-write admission.
+Zero bytes are only safe descriptor coverage; they are **not** populated boids.
+
+The current producer verifies the exact G5 receipt, byte format/length,
+nonbackground draw result, and ordered tick lineage before advancing
+`completed_tick`. This proves bounded source-to-visual integration; a rendered
+image is **not** a full numerical oracle or complete checkpoint of all 384
+agents. Failed or wrong-generation accepted work never silently replays;
+production-quality restored full GPU content and explicit loss/reseed handling
+remain part of [#1291](https://github.com/dornglut/runenwerk/issues/1291).
+
+Native hosted Mesa/Vulkan smoke is opt-in with `RUNENWERK_BOIDS_NATIVE_SMOKE=1`
+for both executable modes. It checks at least 120 **submitted Present
+opportunities**, terminal G5 frame receipts and semantically verified GPU steps,
+then closes its window. This is not a hardware display scanout timestamp or a
+substitute for the owner-native original/species acceptance checks.
 
 The draw pass uses a producer-owned `ProceduralCamera2d` with
 `FillViewport { fixed_axis: Vertical }`. Renderer procedural code derives the
@@ -68,11 +85,29 @@ not own camera truth. The boids shader projects world positions through
 `ProceduralCamera2dUniform`, so landscape, portrait, square, and extreme aspect
 surfaces keep equal projected world x/y scale.
 
-Run:
+Run the original flocking law:
 
 ```bash
 cargo run -p engine --example boids_render_flow
 ```
+
+Run the **alternative three-species local-rule experiment** through the same
+Runenwerk App, ECS state, RenderFlow, fixed-step, GPU grid and instanced
+impostor renderer:
+
+```bash
+cargo run -p engine --example boids_render_flow -- --species
+```
+
+The three example-local species use deterministic instance-index identities.
+Their asymmetric attraction/repulsion law and short-range exclusion produce
+different interactions from the default alignment/cohesion/separation model.
+The color indicates species; the geometric impostor is **not** a world-solid
+or the authority for any simulation state. Both laws remain shader-defined,
+not general-purpose authored rule programs. There is no validated CPU oracle,
+adaptive split/merge, persistent world truth, SDF interaction, or guaranteed
+numerical determinism across backends. The goal is a bounded, visual
+**Runenwerk-native feasibility comparison**, not architectural adoption.
 
 Evidence:
 
