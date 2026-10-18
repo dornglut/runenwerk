@@ -499,13 +499,11 @@ mod contribution_deferral_tests {
         current_secondary.context.flow_registry_revision = 8;
         let current_registry_revision = 8;
         assert_ne!(
-            stale_primary.context.flow_registry_revision,
-            current_registry_revision,
+            stale_primary.context.flow_registry_revision, current_registry_revision,
             "primary preparation must really be stale"
         );
         assert_eq!(
-            current_secondary.context.flow_registry_revision,
-            current_registry_revision,
+            current_secondary.context.flow_registry_revision, current_registry_revision,
             "secondary preparation must independently remain admissible"
         );
 
@@ -525,7 +523,9 @@ mod contribution_deferral_tests {
         assert_eq!(deferred[0].producer_id, contributions[0].producer_id);
         assert_eq!(deferred[0].output, contributions[0].output);
         assert!(
-            deferred[0].request.contains_output(&contributions[0].output),
+            deferred[0]
+                .request
+                .contains_output(&contributions[0].output),
             "stale primary retained exact unsubmitted semantic output"
         );
     }
