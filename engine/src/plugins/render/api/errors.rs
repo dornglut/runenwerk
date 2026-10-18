@@ -35,6 +35,11 @@ pub enum RenderFlowAuthoringError {
     ConflictingStorageDeclaration { label: String },
 
     #[error(
+        "declare GPU uniform '{label}': an existing resource has a different kind or parameter type"
+    )]
+    ConflictingUniformDeclaration { label: String },
+
+    #[error(
         "validate render buffer layout for resource '{resource_id:?}': expected {expected}, found {actual}; retain the declaration-matching GPU buffer handle"
     )]
     BufferLayoutMismatch {

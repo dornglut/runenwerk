@@ -629,6 +629,22 @@ impl RenderFlow {
         U: GpuParams + 'static,
     {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
+            let matches_type = self
+                .graph
+                .resources
+                .resources
+                .iter()
+                .find(|resource| *resource.id() == id)
+                .is_some_and(|resource| {
+                    matches!(
+                        resource,
+                        RenderResourceDeclaration::Uniform(existing)
+                            if existing.params_type_id() == core::any::TypeId::of::<U>()
+                    )
+                });
+            if !matches_type {
+                return Err(RenderFlowAuthoringError::ConflictingUniformDeclaration { label });
+            }
             return Ok(id);
         }
 
@@ -1103,6 +1119,40 @@ mod tests {
                 if *resource_id == foreign_id
         )));
         drop(first_flow);
+    }
+
+    #[test]
+    fn uniform_redeclaration_rejects_mismatched_parameter_type_and_resource_kind() {
+        let (flow, first) = RenderFlow::new("uniform.reuse")
+            .uniform_buffer::<TestParams>("shared.uniform")
+            .expect("first uniform declaration");
+        let (flow, reused) = flow
+            .uniform_buffer::<TestParams>("shared.uniform")
+            .expect("identical uniform declaration may reuse its resource");
+        assert_eq!(first.diagnostic_identity(), reused.diagnostic_identity());
+        assert!(matches!(
+            flow.uniform_buffer::<OtherTestParams>("shared.uniform"),
+            Err(RenderFlowAuthoringError::ConflictingUniformDeclaration { label })
+                if label == "shared.uniform"
+        ));
+
+        let (flow, _) = RenderFlow::new("uniform.storage_collision")
+            .storage_array::<TestCell>("shared.uniform", 4)
+            .expect("storage declaration");
+        assert!(matches!(
+            flow.uniform_buffer::<TestParams>("shared.uniform"),
+            Err(RenderFlowAuthoringError::ConflictingUniformDeclaration { label })
+                if label == "shared.uniform"
+        ));
+
+        let flow = RenderFlow::new("uniform.texture_collision")
+            .with_color_target("shared.uniform")
+            .expect("color target declaration");
+        assert!(matches!(
+            flow.uniform_buffer::<TestParams>("shared.uniform"),
+            Err(RenderFlowAuthoringError::ConflictingUniformDeclaration { label })
+                if label == "shared.uniform"
+        ));
     }
 
     #[test]
