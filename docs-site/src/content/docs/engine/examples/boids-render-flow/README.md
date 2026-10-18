@@ -216,9 +216,11 @@ not equivalent to native-window closure. The native smoke also has a separate
 bounded `Present` completion policy, so manually closing the smoke before
 its requested frame target is not a successful qualification.
 
-The native report's existing `cpu_flow_encode_ms_avg` encompasses
-`cpu_encode_submit_ms_avg` and **must not be added to it**. New,
-nonoverlapping nested GPU graph-stage measurements distinguish
+Earlier revisions mistakenly measured `cpu_flow_encode_ms_avg` around
+`cpu_encode_submit_ms_avg`, then added both in the renderer CPU total.
+The fixed timer boundaries now make these top-level values **disjoint**,
+so the reported renderer CPU total does not double-count the encode/submit
+span. New, nonoverlapping nested GPU graph-stage measurements distinguish
 `gpu_graph_build_ms_avg`, `gpu_prepare_submission_ms_avg` (including the
 awaited RunenGPU preparation), and `gpu_submit_prepared_ms_avg`. The
 difference between `cpu_encode_submit_ms_avg` and those three values

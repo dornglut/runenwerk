@@ -269,6 +269,10 @@ impl Renderer {
             _ => None,
         };
 
+        // Stop before G5 graph formation. Previous revisions included the
+        // subsequent encode/submit span in this timer and then added both,
+        // exaggerating CPU frame costs.
+        timings.flow_encode_ms = flow_encode_start.elapsed().as_secs_f32() * 1000.0;
         let encode_submit_start = Instant::now();
         let _span = tracing::info_span!("renderer.prepare_submit").entered();
         let graph_label = GpuResourceLabel::new(format!(
@@ -561,7 +565,6 @@ impl Renderer {
             }
         }
 
-        timings.flow_encode_ms = flow_encode_start.elapsed().as_secs_f32() * 1000.0;
         timings.encode_submit_ms = encode_submit_start.elapsed().as_secs_f32() * 1000.0;
         batch.capture_runtime.finalize_unresolved();
         let (capture_plan, capture_selector_results) =

@@ -443,8 +443,10 @@ pub struct RendererFrameTimings {
     pub prepare_mesh_ms: f32,
     pub world_prepare_ms: f32,
     pub preflight_ms: f32,
+    /// GPU flow realization up to canonical graph formation; excludes encode_submit_ms.
     pub flow_encode_ms: f32,
-    /// Nested inside flow_encode_ms (not an additive CPU stage).
+    /// Canonical GPU graph formation, RunenGPU preparation/submission and
+    /// accepted-frame bookkeeping, disjoint from flow_encode_ms.
     pub encode_submit_ms: f32,
     /// Formation of the canonical RunenGPU graph inside encode_submit_ms.
     pub gpu_graph_build_ms: f32,
