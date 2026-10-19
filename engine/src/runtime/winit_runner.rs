@@ -4170,7 +4170,7 @@ mod tests {
             type HostProtocol = runenui_core::NoHostProtocol;
 
             fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
-                runenui_core::text("unfocused input owner")
+                runenui_core::button("revision focus probe").on_activate(|| ())
             }
 
             fn update(
@@ -4316,15 +4316,42 @@ mod tests {
             "witness reconciles to the actual framework revision"
         );
 
-        // A second unseen semantic revision must be reconciled BEFORE a
-        // different, genuinely new Down enters the physical reducer. The
-        // prior W lifetime is denied, but fresh A remains eligible for its
-        // separate M13 admission/finality decision (not modeled by this test).
-        runner
-            .native_ui_keyboards
-            .get_mut(&primary)
-            .unwrap()
-            .last_observed_revision = Some(u64::MAX);
+        // A real RunenUI semantic focus mutation now advances M13 ownership
+        // after the native translator's last witness. The already-mounted
+        // button is not a text/composition/modal blocker: focus by itself
+        // must NOT grant or withdraw an independently settled game key.
+        // The test-only selected permit models the framework mutation without
+        // an Engine World transaction so the native next-callback gap is real.
+        let focused = {
+            let slots = runner
+                .state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .unwrap();
+            crate::plugins::ui::native_transaction::test_selected_slot_operation(
+                slots,
+                slot,
+                |slots| {
+                    slots.test_request_first_typed_focus::<RevisionProbe>(slot)?;
+                    slots.settle_slot(slot)
+                },
+            )
+            .expect("actual RunenUI semantic focus action settles");
+            slots.input_ownership(slot).expect("fresh framework M13 focus")
+        };
+        assert_ne!(
+            focused.revision(),
+            current.revision(),
+            "real semantic focus, not a manufactured revision number, creates the gap"
+        );
+        assert!(
+            focused.keyboard().focused_node().is_some()
+                && !native_ui_blocks_preframe_keyboard_gameplay(&focused),
+            "non-text native focus alone does not claim every game key"
+        );
+
+        // The new authentic KeyA is admitted against the already-reconciled
+        // previous M13 revision, not swept up in its old source denial.
         runner
             .admit_native_ui_keyboard_for_recipient(
                 primary,
@@ -4341,9 +4368,54 @@ mod tests {
                 },
             )
             .unwrap();
+        // Settle the independent new KeyA against the pinned framework's
+        // actual ordered M13 keyboard record. This doesn't invent a second
+        // input owner or claim a physical Winit KeyEvent on the CI worker.
+        let device = WinitRunner::native_ui_device(first).unwrap();
+        let (submission, batch, status) = {
+            let slots = runner
+                .state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .unwrap();
+            let before = slots.input_ownership(slot).unwrap();
+            assert_eq!(before.revision(), focused.revision());
+            let submission = slots
+                .submit_native_keyboard(
+                    slot,
+                    runenui_core::KeyboardEvent::new(
+                        runenui_core::KeyboardPhase::Down,
+                        runenui_core::PhysicalKey::Code("KeyA".into()),
+                        runenui_core::LogicalKey::Character("a".into()),
+                        KeyModifiers::NONE,
+                        false,
+                        runenui_core::KeyLocation::Standard,
+                        native_keyboard_composition(&before),
+                        Some(device),
+                    ),
+                )
+                .expect("real M13 keyboard admission for new KeyA");
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .expect("real M13 keyboard settlement");
+            (submission, batch, status)
+        };
+        let settlement =
+            native_keyboard_finality(focused.scope(), device, submission, &batch, &status);
+        assert!(
+            matches!(
+                settlement,
+                Ok(UiInputFinality::Committed(ref facts))
+                    if matches!(
+                        facts.conflict(),
+                        UiInputConflict::Unclaimed | UiInputConflict::ObservedNonexclusive
+                    )
+            ),
+            "fresh physical A must have independently nonexclusive M13 finality: {settlement:?}"
+        );
         // Executable counterexample for the superseded order: invoking
         // source-wide revocation AFTER the fresh physical admission erases
-        // KeyA too, even though its own M13 observation is nonexclusive.
+        // KeyA despite independently committed nonexclusive M13 finality.
         let mut old_order = ActionState::new();
         let physical = runner.state.world.resource::<InputState>().unwrap();
         old_order.project(physical);
@@ -4374,7 +4446,7 @@ mod tests {
                 .get(&primary)
                 .unwrap()
                 .last_observed_revision,
-            Some(current.revision().get()),
+            Some(focused.revision().get()),
             "the actual ownership snapshot remains the only revision witness"
         );
 
