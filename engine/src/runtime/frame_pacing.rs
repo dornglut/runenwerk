@@ -6,7 +6,9 @@ const MAX_ANIMATION_FPS: u32 = 240;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FramePacingMode {
-    ContinuousCapped { target_fps: u32 },
+    ContinuousCapped {
+        target_fps: u32,
+    },
     /// Schedule another host turn continuously without a synthetic FPS deadline.
     /// Real surface presentation/backpressure remain independently configured.
     ContinuousUncapped,
@@ -268,7 +270,10 @@ mod tests {
         let mut schedule = FramePacingSchedule::default();
         let capped = FramePacingPolicyResource::continuous_capped(60);
         let interval = capped.target_frame_interval().unwrap();
-        assert_eq!(schedule.decide(capped, start).next_deadline, Some(start + interval));
+        assert_eq!(
+            schedule.decide(capped, start).next_deadline,
+            Some(start + interval)
+        );
 
         let uncapped = FramePacingPolicyResource::continuous_uncapped();
         for time in [start, start + Duration::from_nanos(1)] {

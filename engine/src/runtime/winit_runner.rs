@@ -1459,7 +1459,10 @@ mod tests {
         let policy = runner.frame_pacing_policy();
         let next = runner.frame_pacing_schedule.decide(policy, start);
         assert!(next.request_redraw);
-        assert!(next.next_deadline.is_none(), "uncapped Host never creates a timer deadline");
+        assert!(
+            next.next_deadline.is_none(),
+            "uncapped Host never creates a timer deadline"
+        );
     }
 
     #[test]

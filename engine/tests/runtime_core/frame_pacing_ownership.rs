@@ -69,7 +69,11 @@ fn uncapped_native_host_policy_is_explicit_without_headless_state() {
             .mode,
         FramePacingMode::ContinuousUncapped
     );
-    assert!(app.world().resource::<FramePacingRuntimeStateResource>().is_err());
+    assert!(
+        app.world()
+            .resource::<FramePacingRuntimeStateResource>()
+            .is_err()
+    );
 }
 
 #[test]
