@@ -140,6 +140,7 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
             .sum::<f64>()
             / status.cpu_renderer_samples_ms.len() as f64
     };
+    let gates = status.frame_gate_observation.unwrap_or_default();
     println!(
         "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} gpu_graph_build_ms_avg={:.2} gpu_prepare_submission_ms_avg={:.2} gpu_submit_prepared_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={} gate_decisions={} gate_deferred={} gate_deterministic={} gate_step_stream={} gate_pending_flow={}",
         status.frames,
@@ -161,11 +162,11 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         status.cpu_renderer_samples_ms.len(),
         status.peak_outstanding_steps,
         status.peak_uncaptured_cpu_ticks,
-        status.frame_gate_observation.unwrap_or_default().decisions,
-        status.frame_gate_observation.unwrap_or_default().deferred,
-        status.frame_gate_observation.unwrap_or_default().deterministic_in_flight,
-        status.frame_gate_observation.unwrap_or_default().step_stream_backpressure,
-        status.frame_gate_observation.unwrap_or_default().registered_flow_in_flight,
+        gates.decisions,
+        gates.deferred,
+        gates.deterministic_in_flight,
+        gates.step_stream_backpressure,
+        gates.registered_flow_in_flight,
     );
     Ok(())
 }
@@ -239,10 +240,11 @@ impl NativeBoidsSmoke {
         let mut terminal = 0;
         let mut frame_gate_observation = None;
         if let Ok(gfx) = world.resource_mut::<Gfx>() {
-            if gfx.frame_gate_observation(RenderSurfaceId::primary()).is_none() {
+            let primary_surface = RenderSurfaceId::primary();
+            if gfx.frame_gate_observation(primary_surface).is_none() {
                 gfx.set_frame_gate_observation_enabled(true);
             }
-            frame_gate_observation = gfx.frame_gate_observation(RenderSurfaceId::primary());
+            frame_gate_observation = gfx.frame_gate_observation(primary_surface);
             if !self.terminal_delivery_enabled {
                 gfx.set_gpu_frame_terminal_delivery(true);
                 self.terminal_delivery_enabled = true;

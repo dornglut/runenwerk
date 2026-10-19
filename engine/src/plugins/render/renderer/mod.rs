@@ -1004,9 +1004,12 @@ impl Gfx {
         &self,
         surface: crate::plugins::render::host::RenderSurfaceId,
     ) -> Option<GfxFrameGateCounters> {
-        self.frame_gate_observations
-            .as_ref()
-            .map(|observations| observations.get(&surface.raw()).copied().unwrap_or_default())
+        self.frame_gate_observations.as_ref().map(|observations| {
+            observations
+                .get(&surface.raw())
+                .copied()
+                .unwrap_or_default()
+        })
     }
 
     pub fn attach_surface(
