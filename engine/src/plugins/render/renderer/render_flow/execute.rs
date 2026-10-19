@@ -2174,24 +2174,30 @@ mod tests {
         let mut cache = BTreeMap::<u32, Option<std::sync::Arc<String>>>::new();
         let mut calls = 0;
         for _ in 0..4 {
-            assert!(realize_pass_once_per_invocation(&mut cache, 1, || {
-                calls += 1;
-                Ok(None::<String>)
-            })
-            .expect("no-pipeline pass succeeds")
-            .is_none());
+            assert!(
+                realize_pass_once_per_invocation(&mut cache, 1, || {
+                    calls += 1;
+                    Ok(None::<String>)
+                })
+                .expect("no-pipeline pass succeeds")
+                .is_none()
+            );
         }
         assert_eq!(calls, 1);
 
-        assert!(realize_pass_once_per_invocation(&mut cache, 2, || {
-            anyhow::bail!("realization refused")
-        })
-        .is_err());
-        assert!(!cache.contains_key(&2), "errors must not become valid cache entries");
-        let recovered = realize_pass_once_per_invocation(&mut cache, 2, || {
-            Ok(Some(String::from("recovered")))
-        })
-        .expect("a later attempt succeeds");
+        assert!(
+            realize_pass_once_per_invocation(&mut cache, 2, || {
+                anyhow::bail!("realization refused")
+            })
+            .is_err()
+        );
+        assert!(
+            !cache.contains_key(&2),
+            "errors must not become valid cache entries"
+        );
+        let recovered =
+            realize_pass_once_per_invocation(&mut cache, 2, || Ok(Some(String::from("recovered"))))
+                .expect("a later attempt succeeds");
         assert_eq!(recovered.as_deref().map(String::as_str), Some("recovered"));
     }
 
