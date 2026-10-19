@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::process::Command;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use engine::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
@@ -33,6 +33,7 @@ use winit::window::Window;
 const NO_RENDER_ENV: &str = "RUNENWERK_NATIVE_NO_RENDER_SMOKE";
 const RENDER_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_HOST_SMOKE";
 const RENDER_UI_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_UI_HOST_SMOKE";
+const UNCAP_HOST_ENV: &str = "RUNENWERK_NATIVE_UNCAPPED_HOST_SMOKE";
 
 const COUNTER_FONT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -106,12 +107,22 @@ fn native_counter_fonts() -> UiRuntimeFontConfiguration {
 fn main() {
     if let Ok(mode) = std::env::var("RUNENWERK_NATIVE_UI_READINESS_SMOKE") {
         assert!(
-            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV]
+            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV, UNCAP_HOST_ENV]
                 .iter()
                 .all(|flag| std::env::var_os(flag).is_none()),
             "native Host smoke modes are mutually exclusive"
         );
         native_readiness::run(&mode).expect("native UI readiness smoke must succeed");
+        return;
+    }
+    if std::env::var_os(UNCAP_HOST_ENV).is_some() {
+        assert!(
+            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV]
+                .iter()
+                .all(|flag| std::env::var_os(flag).is_none()),
+            "native Host smoke modes are mutually exclusive"
+        );
+        native_uncapped_host_smoke().expect("native uncapped Host smoke should succeed");
         return;
     }
     match (
@@ -939,6 +950,104 @@ fn verify_secondary_render_attachment(
         world.resource::<Gfx>()?.has_surface(render_surface_id),
         "selected Render Gfx must own the secondary surface"
     );
+    Ok(())
+}
+
+
+#[derive(runen_ecs::Resource)]
+struct UncappedHostUpdateProbe {
+    updates: Arc<AtomicUsize>,
+    watchdog_expired: Arc<AtomicBool>,
+}
+
+fn observe_uncapped_host_update(probe: Res<UncappedHostUpdateProbe>) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !probe.watchdog_expired.load(Ordering::SeqCst),
+        "uncapped native Host failed to deliver eight automatic frames before the watchdog"
+    );
+    probe.updates.fetch_add(1, Ordering::SeqCst);
+    Ok(())
+}
+
+/// A real event-loop conformance probe, not an FPS benchmark. The hook NEVER
+/// requests redraw; the native Host policy must produce every next frame.
+struct NativeUncappedHostSmokeHook {
+    frames: Arc<AtomicUsize>,
+    watchdog_expired: Arc<AtomicBool>,
+    watchdog_armed: bool,
+}
+
+impl NativeWindowHook for NativeUncappedHostSmokeHook {
+    fn name(&self) -> &'static str {
+        "native_uncapped_host_smoke"
+    }
+
+    fn attach(&mut self, _window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+        if !self.watchdog_armed {
+            self.watchdog_armed = true;
+            let transport = world.resource::<engine::runtime::NativeWakeTransport>()?.clone();
+            let expired = Arc::clone(&self.watchdog_expired);
+            // If an uncapped Wait loop strands redraw, wake exactly once to
+            // deliver a bounded error instead of waiting for the CI job timeout.
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(5));
+                expired.store(true, Ordering::SeqCst);
+                let _ = transport.notify();
+            });
+        }
+        Ok(())
+    }
+
+    fn frame(&mut self, _window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+        let count = self.frames.fetch_add(1, Ordering::SeqCst) + 1;
+        if count >= 8 {
+            world
+                .resource_mut::<WindowStateRegistryResource>()?
+                .record_mut(NativeWindowId::primary())
+                .ok_or_else(|| anyhow::anyhow!("uncapped native primary window missing"))?
+                .request_close();
+        }
+        Ok(())
+    }
+}
+
+fn native_uncapped_host_smoke() -> anyhow::Result<()> {
+    use engine::app::AppNativeHostExt;
+    use engine::runtime::FramePacingPolicyResource;
+
+    let frames = Arc::new(AtomicUsize::new(0));
+    let updates = Arc::new(AtomicUsize::new(0));
+    let watchdog_expired = Arc::new(AtomicBool::new(false));
+
+    let mut app = App::new();
+    app.with_frame_pacing(FramePacingPolicyResource::continuous_uncapped());
+    app.add_plugins(default_plugins());
+    app.insert_resource(UncappedHostUpdateProbe {
+        updates: Arc::clone(&updates),
+        watchdog_expired: Arc::clone(&watchdog_expired),
+    });
+    app.add_systems(Update, observe_uncapped_host_update);
+    app.init_resource::<NativeWindowHookRegistryResource>();
+    app.world_mut()
+        .resource_mut::<NativeWindowHookRegistryResource>()?
+        .register_hook(NativeUncappedHostSmokeHook {
+            frames: Arc::clone(&frames),
+            watchdog_expired: Arc::clone(&watchdog_expired),
+            watchdog_armed: false,
+        });
+
+    app.run()?;
+    let frame_count = frames.load(Ordering::SeqCst);
+    let update_count = updates.load(Ordering::SeqCst);
+    anyhow::ensure!(
+        frame_count >= 8 && update_count == frame_count,
+        "uncapped Host native frame continuity failed: hooks={frame_count}, updates={update_count}"
+    );
+    anyhow::ensure!(
+        !watchdog_expired.load(Ordering::SeqCst),
+        "uncapped Host required watchdog wake rather than native continuous redraw"
+    );
+    println!("native_uncapped_host_smoke=pass frames={frame_count} updates={update_count}");
     Ok(())
 }
 
