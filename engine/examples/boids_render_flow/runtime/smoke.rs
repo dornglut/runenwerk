@@ -56,8 +56,8 @@ fn summarize_terminal_host_ages(samples: &[Duration]) -> (f64, f64) {
     if samples.is_empty() {
         return (0.0, 0.0);
     }
-    let average_ms = samples.iter().map(Duration::as_secs_f64).sum::<f64>() * 1000.0
-        / samples.len() as f64;
+    let average_ms =
+        samples.iter().map(Duration::as_secs_f64).sum::<f64>() * 1000.0 / samples.len() as f64;
     let mut sorted = samples.to_vec();
     sorted.sort_unstable();
     let p95_index = (sorted.len() * 95).div_ceil(100) - 1;
