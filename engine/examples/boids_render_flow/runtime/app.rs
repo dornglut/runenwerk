@@ -455,8 +455,14 @@ mod source_interval_tests {
             assert_ne!(previous_schema.flow_id(), restarted_schema.flow_id());
             let mut restarted = RenderGpuStepDemand::new(0, 8);
             let mut pacing = BoidsSourcePacing::default();
-            capture_fixed_steps(&mut restarted, &restarted_schema, &state, &mut pacing, fixed(1, 1))
-                .unwrap();
+            capture_fixed_steps(
+                &mut restarted,
+                &restarted_schema,
+                &state,
+                &mut pacing,
+                fixed(1, 1),
+            )
+            .unwrap();
             assert_eq!(restarted.completed_tick(), 0);
             assert_eq!(restarted.requested_tick(), 1);
             let restarted_first = restarted.candidate(1);
@@ -514,8 +520,14 @@ mod source_interval_tests {
         assert_eq!((demand.requested_tick(), demand.pending_len()), (5, 5));
         assert_eq!(pacing.time_dilated_host_ticks(), 1);
         for host_tick in 7..=1006 {
-            capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(host_tick, 1))
-                .unwrap();
+            capture_fixed_steps(
+                &mut demand,
+                &schema,
+                &state,
+                &mut pacing,
+                fixed(host_tick, 1),
+            )
+            .unwrap();
         }
         // No backlog replay, silent source-tick skip, or unbounded memory growth.
         assert_eq!((demand.requested_tick(), demand.pending_len()), (5, 5));
@@ -525,7 +537,11 @@ mod source_interval_tests {
         );
         assert_eq!(pacing.time_dilated_host_ticks(), 1001);
         assert_eq!(
-            demand.candidate(8).iter().map(|input| input.tick()).collect::<Vec<_>>(),
+            demand
+                .candidate(8)
+                .iter()
+                .map(|input| input.tick())
+                .collect::<Vec<_>>(),
             vec![1, 2, 3, 4, 5]
         );
     }
@@ -540,18 +556,26 @@ mod source_interval_tests {
             let state = BoidsRenderState::with_rule(rule);
             let mut pacing = BoidsSourcePacing::default();
             let mut demand = RenderGpuStepDemand::new(0, 2);
-            capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(2, 2))
-                .unwrap();
+            capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(2, 2)).unwrap();
             for host_tick in 3..=1002 {
-                capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(host_tick, 1))
-                    .unwrap();
+                capture_fixed_steps(
+                    &mut demand,
+                    &schema,
+                    &state,
+                    &mut pacing,
+                    fixed(host_tick, 1),
+                )
+                .unwrap();
             }
             assert_eq!(demand.requested_tick(), 2);
             assert_eq!(demand.outstanding(), 2);
             assert_eq!(pacing.time_dilated_host_ticks(), 1000);
             let captured = demand.candidate(2);
             assert_eq!(
-                captured.iter().map(|intent| intent.tick()).collect::<Vec<_>>(),
+                captured
+                    .iter()
+                    .map(|intent| intent.tick())
+                    .collect::<Vec<_>>(),
                 vec![1, 2]
             );
             for (tick, intent) in captured.iter().enumerate() {

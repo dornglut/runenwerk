@@ -261,7 +261,9 @@ impl NativeBoidsSmoke {
             .resource::<FixedTimeState>()?
             .total_completed_steps
             .saturating_sub(source.requested_tick());
-        let dilated = world.resource::<BoidsSourcePacing>()?.time_dilated_host_ticks();
+        let dilated = world
+            .resource::<BoidsSourcePacing>()?
+            .time_dilated_host_ticks();
         let mut terminal = 0;
         let mut terminal_host_ages = Vec::new();
         let mut frame_gate_observation = None;
