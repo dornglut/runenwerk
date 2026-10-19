@@ -780,6 +780,109 @@ impl WinitRunner {
     /// physical reducer. The explicitly bound UI host then invokes the pinned
     /// translation and synchronously correlates the real M13 input settlement.
     /// No separate input dispatcher, focus cache or mutable UI permission store.
+    /// Admit one original normalized keyboard observation only after checking
+    /// any PREVIOUS M13 revision gap. This is the same boundary the actual
+    /// Winit callback calls; tests must not simulate a reordered manual pair.
+    fn admit_native_ui_keyboard_for_recipient(
+        &mut self,
+        window: NativeWindowId,
+        slot: UiRuntimeSlotId,
+        binding_epoch: u64,
+        context: InputContext,
+        input: runen_input::KeyboardInput,
+    ) -> Result<()> {
+        let physical_key = input.physical_key.clone();
+        let pressed = input.state == runen_input::DigitalState::Pressed;
+        let preflight = self.reconcile_native_ui_keyboard_before_ingress(
+            window,
+            slot,
+            binding_epoch,
+            context.source,
+        );
+        self.apply_event_group_for_recipient(
+            window,
+            [PlatformEvent::KeyboardInput { context, input }],
+            Some(NativeInputRecipient::RunenUiSlot(slot)),
+        )?;
+        if let Err(error) = preflight {
+            // Failed pre-observation cannot suppress the original neutral
+            // Down or permit it as a game-held action.
+            if pressed {
+                self.deny_native_keyboard_lifetime(context, &physical_key)?;
+            }
+            return Err(error);
+        }
+        Ok(())
+    }
+
+    /// Reconcile an older M13 ownership interval before admitting the next
+    /// genuine physical Down. Otherwise a source-wide revision-gap withdrawal
+    /// would also revoke that newly admitted, independently settled generation.
+    /// This is a witness over RunenUI's real ownership, not an Engine focus cache.
+    fn reconcile_native_ui_keyboard_before_ingress(
+        &mut self,
+        window: NativeWindowId,
+        slot: UiRuntimeSlotId,
+        binding_epoch: u64,
+        source: InputSourceId,
+    ) -> Result<()> {
+        let observed = match self.state.world.resource_mut::<UiRuntimeSlotsResource>() {
+            Ok(mut slots) => slots
+                .input_ownership(slot)
+                .map_err(|error| anyhow!("native pre-ingress M13 ownership unavailable: {error:?}")),
+            Err(error) => Err(anyhow!(
+                "selected native UI runtime vanished before physical admission: {error:?}"
+            )),
+        };
+        let revision = match observed {
+            Ok(snapshot) => snapshot.revision().get(),
+            Err(error) => {
+                // Unavailable ownership cannot leave previously projected
+                // held game actions readable while a new original Down arrives.
+                self.revoke_native_game_keyboard_source(source)?;
+                return Err(error);
+            }
+        };
+        self.reconcile_native_ui_keyboard_revision(
+            window,
+            slot,
+            binding_epoch,
+            source,
+            revision,
+        )
+    }
+
+    /// Only the matching translator's framework revision is a continuity
+    /// witness. Do not substitute current focus for missing intermediate M13
+    /// ownership history, and do not touch another source or recipient.
+    fn reconcile_native_ui_keyboard_revision(
+        &mut self,
+        window: NativeWindowId,
+        slot: UiRuntimeSlotId,
+        binding_epoch: u64,
+        source: InputSourceId,
+        current_revision: u64,
+    ) -> Result<()> {
+        let previous = self.native_ui_keyboards.get(&window).and_then(|lifetime| {
+            (lifetime.recipient == slot
+                && lifetime.source == source
+                && lifetime.binding_epoch == binding_epoch)
+                .then_some(lifetime.last_observed_revision)
+                .flatten()
+        });
+        if previous.is_some_and(|revision| revision != current_revision) {
+            self.revoke_native_game_keyboard_source(source)?;
+        }
+        if let Some(lifetime) = self.native_ui_keyboards.get_mut(&window)
+            && lifetime.recipient == slot
+            && lifetime.source == source
+            && lifetime.binding_epoch == binding_epoch
+        {
+            lifetime.last_observed_revision = Some(current_revision);
+        }
+        Ok(())
+    }
+
     fn route_ui_keyboard(
         &mut self,
         window: NativeWindowId,
@@ -825,16 +928,13 @@ impl WinitRunner {
         // last observed M13 revision may have crossed an exclusive owner and
         // returned to nonexclusive before this native callback. Without all
         // intervening ordered M13 records it is not a gameplay nonclaim.
-        let prior_revision = self.native_ui_keyboards.get(&window).and_then(|lifetime| {
-            (lifetime.recipient == slot
-                && lifetime.source == context.source
-                && lifetime.binding_epoch == binding_epoch)
-                .then_some(lifetime.last_observed_revision)
-                .flatten()
-        });
-        if prior_revision.is_some_and(|prior| prior != before.revision().get()) {
-            self.revoke_native_game_keyboard_source(context.source)?;
-        }
+        self.reconcile_native_ui_keyboard_revision(
+            window,
+            slot,
+            binding_epoch,
+            context.source,
+            before.revision().get(),
+        )?;
         // Revalidate the translator's actual recipient and physical-source
         // generation BEFORE reusing cached modifier or pressed-key evidence.
         self.native_ui_keyboard_translator(window, slot, context.source, device, binding_epoch);
@@ -3102,15 +3202,21 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                         }
                     }
                     Ok((NativeInputRecipient::RunenUiSlot(slot), epoch)) => {
-                        self.apply_event_group_for_recipient(
+                        let epoch =
+                            epoch.context("selected native UI slot has no binding epoch")?;
+                        // The exact same admission order is exercised by
+                        // the source-level regression; M13 finality follows.
+                        self.admit_native_ui_keyboard_for_recipient(
                             native_window_id,
-                            [PlatformEvent::KeyboardInput { context, input }],
-                            Some(NativeInputRecipient::RunenUiSlot(slot)),
+                            slot,
+                            epoch,
+                            context,
+                            input,
                         )?;
                         self.route_ui_keyboard(
                             native_window_id,
                             slot,
-                            epoch.context("selected native UI slot has no binding epoch")?,
+                            epoch,
                             context,
                             &event,
                             is_synthetic,
@@ -4215,6 +4321,113 @@ mod tests {
             Some(current.revision().get()),
             "witness reconciles to the actual framework revision"
         );
+
+        // A second unseen semantic revision must be reconciled BEFORE a
+        // different, genuinely new Down enters the physical reducer. The
+        // prior W lifetime is denied, but fresh A remains eligible for its
+        // separate M13 admission/finality decision (not modeled by this test).
+        runner
+            .native_ui_keyboards
+            .get_mut(&primary)
+            .unwrap()
+            .last_observed_revision = Some(u64::MAX);
+        runner
+            .admit_native_ui_keyboard_for_recipient(
+                primary,
+                slot,
+                epoch,
+                first,
+                KeyboardInput {
+                    physical_key: PhysicalKeyIdentity::code("KeyA"),
+                    logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                    location: KeyLocation::Standard,
+                    state: DigitalState::Pressed,
+                    repeat: false,
+                    origin: ObservationOrigin::SourceReport,
+                },
+            )
+            .unwrap();
+        // Executable counterexample for the superseded order: invoking
+        // source-wide revocation AFTER the fresh physical admission erases
+        // KeyA too, even though its own M13 observation is nonexclusive.
+        let mut old_order = ActionState::new();
+        let physical = runner.state.world.resource::<InputState>().unwrap();
+        old_order.project(physical);
+        assert!(
+            old_order.action_down(crate::plugins::action::WORLD_MOVE_LEFT),
+            "the original physical A Down has a genuine game action before gap revocation"
+        );
+        old_order.revoke_source_keyboard_for_ui_ownership(physical, first.source);
+        assert!(
+            !old_order.action_down(crate::plugins::action::WORLD_MOVE_LEFT),
+            "post-ingress gap reconciliation demonstrably kills the fresh A lifetime"
+        );
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        runner.state.world.insert_resource(actions);
+        let actions = runner.state.world.resource::<ActionState>().unwrap();
+        assert!(
+            actions.action_down(crate::plugins::action::WORLD_MOVE_LEFT),
+            "an older M13 revision gap cannot revoke a later authentic, source-local A Down"
+        );
+        assert!(
+            !actions.action_down(crate::plugins::action::WORLD_MOVE_UP),
+            "the older W generation stays revoked after the fresh A Down"
+        );
+        assert_eq!(
+            runner
+                .native_ui_keyboards
+                .get(&primary)
+                .unwrap()
+                .last_observed_revision,
+            Some(current.revision().get()),
+            "the actual ownership snapshot remains the only revision witness"
+        );
+
+        // If the selected framework owner disappears, all previous source
+        // permission is withdrawn BEFORE the next original Down, which is
+        // nevertheless kept in neutral physical truth and denied in ActionState.
+        runner
+            .state
+            .world
+            .remove_resource::<UiRuntimeSlotsResource>();
+        assert!(
+            runner
+                .admit_native_ui_keyboard_for_recipient(
+                    primary,
+                    slot,
+                    epoch,
+                    first,
+                    KeyboardInput {
+                        physical_key: PhysicalKeyIdentity::code("KeyD"),
+                        logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                        location: KeyLocation::Standard,
+                        state: DigitalState::Pressed,
+                        repeat: false,
+                        origin: ObservationOrigin::SourceReport,
+                    },
+                )
+                .is_err(),
+            "an absent M13 ownership snapshot is never a game nonclaim"
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(first, &PhysicalKeyIdentity::code("KeyD"))
+                .is_some(),
+            "failed UI preflight cannot erase original physical Down"
+        );
+        let mut actions = runner.state.world.remove_resource::<ActionState>().unwrap();
+        actions.project(runner.state.world.resource::<InputState>().unwrap());
+        assert!(
+            !actions.action_down(crate::plugins::action::WORLD_MOVE_LEFT)
+                && !actions.action_down(crate::plugins::action::WORLD_MOVE_RIGHT),
+            "unknown M13 state must revoke old A and deny the newly admitted D"
+        );
+        runner.state.world.insert_resource(actions);
     }
 
     #[test]
