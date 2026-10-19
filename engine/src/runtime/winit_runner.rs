@@ -827,7 +827,7 @@ impl WinitRunner {
         source: InputSourceId,
     ) -> Result<()> {
         let observed = match self.state.world.resource_mut::<UiRuntimeSlotsResource>() {
-            Ok(mut slots) => slots.input_ownership(slot).map_err(|error| {
+            Ok(slots) => slots.input_ownership(slot).map_err(|error| {
                 anyhow!("native pre-ingress M13 ownership unavailable: {error:?}")
             }),
             Err(error) => Err(anyhow!(
