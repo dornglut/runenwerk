@@ -827,9 +827,9 @@ impl WinitRunner {
         source: InputSourceId,
     ) -> Result<()> {
         let observed = match self.state.world.resource_mut::<UiRuntimeSlotsResource>() {
-            Ok(mut slots) => slots
-                .input_ownership(slot)
-                .map_err(|error| anyhow!("native pre-ingress M13 ownership unavailable: {error:?}")),
+            Ok(mut slots) => slots.input_ownership(slot).map_err(|error| {
+                anyhow!("native pre-ingress M13 ownership unavailable: {error:?}")
+            }),
             Err(error) => Err(anyhow!(
                 "selected native UI runtime vanished before physical admission: {error:?}"
             )),
@@ -843,13 +843,7 @@ impl WinitRunner {
                 return Err(error);
             }
         };
-        self.reconcile_native_ui_keyboard_revision(
-            window,
-            slot,
-            binding_epoch,
-            source,
-            revision,
-        )
+        self.reconcile_native_ui_keyboard_revision(window, slot, binding_epoch, source, revision)
     }
 
     /// Only the matching translator's framework revision is a continuity
