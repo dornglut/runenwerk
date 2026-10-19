@@ -411,7 +411,6 @@ fn capture_fixed_steps(
     Ok(())
 }
 
-
 /// GPU-generated cell counts are written by the authored count stage for
 /// each accepted source tick; the final batch leaves the last source step's
 /// counts resident. This validates nontrivial GPU-produced simulation state,
@@ -432,7 +431,8 @@ fn verify_gpu_grid_population(bytes: &[u8]) -> Result<()> {
             count <= DEFAULT_BOID_COUNT,
             "Boids GPU grid proof contains an impossible cell population"
         );
-        total = total.checked_add(u64::from(count))
+        total = total
+            .checked_add(u64::from(count))
             .context("Boids GPU grid population sum overflow")?;
     }
     anyhow::ensure!(

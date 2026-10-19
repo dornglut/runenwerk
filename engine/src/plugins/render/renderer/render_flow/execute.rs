@@ -248,7 +248,10 @@ impl Renderer {
             let occurrence = allocate_aux_occurrence(&mut batch.maximum_occurrence)?;
             nodes.push(ResolvedRenderGpuWorkNode::capture_readback(
                 occurrence,
-                GpuResourceLabel::new(format!("render.source.buffer-readback.{}", occurrence.raw()))?,
+                GpuResourceLabel::new(format!(
+                    "render.source.buffer-readback.{}",
+                    occurrence.raw()
+                ))?,
                 operation,
                 terminal_controls.iter().copied(),
             ));
