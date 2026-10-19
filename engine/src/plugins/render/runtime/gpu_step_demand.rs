@@ -1012,11 +1012,27 @@ mod required_capture_tests {
         let mut streams = RenderGpuFlowStepStreams::default();
         streams.register(flow.id(), 0, 4).unwrap();
         streams.register(oversized.id(), 0, 4).unwrap();
-        assert!(streams.require_buffer_readback(&foreign, foreign_buffer).is_err());
-        assert!(streams.require_buffer_readback(&flow, oversized_buffer.clone()).is_err());
-        assert!(streams.require_buffer_readback(&oversized, oversized_buffer).is_err());
+        assert!(
+            streams
+                .require_buffer_readback(&foreign, foreign_buffer)
+                .is_err()
+        );
+        assert!(
+            streams
+                .require_buffer_readback(&flow, oversized_buffer.clone())
+                .is_err()
+        );
+        assert!(
+            streams
+                .require_buffer_readback(&oversized, oversized_buffer)
+                .is_err()
+        );
         assert!(streams.accepted_buffer_readback(flow.id()).is_err());
-        assert!(streams.require_buffer_readback(&flow, buffer.clone()).is_ok());
+        assert!(
+            streams
+                .require_buffer_readback(&flow, buffer.clone())
+                .is_ok()
+        );
         assert!(streams.require_buffer_readback(&flow, buffer).is_err());
     }
 
