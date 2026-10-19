@@ -254,7 +254,8 @@ fn advance_boids_simulation_system(
                 // simulation result. Validate this G5 submission's actual
                 // GPU-written grid population before committing source ticks.
                 let proof = streams.accepted_buffer_readback(flow)?;
-                let readback = accepted.readback(proof.readback_id())
+                let readback = accepted
+                    .readback(proof.readback_id())
                     .context("Boids accepted G5 graph omitted its required buffer result")?;
                 let mut ready = false;
                 match readback.status() {

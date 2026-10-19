@@ -52,9 +52,14 @@ impl BoidsGpuStepSchema {
         let draw_pass = flow
             .pass_id("boids.draw")
             .context("missing Boids graph terminal draw pass for required GPU evidence")?;
-        let grid_counts = flow.resource_id("boids.grid.cell_counts")
+        let grid_counts = flow
+            .resource_id("boids.grid.cell_counts")
             .context("missing Boids GPU grid counter resource")?;
-        let cell_counts = flow.graph().resources.resources.iter()
+        let cell_counts = flow
+            .graph()
+            .resources
+            .resources
+            .iter()
             .find(|resource| *resource.id() == grid_counts)
             .and_then(|resource| resource.buffer_handle())
             .cloned()

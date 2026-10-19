@@ -999,6 +999,28 @@ mod required_capture_tests {
     use super::*;
 
     #[test]
+    fn producer_buffer_proof_rejects_foreign_unbounded_and_duplicate_resources() {
+        let (flow, buffer) = RenderFlow::new("proof.owner")
+            .storage_array::<crate::plugins::render::U32Counter>("proof.data", 4)
+            .unwrap();
+        let (foreign, foreign_buffer) = RenderFlow::new("proof.foreign")
+            .storage_array::<crate::plugins::render::U32Counter>("foreign.data", 4)
+            .unwrap();
+        let (oversized, oversized_buffer) = RenderFlow::new("proof.oversized")
+            .storage_array::<crate::plugins::render::U32Counter>("oversized.data", 16_385)
+            .unwrap();
+        let mut streams = RenderGpuFlowStepStreams::default();
+        streams.register(flow.id(), 0, 4).unwrap();
+        streams.register(oversized.id(), 0, 4).unwrap();
+        assert!(streams.require_buffer_readback(&foreign, foreign_buffer).is_err());
+        assert!(streams.require_buffer_readback(&flow, oversized_buffer.clone()).is_err());
+        assert!(streams.require_buffer_readback(&oversized, oversized_buffer).is_err());
+        assert!(streams.accepted_buffer_readback(flow.id()).is_err());
+        assert!(streams.require_buffer_readback(&flow, buffer.clone()).is_ok());
+        assert!(streams.require_buffer_readback(&flow, buffer).is_err());
+    }
+
+    #[test]
     fn producer_capture_registration_requires_exact_source_and_bounded_unique_contract() {
         let flow = RenderFlowId::try_from_raw(71).unwrap();
         let other = RenderFlowId::try_from_raw(72).unwrap();
