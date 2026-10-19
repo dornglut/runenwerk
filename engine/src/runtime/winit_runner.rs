@@ -1514,7 +1514,10 @@ mod tests {
         );
         runner.frame_requested = false;
         assert!(
-            !runner.frame_pacing_schedule.decide(policy, now).request_redraw,
+            !runner
+                .frame_pacing_schedule
+                .decide(policy, now)
+                .request_redraw,
             "on-demand must not keep the former uncapped automatic requests alive"
         );
 
