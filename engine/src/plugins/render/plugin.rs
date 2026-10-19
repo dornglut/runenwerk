@@ -31,8 +31,8 @@ use super::inspect::{
     WorldRuntimeInspectorSnapshot,
 };
 use super::pipelines::PipelineCacheResource;
-use super::renderer::Gfx;
 use super::readiness::RenderReadinessState;
+use super::renderer::Gfx;
 use super::residency::{
     RenderGpuResidencyBudgetResource, RenderGpuResidencyResource,
     derive_render_gpu_residency_system,
@@ -47,7 +47,9 @@ use crate::app::App;
 use crate::plugin::Plugin;
 use crate::plugins::scene::SceneResource;
 use crate::plugins::ui::UiRuntimeSet;
-use crate::runtime::{PreUpdate, RenderPrepare, RenderSubmit, SystemConfigExt, SystemMobilityExt, WorldMut};
+use crate::runtime::{
+    PreUpdate, RenderPrepare, RenderSubmit, SystemConfigExt, SystemMobilityExt, WorldMut,
+};
 use crate::state::DebugMetricsState;
 
 #[derive(Debug, Default)]
