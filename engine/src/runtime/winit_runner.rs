@@ -1449,6 +1449,20 @@ mod tests {
     }
 
     #[test]
+    fn continuous_uncapped_keeps_host_turns_ready_without_a_timer() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::continuous_uncapped());
+        let start = Instant::now();
+        runner.last_primary_redraw_at = Some(start);
+        assert!(runner.frame_is_ready(start));
+        assert!(runner.should_request_primary_redraw_now(start));
+        assert!(runner.should_request_primary_redraw_now(start + Duration::from_nanos(1)));
+        let policy = runner.frame_pacing_policy();
+        let next = runner.frame_pacing_schedule.decide(policy, start);
+        assert!(next.request_redraw);
+        assert!(next.next_deadline.is_none(), "uncapped Host never creates a timer deadline");
+    }
+
+    #[test]
     fn primary_input_redraws_stay_immediate_on_demand() {
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
         let now = Instant::now();

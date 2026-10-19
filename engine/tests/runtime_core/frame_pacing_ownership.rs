@@ -59,6 +59,20 @@ fn explicit_frame_pacing_configures_only_policy_before_host_realization() {
 }
 
 #[test]
+fn uncapped_native_host_policy_is_explicit_without_headless_state() {
+    let mut app = App::new();
+    app.with_frame_pacing(FramePacingPolicyResource::continuous_uncapped());
+    assert_eq!(
+        app.world()
+            .resource::<FramePacingPolicyResource>()
+            .expect("explicit uncapped policy")
+            .mode,
+        FramePacingMode::ContinuousUncapped
+    );
+    assert!(app.world().resource::<FramePacingRuntimeStateResource>().is_err());
+}
+
+#[test]
 fn bounded_headless_execution_does_not_require_frame_pacing_resources() {
     let app = App::headless();
     let app = app

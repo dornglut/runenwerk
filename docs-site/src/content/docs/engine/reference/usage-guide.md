@@ -120,8 +120,17 @@ Windowed apps default to `FramePacingPolicyResource::continuous_capped(60)`.
 the trait available through the ordinary prelude, the ergonomic call remains
 `app.with_frame_pacing(FramePacingPolicyResource::on_demand())`. Use on-demand pacing for
 tools that should redraw only after explicit input, resize, cursor, native-window intent,
-or app invalidations. The winit runner maps the policy to `WaitUntil` for capped
-animation and `Wait` for on-demand mode. Native pacing is not a headless policy:
+or app invalidations. Use
+`app.with_frame_pacing(FramePacingPolicyResource::continuous_uncapped())` for
+continuous Host turns without an artificial FPS deadline. The winit runner maps
+capped animation to `WaitUntil`, and both on-demand and uncapped to event-driven
+`Wait`, with uncapped explicitly requesting another redraw on every turn.
+The Host still retains one pending-redraw identity per native window and does
+not introduce a second scheduling loop. Uncapped Host cadence does **not**
+disable Render's current FIFO (VSync) surface presentation or guarantee
+unlimited submitted, completed, or physically displayed frames; changing
+surface Present mode requires separate capability-aware Render policy.
+Fixed-step simulation cadence remains independent. Native pacing is not a headless policy:
 configuring it on `App::headless()` is rejected during composition admission. Native
 lifecycle/effect intent is keyed by `NativeWindowId` in
 `WindowStateRegistryResource`; headless App state does not manufacture a native-window
