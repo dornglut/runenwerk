@@ -74,9 +74,10 @@ impl BoidsGpuStepSchema {
     }
 
     /// source_tick is zero-based: first source tick 0 seeds the initial GPU
-    /// buffers. This example's simulation law is fixed at construction, allowing
-    /// exact late projection of time-debt ticks from their original identities.
-    /// Mutable sources must snapshot their changing inputs at source time instead.
+    /// buffers. The producer time-dilates source ticks under backpressure;
+    /// elapsed host fixed ticks are not replayed. Already captured steps retain
+    /// their original immutable source-tick inputs and identities.
+    /// Mutable sources must snapshot inputs at source time instead.
     pub(crate) fn capture(
         &self,
         state: &BoidsRenderState,

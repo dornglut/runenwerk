@@ -94,9 +94,24 @@ impl BoidsVerifiedGpuGeneration {
     }
 }
 
-/// Bounded source-owned historical steps. Exhaustion is an explicit host failure;
-/// never silently discard already-run CPU ticks or fabricate GPU simulation work.
+/// Producer-owned retention limit, not a budget for replaying elapsed host time.
 const MAX_OUTSTANDING_BOIDS_STEPS: usize = 512;
+
+/// The ephemeral Boids example time-dilates its source clock when GPU capacity
+/// is exhausted. Engine fixed steps remain host cadence observations, not
+/// immutable Boids inputs until admitted by this producer. Applications with
+/// externally authored simulation events must preserve those events instead.
+#[derive(Debug, Default, runen_ecs::Resource)]
+pub(super) struct BoidsSourcePacing {
+    last_host_fixed_tick: u64,
+    time_dilated_host_ticks: u64,
+}
+
+impl BoidsSourcePacing {
+    pub(super) const fn time_dilated_host_ticks(&self) -> u64 {
+        self.time_dilated_host_ticks
+    }
+}
 
 pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     let mut app = App::new();
@@ -134,6 +149,7 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     app.insert_resource(source);
     app.insert_resource(streams);
     app.insert_resource(BoidsVisualContinuityEvidence::default());
+    app.insert_resource(BoidsSourcePacing::default());
     let native_fault_at_verified_tick = if native_smoke {
         std::env::var("RUNENWERK_BOIDS_NATIVE_SOURCE_FAULT_AFTER_TICK")
             .ok()
@@ -200,6 +216,7 @@ fn advance_boids_simulation_system(
     mut streams: ResMut<RenderGpuFlowStepStreams>,
     mut visual: ResMut<BoidsVisualContinuityEvidence>,
     mut generation: ResMut<BoidsVerifiedGpuGeneration>,
+    mut source_pacing: ResMut<BoidsSourcePacing>,
 ) -> Result<()> {
     // Winit's CloseRequested is deliberately an intent, not an automatic
     // Engine exit. Boids owns the decision to approve it. Do not schedule
@@ -321,7 +338,7 @@ fn advance_boids_simulation_system(
     let stream = streams
         .stream_mut(flow)
         .context("Boids source stream not registered")?;
-    capture_fixed_steps(stream, &source, &state, *fixed)?;
+    capture_fixed_steps(stream, &source, &state, &mut source_pacing, *fixed)?;
     Ok(())
 }
 
@@ -329,34 +346,35 @@ fn capture_fixed_steps(
     stream: &mut RenderGpuStepDemand<RenderGpuFixedStepInput>,
     source: &BoidsGpuStepSchema,
     state: &BoidsRenderState,
+    pacing: &mut BoidsSourcePacing,
     fixed: FixedTimeState,
 ) -> Result<()> {
-    anyhow::ensure!(
-        fixed.total_completed_steps >= u64::from(fixed.steps_ran_last_frame),
-        "Boids FixedTimeState completed fewer ticks than its current interval"
-    );
-    let start = stream.requested_tick();
-    anyhow::ensure!(
-        start <= fixed.total_completed_steps,
-        "Boids fixed-time source reset behind its existing GPU history: requested {start}, host {}",
-        fixed.total_completed_steps
-    );
-    // This example's law and input parameters are immutable after construction:
-    // any delayed source tick can be projected exactly from its original tick.
-    // Do not apply this policy to a mutable-input producer without preserving
-    // that producer's exact historical snapshots at their source time.
-    //
-    // A saturated GPU no longer causes CapacityExceeded in ordinary operation:
-    // leave unrequested CPU ticks as time debt, capture them in order when
-    // capacity becomes available, and never drop/relabel an accepted interval.
-    let outstanding_source_ticks = fixed.total_completed_steps - start;
-    let count = usize::try_from(outstanding_source_ticks)
-        .unwrap_or(usize::MAX)
+    let frame_steps = u64::from(fixed.steps_ran_last_frame);
+    let preceding_host_tick = fixed
+        .total_completed_steps
+        .checked_sub(frame_steps)
+        .context("Boids FixedTimeState completed fewer ticks than its current interval")?;
+    // A skipped Update (including an already-approved close) cannot mint
+    // source steps retrospectively. Count its host opportunities as dilated.
+    let prior_skipped_host_steps = preceding_host_tick
+        .checked_sub(pacing.last_host_fixed_tick)
+        .context("Boids host fixed-time cadence regressed behind its previous observation")?;
+    // Only this frame's cadence opportunities can become Boids source ticks.
+    // An exhausted GPU source stream causes explicit simulation time dilation,
+    // not a retained queue of unbounded wall-time debt. Existing captured and
+    // accepted ticks retain their original identities and G5 proofs.
+    let count = (fixed.steps_ran_last_frame as usize)
         .min(stream.remaining_capacity())
         .min(source.max_substeps() as usize);
+    let start = stream.requested_tick();
     let end = start
         .checked_add(u64::try_from(count).context("Boids capture count overflow")?)
         .context("Boids requested tick identity exhausted")?;
+    let next_dilated = pacing
+        .time_dilated_host_ticks
+        .checked_add(prior_skipped_host_steps)
+        .and_then(|value| value.checked_add(frame_steps - count as u64))
+        .context("Boids source time-dilation count exhausted")?;
     if start != end {
         let history = (start..end)
             .map(|tick| source.capture(state, tick))
@@ -367,6 +385,9 @@ fn capture_fixed_steps(
                 anyhow::anyhow!("Boids immutable source admission rejected: {error}")
             })?;
     }
+    // Publish pace evidence only after any immutable input admission succeeded.
+    pacing.last_host_fixed_tick = fixed.total_completed_steps;
+    pacing.time_dilated_host_ticks = next_dilated;
     Ok(())
 }
 
@@ -433,7 +454,9 @@ mod source_interval_tests {
             let restarted_schema = BoidsGpuStepSchema::from_flow(&restarted_flow).unwrap();
             assert_ne!(previous_schema.flow_id(), restarted_schema.flow_id());
             let mut restarted = RenderGpuStepDemand::new(0, 8);
-            capture_fixed_steps(&mut restarted, &restarted_schema, &state, fixed(1, 1)).unwrap();
+            let mut pacing = BoidsSourcePacing::default();
+            capture_fixed_steps(&mut restarted, &restarted_schema, &state, &mut pacing, fixed(1, 1))
+                .unwrap();
             assert_eq!(restarted.completed_tick(), 0);
             assert_eq!(restarted.requested_tick(), 1);
             let restarted_first = restarted.candidate(1);
@@ -477,32 +500,80 @@ mod source_interval_tests {
 
     #[test]
     fn zero_one_many_and_backpressure_preserve_unsubmitted_boids_inputs() {
-        let flow = build_render_flow();
-        let schema = BoidsGpuStepSchema::from_flow(&flow).unwrap();
+        let schema = BoidsGpuStepSchema::from_flow(&build_render_flow()).unwrap();
         let state = BoidsRenderState::default();
         let mut demand = RenderGpuStepDemand::new(0, 5);
+        let mut pacing = BoidsSourcePacing::default();
 
-        capture_fixed_steps(&mut demand, &schema, &state, fixed(0, 0)).unwrap();
-        assert_eq!((demand.requested_tick(), demand.pending_len()), (0, 0));
-        capture_fixed_steps(&mut demand, &schema, &state, fixed(1, 1)).unwrap();
-        assert_eq!((demand.requested_tick(), demand.pending_len()), (1, 1));
-        capture_fixed_steps(&mut demand, &schema, &state, fixed(1, 0)).unwrap();
-        assert_eq!((demand.requested_tick(), demand.pending_len()), (1, 1));
-        capture_fixed_steps(&mut demand, &schema, &state, fixed(4, 3)).unwrap();
+        capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(0, 0)).unwrap();
+        capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(1, 1)).unwrap();
+        capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(1, 0)).unwrap();
+        capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(4, 3)).unwrap();
         assert_eq!((demand.requested_tick(), demand.pending_len()), (4, 4));
+        capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(6, 2)).unwrap();
+        assert_eq!((demand.requested_tick(), demand.pending_len()), (5, 5));
+        assert_eq!(pacing.time_dilated_host_ticks(), 1);
+        for host_tick in 7..=1006 {
+            capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(host_tick, 1))
+                .unwrap();
+        }
+        // No backlog replay, silent source-tick skip, or unbounded memory growth.
+        assert_eq!((demand.requested_tick(), demand.pending_len()), (5, 5));
+        assert_eq!(pacing.time_dilated_host_ticks(), 1001);
+        assert!(
+            capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(4, 1)).is_err()
+        );
+        assert_eq!(pacing.time_dilated_host_ticks(), 1001);
+        assert_eq!(
+            demand.candidate(8).iter().map(|input| input.tick()).collect::<Vec<_>>(),
+            vec![1, 2, 3, 4, 5]
+        );
+    }
 
-        capture_fixed_steps(&mut demand, &schema, &state, fixed(6, 2)).unwrap();
-        assert_eq!((demand.requested_tick(), demand.pending_len()), (5, 5));
-        // A long stall is bounded and never consumes source tick 6 or 7.
-        capture_fixed_steps(&mut demand, &schema, &state, fixed(1000, 4)).unwrap();
-        assert_eq!((demand.requested_tick(), demand.pending_len()), (5, 5));
-        assert!(capture_fixed_steps(&mut demand, &schema, &state, fixed(4, 1)).is_err());
-        let ticks = demand
-            .candidate(8)
-            .iter()
-            .map(|input| input.tick())
-            .collect::<Vec<_>>();
-        assert_eq!(ticks, vec![1, 2, 3, 4, 5]);
+    #[test]
+    fn original_and_species_source_clocks_do_not_replay_dilated_host_ticks() {
+        for rule in [
+            crate::rendering::BoidsRuleFamily::Flocking,
+            crate::rendering::BoidsRuleFamily::SpeciesInteraction,
+        ] {
+            let schema = BoidsGpuStepSchema::from_flow(&build_render_flow()).unwrap();
+            let state = BoidsRenderState::with_rule(rule);
+            let mut pacing = BoidsSourcePacing::default();
+            let mut demand = RenderGpuStepDemand::new(0, 2);
+            capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(2, 2))
+                .unwrap();
+            for host_tick in 3..=1002 {
+                capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(host_tick, 1))
+                    .unwrap();
+            }
+            assert_eq!(demand.requested_tick(), 2);
+            assert_eq!(demand.outstanding(), 2);
+            assert_eq!(pacing.time_dilated_host_ticks(), 1000);
+            let captured = demand.candidate(2);
+            assert_eq!(
+                captured.iter().map(|intent| intent.tick()).collect::<Vec<_>>(),
+                vec![1, 2]
+            );
+            for (tick, intent) in captured.iter().enumerate() {
+                assert_eq!(
+                    intent.input().uniforms,
+                    schema.capture(&state, tick as u64).unwrap().uniforms
+                );
+            }
+
+            // Model the *post-verified* source stream identity, not GPU proof:
+            // actual terminal G5 and source verification must occur separately.
+            let mut successor = RenderGpuStepDemand::new(2, 2);
+            capture_fixed_steps(&mut successor, &schema, &state, &mut pacing, fixed(1003, 1))
+                .unwrap();
+            assert_eq!(successor.requested_tick(), 3);
+            assert_eq!(successor.candidate(2)[0].tick(), 3);
+            assert_eq!(pacing.time_dilated_host_ticks(), 1000);
+            assert_eq!(
+                successor.candidate(2)[0].input().uniforms,
+                schema.capture(&state, 2).unwrap().uniforms
+            );
+        }
     }
 }
 

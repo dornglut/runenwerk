@@ -1,7 +1,7 @@
 //! Native, bounded validation of the *actual* Boids example in both modes.
 //! Counts accepted surface Present operations and terminal RunenGPU frame
 //! receipts separately; neither is mistaken for hardware scanout timing.
-use super::app::BoidsVisualContinuityEvidence;
+use super::app::{BoidsSourcePacing, BoidsVisualContinuityEvidence};
 use anyhow::{Context, Result};
 use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::inspect::{
@@ -37,6 +37,7 @@ pub(crate) struct NativeBoidsSmokeStatus {
     require_visual_readback: bool,
     peak_outstanding_steps: usize,
     peak_uncaptured_cpu_ticks: u64,
+    source_time_dilated_host_ticks: u64,
     frame_gate_observation: Option<engine::plugins::render::renderer::GfxFrameGateCounters>,
     first_present: Option<Instant>,
     last_present: Option<Instant>,
@@ -159,7 +160,7 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
     let (terminal_age_avg_ms, terminal_age_p95_ms) =
         summarize_terminal_host_ages(&status.terminal_host_ages);
     println!(
-        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} gpu_graph_build_ms_avg={:.2} gpu_prepare_submission_ms_avg={:.2} gpu_submit_prepared_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={} gate_decisions={} gate_deferred={} gate_deterministic={} gate_step_stream={} gate_pending_flow={} host_terminal_age_ms_avg={:.2} host_terminal_age_ms_p95={:.2} host_terminal_age_samples={}",
+        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} gpu_graph_build_ms_avg={:.2} gpu_prepare_submission_ms_avg={:.2} gpu_submit_prepared_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={} source_time_dilated_host_ticks={} gate_decisions={} gate_deferred={} gate_deterministic={} gate_step_stream={} gate_pending_flow={} host_terminal_age_ms_avg={:.2} host_terminal_age_ms_p95={:.2} host_terminal_age_samples={}",
         status.frames,
         status.required_present_submissions,
         status.presented_opportunities,
@@ -179,6 +180,7 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         status.cpu_renderer_samples_ms.len(),
         status.peak_outstanding_steps,
         status.peak_uncaptured_cpu_ticks,
+        status.source_time_dilated_host_ticks,
         gates.decisions,
         gates.deferred,
         gates.deterministic_in_flight,
@@ -253,10 +255,13 @@ impl NativeBoidsSmoke {
             .context("Boids GPU source stream missing while rendering")?;
         let verified = source.completed_tick();
         let outstanding = source.outstanding();
+        // Host-vs-producer divergence now measures deliberate time dilation,
+        // not a backlog that the simulation will subsequently replay.
         let uncaptured = world
             .resource::<FixedTimeState>()?
             .total_completed_steps
             .saturating_sub(source.requested_tick());
+        let dilated = world.resource::<BoidsSourcePacing>()?.time_dilated_host_ticks();
         let mut terminal = 0;
         let mut terminal_host_ages = Vec::new();
         let mut frame_gate_observation = None;
@@ -302,6 +307,7 @@ impl NativeBoidsSmoke {
         state.frames += 1;
         state.peak_outstanding_steps = state.peak_outstanding_steps.max(outstanding);
         state.peak_uncaptured_cpu_ticks = state.peak_uncaptured_cpu_ticks.max(uncaptured);
+        state.source_time_dilated_host_ticks = dilated;
         state.frame_gate_observation = frame_gate_observation;
         if presented > state.presented_opportunities {
             let previous_count = state.presented_opportunities;
