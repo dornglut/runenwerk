@@ -31,6 +31,7 @@ use super::inspect::{
     WorldRuntimeInspectorSnapshot,
 };
 use super::pipelines::PipelineCacheResource;
+use super::renderer::Gfx;
 use super::readiness::RenderReadinessState;
 use super::residency::{
     RenderGpuResidencyBudgetResource, RenderGpuResidencyResource,
@@ -46,7 +47,7 @@ use crate::app::App;
 use crate::plugin::Plugin;
 use crate::plugins::scene::SceneResource;
 use crate::plugins::ui::UiRuntimeSet;
-use crate::runtime::{RenderPrepare, RenderSubmit, SystemConfigExt, SystemMobilityExt};
+use crate::runtime::{PreUpdate, RenderPrepare, RenderSubmit, SystemConfigExt, SystemMobilityExt, WorldMut};
 use crate::state::DebugMetricsState;
 
 #[derive(Debug, Default)]
@@ -56,6 +57,17 @@ impl runen_ecs::Resource for RenderIntegrationActivation {}
 
 pub(crate) fn render_integration_is_active(world: &runen_ecs::World) -> bool {
     world.has_resource::<RenderIntegrationActivation>()
+}
+
+/// The Engine renderer owns the only nonblocking G5 progress/reconciliation
+/// point before all producers verify their accepted GPU source steps in Update.
+/// This also runs when a frame has no drawable surface; no Gfx means no GPU poll.
+/// Each Gfx instance remains the sole owner of its context and observations.
+fn frame_render_gpu_progress_before_update(mut world: WorldMut) -> anyhow::Result<()> {
+    if let Ok(gfx) = world.resource_mut::<Gfx>() {
+        gfx.progress_gpu_before_producer_update()?;
+    }
+    Ok(())
 }
 
 pub struct RenderPlugin;
@@ -129,6 +141,10 @@ impl Plugin for RenderPlugin {
         app.init_resource::<RenderReadinessState>();
         app.init_resource::<DebugMetricsState>();
 
+        app.add_systems(
+            PreUpdate,
+            frame_render_gpu_progress_before_update.on_invoker_thread(),
+        );
         app.add_systems(
             RenderPrepare,
             sync_render_flow_registry_system.before(RenderRuntimeSet::FramePrepare),

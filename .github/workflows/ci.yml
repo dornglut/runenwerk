@@ -185,16 +185,15 @@ jobs:
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
             cargo +stable run -p engine --example boids_render_flow --locked -- --species
 
-      - name: Prove Boids earlier GPU progress against real Vulkan (source and readback)
+      - name: Prove Engine-owned PreUpdate GPU progress with Boids (source and readback)
         env:
           RUST_BACKTRACE: '1'
           RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
-          RUNENWERK_BOIDS_EARLY_GPU_PROGRESS: '1'
           RUNENWERK_G5_REQUIRE_GPU: '1'
         run: |
           set -euo pipefail
-          # Exercise the opt-in before-Update Gfx lifecycle, not just its
-          # normal-path default. These are separate real-GPU consumer runs:
+          # Exercise the default Engine-owned before-Update Gfx lifecycle.
+          # These are separate real-GPU consumer runs:
           # original flocking verifies actual GPU image change; species
           # verifies source lineage without full-frame image readback.
           for mode in flocking species; do
@@ -213,9 +212,8 @@ jobs:
               exit 1
             fi
             cat "$log"
-            if ! grep -F "native_boids_gpu_smoke=pass" "$log" \
-                || ! grep -F "early_gpu_progress=true" "$log"; then
-              echo "Early-GPU-progress native Boids conformance marker missing" >&2
+            if ! grep -F "native_boids_gpu_smoke=pass" "$log"; then
+              echo "Engine PreUpdate GPU Boids conformance marker missing" >&2
               rm -f "$log"
               exit 1
             fi

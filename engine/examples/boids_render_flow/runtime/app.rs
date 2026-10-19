@@ -7,7 +7,6 @@ use engine::plugins::render::{
 use engine::plugins::{DebugMetricsPlugin, RenderPlugin, ScenePlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt, FixedTimeState, Res, ResMut, Update};
 use engine::runtime::WindowStateRegistryResource;
-use engine::runtime::{PreUpdate, SystemMobilityExt, WorldMut};
 use runen_gpu::{GpuContextAffinity, GpuReadbackStatus, GpuSubmissionStatus, GpuTextureFormat};
 
 /// Diagnostic evidence only: a GPU-rendered image is not a retained Boids
@@ -155,15 +154,6 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
         native_fault_at_verified_tick,
         require_visual_readback,
     });
-    // Bounded A/B experiment: opt into the existing Gfx nonblocking progress
-    // earlier in the host frame, before source-owned Update verification.
-    // Default remains the ordinary renderer-owned RenderSubmit path.
-    if std::env::var("RUNENWERK_BOIDS_EARLY_GPU_PROGRESS").as_deref() == Ok("1") {
-        app.add_systems(
-            PreUpdate,
-            progress_boids_gpu_before_update.on_invoker_thread(),
-        );
-    }
     app.add_systems(Update, advance_boids_simulation_system);
     app.add_render_flow(flow);
     let smoke = if native_smoke {
@@ -195,16 +185,6 @@ fn approve_boids_window_close(windows: &mut WindowStateRegistryResource) -> bool
     }
     primary.approve_close();
     true
-}
-
-// The Gfx renderer remains the sole owner of nonblocking G5 progress and
-// completion observation. This host-phase adapter does not access a backend,
-// mark source ticks complete, create a second poll, or bypass producer checks.
-fn progress_boids_gpu_before_update(mut world: WorldMut) -> Result<()> {
-    if let Ok(gfx) = world.resource_mut::<Gfx>() {
-        gfx.progress_gpu_before_producer_update()?;
-    }
-    Ok(())
 }
 
 // All eight parameters are distinct ECS resource contracts; keeping the
