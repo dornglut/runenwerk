@@ -878,6 +878,53 @@ pub use render_flow::{
 pub struct Gfx {
     ctx: RenderGpuContext,
     pub renderer: Renderer,
+    /// Optional, per-surface diagnostic counts; never influences G3/G5 admission.
+    frame_gate_observations: Option<BTreeMap<u64, GfxFrameGateCounters>>,
+}
+
+/// Cumulative, opt-in host gate decisions for one render surface. Gates may
+/// overlap: each reason counts every decision at which it was true. This is
+/// neither GPU completion latency nor a physical display frame counter.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct GfxFrameGateCounters {
+    pub decisions: u64,
+    pub deferred: u64,
+    pub deterministic_in_flight: u64,
+    pub step_stream_backpressure: u64,
+    pub registered_flow_in_flight: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct GfxFrameGateReasons {
+    deterministic_in_flight: bool,
+    step_stream_backpressure: bool,
+    registered_flow_in_flight: bool,
+}
+
+impl GfxFrameGateReasons {
+    fn is_deferred(self) -> bool {
+        self.deterministic_in_flight
+            || self.step_stream_backpressure
+            || self.registered_flow_in_flight
+    }
+}
+
+impl GfxFrameGateCounters {
+    fn observe(&mut self, reasons: GfxFrameGateReasons) {
+        self.decisions = self.decisions.saturating_add(1);
+        if reasons.is_deferred() {
+            self.deferred = self.deferred.saturating_add(1);
+        }
+        if reasons.deterministic_in_flight {
+            self.deterministic_in_flight = self.deterministic_in_flight.saturating_add(1);
+        }
+        if reasons.step_stream_backpressure {
+            self.step_stream_backpressure = self.step_stream_backpressure.saturating_add(1);
+        }
+        if reasons.registered_flow_in_flight {
+            self.registered_flow_in_flight = self.registered_flow_in_flight.saturating_add(1);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -894,6 +941,7 @@ impl Gfx {
         Ok(Self {
             ctx,
             renderer: Renderer::new(),
+            frame_gate_observations: None,
         })
     }
 
@@ -946,6 +994,21 @@ impl Gfx {
         self.renderer.take_gpu_frame_terminal_outcomes()
     }
 
+    /// Enable lightweight, surface-keyed gate counts for native performance
+    /// diagnostics. Default-off and not a prerequisite for rendering.
+    pub fn set_frame_gate_observation_enabled(&mut self, enabled: bool) {
+        self.frame_gate_observations = enabled.then(BTreeMap::new);
+    }
+
+    pub fn frame_gate_observation(
+        &self,
+        surface: crate::plugins::render::host::RenderSurfaceId,
+    ) -> Option<GfxFrameGateCounters> {
+        self.frame_gate_observations
+            .as_ref()
+            .map(|observations| observations.get(&surface.raw()).copied().unwrap_or_default())
+    }
+
     pub fn attach_surface(
         &mut self,
         render_surface_id: crate::plugins::render::host::RenderSurfaceId,
@@ -965,6 +1028,9 @@ impl Gfx {
             self.renderer
                 .render_sessions
                 .retire_surface(render_surface_id);
+            if let Some(observations) = self.frame_gate_observations.as_mut() {
+                observations.remove(&render_surface_id.raw());
+            }
         }
         detached
     }
@@ -1043,13 +1109,34 @@ impl Gfx {
                     .submission_lifecycle
                     .has_pending_flow(invocation.flow_id)
         });
-        if should_defer_deterministic_surface(
+        let deterministic_in_flight = should_defer_deterministic_surface(
             !surface_contributions.is_empty(),
             self.renderer
                 .has_in_flight_deterministic_producer(&surface_contributions),
-        ) || gpu_step_streams.should_defer(prepared_frame)
-            || pending_registered_flow
-        {
+        );
+        // Preserve the existing admission short circuit in normal execution:
+        // diagnostics compute all reasons only when explicitly enabled.
+        let reasons = if self.frame_gate_observations.is_some() {
+            GfxFrameGateReasons {
+                deterministic_in_flight,
+                step_stream_backpressure: gpu_step_streams.should_defer(prepared_frame),
+                registered_flow_in_flight: pending_registered_flow,
+            }
+        } else {
+            GfxFrameGateReasons {
+                deterministic_in_flight,
+                step_stream_backpressure: !deterministic_in_flight
+                    && gpu_step_streams.should_defer(prepared_frame),
+                registered_flow_in_flight: pending_registered_flow,
+            }
+        };
+        if let Some(observations) = self.frame_gate_observations.as_mut() {
+            observations
+                .entry(prepared_frame.surface.render_surface_id.raw())
+                .or_default()
+                .observe(reasons);
+        }
+        if reasons.is_deferred() {
             // Progressed observations were published before deferral. This
             // frame did not submit or acquire a surface image.
             return Ok(timings);
@@ -1262,6 +1349,28 @@ mod tests {
 
         let none = Renderer::clip_to_scissor([200.0, 200.0, 10.0, 10.0], 100, 80);
         assert!(none.is_none());
+    }
+
+    #[test]
+    fn opt_in_frame_gate_counts_track_overlapping_reasons_without_inventing_submissions() {
+        use super::{GfxFrameGateCounters, GfxFrameGateReasons};
+        let mut counts = GfxFrameGateCounters::default();
+        counts.observe(GfxFrameGateReasons::default());
+        counts.observe(GfxFrameGateReasons {
+            step_stream_backpressure: true,
+            registered_flow_in_flight: true,
+            ..GfxFrameGateReasons::default()
+        });
+        counts.observe(GfxFrameGateReasons {
+            deterministic_in_flight: true,
+            ..GfxFrameGateReasons::default()
+        });
+        assert_eq!(counts.decisions, 3);
+        assert_eq!(counts.deferred, 2);
+        assert_eq!(counts.deterministic_in_flight, 1);
+        assert_eq!(counts.step_stream_backpressure, 1);
+        assert_eq!(counts.registered_flow_in_flight, 1);
+        // Reasons can overlap; their sum is not the deferred frame count.
     }
 
     #[test]

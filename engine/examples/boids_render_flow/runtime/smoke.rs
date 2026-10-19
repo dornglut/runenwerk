@@ -37,6 +37,7 @@ pub(crate) struct NativeBoidsSmokeStatus {
     require_visual_readback: bool,
     peak_outstanding_steps: usize,
     peak_uncaptured_cpu_ticks: u64,
+    frame_gate_observation: Option<engine::plugins::render::renderer::GfxFrameGateCounters>,
     first_present: Option<Instant>,
     last_present: Option<Instant>,
     present_intervals: Vec<Duration>,
@@ -140,7 +141,7 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
             / status.cpu_renderer_samples_ms.len() as f64
     };
     println!(
-        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} gpu_graph_build_ms_avg={:.2} gpu_prepare_submission_ms_avg={:.2} gpu_submit_prepared_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={}",
+        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} gpu_graph_build_ms_avg={:.2} gpu_prepare_submission_ms_avg={:.2} gpu_submit_prepared_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={} gate_decisions={} gate_deferred={} gate_deterministic={} gate_step_stream={} gate_pending_flow={}",
         status.frames,
         status.required_present_submissions,
         status.presented_opportunities,
@@ -159,7 +160,12 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         mean_cpu_ms(5),
         status.cpu_renderer_samples_ms.len(),
         status.peak_outstanding_steps,
-        status.peak_uncaptured_cpu_ticks
+        status.peak_uncaptured_cpu_ticks,
+        status.frame_gate_observation.unwrap_or_default().decisions,
+        status.frame_gate_observation.unwrap_or_default().deferred,
+        status.frame_gate_observation.unwrap_or_default().deterministic_in_flight,
+        status.frame_gate_observation.unwrap_or_default().step_stream_backpressure,
+        status.frame_gate_observation.unwrap_or_default().registered_flow_in_flight,
     );
     Ok(())
 }
@@ -231,7 +237,12 @@ impl NativeBoidsSmoke {
             .total_completed_steps
             .saturating_sub(source.requested_tick());
         let mut terminal = 0;
+        let mut frame_gate_observation = None;
         if let Ok(gfx) = world.resource_mut::<Gfx>() {
+            if gfx.frame_gate_observation(RenderSurfaceId::primary()).is_none() {
+                gfx.set_frame_gate_observation_enabled(true);
+            }
+            frame_gate_observation = gfx.frame_gate_observation(RenderSurfaceId::primary());
             if !self.terminal_delivery_enabled {
                 gfx.set_gpu_frame_terminal_delivery(true);
                 self.terminal_delivery_enabled = true;
@@ -265,6 +276,7 @@ impl NativeBoidsSmoke {
         state.frames += 1;
         state.peak_outstanding_steps = state.peak_outstanding_steps.max(outstanding);
         state.peak_uncaptured_cpu_ticks = state.peak_uncaptured_cpu_ticks.max(uncaptured);
+        state.frame_gate_observation = frame_gate_observation;
         if presented > state.presented_opportunities {
             let previous_count = state.presented_opportunities;
             state
