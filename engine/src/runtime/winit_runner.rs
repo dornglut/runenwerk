@@ -1455,7 +1455,7 @@ mod tests {
         runner.last_primary_redraw_at = Some(start);
         assert!(runner.frame_is_ready(start));
         assert!(runner.should_request_primary_redraw_now(start));
-        assert!(runner.should_request_primary_redraw_now(start + Duration::from_nanos(1)));
+        assert!(runner.should_request_primary_redraw_now(start + std::time::Duration::from_nanos(1)));
         let policy = runner.frame_pacing_policy();
         let next = runner.frame_pacing_schedule.decide(policy, start);
         assert!(next.request_redraw);
