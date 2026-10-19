@@ -1154,7 +1154,6 @@ mod native_uncapped_transition {
     struct Hook {
         frames: Arc<AtomicUsize>,
         wake_sent: Arc<AtomicBool>,
-        unexpected_demand_frame: Arc<AtomicBool>,
         watchdog_expired: Arc<AtomicBool>,
         watchdog_armed: bool,
         last_frame_at: Option<Instant>,
@@ -1233,7 +1232,6 @@ mod native_uncapped_transition {
             .register_hook(Hook {
                 frames: Arc::clone(&frames),
                 wake_sent: Arc::clone(&demand_wake_sent),
-                unexpected_demand_frame: Arc::clone(&unexpected_demand_frame),
                 watchdog_expired: Arc::clone(&watchdog_expired),
                 watchdog_armed: false,
                 last_frame_at: None,
