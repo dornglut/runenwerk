@@ -38,6 +38,7 @@ pub(crate) struct NativeBoidsSmokeStatus {
     peak_outstanding_steps: usize,
     peak_uncaptured_cpu_ticks: u64,
     frame_gate_observation: Option<engine::plugins::render::renderer::GfxFrameGateCounters>,
+    early_gpu_progress_requested: bool,
     first_present: Option<Instant>,
     last_present: Option<Instant>,
     present_intervals: Vec<Duration>,
@@ -94,6 +95,8 @@ pub(crate) fn install(
     app.init_resource::<NativeWindowHookRegistryResource>();
     let status = Arc::new(Mutex::new(NativeBoidsSmokeStatus {
         require_visual_readback,
+        early_gpu_progress_requested:
+            std::env::var("RUNENWERK_BOIDS_EARLY_GPU_PROGRESS").as_deref() == Ok("1"),
         required_present_submissions: present_target,
         ..NativeBoidsSmokeStatus::default()
     }));
@@ -159,7 +162,7 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
     let (terminal_age_avg_ms, terminal_age_p95_ms) =
         summarize_terminal_host_ages(&status.terminal_host_ages);
     println!(
-        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} gpu_graph_build_ms_avg={:.2} gpu_prepare_submission_ms_avg={:.2} gpu_submit_prepared_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={} gate_decisions={} gate_deferred={} gate_deterministic={} gate_step_stream={} gate_pending_flow={} host_terminal_age_ms_avg={:.2} host_terminal_age_ms_p95={:.2} host_terminal_age_samples={}",
+        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} gpu_graph_build_ms_avg={:.2} gpu_prepare_submission_ms_avg={:.2} gpu_submit_prepared_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={} gate_decisions={} gate_deferred={} gate_deterministic={} gate_step_stream={} gate_pending_flow={} host_terminal_age_ms_avg={:.2} host_terminal_age_ms_p95={:.2} host_terminal_age_samples={} early_gpu_progress={}",
         status.frames,
         status.required_present_submissions,
         status.presented_opportunities,
@@ -187,6 +190,7 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         terminal_age_avg_ms,
         terminal_age_p95_ms,
         status.terminal_host_ages.len(),
+        status.early_gpu_progress_requested,
     );
     Ok(())
 }
