@@ -107,9 +107,14 @@ fn native_counter_fonts() -> UiRuntimeFontConfiguration {
 fn main() {
     if let Ok(mode) = std::env::var("RUNENWERK_NATIVE_UI_READINESS_SMOKE") {
         assert!(
-            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV, UNCAP_HOST_ENV]
-                .iter()
-                .all(|flag| std::env::var_os(flag).is_none()),
+            [
+                NO_RENDER_ENV,
+                RENDER_HOST_ENV,
+                RENDER_UI_HOST_ENV,
+                UNCAP_HOST_ENV
+            ]
+            .iter()
+            .all(|flag| std::env::var_os(flag).is_none()),
             "native Host smoke modes are mutually exclusive"
         );
         native_readiness::run(&mode).expect("native UI readiness smoke must succeed");
@@ -953,7 +958,6 @@ fn verify_secondary_render_attachment(
     Ok(())
 }
 
-
 #[derive(runen_ecs::Resource)]
 struct UncappedHostUpdateProbe {
     updates: Arc<AtomicUsize>,
@@ -985,7 +989,9 @@ impl NativeWindowHook for NativeUncappedHostSmokeHook {
     fn attach(&mut self, _window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
         if !self.watchdog_armed {
             self.watchdog_armed = true;
-            let transport = world.resource::<engine::runtime::NativeWakeTransport>()?.clone();
+            let transport = world
+                .resource::<engine::runtime::NativeWakeTransport>()?
+                .clone();
             let expired = Arc::clone(&self.watchdog_expired);
             // If an uncapped Wait loop strands redraw, wake exactly once to
             // deliver a bounded error instead of waiting for the CI job timeout.
