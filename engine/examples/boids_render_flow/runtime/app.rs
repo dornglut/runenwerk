@@ -444,8 +444,7 @@ fn verify_gpu_simulation_witness(bytes: &[u8], expected_tick: u32) -> Result<()>
     let vx = f32::from_bits(word(4));
     let vy = f32::from_bits(word(5));
     anyhow::ensure!(
-        px.is_finite() && py.is_finite()
-            && (0.0..1.0).contains(&px) && (0.0..1.0).contains(&py),
+        px.is_finite() && py.is_finite() && (0.0..1.0).contains(&px) && (0.0..1.0).contains(&py),
         "Boids GPU final published particle position is non-finite or outside world"
     );
     anyhow::ensure!(
@@ -479,26 +478,41 @@ mod compact_gpu_result_tests {
         verify_gpu_simulation_witness(&valid, 21).unwrap();
         assert!(verify_gpu_simulation_witness(&valid, 22).is_err());
         assert!(verify_gpu_simulation_witness(&valid[..23], 21).is_err());
-        assert!(verify_gpu_simulation_witness(
-            &encoded(21, DEFAULT_BOID_COUNT - 1, [0.5, 0.4], [0.1, -0.2]),
-            21
-        ).is_err());
-        assert!(verify_gpu_simulation_witness(
-            &encoded(21, DEFAULT_BOID_COUNT, [f32::NAN, 0.4], [0.1, -0.2]),
-            21
-        ).is_err());
-        assert!(verify_gpu_simulation_witness(
-            &encoded(21, DEFAULT_BOID_COUNT, [1.2, 0.4], [0.1, -0.2]),
-            21
-        ).is_err());
-        assert!(verify_gpu_simulation_witness(
-            &encoded(21, DEFAULT_BOID_COUNT, [0.5, 0.4], [f32::INFINITY, 0.0]),
-            21
-        ).is_err());
-        assert!(verify_gpu_simulation_witness(
-            &encoded(21, DEFAULT_BOID_COUNT, [0.5, 0.4], [1.1, 0.0]),
-            21
-        ).is_err());
+        assert!(
+            verify_gpu_simulation_witness(
+                &encoded(21, DEFAULT_BOID_COUNT - 1, [0.5, 0.4], [0.1, -0.2]),
+                21
+            )
+            .is_err()
+        );
+        assert!(
+            verify_gpu_simulation_witness(
+                &encoded(21, DEFAULT_BOID_COUNT, [f32::NAN, 0.4], [0.1, -0.2]),
+                21
+            )
+            .is_err()
+        );
+        assert!(
+            verify_gpu_simulation_witness(
+                &encoded(21, DEFAULT_BOID_COUNT, [1.2, 0.4], [0.1, -0.2]),
+                21
+            )
+            .is_err()
+        );
+        assert!(
+            verify_gpu_simulation_witness(
+                &encoded(21, DEFAULT_BOID_COUNT, [0.5, 0.4], [f32::INFINITY, 0.0]),
+                21
+            )
+            .is_err()
+        );
+        assert!(
+            verify_gpu_simulation_witness(
+                &encoded(21, DEFAULT_BOID_COUNT, [0.5, 0.4], [1.1, 0.0]),
+                21
+            )
+            .is_err()
+        );
     }
 }
 
