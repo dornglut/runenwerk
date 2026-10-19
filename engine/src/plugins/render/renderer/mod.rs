@@ -887,18 +887,15 @@ pub struct Gfx {
     early_gpu_progress_affinity: Option<runen_gpu::GpuContextAffinity>,
 }
 
-/// Cumulative, opt-in host gate decisions for one render surface. Gates may
-/// overlap: each reason counts every decision at which it was true. This is
-/// neither GPU completion latency nor a physical display frame counter.
 // A matching early observation replaces the *first* later RenderSubmit poll.
 // Always consume the token even if the device generation has changed.
-fn consume_matching_early_gpu_progress<T: PartialEq>(
-    marker: &mut Option<T>,
-    current: &T,
-) -> bool {
+fn consume_matching_early_gpu_progress<T: PartialEq>(marker: &mut Option<T>, current: &T) -> bool {
     marker.take().as_ref() == Some(current)
 }
 
+/// Cumulative, opt-in host gate decisions for one render surface. Gates may
+/// overlap: each reason counts every decision at which it was true. This is
+/// neither GPU completion latency nor a physical display frame counter.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct GfxFrameGateCounters {
     pub decisions: u64,
@@ -1402,7 +1399,10 @@ mod tests {
 
         marker = Some(1);
         assert!(!consume_matching_early_gpu_progress(&mut marker, &2_u64));
-        assert_eq!(marker, None, "changed affinity must force ordinary observation");
+        assert_eq!(
+            marker, None,
+            "changed affinity must force ordinary observation"
+        );
     }
 
     #[test]

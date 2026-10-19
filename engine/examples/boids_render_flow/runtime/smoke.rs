@@ -95,8 +95,9 @@ pub(crate) fn install(
     app.init_resource::<NativeWindowHookRegistryResource>();
     let status = Arc::new(Mutex::new(NativeBoidsSmokeStatus {
         require_visual_readback,
-        early_gpu_progress_requested:
-            std::env::var("RUNENWERK_BOIDS_EARLY_GPU_PROGRESS").as_deref() == Ok("1"),
+        early_gpu_progress_requested: std::env::var("RUNENWERK_BOIDS_EARLY_GPU_PROGRESS")
+            .as_deref()
+            == Ok("1"),
         required_present_submissions: present_target,
         ..NativeBoidsSmokeStatus::default()
     }));

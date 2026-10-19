@@ -6,8 +6,8 @@ use engine::plugins::render::{
 };
 use engine::plugins::{DebugMetricsPlugin, RenderPlugin, ScenePlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt, FixedTimeState, Res, ResMut, Update};
-use engine::runtime::{PreUpdate, SystemMobilityExt, WorldMut};
 use engine::runtime::WindowStateRegistryResource;
+use engine::runtime::{PreUpdate, SystemMobilityExt, WorldMut};
 use runen_gpu::{GpuContextAffinity, GpuReadbackStatus, GpuSubmissionStatus, GpuTextureFormat};
 
 /// Diagnostic evidence only: a GPU-rendered image is not a retained Boids
