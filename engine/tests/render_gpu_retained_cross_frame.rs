@@ -239,16 +239,27 @@ fn independently_authored_read_write_flows_cannot_bypass_retained_continuity() {
     // authored Flow B cannot read (RAW) or write (WAW) while A owns G5.
     let writer = pollster::block_on(context.submit_work(
         "cross.flow.writer.a",
-        [write_fragment(&shared, "cross.flow.writer.a", &first_values)],
+        [write_fragment(
+            &shared,
+            "cross.flow.writer.a",
+            &first_values,
+        )],
     ))
     .expect("first retained writer must be admitted");
     assert_eq!(writer.status(), GpuSubmissionStatus::Accepted);
     let refused_read = submit(&context, &shared, "cross.flow.reader.b");
     let refused_write = pollster::block_on(context.submit_work(
         "cross.flow.writer.b",
-        [write_fragment(&shared, "cross.flow.writer.b", &second_values)],
+        [write_fragment(
+            &shared,
+            "cross.flow.writer.b",
+            &second_values,
+        )],
     ));
-    for refusal in [refused_read.map(|(submission, _)| submission), refused_write] {
+    for refusal in [
+        refused_read.map(|(submission, _)| submission),
+        refused_write,
+    ] {
         match refusal {
             Err(GpuWorkSubmissionError::SubmissionRejected(reason)) => assert_eq!(
                 reason.kind(),
@@ -284,7 +295,9 @@ fn independently_authored_read_write_flows_cannot_bypass_retained_continuity() {
         Ok(_) => panic!("retained writer bypassed an in-flight read"),
     }
     complete(&context, &reader);
-    let readback = reader.readback(id).expect("exact accepted reader G5 result");
+    let readback = reader
+        .readback(id)
+        .expect("exact accepted reader G5 result");
     match readback.status() {
         GpuReadbackStatus::Ready(bytes) => {
             let expected = first_values
@@ -308,8 +321,8 @@ fn independently_authored_read_write_flows_cannot_bypass_retained_continuity() {
     ))
     .expect("fresh post-reader write admission");
     complete(&context, &replacement);
-    let (final_read, final_id) = submit(&context, &shared, "cross.flow.final.read")
-        .expect("final new graph admission");
+    let (final_read, final_id) =
+        submit(&context, &shared, "cross.flow.final.read").expect("final new graph admission");
     complete(&context, &final_read);
     let expected = second_values
         .iter()
