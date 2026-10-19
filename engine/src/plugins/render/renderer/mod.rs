@@ -880,11 +880,25 @@ pub struct Gfx {
     pub renderer: Renderer,
     /// Optional, per-surface diagnostic counts; never influences G3/G5 admission.
     frame_gate_observations: Option<BTreeMap<u64, GfxFrameGateCounters>>,
+    // An explicitly opted-in consumer may advance this Gfx context in PreUpdate
+    // so its producer can verify G5 completion in Update. Only the next render
+    // of the same GPU generation consumes the pre-observation; later surfaces
+    // keep their original independent progress behavior.
+    early_gpu_progress_affinity: Option<runen_gpu::GpuContextAffinity>,
 }
 
 /// Cumulative, opt-in host gate decisions for one render surface. Gates may
 /// overlap: each reason counts every decision at which it was true. This is
 /// neither GPU completion latency nor a physical display frame counter.
+// A matching early observation replaces the *first* later RenderSubmit poll.
+// Always consume the token even if the device generation has changed.
+fn consume_matching_early_gpu_progress<T: PartialEq>(
+    marker: &mut Option<T>,
+    current: &T,
+) -> bool {
+    marker.take().as_ref() == Some(current)
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct GfxFrameGateCounters {
     pub decisions: u64,
@@ -942,6 +956,7 @@ impl Gfx {
             ctx,
             renderer: Renderer::new(),
             frame_gate_observations: None,
+            early_gpu_progress_affinity: None,
         })
     }
 
@@ -992,6 +1007,21 @@ impl Gfx {
     /// domain simulation steps or visible presentation.
     pub fn take_gpu_frame_terminal_outcomes(&mut self) -> RenderGpuFrameTerminalBatch {
         self.renderer.take_gpu_frame_terminal_outcomes()
+    }
+
+    /// Move the normal nonblocking Gfx-owned GPU observation before a consumer
+    /// producer's Update verification. The next render on this same context
+    /// generation consumes this observation instead of polling a second time.
+    ///
+    /// The Engine still owns G5 status/progress and all terminal/capture
+    /// publication; the application MUST NOT infer producer completion from
+    /// this call. Schedule once before Update, on the rendering invoker thread.
+    /// Multi-surface later render calls retain their existing progress behavior.
+    pub fn progress_gpu_before_producer_update(&mut self) -> Result<()> {
+        self.renderer
+            .begin_frame_gpu_observation(self.ctx.context())?;
+        self.early_gpu_progress_affinity = Some(self.ctx.context().affinity());
+        Ok(())
     }
 
     /// Enable lightweight, surface-keyed gate counts for native performance
@@ -1090,8 +1120,13 @@ impl Gfx {
         ))?;
         self.renderer.render_sessions.synchronize(target_requests);
         let mut timings = GfxFrameTimings::default();
-        self.renderer
-            .begin_frame_gpu_observation(self.ctx.context())?;
+        if !consume_matching_early_gpu_progress(
+            &mut self.early_gpu_progress_affinity,
+            &self.ctx.context().affinity(),
+        ) {
+            self.renderer
+                .begin_frame_gpu_observation(self.ctx.context())?;
+        }
         // Earlier terminal GPU evidence must remain publishable even when
         // validation or surface acquisition rejects this new host frame.
         self.renderer.publish_progressed_gpu_observations();
@@ -1352,6 +1387,22 @@ mod tests {
 
         let none = Renderer::clip_to_scissor([200.0, 200.0, 10.0, 10.0], 100, 80);
         assert!(none.is_none());
+    }
+
+    #[test]
+    fn preupdate_gpu_progress_replaces_one_render_poll_only_for_matching_generation() {
+        use super::consume_matching_early_gpu_progress;
+        let mut marker = None;
+        assert!(!consume_matching_early_gpu_progress(&mut marker, &1_u64));
+
+        marker = Some(1);
+        assert!(consume_matching_early_gpu_progress(&mut marker, &1_u64));
+        assert_eq!(marker, None, "the second surface must not consume it again");
+        assert!(!consume_matching_early_gpu_progress(&mut marker, &1_u64));
+
+        marker = Some(1);
+        assert!(!consume_matching_early_gpu_progress(&mut marker, &2_u64));
+        assert_eq!(marker, None, "changed affinity must force ordinary observation");
     }
 
     #[test]
