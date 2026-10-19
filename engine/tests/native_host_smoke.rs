@@ -124,9 +124,14 @@ fn main() {
     }
     if std::env::var_os(UNCAP_TRANSITION_ENV).is_some() {
         assert!(
-            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV, UNCAP_HOST_ENV]
-                .iter()
-                .all(|flag| std::env::var_os(flag).is_none()),
+            [
+                NO_RENDER_ENV,
+                RENDER_HOST_ENV,
+                RENDER_UI_HOST_ENV,
+                UNCAP_HOST_ENV,
+            ]
+            .iter()
+            .all(|flag| std::env::var_os(flag).is_none()),
             "native Host smoke modes are mutually exclusive"
         );
         native_uncapped_transition::run()
@@ -1072,7 +1077,6 @@ fn native_uncapped_host_smoke() -> anyhow::Result<()> {
     Ok(())
 }
 
-
 fn run_native_uncapped_transition_child_smoke() -> anyhow::Result<()> {
     let status = Command::new(std::env::current_exe()?)
         .env_remove(UNCAP_HOST_ENV)
@@ -1125,9 +1129,7 @@ mod native_uncapped_transition {
                 let unexpected = Arc::clone(&probe.unexpected_demand_frame);
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_millis(180));
-                    if frames.load(Ordering::SeqCst) != 3
-                        || updates.load(Ordering::SeqCst) != 3
-                    {
+                    if frames.load(Ordering::SeqCst) != 3 || updates.load(Ordering::SeqCst) != 3 {
                         unexpected.store(true, Ordering::SeqCst);
                     }
                     sent.store(true, Ordering::SeqCst);
