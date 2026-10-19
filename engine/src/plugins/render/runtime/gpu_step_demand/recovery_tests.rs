@@ -325,6 +325,56 @@ fn accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay() 
         .unwrap();
     let replay_receipt = producer.accepted_submission().unwrap().clone();
     wait(&new_context, &replay_receipt);
+    // Even a real terminal G5 result MUST NOT commit a producer's immutable
+    // accepted prefix when its exact GPU readback is absent or semantically
+    // wrong. Both failures must retain the same accepted receipt and history;
+    // a later correct verification must not need another GPU submission.
+    let foreign_readback = GpuReadbackId::allocate().unwrap();
+    let missing = producer.commit_verified(new_context.affinity(), |submission, steps| {
+        assert_eq!(submission.id(), replay_receipt.id());
+        assert_eq!(
+            steps.iter().map(|s| s.tick()).collect::<Vec<_>>(),
+            vec![1, 2]
+        );
+        if submission.readback(foreign_readback).is_some() {
+            Ok::<(), &'static str>(())
+        } else {
+            Err("not the GPU readback of this accepted source work")
+        }
+    });
+    assert!(matches!(
+        missing,
+        Err(RenderGpuStepCommitError::Verification(_))
+    ));
+    let semantically_wrong = producer.commit_verified(new_context.affinity(), |submission, _| {
+        if bytes_equal(submission, replay_readback, &verified_checkpoint) {
+            Ok::<(), &'static str>(())
+        } else {
+            Err("real GPU bytes do not match the producer's required result")
+        }
+    });
+    assert!(matches!(
+        semantically_wrong,
+        Err(RenderGpuStepCommitError::Verification(_))
+    ));
+    assert_eq!(
+        (producer.requested_tick(), producer.completed_tick()),
+        (3, 0)
+    );
+    assert_eq!(producer.pending_len(), 1);
+    assert_eq!(
+        producer
+            .accepted_steps()
+            .iter()
+            .map(|s| (s.tick(), *s.input()))
+            .collect::<Vec<_>>(),
+        vec![(1, 5), (2, 7)]
+    );
+    assert_eq!(
+        producer.accepted_submission().unwrap().id(),
+        replay_receipt.id()
+    );
+
     let committed = producer
         .commit_verified(new_context.affinity(), |submission, steps| {
             assert_eq!(submission.id(), replay_receipt.id());
