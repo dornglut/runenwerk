@@ -261,7 +261,7 @@ mod tests {
             }
         );
         let demand = decide_frame_pacing(FramePacingPolicyResource::on_demand(), Some(now), now);
-        assert_eq!(demand.request_redraw, false);
+        assert!(!demand.request_redraw);
     }
 
     #[test]
