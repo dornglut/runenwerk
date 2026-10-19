@@ -252,35 +252,20 @@ fn advance_boids_simulation_system(
                 // GPU completion alone cannot commit source ticks. The final
                 // compute pass must supply an actual GPU-produced result for
                 // this same accepted source interval and its final source tick.
-                let proof = streams.accepted_buffer_readback(flow)?;
+                let proof = streams.accepted_buffer_readback(flow)?.clone();
                 let readback = accepted
                     .readback(proof.readback_id())
                     .context("Boids accepted G5 graph omitted its required buffer result")?;
-                let mut ready = false;
-                match readback.status() {
-                    GpuReadbackStatus::Pending => {}
+                // Observation of Ready only admits an *attempt* to verify.
+                // Definitive provenance and GPU-result checks belong to the
+                // same commit callback that advances immutable source time.
+                let mut ready = match readback.status() {
+                    GpuReadbackStatus::Pending => false,
                     GpuReadbackStatus::Failed(failure) => {
                         anyhow::bail!("Boids GPU final-stage witness readback failed: {failure:?}");
                     }
-                    GpuReadbackStatus::Ready(bytes) => {
-                        anyhow::ensure!(
-                            proof.matches_submission(&accepted)
-                                && bytes.as_bytes().len() as u64 == proof.expected_byte_len(),
-                            "Boids GPU final-stage witness is not from its exact completed G5 graph"
-                        );
-                        let last_step_tick = streams
-                            .stream(flow)
-                            .and_then(|stream| stream.accepted_steps().last())
-                            .context("Boids GPU result has no accepted source steps")?
-                            .tick();
-                        let source_tick = last_step_tick
-                            .checked_sub(1)
-                            .and_then(|value| u32::try_from(value).ok())
-                            .context("Boids GPU result source tick exceeds its shader domain")?;
-                        verify_gpu_simulation_witness(bytes.as_bytes(), source_tick)?;
-                        ready = true;
-                    }
-                }
+                    GpuReadbackStatus::Ready(_) => true,
+                };
                 if ready && generation.require_visual_readback {
                     let evidence = streams.accepted_capture_readbacks(flow)?;
                     anyhow::ensure!(
@@ -348,7 +333,26 @@ fn advance_boids_simulation_system(
                                     }),
                                 "Boids source/G5 receipt is inconsistent with its immutable step prefix"
                             );
-                            Ok::<(), anyhow::Error>(())
+                            let readback = submission
+                                .readback(proof.readback_id())
+                                .context("Boids commit has no exact GPU-result readback")?;
+                            let GpuReadbackStatus::Ready(bytes) = readback.status() else {
+                                anyhow::bail!("Boids commit requires a ready GPU-result readback");
+                            };
+                            anyhow::ensure!(
+                                proof.matches_submission(submission)
+                                    && bytes.as_bytes().len() as u64 == proof.expected_byte_len(),
+                                "Boids GPU final-stage witness is not from its exact completed G5 graph"
+                            );
+                            let source_tick = steps
+                                .last()
+                                .context("Boids commit has no last source step")?
+                                .tick()
+                                .checked_sub(1)
+                                .and_then(|value| u32::try_from(value).ok())
+                                .context("Boids GPU result source tick exceeds its shader domain")?;
+                            verify_gpu_simulation_witness(bytes.as_bytes(), source_tick)
+
                         })
                         .map_err(|error| {
                             anyhow::anyhow!("Boids source semantic verification rejected: {error}")
