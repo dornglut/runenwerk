@@ -10,6 +10,7 @@ use runen_gpu::{
     GpuSubmissionFailure, GpuSubmissionId, GpuSubmissionStatus,
 };
 use std::collections::VecDeque;
+use std::time::{Duration, Instant};
 
 #[derive(Debug)]
 struct AcceptedFrameSubmission {
@@ -17,6 +18,7 @@ struct AcceptedFrameSubmission {
     frame: u64,
     surface: u64,
     invocations: Vec<RenderGpuFrameInvocationReceipt>,
+    accepted_observed_at: Instant,
 }
 
 /// Selected ordinary flow invocations present in a composed frame's admitted
@@ -126,6 +128,7 @@ pub struct RenderGpuFrameTerminalOutcome {
     affinity: GpuContextAffinity,
     disposition: RenderGpuFrameTerminalDisposition,
     invocations: Vec<RenderGpuFrameInvocationReceipt>,
+    host_observed_terminal_age: Duration,
 }
 
 impl RenderGpuFrameTerminalOutcome {
@@ -147,6 +150,13 @@ impl RenderGpuFrameTerminalOutcome {
 
     pub fn disposition(&self) -> &RenderGpuFrameTerminalDisposition {
         &self.disposition
+    }
+
+    /// Time from renderer observation of G5 acceptance to its first observed
+    /// terminal state. Includes host progress/poll cadence and therefore does
+    /// NOT measure shader runtime, hardware completion timestamp, or scanout.
+    pub const fn host_observed_terminal_age(&self) -> Duration {
+        self.host_observed_terminal_age
     }
 
     pub fn invocations(&self) -> &[RenderGpuFrameInvocationReceipt] {
@@ -309,6 +319,7 @@ impl RendererSubmissionLifecycle {
             frame,
             surface,
             invocations,
+            accepted_observed_at: Instant::now(),
         });
     }
 
@@ -420,6 +431,7 @@ impl RendererSubmissionLifecycle {
                         affinity: accepted.submission.affinity(),
                         disposition: outcome,
                         invocations: accepted.invocations.clone(),
+                        host_observed_terminal_age: accepted.accepted_observed_at.elapsed(),
                     },
                 );
             }

@@ -41,6 +41,7 @@ pub(crate) struct NativeBoidsSmokeStatus {
     first_present: Option<Instant>,
     last_present: Option<Instant>,
     present_intervals: Vec<Duration>,
+    terminal_host_ages: Vec<Duration>,
     cpu_renderer_samples_ms: Vec<[f32; 6]>,
     required_present_submissions: usize,
     succeeded: bool,
@@ -48,6 +49,20 @@ pub(crate) struct NativeBoidsSmokeStatus {
 }
 
 type SharedStatus = Arc<Mutex<NativeBoidsSmokeStatus>>;
+
+/// Host-observed G5 acceptance-to-terminal age, sampled on a later host
+/// progress point. Quantized by progress cadence; not a shader GPU timestamp.
+fn summarize_terminal_host_ages(samples: &[Duration]) -> (f64, f64) {
+    if samples.is_empty() {
+        return (0.0, 0.0);
+    }
+    let average_ms = samples.iter().map(Duration::as_secs_f64).sum::<f64>() * 1000.0
+        / samples.len() as f64;
+    let mut sorted = samples.to_vec();
+    sorted.sort_unstable();
+    let p95_index = (sorted.len() * 95).div_ceil(100) - 1;
+    (average_ms, sorted[p95_index].as_secs_f64() * 1000.0)
+}
 
 fn parse_native_present_target(value: Option<&str>) -> Result<usize> {
     let Some(value) = value else {
@@ -141,8 +156,10 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
             / status.cpu_renderer_samples_ms.len() as f64
     };
     let gates = status.frame_gate_observation.unwrap_or_default();
+    let (terminal_age_avg_ms, terminal_age_p95_ms) =
+        summarize_terminal_host_ages(&status.terminal_host_ages);
     println!(
-        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} gpu_graph_build_ms_avg={:.2} gpu_prepare_submission_ms_avg={:.2} gpu_submit_prepared_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={} gate_decisions={} gate_deferred={} gate_deterministic={} gate_step_stream={} gate_pending_flow={}",
+        "native_boids_gpu_smoke=pass frames={} present_target={} present_submitted={} terminal_gpu_frames={} verified_gpu_ticks={} sampled_images={} changed_images={} visual_readback={} present_submit_fps={:.2} p95_present_submit_interval_ms={:.2} cpu_renderer_stage_ms_avg={:.2} cpu_flow_encode_ms_avg={:.2} cpu_encode_submit_ms_avg={:.2} gpu_graph_build_ms_avg={:.2} gpu_prepare_submission_ms_avg={:.2} gpu_submit_prepared_ms_avg={:.2} cpu_samples={} peak_outstanding_steps={} peak_uncaptured_cpu_ticks={} gate_decisions={} gate_deferred={} gate_deterministic={} gate_step_stream={} gate_pending_flow={} host_terminal_age_ms_avg={:.2} host_terminal_age_ms_p95={:.2} host_terminal_age_samples={}",
         status.frames,
         status.required_present_submissions,
         status.presented_opportunities,
@@ -167,6 +184,9 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         gates.deterministic_in_flight,
         gates.step_stream_backpressure,
         gates.registered_flow_in_flight,
+        terminal_age_avg_ms,
+        terminal_age_p95_ms,
+        status.terminal_host_ages.len(),
     );
     Ok(())
 }
@@ -238,6 +258,7 @@ impl NativeBoidsSmoke {
             .total_completed_steps
             .saturating_sub(source.requested_tick());
         let mut terminal = 0;
+        let mut terminal_host_ages = Vec::new();
         let mut frame_gate_observation = None;
         if let Ok(gfx) = world.resource_mut::<Gfx>() {
             let primary_surface = RenderSurfaceId::primary();
@@ -263,7 +284,10 @@ impl NativeBoidsSmoke {
                     continue;
                 }
                 match outcome.disposition() {
-                    RenderGpuFrameTerminalDisposition::Completed => terminal += 1,
+                    RenderGpuFrameTerminalDisposition::Completed => {
+                        terminal += 1;
+                        terminal_host_ages.push(outcome.host_observed_terminal_age());
+                    }
                     other => anyhow::bail!("Boids submitted native GPU frame failed: {other:?}"),
                 }
             }
@@ -294,6 +318,7 @@ impl NativeBoidsSmoke {
         }
         state.presented_opportunities = presented;
         state.terminal_gpu_frames += terminal;
+        state.terminal_host_ages.extend(terminal_host_ages);
         state.verified_ticks = verified;
         state.sampled_gpu_images = sampled_gpu_images;
         state.changed_gpu_images = changed_gpu_images;
@@ -323,6 +348,20 @@ impl NativeBoidsSmoke {
 #[cfg(test)]
 mod present_target_tests {
     use super::*;
+
+    #[test]
+    fn terminal_host_observation_summary_is_bounded_and_empty_safe() {
+        assert_eq!(summarize_terminal_host_ages(&[]), (0.0, 0.0));
+        let samples = [
+            Duration::from_millis(4),
+            Duration::from_millis(10),
+            Duration::from_millis(18),
+            Duration::from_millis(8),
+        ];
+        let (avg, p95) = summarize_terminal_host_ages(&samples);
+        assert_eq!(avg, 10.0);
+        assert_eq!(p95, 18.0);
+    }
 
     #[test]
     fn native_target_is_bounded_and_defaults_to_120() {
