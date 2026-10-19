@@ -259,14 +259,18 @@ fn advance_boids_simulation_system(
                 // Observation of Ready only admits an *attempt* to verify.
                 // Definitive provenance and GPU-result checks belong to the
                 // same commit callback that advances immutable source time.
-                let mut ready = match readback.status() {
+                let compact_ready = match readback.status() {
                     GpuReadbackStatus::Pending => false,
                     GpuReadbackStatus::Failed(failure) => {
                         anyhow::bail!("Boids GPU final-stage witness readback failed: {failure:?}");
                     }
                     GpuReadbackStatus::Ready(_) => true,
                 };
-                if ready && generation.require_visual_readback {
+                // Diagnostic visual conformance is a separate required proof
+                // only in the opt-in smoke fixture. Pending image readback
+                // must not silently inherit the compact witness's readiness.
+                let mut visual_ready = false;
+                if compact_ready && generation.require_visual_readback {
                     let evidence = streams.accepted_capture_readbacks(flow)?;
                     anyhow::ensure!(
                         evidence.len() == 1
@@ -312,11 +316,15 @@ fn advance_boids_simulation_system(
                             // Diagnostics do not authorize semantic advancement:
                             // the exact G5 receipt and immutable tick check below do.
                             visual.observe(bytes.as_bytes(), capture_extent);
-                            ready = true;
+                            visual_ready = true;
                         }
                     }
                 }
-                if ready {
+                if boids_result_ready_for_commit(
+                    compact_ready,
+                    generation.require_visual_readback,
+                    visual_ready,
+                ) {
                     let affinity = current_affinity;
                     let stream = streams
                         .stream_mut(flow)
@@ -424,6 +432,16 @@ fn capture_fixed_steps(
     Ok(())
 }
 
+/// Readiness is conjunctive: the optional visual conformance fixture MUST
+/// wait for its own readback, even when the compact source witness is ready.
+fn boids_result_ready_for_commit(
+    compact_ready: bool,
+    require_visual_readback: bool,
+    visual_ready: bool,
+) -> bool {
+    compact_ready && (!require_visual_readback || visual_ready)
+}
+
 /// Validate a real GPU-computed final-stage result, not a CPU tick echo or
 /// population left in retained storage by an earlier accepted submission.
 /// The witness proves a bounded invariant (tick, population, plausible boid 0);
@@ -461,6 +479,15 @@ fn verify_gpu_simulation_witness(bytes: &[u8], expected_tick: u32) -> Result<()>
 #[cfg(test)]
 mod compact_gpu_result_tests {
     use super::*;
+
+    #[test]
+    fn optional_required_visual_result_cannot_commit_while_pending() {
+        assert!(!boids_result_ready_for_commit(false, false, false));
+        assert!(boids_result_ready_for_commit(true, false, false));
+        assert!(!boids_result_ready_for_commit(true, true, false));
+        assert!(!boids_result_ready_for_commit(false, true, true));
+        assert!(boids_result_ready_for_commit(true, true, true));
+    }
 
     fn encoded(tick: u32, population: u32, position: [f32; 2], velocity: [f32; 2]) -> Vec<u8> {
         [
