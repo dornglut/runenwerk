@@ -81,9 +81,26 @@ struct RealizedScheduledPass<'a> {
 struct RealizedPassExecution<'a> {
     pass: &'a CompiledPassExecutionPlan,
     timestamp_indices: Option<GpuPassTimestampIndices>,
-    pipeline: Option<PreparedPipelinePass>,
+    pipeline: Option<std::sync::Arc<PreparedPipelinePass>>,
     before_captures: Vec<PreparedCaptureReadback>,
     after_captures: Vec<PreparedCaptureReadback>,
+}
+
+/// G4 program, layout and runtime binding identity is stable for repeated occurrences of
+/// one compiled pass *within the same prepared invocation*. Historical uploads and
+/// dispatches remain distinct GPU operations; this cache only shares the immutable
+/// realized pipeline/bindings. Never cross an invocation, surface or frame boundary.
+fn realize_pass_once_per_invocation<K: Ord + Copy, T>(
+    cache: &mut BTreeMap<K, Option<std::sync::Arc<T>>>,
+    key: K,
+    realize: impl FnOnce() -> Result<Option<T>>,
+) -> Result<Option<std::sync::Arc<T>>> {
+    if let Some(existing) = cache.get(&key) {
+        return Ok(existing.clone());
+    }
+    let realized = realize()?.map(std::sync::Arc::new);
+    cache.insert(key, realized.clone());
+    Ok(realized)
 }
 
 impl Renderer {
@@ -533,7 +550,7 @@ impl Renderer {
                 );
                 for scheduled in &invocation.scheduled_passes {
                     let pass = scheduled.execution.pass;
-                    let pipeline = scheduled.execution.pipeline.as_ref();
+                    let pipeline = scheduled.execution.pipeline.as_deref();
                     let evidence = EncodedPassEvidence {
                         shader_id: pipeline
                             .map(|prepared| prepared.shader_id.clone())
@@ -859,6 +876,8 @@ impl Renderer {
                             None => None,
                         };
                         let mut realized_passes = Vec::new();
+                        let mut pipeline_by_pass = BTreeMap::new();
+                        let mut pipeline_realization_count = 0_usize;
                         for (ordinal, occurrence) in occurrences.into_iter().enumerate() {
                             let mut fixed_step_uploads = Vec::new();
                             let mut historical_dispatch = None;
@@ -970,14 +989,21 @@ impl Renderer {
                                     &mut before_captures,
                                 )?;
                             }
-                            let pipeline = self.realize_compiled_pass(
-                                context,
-                                &invocation_packet,
-                                flow,
-                                &invocation.inputs,
-                                pass,
-                                shader_registry,
-                                runtime_resources,
+                            let pipeline = realize_pass_once_per_invocation(
+                                &mut pipeline_by_pass,
+                                execution_pass_id(pass),
+                                || {
+                                    pipeline_realization_count += 1;
+                                    self.realize_compiled_pass(
+                                        context,
+                                        &invocation_packet,
+                                        flow,
+                                        &invocation.inputs,
+                                        pass,
+                                        shader_registry,
+                                        runtime_resources,
+                                    )
+                                },
                             )?;
                             let mut after_captures = Vec::new();
                             if capture_runtime.should_attempt_stage(CaptureStage::After) {
@@ -1035,13 +1061,19 @@ impl Renderer {
                                 },
                             });
                         }
+                        tracing::trace!(
+                            target: "runenwerk_profile",
+                            pass_occurrences = realized_passes.len(),
+                            pipeline_realizations = pipeline_realization_count,
+                            "render.flow.invocation_pipeline_realizations"
+                        );
                         let canonical_projections = realized_passes
                             .iter()
                             .map(|scheduled| CanonicalPassProjection {
                                 occurrence: scheduled.occurrence,
                                 control_order_after: &scheduled.control_order_after,
                                 pass: scheduled.execution.pass,
-                                pipeline: scheduled.execution.pipeline.as_ref(),
+                                pipeline: scheduled.execution.pipeline.as_deref(),
                                 timestamp_indices: scheduled.execution.timestamp_indices,
                                 fixed_step_uploads: &scheduled.fixed_step_uploads,
                                 historical_dispatch: scheduled.historical_dispatch,
@@ -2100,6 +2132,67 @@ mod tests {
             )
             .is_some()
         );
+    }
+
+    #[test]
+    fn invocation_pipeline_realization_reuses_each_pass_without_reusing_dynamic_occurrences() {
+        use std::cell::Cell;
+        use std::sync::Arc;
+
+        let mut cache = BTreeMap::<u32, Option<Arc<String>>>::new();
+        let calls = Cell::new(0_u32);
+        let mut resolve = |pass: u32| {
+            realize_pass_once_per_invocation(&mut cache, pass, || {
+                calls.set(calls.get() + 1);
+                Ok(Some(format!("pipeline.{pass}")))
+            })
+            .expect("realization succeeds")
+            .expect("pass has pipeline")
+        };
+        let first = resolve(1);
+        let repeated = resolve(1);
+        let other = resolve(2);
+        assert!(Arc::ptr_eq(&first, &repeated));
+        assert!(!Arc::ptr_eq(&first, &other));
+        assert_eq!(calls.get(), 2, "one realization per unique pass");
+        assert_eq!(&*first, "pipeline.1");
+        assert_eq!(&*other, "pipeline.2");
+
+        // Each physical invocation constructs its own cache: no cached GPU
+        // bindings survive a surface, view, or resource-generation transition.
+        let mut next_invocation = BTreeMap::new();
+        let fresh = realize_pass_once_per_invocation(&mut next_invocation, 1, || {
+            Ok(Some(String::from("pipeline.1")))
+        })
+        .expect("fresh invocation realization")
+        .expect("pass pipeline exists");
+        assert!(!Arc::ptr_eq(&first, &fresh));
+    }
+
+    #[test]
+    fn invocation_pipeline_realization_caches_no_pipeline_but_not_failed_realization() {
+        let mut cache = BTreeMap::<u32, Option<std::sync::Arc<String>>>::new();
+        let mut calls = 0;
+        for _ in 0..4 {
+            assert!(realize_pass_once_per_invocation(&mut cache, 1, || {
+                calls += 1;
+                Ok(None::<String>)
+            })
+            .expect("no-pipeline pass succeeds")
+            .is_none());
+        }
+        assert_eq!(calls, 1);
+
+        assert!(realize_pass_once_per_invocation(&mut cache, 2, || {
+            anyhow::bail!("realization refused")
+        })
+        .is_err());
+        assert!(!cache.contains_key(&2), "errors must not become valid cache entries");
+        let recovered = realize_pass_once_per_invocation(&mut cache, 2, || {
+            Ok(Some(String::from("recovered")))
+        })
+        .expect("a later attempt succeeds");
+        assert_eq!(recovered.as_deref().map(String::as_str), Some("recovered"));
     }
 
     #[test]
