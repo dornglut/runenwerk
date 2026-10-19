@@ -67,22 +67,42 @@ RUNENWERK_G5_REQUIRE_GPU=1 cargo +stable test -p engine --test render_gpu_retain
 RUNENWERK_G5_REQUIRE_GPU=1 cargo +stable test -p engine --test render_gpu_fixed_step_continuity --locked -- --nocapture --test-threads=1
 ```
 
-The first proves conservative read-only retained-resource exclusion, independent
-retained-resource admission, terminal readback, and fresh post-terminal
-submission. The native historical RenderFlow hook also asserts that no two
+The first tests two independently authored public RunenGPU G5 fragments
+against the **same actual retained buffer**. An accepted transfer writer
+rejects overlapping readers (read-after-write) and other writers
+(write-after-write); an accepted reader rejects an overlapping writer
+(write-after-read). Each rejection must be
+`RetainedContinuityChanged`, never an implicitly ordered continuation.
+After predecessor completion, a newly prepared submission must observe the
+actual GPU-written bytes; unrelated retained resources can proceed without a
+global stall. The test also covers read-only overlapping participants.
+These are real G5 resource-participation proofs, **not** two distinct
+application RenderFlow identities sharing an imported retained buffer.
+
+The native historical RenderFlow hook separately asserts that no two
 still-pending G5 frame receipts can select its registered stateful flow,
-including after its producer has committed all steps and subsequent frames
-merely read the retained counter for presentation.
-The second exercises the `RenderGpuStepDemand<T>` immutable-input transport with a test-owned producer: bounded historical input capture across
-deferred host frames, exact GPU results, transient G5 conflict followed by
-fresh preparation, and explicitly verified GPU reset followed by requeue of the
-*same* historical inputs. The recovery fixture reconstructs a semantically
-unverified **terminal-success** batch; it does not emulate an unknown
-partially executed write or device loss. These public G3/G5 tests do not
-implement production RenderFlow scheduling or prove native windowed boids
-`--species` continuity, post-failure GPU reconstruction, or visible Present.
-An exact-head green Vulkan lane is therefore a *scoped* integration result,
-not completion of [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291).
+including after the producer has committed all steps and later frames only
+read the retained counter for presentation. A genuinely attached second
+native surface requests that same flow while its source interval remains
+unverified: it must defer without submission, then make independent progress
+when switched to an unrelated flow.
+
+The second public G5 test exercises the `RenderGpuStepDemand<T>` immutable-input
+transport: bounded historical capture across deferred host frames, exact GPU
+results, typed G5 conflict followed by **fresh** preparation, and explicitly
+verified reconstruction followed by requeue of the same historical inputs.
+Its controlled recovery starts from a producer-verified GPU checkpoint,
+rejects incorrect restored bytes, and never treats failed or missing
+readbacks as semantic completion. A separate GPU-required recovery test
+proves that a completed G5 submission with rejected semantic evidence
+retains its exact accepted interval until a correct verification succeeds.
+
+These tests do **not** inject arbitrary physical device loss or partial
+writes, make Runenwerk the owner of G5 hazards, establish an independent
+cross-RenderFlow shared-buffer import contract, or qualify owner GPU
+performance. An exact-head green hosted Vulkan lane is therefore a scoped
+integration result, not automatic completion of
+[Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291).
 
 ## Native historical RenderFlow execution proof
 
