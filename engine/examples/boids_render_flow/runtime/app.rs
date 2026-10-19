@@ -94,9 +94,6 @@ impl BoidsVerifiedGpuGeneration {
     }
 }
 
-/// Producer-owned retention limit, not a budget for replaying elapsed host time.
-const MAX_OUTSTANDING_BOIDS_STEPS: usize = 512;
-
 /// The ephemeral Boids example time-dilates its source clock when GPU capacity
 /// is exhausted. Engine fixed steps remain host cadence observations, not
 /// immutable Boids inputs until admitted by this producer. Applications with
@@ -128,7 +125,10 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     let require_visual_readback =
         native_smoke && std::env::var("RUNENWERK_BOIDS_NATIVE_NO_READBACK").as_deref() != Ok("1");
     let mut streams = RenderGpuFlowStepStreams::default();
-    streams.register(source.flow_id(), 0, MAX_OUTSTANDING_BOIDS_STEPS)?;
+    // Retain at most one authored four-substep region. A larger resident
+    // queue would delay visible simulation by many seconds under sustained
+    // GPU backpressure before time dilation could begin.
+    streams.register(source.flow_id(), 0, source.max_substeps() as usize)?;
     // Visual conformance deliberately samples the GPU-rendered image. Normal
     // execution requires only terminal G5 success and exact source lineage:
     // staging an entire surface on the CPU is not a Boids simulation invariant.
@@ -502,6 +502,26 @@ mod source_interval_tests {
         assert!(guard.should_fail_source(12));
         assert!(guard.should_fail_source(13));
         assert!(!BoidsVerifiedGpuGeneration::default().should_fail_source(u64::MAX));
+    }
+
+    #[test]
+    fn admitted_boids_history_never_exceeds_one_gpu_region() {
+        for rule in [
+            crate::rendering::BoidsRuleFamily::Flocking,
+            crate::rendering::BoidsRuleFamily::SpeciesInteraction,
+        ] {
+            let schema = BoidsGpuStepSchema::from_flow(&build_render_flow()).unwrap();
+            let state = BoidsRenderState::with_rule(rule);
+            let mut demand = RenderGpuStepDemand::new(0, schema.max_substeps() as usize);
+            let mut pacing = BoidsSourcePacing::default();
+            capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(4, 4)).unwrap();
+            assert_eq!(demand.outstanding(), schema.max_substeps() as usize);
+            capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(8, 4)).unwrap();
+            capture_fixed_steps(&mut demand, &schema, &state, &mut pacing, fixed(9, 1)).unwrap();
+            assert_eq!(demand.outstanding(), schema.max_substeps() as usize);
+            assert_eq!(demand.requested_tick(), 4);
+            assert_eq!(pacing.time_dilated_host_ticks(), 5);
+        }
     }
 
     #[test]
