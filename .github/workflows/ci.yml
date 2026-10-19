@@ -185,6 +185,48 @@ jobs:
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
             cargo +stable run -p engine --example boids_render_flow --locked -- --species
 
+      - name: Prove Boids earlier GPU progress against real Vulkan (source and readback)
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
+          RUNENWERK_BOIDS_EARLY_GPU_PROGRESS: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          # Exercise the opt-in before-Update Gfx lifecycle, not just its
+          # normal-path default. These are separate real-GPU consumer runs:
+          # original flocking verifies actual GPU image change; species
+          # verifies source lineage without full-frame image readback.
+          for mode in flocking species; do
+            log="$(mktemp)"
+            args=()
+            if [ "$mode" = species ]; then
+              args=(--species)
+              export RUNENWERK_BOIDS_NATIVE_NO_READBACK=1
+            else
+              unset RUNENWERK_BOIDS_NATIVE_NO_READBACK
+            fi
+            if ! xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+                 cargo +stable run -p engine --example boids_render_flow --locked -- "${args[@]}" >"$log" 2>&1; then
+              cat "$log"
+              rm -f "$log"
+              exit 1
+            fi
+            cat "$log"
+            if ! grep -F "native_boids_gpu_smoke=pass" "$log" \
+                || ! grep -F "early_gpu_progress=true" "$log"; then
+              echo "Early-GPU-progress native Boids conformance marker missing" >&2
+              rm -f "$log"
+              exit 1
+            fi
+            if [ "$mode" = flocking ]; then
+              grep -F "visual_readback=true" "$log"
+            else
+              grep -F "visual_readback=false" "$log"
+            fi
+            rm -f "$log"
+          done
+
       - name: Run maintained arena presentation GPU proof
         env:
           RUST_BACKTRACE: '1'
