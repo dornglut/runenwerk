@@ -17,8 +17,9 @@ use crate::plugins::render::{
 };
 use anyhow::Context;
 use runen_gpu::{
-    GpuPresentOperation, GpuRenderDraw, GpuResourceLabel, GpuResourceProvenance, GpuTextureHandle,
-    GpuTextureViewHandle, GpuWorkFragment, GpuWorkImport,
+    GpuBufferRegion, GpuPresentOperation, GpuReadbackId, GpuReadbackOperation, GpuRenderDraw,
+    GpuResourceLabel, GpuResourceProvenance, GpuTextureHandle, GpuTextureViewHandle,
+    GpuWorkFragment, GpuWorkImport,
 };
 use runen_render::execution_2d::{Render2dPreparedContribution, Render2dTarget};
 
@@ -139,6 +140,8 @@ impl Renderer {
         // formation completes without a raw device/queue loan.
         let producer_required_captures =
             gpu_step_streams.required_capture_selectors_for_frame(prepared_frame);
+        let producer_required_buffers =
+            gpu_step_streams.required_buffer_readbacks_for_frame(prepared_frame);
         let mut batch = self.realize_render_batch(
             context,
             surface_texture,
@@ -234,6 +237,23 @@ impl Renderer {
                 final_capture_occurrences.push(occurrence);
             }
             terminal_controls = final_capture_occurrences;
+        }
+        // Required compact source observations must be actual G5 readbacks of
+        // GPU-written resources *after* the producer's authored work. Render
+        // supplies graph order; G3/G5 supply hazards and physical admission.
+        let mut required_buffer_receipts = Vec::new();
+        for (flow, buffer) in producer_required_buffers {
+            let id = GpuReadbackId::allocate()?;
+            let operation = GpuReadbackOperation::new(GpuBufferRegion::whole(&buffer)?.into(), id)?;
+            let occurrence = allocate_aux_occurrence(&mut batch.maximum_occurrence)?;
+            nodes.push(ResolvedRenderGpuWorkNode::capture_readback(
+                occurrence,
+                GpuResourceLabel::new(format!("render.source.buffer-readback.{}", occurrence.raw()))?,
+                operation,
+                terminal_controls.iter().copied(),
+            ));
+            terminal_controls = vec![occurrence];
+            required_buffer_receipts.push((flow, id, buffer.descriptor().size_bytes()));
         }
         let present_occurrence = allocate_aux_occurrence(&mut batch.maximum_occurrence)?;
         let present = GpuPresentOperation::new(
@@ -382,6 +402,9 @@ impl Renderer {
         // Infallibly bind the exact historical source interval immediately at
         // the real G5 admission boundary, before later renderer bookkeeping.
         gpu_step_streams.accepted(prepared_frame, &submission);
+        for (flow, id, bytes) in required_buffer_receipts {
+            gpu_step_streams.associate_accepted_buffer_readback(&submission, flow, id, bytes);
+        }
         self.retained_submission_trace.accepted(
             submission.clone(),
             retained_trace,

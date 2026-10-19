@@ -8,11 +8,11 @@ use crate::plugins::render::inspect::{
     CaptureStage, RenderCaptureIdentity, RenderCaptureSelector, RenderCaptureSubmissionReceipt,
 };
 use crate::plugins::render::{
-    PreparedRenderFrame, RenderFixedStepIterationUniform, RenderFlowId, RenderPassId,
+    PreparedRenderFrame, RenderFixedStepIterationUniform, RenderFlow, RenderFlowId, RenderPassId,
 };
 use runen_gpu::{
-    GpuContextAffinity, GpuReadbackId, GpuReadbackStatus, GpuSubmission, GpuSubmissionStatus,
-    GpuTextureFormat, GpuWorkResourceId,
+    GpuBufferHandle, GpuBufferUsage, GpuContextAffinity, GpuReadbackId, GpuReadbackStatus,
+    GpuSubmission, GpuSubmissionId, GpuSubmissionStatus, GpuTextureFormat, GpuWorkResourceId,
 };
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
@@ -503,6 +503,33 @@ impl RenderGpuAcceptedCaptureReadback {
         Some(rgba)
     }
 }
+/// A bounded producer-required buffer observation in the same composed G5
+/// submission as its actual state mutation. This is evidence provenance, not
+/// a GPU-result validity claim: callers inspect the GPU-written bytes.
+#[derive(Debug, Clone)]
+pub struct RenderGpuAcceptedBufferReadback {
+    submission_id: GpuSubmissionId,
+    affinity: GpuContextAffinity,
+    readback_id: GpuReadbackId,
+    byte_len: u64,
+}
+
+impl RenderGpuAcceptedBufferReadback {
+    pub const fn readback_id(&self) -> GpuReadbackId {
+        self.readback_id
+    }
+
+    pub fn matches_submission(&self, submission: &GpuSubmission) -> bool {
+        self.submission_id == submission.id()
+            && self.affinity == submission.affinity()
+            && matches!(submission.status(), GpuSubmissionStatus::Completed)
+            && submission.readback(self.readback_id).is_some()
+    }
+
+    pub const fn expected_byte_len(&self) -> u64 {
+        self.byte_len
+    }
+}
 
 /// A producer cannot treat missing or truncated capture references as
 /// successful verification. A full G5 submission stays retained either way.
@@ -574,6 +601,8 @@ pub struct RenderGpuFlowStepStreams {
     streams: BTreeMap<RenderFlowId, RenderGpuStepDemand<RenderGpuFixedStepInput>>,
     required_capture_selectors: BTreeMap<RenderFlowId, Vec<RenderCaptureSelector>>,
     accepted_capture_readbacks: BTreeMap<RenderFlowId, AcceptedCaptureReadbacks>,
+    required_buffer_readbacks: BTreeMap<RenderFlowId, GpuBufferHandle>,
+    accepted_buffer_readbacks: BTreeMap<RenderFlowId, RenderGpuAcceptedBufferReadback>,
 }
 
 impl RenderGpuFlowStepStreams {
@@ -606,6 +635,105 @@ impl RenderGpuFlowStepStreams {
         flow: RenderFlowId,
     ) -> Option<&RenderGpuStepDemand<RenderGpuFixedStepInput>> {
         self.streams.get(&flow)
+    }
+
+
+    /// Require a small GPU-written storage-buffer result before the producer
+    /// may semantically commit its accepted steps. G3/G5 still own ordering,
+    /// buffer access, in-flight reservation and actual readback readiness.
+    /// The buffer must be a resource from this producer's authored RenderFlow;
+    /// source-side registration cannot import an unrelated buffer into a flow.
+    pub fn require_buffer_readback(
+        &mut self,
+        source_flow: &RenderFlow,
+        buffer: GpuBufferHandle,
+    ) -> anyhow::Result<()> {
+        const MAX_REQUIRED_BYTES: u64 = 64 * 1024;
+        let flow = source_flow.id();
+        let stream = self.streams.get(&flow).ok_or_else(|| {
+            anyhow::anyhow!("GPU buffer result requires a registered source flow")
+        })?;
+        anyhow::ensure!(
+            source_flow.graph().resources.resources.iter().any(|resource| {
+                resource.buffer_handle().is_some_and(|owned| owned == &buffer)
+            }),
+            "producer GPU readback buffer is not authored by the registered RenderFlow"
+        );
+        anyhow::ensure!(
+            stream.accepted_submission().is_none()
+                && !self.required_buffer_readbacks.contains_key(&flow),
+            "cannot replace/duplicate an accepted producer's GPU buffer result"
+        );
+        let descriptor = buffer.descriptor();
+        anyhow::ensure!(
+            descriptor.size_bytes() <= MAX_REQUIRED_BYTES
+                && descriptor.usages().contains(GpuBufferUsage::CopySource),
+            "producer GPU buffer result requires CopySource and at most 64 KiB"
+        );
+        self.required_buffer_readbacks.insert(flow, buffer);
+        Ok(())
+    }
+
+    /// The exact selected producer flows that actually carry new source work.
+    /// Returned GPU handles are only borrowed from authored source resources.
+    pub(crate) fn required_buffer_readbacks_for_frame(
+        &self,
+        frame: &PreparedRenderFrame,
+    ) -> Vec<(RenderFlowId, GpuBufferHandle)> {
+        frame.flow_invocations.iter().filter_map(|invocation| {
+            let stream = self.streams.get(&invocation.flow_id)?;
+            (stream.pending_len() > 0 && stream.accepted_submission().is_none())
+                .then(|| {
+                    self.required_buffer_readbacks
+                        .get(&invocation.flow_id)
+                        .cloned()
+                        .map(|buffer| (invocation.flow_id, buffer))
+                })
+                .flatten()
+        }).collect()
+    }
+
+    /// Fail closed on missing/mismatched accepted G5 provenance; this is not a
+    /// substitute for checking Pending/Failed/Ready and the GPU result bytes.
+    pub fn accepted_buffer_readback(
+        &self,
+        flow: RenderFlowId,
+    ) -> anyhow::Result<&RenderGpuAcceptedBufferReadback> {
+        let submission = self.streams.get(&flow)
+            .and_then(RenderGpuStepDemand::accepted_submission)
+            .ok_or_else(|| anyhow::anyhow!("GPU source has no accepted step batch"))?;
+        let result = self.accepted_buffer_readbacks.get(&flow)
+            .ok_or_else(|| anyhow::anyhow!("accepted GPU source has no required buffer result"))?;
+        anyhow::ensure!(
+            result.submission_id == submission.id()
+                && result.affinity == submission.affinity()
+                && submission.readback(result.readback_id).is_some(),
+            "GPU source buffer result belongs to a different G5 submission"
+        );
+        Ok(result)
+    }
+
+    pub(crate) fn associate_accepted_buffer_readback(
+        &mut self,
+        submission: &GpuSubmission,
+        flow: RenderFlowId,
+        readback_id: GpuReadbackId,
+        byte_len: u64,
+    ) {
+        if !self.streams.get(&flow)
+            .and_then(RenderGpuStepDemand::accepted_submission)
+            .is_some_and(|accepted| accepted.id() == submission.id()
+                && accepted.affinity() == submission.affinity())
+            || submission.readback(readback_id).is_none()
+        {
+            return;
+        }
+        self.accepted_buffer_readbacks.insert(flow, RenderGpuAcceptedBufferReadback {
+            submission_id: submission.id(),
+            affinity: submission.affinity(),
+            readback_id,
+            byte_len,
+        });
     }
 
     /// Require a canonical texture readback for this producer's semantic
@@ -839,6 +967,7 @@ impl RenderGpuFlowStepStreams {
                 .expect("prevalidated producer history");
             if !history.steps.is_empty() {
                 self.accepted_capture_readbacks.remove(&invocation.flow_id);
+                self.accepted_buffer_readbacks.remove(&invocation.flow_id);
                 stream.accept_prevalidated(history.steps.len(), submission.clone());
             }
         }

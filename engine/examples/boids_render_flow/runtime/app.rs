@@ -1,4 +1,7 @@
-use crate::rendering::{BoidsGpuStepSchema, BoidsRenderState, BoidsRuleFamily, build_render_flow};
+use crate::rendering::{
+    BoidsGpuStepSchema, BoidsRenderState, BoidsRuleFamily, DEFAULT_BOID_COUNT,
+    DEFAULT_GRID_CELLS_X, DEFAULT_GRID_CELLS_Y, build_render_flow,
+};
 use anyhow::{Context, Result};
 use engine::plugins::render::inspect::{CaptureStage, CaptureTextureClass, RenderCaptureSelector};
 use engine::plugins::render::{
@@ -129,9 +132,9 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     // queue would delay visible simulation by many seconds under sustained
     // GPU backpressure before time dilation could begin.
     streams.register(source.flow_id(), 0, source.max_substeps() as usize)?;
-    // Visual conformance deliberately samples the GPU-rendered image. Normal
-    // execution requires only terminal G5 success and exact source lineage:
-    // staging an entire surface on the CPU is not a Boids simulation invariant.
+    streams.require_buffer_readback(&flow, source.cell_counts_buffer().clone())?;
+    // Normal simulation requires a compact GPU-written cell-count result.
+    // Full-frame image capture remains opt-in visual conformance only.
     if require_visual_readback {
         streams.require_capture(
             source.flow_id(),
@@ -247,12 +250,29 @@ fn advance_boids_simulation_system(
                 );
             }
             GpuSubmissionStatus::Completed => {
-                // Physical G5 success proves completion of the submitted graph.
-                // Boids retains immutable source inputs and checks the exact tick
-                // interval before admitting it; only native visual conformance
-                // additionally demands a full RGBA readback.
-                let mut ready = !generation.require_visual_readback;
-                if generation.require_visual_readback {
+                // Completion and immutable source labels do NOT prove a GPU
+                // simulation result. Validate this G5 submission's actual
+                // GPU-written grid population before committing source ticks.
+                let proof = streams.accepted_buffer_readback(flow)?;
+                let readback = accepted.readback(proof.readback_id())
+                    .context("Boids accepted G5 graph omitted its required buffer result")?;
+                let mut ready = false;
+                match readback.status() {
+                    GpuReadbackStatus::Pending => {}
+                    GpuReadbackStatus::Failed(failure) => {
+                        anyhow::bail!("Boids GPU grid result readback failed: {failure:?}");
+                    }
+                    GpuReadbackStatus::Ready(bytes) => {
+                        anyhow::ensure!(
+                            proof.matches_submission(&accepted)
+                                && bytes.as_bytes().len() as u64 == proof.expected_byte_len(),
+                            "Boids GPU grid proof is not from its exact completed G5 graph"
+                        );
+                        verify_gpu_grid_population(bytes.as_bytes())?;
+                        ready = true;
+                    }
+                }
+                if ready && generation.require_visual_readback {
                     let evidence = streams.accepted_capture_readbacks(flow)?;
                     anyhow::ensure!(
                         evidence.len() == 1
@@ -389,6 +409,55 @@ fn capture_fixed_steps(
     pacing.last_host_fixed_tick = fixed.total_completed_steps;
     pacing.time_dilated_host_ticks = next_dilated;
     Ok(())
+}
+
+
+/// GPU-generated cell counts are written by the authored count stage for
+/// each accepted source tick; the final batch leaves the last source step's
+/// counts resident. This validates nontrivial GPU-produced simulation state,
+/// not just a shader echo of a CPU-submitted source tick. It does not claim
+/// full numerical validation of every boid position or velocity.
+fn verify_gpu_grid_population(bytes: &[u8]) -> Result<()> {
+    let expected_cells = (DEFAULT_GRID_CELLS_X as usize)
+        .checked_mul(DEFAULT_GRID_CELLS_Y as usize)
+        .context("Boids grid cell count overflow")?;
+    anyhow::ensure!(
+        bytes.len() == expected_cells * 4,
+        "Boids GPU grid proof byte count does not match the authored grid"
+    );
+    let mut total = 0u64;
+    for cell in bytes.chunks_exact(4) {
+        let count = u32::from_le_bytes(cell.try_into().expect("exact four bytes"));
+        anyhow::ensure!(
+            count <= DEFAULT_BOID_COUNT,
+            "Boids GPU grid proof contains an impossible cell population"
+        );
+        total = total.checked_add(u64::from(count))
+            .context("Boids GPU grid population sum overflow")?;
+    }
+    anyhow::ensure!(
+        total == u64::from(DEFAULT_BOID_COUNT),
+        "Boids GPU grid proof population mismatch: GPU {total}, expected {DEFAULT_BOID_COUNT}"
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod compact_gpu_result_tests {
+    use super::*;
+
+    #[test]
+    fn grid_result_requires_real_population_bytes_not_just_tick_identity() {
+        let cells = (DEFAULT_GRID_CELLS_X * DEFAULT_GRID_CELLS_Y) as usize;
+        let mut bytes = vec![0u8; cells * 4];
+        assert!(verify_gpu_grid_population(&bytes).is_err());
+        bytes[0..4].copy_from_slice(&DEFAULT_BOID_COUNT.to_le_bytes());
+        verify_gpu_grid_population(&bytes).unwrap();
+        bytes[4..8].copy_from_slice(&1u32.to_le_bytes());
+        assert!(verify_gpu_grid_population(&bytes).is_err());
+        bytes.truncate(bytes.len() - 4);
+        assert!(verify_gpu_grid_population(&bytes).is_err());
+    }
 }
 
 #[cfg(test)]
