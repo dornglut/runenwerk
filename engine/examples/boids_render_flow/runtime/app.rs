@@ -426,8 +426,8 @@ fn verify_gpu_grid_population(bytes: &[u8]) -> Result<()> {
         "Boids GPU grid proof byte count does not match the authored grid"
     );
     let mut total = 0u64;
-    for cell in bytes.chunks_exact(4) {
-        let count = u32::from_le_bytes(cell.try_into().expect("exact four bytes"));
+    for cell in bytes.as_chunks::<4>().0 {
+        let count = u32::from_le_bytes(*cell);
         anyhow::ensure!(
             count <= DEFAULT_BOID_COUNT,
             "Boids GPU grid proof contains an impossible cell population"
