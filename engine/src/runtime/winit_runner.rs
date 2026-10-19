@@ -4337,7 +4337,9 @@ mod tests {
                 },
             )
             .expect("actual RunenUI semantic focus action settles");
-            slots.input_ownership(slot).expect("fresh framework M13 focus")
+            slots
+                .input_ownership(slot)
+                .expect("fresh framework M13 focus")
         };
         assert_ne!(
             focused.revision(),
