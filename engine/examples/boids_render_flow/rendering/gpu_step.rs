@@ -30,7 +30,7 @@ pub(crate) struct BoidsGpuStepSchema {
     uniforms: [GpuWorkResourceId; 8],
     passes: [RenderPassId; 8],
     draw_pass: RenderPassId,
-    cell_counts: GpuBufferHandle,
+    witness: GpuBufferHandle,
 }
 
 impl BoidsGpuStepSchema {
@@ -52,18 +52,18 @@ impl BoidsGpuStepSchema {
         let draw_pass = flow
             .pass_id("boids.draw")
             .context("missing Boids graph terminal draw pass for required GPU evidence")?;
-        let grid_counts = flow
-            .resource_id("boids.grid.cell_counts")
-            .context("missing Boids GPU grid counter resource")?;
-        let cell_counts = flow
+        let witness_id = flow
+            .resource_id("boids.simulation.witness")
+            .context("missing Boids GPU final-stage witness resource")?;
+        let witness = flow
             .graph()
             .resources
             .resources
             .iter()
-            .find(|resource| *resource.id() == grid_counts)
+            .find(|resource| *resource.id() == witness_id)
             .and_then(|resource| resource.buffer_handle())
             .cloned()
-            .context("Boids GPU grid counter has no actual G5 buffer handle")?;
+            .context("Boids GPU final-stage witness has no G5 buffer handle")?;
         Ok(Self {
             flow_id: flow.id(),
             uniforms: uniforms
@@ -71,7 +71,7 @@ impl BoidsGpuStepSchema {
                 .expect("eight checked Boids uniform IDs"),
             passes: passes.try_into().expect("eight checked Boids pass IDs"),
             draw_pass,
-            cell_counts,
+            witness,
         })
     }
 
@@ -83,8 +83,8 @@ impl BoidsGpuStepSchema {
         self.draw_pass
     }
 
-    pub(crate) fn cell_counts_buffer(&self) -> &GpuBufferHandle {
-        &self.cell_counts
+    pub(crate) fn witness_buffer(&self) -> &GpuBufferHandle {
+        &self.witness
     }
 
     pub(crate) const fn max_substeps(&self) -> u32 {

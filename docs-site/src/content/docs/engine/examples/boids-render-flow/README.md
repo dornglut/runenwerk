@@ -56,9 +56,16 @@ passes using exact IDs from the authored `RenderFlow`. The ECS fixed-time
 counter describes **requested** source steps, never proof that GPU state has
 advanced. The Engine admits an ordered, bounded prefix to RunenGPU G5 and
 retains accepted source steps until its exact completed submission and producer-owned
-source interval verification. GPU-resident normal simulation does not require a
-GPU-to-CPU color readback. The native smoke explicitly opts into the full-frame
-texture witness to test rendered pixels and motion.
+source interval verification. Normal simulation requires a **24-byte final-stage
+GPU storage-buffer witness** from its exact accepted G5 submission: the GPU publishes
+the last source tick, sums the current grid-cell populations, and includes one
+particle's simulated position and velocity. The producer rejects a stale tick,
+wrong population, or invalid sampled state before advancing its verified tick.
+This is a bounded numerical invariant, **not** an exhaustive verification of all
+particle positions or a recoverable GPU checkpoint. GPU-resident normal
+simulation does not require a GPU-to-CPU color readback. The native smoke
+explicitly opts into the full-frame texture witness to test rendered pixels
+and motion.
 
 On the first accepted source step, the shader seeds the retained boid population;
 later source steps advance their own captured ticks, not a reconstructed host

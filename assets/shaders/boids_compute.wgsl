@@ -12,6 +12,13 @@ struct U32Word {
     value: u32,
 };
 
+struct SimulationWitness {
+    source_tick: u32,
+    population: u32,
+    position: vec2<f32>,
+    velocity: vec2<f32>,
+};
+
 struct ComputeParams {
     frame_meta: vec4<u32>, // tick, mode, boid_count, grid_cell_count
     grid: vec4<u32>, // cells_x, cells_y, cell_count, padding
@@ -56,6 +63,9 @@ struct FixedStepIteration {
 
 @group(0) @binding(7)
 var<uniform> fixed_step_iteration: FixedStepIteration;
+
+@group(0) @binding(8)
+var<storage, read_write> simulation_witness: array<SimulationWitness>;
 
 const MODE_SEED: u32 = 0u;
 const MODE_CLEAR_COUNTS: u32 = 1u;
@@ -362,6 +372,18 @@ fn cs_main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     if (mode == MODE_PUBLISH) {
         boids_a[index] = boids_b[index];
+        if (index == 0u) {
+            // Every count was GPU-written in the latest count stage.
+            // Read in the final publish stage, after the actual simulation
+            // pass, so old source-tick results cannot certify a new batch.
+            var population = 0u;
+            for (var cell = 0u; cell < cell_count; cell = cell + 1u) {
+                population = population + atomicLoad(&cell_counts[cell].value);
+            }
+            simulation_witness[0] = SimulationWitness(
+                tick, population, boids_b[0].position, boids_b[0].velocity
+            );
+        }
         return;
     }
 }

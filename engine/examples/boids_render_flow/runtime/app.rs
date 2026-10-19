@@ -1,6 +1,5 @@
 use crate::rendering::{
-    BoidsGpuStepSchema, BoidsRenderState, BoidsRuleFamily, DEFAULT_BOID_COUNT,
-    DEFAULT_GRID_CELLS_X, DEFAULT_GRID_CELLS_Y, build_render_flow,
+    BoidsGpuStepSchema, BoidsRenderState, BoidsRuleFamily, DEFAULT_BOID_COUNT, build_render_flow,
 };
 use anyhow::{Context, Result};
 use engine::plugins::render::inspect::{CaptureStage, CaptureTextureClass, RenderCaptureSelector};
@@ -132,8 +131,8 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     // queue would delay visible simulation by many seconds under sustained
     // GPU backpressure before time dilation could begin.
     streams.register(source.flow_id(), 0, source.max_substeps() as usize)?;
-    streams.require_buffer_readback(&flow, source.cell_counts_buffer().clone())?;
-    // Normal simulation requires a compact GPU-written cell-count result.
+    streams.require_buffer_readback(&flow, source.witness_buffer().clone())?;
+    // Normal simulation requires a 24-byte GPU-written final-stage witness.
     // Full-frame image capture remains opt-in visual conformance only.
     if require_visual_readback {
         streams.require_capture(
@@ -250,9 +249,9 @@ fn advance_boids_simulation_system(
                 );
             }
             GpuSubmissionStatus::Completed => {
-                // Completion and immutable source labels do NOT prove a GPU
-                // simulation result. Validate this G5 submission's actual
-                // GPU-written grid population before committing source ticks.
+                // GPU completion alone cannot commit source ticks. The final
+                // compute pass must supply an actual GPU-produced result for
+                // this same accepted source interval and its final source tick.
                 let proof = streams.accepted_buffer_readback(flow)?;
                 let readback = accepted
                     .readback(proof.readback_id())
@@ -261,15 +260,24 @@ fn advance_boids_simulation_system(
                 match readback.status() {
                     GpuReadbackStatus::Pending => {}
                     GpuReadbackStatus::Failed(failure) => {
-                        anyhow::bail!("Boids GPU grid result readback failed: {failure:?}");
+                        anyhow::bail!("Boids GPU final-stage witness readback failed: {failure:?}");
                     }
                     GpuReadbackStatus::Ready(bytes) => {
                         anyhow::ensure!(
                             proof.matches_submission(&accepted)
                                 && bytes.as_bytes().len() as u64 == proof.expected_byte_len(),
-                            "Boids GPU grid proof is not from its exact completed G5 graph"
+                            "Boids GPU final-stage witness is not from its exact completed G5 graph"
                         );
-                        verify_gpu_grid_population(bytes.as_bytes())?;
+                        let last_step_tick = streams
+                            .stream(flow)
+                            .and_then(|stream| stream.accepted_steps().last())
+                            .context("Boids GPU result has no accepted source steps")?
+                            .tick();
+                        let source_tick = last_step_tick
+                            .checked_sub(1)
+                            .and_then(|value| u32::try_from(value).ok())
+                            .context("Boids GPU result source tick exceeds its shader domain")?;
+                        verify_gpu_simulation_witness(bytes.as_bytes(), source_tick)?;
                         ready = true;
                     }
                 }
@@ -412,33 +420,37 @@ fn capture_fixed_steps(
     Ok(())
 }
 
-/// GPU-generated cell counts are written by the authored count stage for
-/// each accepted source tick; the final batch leaves the last source step's
-/// counts resident. This validates nontrivial GPU-produced simulation state,
-/// not just a shader echo of a CPU-submitted source tick. It does not claim
-/// full numerical validation of every boid position or velocity.
-fn verify_gpu_grid_population(bytes: &[u8]) -> Result<()> {
-    let expected_cells = (DEFAULT_GRID_CELLS_X as usize)
-        .checked_mul(DEFAULT_GRID_CELLS_Y as usize)
-        .context("Boids grid cell count overflow")?;
+/// Validate a real GPU-computed final-stage result, not a CPU tick echo or
+/// population left in retained storage by an earlier accepted submission.
+/// The witness proves a bounded invariant (tick, population, plausible boid 0);
+/// it does not numerically verify all particles or restore lost GPU contents.
+fn verify_gpu_simulation_witness(bytes: &[u8], expected_tick: u32) -> Result<()> {
     anyhow::ensure!(
-        bytes.len() == expected_cells * 4,
-        "Boids GPU grid proof byte count does not match the authored grid"
+        bytes.len() == 24,
+        "Boids GPU simulation witness must contain exactly 24 bytes"
     );
-    let mut total = 0u64;
-    for cell in bytes.as_chunks::<4>().0 {
-        let count = u32::from_le_bytes(*cell);
-        anyhow::ensure!(
-            count <= DEFAULT_BOID_COUNT,
-            "Boids GPU grid proof contains an impossible cell population"
-        );
-        total = total
-            .checked_add(u64::from(count))
-            .context("Boids GPU grid population sum overflow")?;
-    }
+    let words = bytes.as_chunks::<4>().0;
+    let word = |index: usize| u32::from_le_bytes(words[index]);
     anyhow::ensure!(
-        total == u64::from(DEFAULT_BOID_COUNT),
-        "Boids GPU grid proof population mismatch: GPU {total}, expected {DEFAULT_BOID_COUNT}"
+        word(0) == expected_tick,
+        "Boids GPU simulation witness is stale or belongs to another source tick"
+    );
+    anyhow::ensure!(
+        word(1) == DEFAULT_BOID_COUNT,
+        "Boids GPU computed population does not match authored source count"
+    );
+    let px = f32::from_bits(word(2));
+    let py = f32::from_bits(word(3));
+    let vx = f32::from_bits(word(4));
+    let vy = f32::from_bits(word(5));
+    anyhow::ensure!(
+        px.is_finite() && py.is_finite()
+            && (0.0..1.0).contains(&px) && (0.0..1.0).contains(&py),
+        "Boids GPU final published particle position is non-finite or outside world"
+    );
+    anyhow::ensure!(
+        vx.is_finite() && vy.is_finite() && vx * vx + vy * vy <= 1.0,
+        "Boids GPU final published particle velocity is implausible"
     );
     Ok(())
 }
@@ -447,17 +459,46 @@ fn verify_gpu_grid_population(bytes: &[u8]) -> Result<()> {
 mod compact_gpu_result_tests {
     use super::*;
 
+    fn encoded(tick: u32, population: u32, position: [f32; 2], velocity: [f32; 2]) -> Vec<u8> {
+        [
+            tick,
+            population,
+            position[0].to_bits(),
+            position[1].to_bits(),
+            velocity[0].to_bits(),
+            velocity[1].to_bits(),
+        ]
+        .into_iter()
+        .flat_map(u32::to_le_bytes)
+        .collect()
+    }
+
     #[test]
-    fn grid_result_requires_real_population_bytes_not_just_tick_identity() {
-        let cells = (DEFAULT_GRID_CELLS_X * DEFAULT_GRID_CELLS_Y) as usize;
-        let mut bytes = vec![0u8; cells * 4];
-        assert!(verify_gpu_grid_population(&bytes).is_err());
-        bytes[0..4].copy_from_slice(&DEFAULT_BOID_COUNT.to_le_bytes());
-        verify_gpu_grid_population(&bytes).unwrap();
-        bytes[4..8].copy_from_slice(&1u32.to_le_bytes());
-        assert!(verify_gpu_grid_population(&bytes).is_err());
-        bytes.truncate(bytes.len() - 4);
-        assert!(verify_gpu_grid_population(&bytes).is_err());
+    fn final_gpu_result_rejects_stale_corrupt_and_nonphysical_state() {
+        let valid = encoded(21, DEFAULT_BOID_COUNT, [0.5, 0.4], [0.1, -0.2]);
+        verify_gpu_simulation_witness(&valid, 21).unwrap();
+        assert!(verify_gpu_simulation_witness(&valid, 22).is_err());
+        assert!(verify_gpu_simulation_witness(&valid[..23], 21).is_err());
+        assert!(verify_gpu_simulation_witness(
+            &encoded(21, DEFAULT_BOID_COUNT - 1, [0.5, 0.4], [0.1, -0.2]),
+            21
+        ).is_err());
+        assert!(verify_gpu_simulation_witness(
+            &encoded(21, DEFAULT_BOID_COUNT, [f32::NAN, 0.4], [0.1, -0.2]),
+            21
+        ).is_err());
+        assert!(verify_gpu_simulation_witness(
+            &encoded(21, DEFAULT_BOID_COUNT, [1.2, 0.4], [0.1, -0.2]),
+            21
+        ).is_err());
+        assert!(verify_gpu_simulation_witness(
+            &encoded(21, DEFAULT_BOID_COUNT, [0.5, 0.4], [f32::INFINITY, 0.0]),
+            21
+        ).is_err());
+        assert!(verify_gpu_simulation_witness(
+            &encoded(21, DEFAULT_BOID_COUNT, [0.5, 0.4], [1.1, 0.0]),
+            21
+        ).is_err());
     }
 }
 

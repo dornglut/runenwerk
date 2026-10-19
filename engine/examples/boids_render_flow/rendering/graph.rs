@@ -1,5 +1,6 @@
 use crate::rendering::{
-    BoidAgent, BoidsRenderState, DEFAULT_BOID_COUNT, DEFAULT_GRID_CELLS_X, DEFAULT_GRID_CELLS_Y,
+    BoidAgent, BoidsGpuWitness, BoidsRenderState, DEFAULT_BOID_COUNT, DEFAULT_GRID_CELLS_X,
+    DEFAULT_GRID_CELLS_Y,
 };
 use engine::plugins::render::{
     BoundedUniformGrid2dBuildPlan, BoundedUniformGrid2dConfig, BoundedUniformGrid2dStage,
@@ -26,6 +27,13 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .storage_array_with_initialization::<U32Counter>(
             "boids.grid.cell_counts",
             grid_cell_count,
+            GpuBufferInitialization::Zeroed,
+        )
+        .expect("render flow authoring should succeed");
+    let (flow, gpu_witness) = flow
+        .storage_array_with_initialization::<BoidsGpuWitness>(
+            "boids.simulation.witness",
+            1,
             GpuBufferInitialization::Zeroed,
         )
         .expect("render flow authoring should succeed");
@@ -85,6 +93,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
     let grid_scatter_cursors_binding = binding_key(5);
     let grid_sorted_indices_binding = binding_key(6);
     let fixed_step_iteration_binding = binding_key(7);
+    let witness_binding = binding_key(8);
     // `boids_compose.wgsl` declares its draw parameters at group 0, binding 0.
     let draw_params_binding = binding_key(0);
 
@@ -106,6 +115,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
         .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .bind_storage(witness_binding, gpu_witness.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish()
         .compute_pass(clear_counts.clone())
@@ -124,6 +134,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
         .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .bind_storage(witness_binding, gpu_witness.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_grid_workgroups)
         .finish()
         .compute_pass(count_cells.clone())
@@ -139,6 +150,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
         .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .bind_storage(witness_binding, gpu_witness.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish()
         .compute_pass(scan_counts.clone())
@@ -154,6 +166,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
         .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .bind_storage(witness_binding, gpu_witness.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_scan_workgroups)
         .finish()
         .compute_pass(reset_cursors.clone())
@@ -172,6 +185,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
         .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .bind_storage(witness_binding, gpu_witness.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_grid_workgroups)
         .finish()
         .compute_pass(scatter_indices.clone())
@@ -190,6 +204,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
         .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .bind_storage(witness_binding, gpu_witness.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish()
         .compute_pass(simulate_neighbors.clone())
@@ -205,6 +220,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_cell_offsets_binding, grid_cell_offsets.clone())
         .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors.clone())
         .bind_storage(grid_sorted_indices_binding, grid_sorted_indices.clone())
+        .bind_storage(witness_binding, gpu_witness.clone())
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish()
         .compute_pass(publish_draw.clone())
@@ -220,6 +236,7 @@ pub(crate) fn build_render_flow() -> RenderFlow {
         .bind_storage(grid_cell_offsets_binding, grid_cell_offsets)
         .bind_storage(grid_scatter_cursors_binding, grid_scatter_cursors)
         .bind_storage(grid_sorted_indices_binding, grid_sorted_indices)
+        .bind_storage(witness_binding, gpu_witness)
         .dispatch_from_state(BoidsRenderState::dispatch_workgroups)
         .finish();
 

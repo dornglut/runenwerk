@@ -673,8 +673,9 @@ impl RenderGpuFlowStepStreams {
         let descriptor = buffer.descriptor();
         anyhow::ensure!(
             descriptor.size_bytes() <= MAX_REQUIRED_BYTES
+                && descriptor.usages().contains(GpuBufferUsage::Storage)
                 && descriptor.usages().contains(GpuBufferUsage::CopySource),
-            "producer GPU buffer result requires CopySource and at most 64 KiB"
+            "producer GPU result must be a storage buffer with CopySource and at most 64 KiB"
         );
         self.required_buffer_readbacks.insert(flow, buffer);
         Ok(())
@@ -997,6 +998,12 @@ impl RenderGpuFlowStepStreams {
 #[cfg(test)]
 mod required_capture_tests {
     use super::*;
+    use crate::plugins::render::GpuUniform;
+
+    #[derive(Debug, Clone, Copy, GpuUniform)]
+    struct CpuOnlyResult {
+        value: u32,
+    }
 
     #[test]
     fn producer_buffer_proof_rejects_foreign_unbounded_and_duplicate_resources() {
@@ -1009,7 +1016,17 @@ mod required_capture_tests {
         let (oversized, oversized_buffer) = RenderFlow::new("proof.oversized")
             .storage_array::<crate::plugins::render::U32Counter>("oversized.data", 16_385)
             .unwrap();
+        let (uniform_flow, uniform_buffer) = RenderFlow::new("proof.uniform")
+            .uniform_buffer::<CpuOnlyResult>("proof.cpu_writable")
+            .unwrap();
         let mut streams = RenderGpuFlowStepStreams::default();
+        streams.register(uniform_flow.id(), 0, 4).unwrap();
+        assert!(
+            streams
+                .require_buffer_readback(&uniform_flow, uniform_buffer)
+                .is_err(),
+            "a CPU-authored uniform must not certify GPU-compute results"
+        );
         streams.register(flow.id(), 0, 4).unwrap();
         streams.register(oversized.id(), 0, 4).unwrap();
         assert!(

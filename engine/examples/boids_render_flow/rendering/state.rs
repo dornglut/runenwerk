@@ -49,6 +49,16 @@ pub(crate) struct BoidAgent {
     pub visual_heading: [f32; 2],
 }
 
+/// The final compute pass writes one small, source-tick-correlated GPU result.
+/// This is an invariant witness, not a complete numerical or recovery checkpoint.
+#[derive(Debug, Clone, Copy, GpuStorage)]
+pub(crate) struct BoidsGpuWitness {
+    pub source_tick: u32,
+    pub population: u32,
+    pub position: [f32; 2],
+    pub velocity: [f32; 2],
+}
+
 #[derive(Debug, Clone, Copy, GpuUniform)]
 pub(crate) struct BoidsComputeParams {
     pub meta: [u32; 4],
