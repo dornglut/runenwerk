@@ -1370,7 +1370,10 @@ mod tests {
             None,
         );
         assert!(result.is_err());
-        assert_eq!(std::fs::read(&old_report).unwrap(), b"previous evidence".to_vec());
+        assert_eq!(
+            std::fs::read(&old_report).unwrap(),
+            b"previous evidence".to_vec()
+        );
         std::fs::remove_dir_all(&directory).unwrap();
     }
 

@@ -446,11 +446,17 @@ pub(super) fn write_report(path: &std::path::Path, report: &PerformanceReport) -
         .write(true)
         .create_new(true)
         .open(path)
-        .with_context(|| format!("create new Render Lab performance report {}", path.display()))?;
+        .with_context(|| {
+            format!(
+                "create new Render Lab performance report {}",
+                path.display()
+            )
+        })?;
     if let Err(error) = file.write_all(&bytes).and_then(|()| file.flush()) {
         drop(file);
         let _ = std::fs::remove_file(path);
-        return Err(error).with_context(|| format!("write Render Lab performance report {}", path.display()));
+        return Err(error)
+            .with_context(|| format!("write Render Lab performance report {}", path.display()));
     }
     Ok(())
 }
@@ -715,7 +721,10 @@ mod tests {
             RenderFrameObservationPolicyResource::enabled(4),
         );
         assert!(write_report(&path, &report).is_err());
-        assert_eq!(std::fs::read(&path).unwrap(), b"existing schema-v2 evidence".to_vec());
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            b"existing schema-v2 evidence".to_vec()
+        );
         std::fs::remove_file(&path).unwrap();
     }
 
