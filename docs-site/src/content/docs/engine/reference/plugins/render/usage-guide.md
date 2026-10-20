@@ -49,24 +49,26 @@ Import `AppRenderExt` directly or through `engine::prelude::*`. These owner oper
 - feature registry
 - prepared frame resource
 - pipeline cache stats resource
+- renderer-owned nonblocking GPU progress in `PreUpdate`
 - render prepare/submit systems
 
 Feature modules should register feature-owned flow declarations and state resources; they should not duplicate plugin bootstrap wiring.
 
 ## Frame Pipeline Contract
 
-`RenderPlugin` wires a two-phase render frame contract:
+`RenderPlugin` wires renderer GPU completion observation before producer verification, then a two-phase render frame contract:
 
-1. `RenderPrepare`:
+1. `PreUpdate`: the invoker-thread `frame_render_gpu_progress_before_update` advances the current Gfx context once through the existing nonblocking RunenGPU G5 progress/reconciliation contract when Gfx exists. GPU completion can then be verified by source-owned `Update` producers. No Gfx means no poll; no drawable frame does not inhibit this progress.
+2. `RenderPrepare`:
    - `sync_render_feature_registry_system`
    - `sync_render_flow_registry_system`
    - `frame_render_prepare_system`
-2. `RenderSubmit`:
+3. `RenderSubmit`:
    - `frame_render_submit_system`
 
 `frame_render_prepare_system` publishes an owned `PreparedRenderFrame` into `PreparedRenderFrameResource`.
 
-`frame_render_submit_system` consumes the prepared frame and submits through renderer integration state and public RunenGPU execution contracts. It does not perform live extraction of flow-declared ECS resources.
+`frame_render_submit_system` consumes the prepared frame and submits through renderer integration state and public RunenGPU execution contracts. It does not perform live extraction of flow-declared ECS resources. The first matching Gfx render consumes the earlier GPU progress observation instead of polling twice; subsequent surfaces retain their normal progress, and an incompatible device affinity falls back to a normal render-time observation. This observation alone never verifies producer steps or authorizes retained-resource reuse.
 
 Feature fallback policy is resolved in prepare (`Ready | Stale | Disabled | Missing`) and submit/runtime executes the encoded policy without ECS back-fills.
 

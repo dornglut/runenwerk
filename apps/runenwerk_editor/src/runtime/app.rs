@@ -36,6 +36,7 @@ const EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.p
 const EDITOR_VIEWPORT_PICKING_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.picking";
 const EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID: &str = "runenwerk.editor.viewport.product.overlay";
 const EDITOR_MAIN_UI_PASS_ID: &str = "runenwerk.editor.main.ui";
+const EDITOR_MAIN_PRESENT_PASS_ID: &str = "runenwerk.editor.main.present";
 pub const EDITOR_MATERIAL_PREVIEW_FLOW_ID: &str = "runenwerk.editor.material.preview.flow";
 const EDITOR_MATERIAL_PREVIEW_PASS_ID: &str = "runenwerk.editor.material.preview.pass";
 pub const EDITOR_VIEWPORT_SCENE_PRODUCT_SHADER_ID: &str = "editor_viewport_scene_product";
@@ -198,6 +199,7 @@ fn register_editor_render_flow(app: &mut App) -> Result<()> {
         .offscreen_products_only()
         .order_after(EDITOR_VIEWPORT_SCENE_PRODUCT_PASS_ID)
         .shader_asset(EDITOR_VIEWPORT_PICKING_PRODUCT_SHADER_ID)
+        .clear_color(EDITOR_VIEWPORT_TRANSPARENT_CLEAR)
         .uniform_from_state_with_surface_to(
             scene_product_uniform_binding,
             scene_product_uniform.clone(),
@@ -221,6 +223,11 @@ fn register_editor_render_flow(app: &mut App) -> Result<()> {
         .main_surface_only()
         .order_after(EDITOR_VIEWPORT_OVERLAY_PRODUCT_PASS_ID)
         .finish()
+        .present_pass(EDITOR_MAIN_PRESENT_PASS_ID)?
+        .main_surface_only()
+        .order_after(EDITOR_MAIN_UI_PASS_ID)
+        .surface_color()?
+        .finish()
         .validate()
         .expect("editor render flow should validate");
     app.add_render_flow(flow);
@@ -231,6 +238,7 @@ fn register_editor_render_flow(app: &mut App) -> Result<()> {
         .offscreen_products_only()
         .shader_asset(EDITOR_MATERIAL_PREVIEW_SHADER_ID)
         .for_feature(engine::plugins::render::MATERIAL_RENDER_FEATURE_ID)
+        .clear_color(EDITOR_VIEWPORT_TRANSPARENT_CLEAR)
         .write_target_alias(VIEWPORT_TARGET_ALIAS_MATERIAL_PREVIEW)
         .finish()
         .validate()
@@ -296,6 +304,55 @@ mod tests {
     use crate::shell::RunenwerkWorkbenchComposition;
 
     use super::*;
+
+    #[test]
+    fn editor_flows_initialize_product_attachments_and_present_after_ui() {
+        use engine::plugins::render::{CompiledPassExecutionPlan, RenderFlowRegistryResource};
+        let mut app = build_headless_app().expect("editor app");
+        let registry = app
+            .world_mut()
+            .resource_mut::<RenderFlowRegistryResource>()
+            .unwrap();
+        registry.sync_compiled_flows();
+        let main = registry
+            .compiled_flows()
+            .iter()
+            .find(|flow| flow.flow_label == EDITOR_MAIN_FLOW_ID)
+            .unwrap();
+        let presents = main
+            .execution
+            .passes
+            .iter()
+            .filter_map(|pass| match pass {
+                CompiledPassExecutionPlan::Present(present) => Some(present),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(presents.len(), 1, "one terminal presentation");
+        let ui_position = main
+            .execution
+            .passes
+            .iter()
+            .position(|pass| matches!(pass, CompiledPassExecutionPlan::BuiltinUiComposite(_)))
+            .unwrap();
+        let present_position = main
+            .execution
+            .passes
+            .iter()
+            .position(|pass| matches!(pass, CompiledPassExecutionPlan::Present(_)))
+            .unwrap();
+        assert!(present_position > ui_position);
+        for flow in registry.compiled_flows() {
+            for pass in &flow.execution.passes {
+                if let CompiledPassExecutionPlan::Fullscreen(raster) = pass {
+                    assert!(
+                        raster.clear_color.is_some(),
+                        "new product attachments need initialization before Load"
+                    );
+                }
+            }
+        }
+    }
 
     #[test]
     fn material_lab_headless_app_installs_material_lab_workbench_host() {

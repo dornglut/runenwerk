@@ -4,13 +4,12 @@ use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::plugin::WorldAuthorityState;
 use crate::plugins::render::features::{
     FeatureContributionStatus, FeatureFallbackPolicy, PreparedDetailFeatureResource,
-    PreparedWindFieldFeatureResource, PreparedWorldFeatureResource,
-    world::runtime_cache::WorldRuntimeCacheResource,
+    PreparedWorldFeatureResource, world::runtime_cache::WorldRuntimeCacheResource,
 };
 use crate::plugins::render::frame::{
     PreparedDetailCellContribution, PreparedDetailFeatureContribution,
-    PreparedWindFieldFeatureContribution, PreparedWorldChunkContribution,
-    PreparedWorldDrawBatchRef, PreparedWorldFeatureContribution, PreparedWorldResidencyIntent,
+    PreparedWorldChunkContribution, PreparedWorldDrawBatchRef, PreparedWorldFeatureContribution,
+    PreparedWorldResidencyIntent,
 };
 use crate::plugins::render::inspect::{
     RenderDebugTimingsState, RenderRuntimeResourceInspectorState, WorldRuntimeInspectorSnapshot,
@@ -86,12 +85,6 @@ pub fn prepare_world_feature_contributions_system(mut world: WorldMut) {
         detail_feature.payload = PreparedDetailFeatureContribution {
             cells: detail_cells,
         };
-    }
-
-    if let Ok(wind_feature) = world.resource_mut::<PreparedWindFieldFeatureResource>() {
-        wind_feature.status = FeatureContributionStatus::Missing;
-        wind_feature.fallback_policy = FeatureFallbackPolicy::SkipFeaturePasses;
-        wind_feature.payload = PreparedWindFieldFeatureContribution::default();
     }
 
     if let Ok(metrics) = world.resource_mut::<WorldDebugMetricsResource>() {

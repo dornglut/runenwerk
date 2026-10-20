@@ -5,6 +5,7 @@ use crate::plugins::render::{
     RenderBlendMode, RenderCullMode, RenderDepthPolicy, RenderFeatureId, RenderPassId,
     RenderPrimitiveTopology, RenderRasterState, RenderVertexFormat, RenderVertexStepMode,
 };
+use anyhow::Context;
 use runen_gpu::{
     GpuAdmittedProgramSource, GpuBindingKey, GpuBindingLayoutRefinement,
     GpuColorTargetStateDescriptor, GpuColorWriteMask, GpuCompareFunction,
@@ -243,7 +244,13 @@ impl Renderer {
         let runtime_bindings = GpuRuntimeBindingSet::new(
             pipeline_key.pipeline_descriptor.layout().clone(),
             primary_values.into_iter().chain(material_values),
-        )?;
+        )
+        .with_context(|| {
+            format!(
+                "material/runtime binding realization failed for flow '{}' pass '{}'",
+                flow.flow_id, pass_id,
+            )
+        })?;
 
         let program = pollster::block_on(
             context.realize_program(pipeline_key.pipeline_descriptor.program()),
@@ -378,7 +385,7 @@ fn gpu_material_binding_refinements_for_pass(
     let Some(material) = packet.prepared_material.as_ref() else {
         return Ok(Vec::new());
     };
-    gpu_material_binding_refinements(material)
+    gpu_material_binding_refinements(material, execution_pass_shader_reference(pass))
 }
 
 fn sorted_material_texture_bindings(
@@ -389,15 +396,27 @@ fn sorted_material_texture_bindings(
         .iter()
         .flat_map(|instance| instance.texture_bindings.iter())
         .collect::<Vec<_>>();
-    bindings.sort_by_key(|binding| {
-        (
-            binding.bind_group,
-            binding.texture_binding,
-            binding.sampler_binding,
-            binding.resource_slot_index,
-        )
-    });
+    bindings.sort_by_key(|binding| binding.resource_order_key());
     bindings
+}
+
+fn material_texture_binding_matches_program(
+    binding: &crate::plugins::render::PreparedMaterialTextureBinding,
+    shader: Option<&RenderShaderReference>,
+) -> bool {
+    use crate::plugins::render::PreparedMaterialTextureProgramScope;
+    match (&binding.program_scope, shader) {
+        (PreparedMaterialTextureProgramScope::AllMaterialPrograms, _) => true,
+        (
+            PreparedMaterialTextureProgramScope::SceneBundle,
+            Some(RenderShaderReference::MaterialSceneBundle { .. }),
+        ) => true,
+        (
+            PreparedMaterialTextureProgramScope::ShaderAsset(id),
+            Some(RenderShaderReference::AssetPath(path)),
+        ) => id == path,
+        _ => false,
+    }
 }
 
 fn gpu_material_runtime_binding_values_for_pass(
@@ -424,7 +443,11 @@ fn gpu_material_runtime_binding_values_for_pass(
         return Ok(Vec::new());
     };
     let bindings = sorted_material_texture_bindings(material);
-    if bindings.is_empty() {
+    let shader = execution_pass_shader_reference(pass);
+    if !bindings
+        .iter()
+        .any(|binding| material_texture_binding_matches_program(binding, shader))
+    {
         return Ok(Vec::new());
     }
     let resources = packet.prepared_material_gpu_resources.as_ref().ok_or_else(|| {
@@ -451,6 +474,9 @@ fn gpu_material_runtime_binding_values_for_pass(
         .zip(&resources._texture_views)
         .zip(&resources._samplers)
     {
+        if !material_texture_binding_matches_program(binding, shader) {
+            continue;
+        }
         values.push(GpuRuntimeBindingValue::new(
             GpuBindingKey::try_new(
                 u64::from(binding.bind_group),
@@ -473,10 +499,14 @@ fn gpu_material_runtime_binding_values_for_pass(
 
 fn gpu_material_binding_refinements(
     material: &crate::plugins::render::PreparedMaterialFeatureContribution,
+    shader: Option<&RenderShaderReference>,
 ) -> Result<Vec<GpuBindingLayoutRefinement>> {
     let bindings = sorted_material_texture_bindings(material);
     let mut refinements = Vec::with_capacity(bindings.len() * 2);
     for binding in bindings {
+        if !material_texture_binding_matches_program(binding, shader) {
+            continue;
+        }
         if binding.bind_group != 1 {
             bail!(
                 "material runtime binding uses group {}, but the renderer material contract requires exact group 1",
@@ -767,11 +797,66 @@ mod tests {
     }
 
     #[test]
+    fn material_program_selection_preserves_each_source_resource_and_coordinate() {
+        use crate::plugins::render::PreparedMaterialTextureProgramScope;
+        let mut scene = texture_binding(0, 1, 2, 3);
+        scene.program_scope = PreparedMaterialTextureProgramScope::SceneBundle;
+        scene.artifact_id = "scene-2d".into();
+        let mut preview = texture_binding(0, 1, 0, 1);
+        preview.program_scope = PreparedMaterialTextureProgramScope::ShaderAsset("preview".into());
+        preview.artifact_id = "preview-3d".into();
+        preview.texture_kind = PreparedMaterialTextureKind::Texture3D;
+        let material = material_with_bindings(vec![preview, scene]);
+        material
+            .validate_portable_limits()
+            .expect("disjoint program ABI should validate");
+        let scene_shader = RenderShaderReference::MaterialSceneBundle {
+            fallback_asset: "fallback".into(),
+        };
+        let preview_shader = RenderShaderReference::AssetPath("preview".into());
+        let sorted = sorted_material_texture_bindings(&material);
+        assert_eq!(sorted[0].artifact_id, "scene-2d");
+        assert_eq!(sorted[1].artifact_id, "preview-3d");
+        assert!(material_texture_binding_matches_program(
+            sorted[0],
+            Some(&scene_shader)
+        ));
+        assert!(!material_texture_binding_matches_program(
+            sorted[1],
+            Some(&scene_shader)
+        ));
+        assert!(!material_texture_binding_matches_program(
+            sorted[0],
+            Some(&preview_shader)
+        ));
+        assert!(material_texture_binding_matches_program(
+            sorted[1],
+            Some(&preview_shader)
+        ));
+        for (shader, coordinates) in [(&scene_shader, [2, 3]), (&preview_shader, [0, 1])] {
+            let refinements = gpu_material_binding_refinements(&material, Some(shader)).unwrap();
+            assert_eq!(
+                refinements
+                    .iter()
+                    .map(|r| r.key().binding())
+                    .collect::<Vec<_>>(),
+                coordinates
+            );
+        }
+        let other_shader = RenderShaderReference::AssetPath("other".into());
+        assert!(
+            gpu_material_binding_refinements(&material, Some(&other_shader))
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn material_group_one_refinements_use_transported_compiler_coordinates() {
         let material = material_with_bindings(vec![texture_binding(91, 1, 31, 47)]);
 
-        let refinements =
-            gpu_material_binding_refinements(&material).expect("typed refinements should form");
+        let refinements = gpu_material_binding_refinements(&material, None)
+            .expect("typed refinements should form");
         assert_eq!(refinements.len(), 2);
         assert_eq!(refinements[0].key().group(), 1);
         assert_eq!(refinements[0].key().binding(), 31);
@@ -790,7 +875,7 @@ mod tests {
     #[test]
     fn material_group_one_refinements_reject_invalid_or_duplicate_transported_keys() {
         let invalid_group = material_with_bindings(vec![texture_binding(0, 2, 31, 47)]);
-        let error = gpu_material_binding_refinements(&invalid_group)
+        let error = gpu_material_binding_refinements(&invalid_group, None)
             .expect_err("material refinements must reject a non-group-one compiler coordinate");
         assert!(error.to_string().contains("exact group 1"));
 
@@ -798,7 +883,7 @@ mod tests {
             texture_binding(0, 1, 31, 47),
             texture_binding(1, 1, 31, 47),
         ]);
-        let error = gpu_material_binding_refinements(&duplicate)
+        let error = gpu_material_binding_refinements(&duplicate, None)
             .expect_err("material refinements must reject duplicate final GPU keys");
         assert!(error.to_string().contains("duplicate final GPU key"));
     }

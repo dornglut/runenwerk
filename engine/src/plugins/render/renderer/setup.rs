@@ -97,6 +97,8 @@ impl Renderer {
             last_capture_selector_results: Vec::new(),
             last_captured_textures: Vec::new(),
             gpu_observations: super::render_flow::RendererGpuObservationState::default(),
+            submission_lifecycle: Default::default(),
+            retained_submission_trace: Default::default(),
             pending_gpu_observation_output:
                 super::render_flow::RendererGpuObservationOutput::default(),
             runenui_gpu_accepted: Vec::new(),
@@ -129,6 +131,7 @@ impl Renderer {
         // capture consume the resulting public lifecycle facts; neither feature creates a poll
         // loop or reaches into the backend.
         context.progress();
+        self.submission_lifecycle.reconcile(context);
         self.render_sessions.reconcile();
         let super::render_flow::RendererGpuObservationOutput {
             timing_evidence,
@@ -196,6 +199,24 @@ impl Renderer {
             .append(&mut progressed.runenui_presented);
         self.runenui_gpu_rejected
             .append(&mut progressed.runenui_rejected);
+    }
+
+    /// Accepted work is traced independently of optional timing/capture/UI.
+    /// These receipts reference the exact RunenGPU submission status handles.
+    pub fn pending_gpu_frame_submissions(&self) -> Vec<super::RenderGpuFrameSubmissionReceipt> {
+        self.submission_lifecycle.pending_receipts()
+    }
+
+    /// Enable terminal event delivery only for a consumer that needs it.
+    /// Exact accepted submission handles remain tracked either way.
+    pub fn set_gpu_frame_terminal_delivery(&mut self, enabled: bool) {
+        self.submission_lifecycle.set_terminal_delivery(enabled);
+    }
+
+    /// Returns terminal outcomes once, preserving a nonzero loss counter when
+    /// the bounded delivery buffer overflowed before consumption.
+    pub fn take_gpu_frame_terminal_outcomes(&mut self) -> super::RenderGpuFrameTerminalBatch {
+        self.submission_lifecycle.take_terminal()
     }
 
     /// Consumes only renderer-proven terminal presentation identities. Their

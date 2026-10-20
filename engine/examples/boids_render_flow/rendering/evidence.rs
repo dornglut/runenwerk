@@ -227,7 +227,7 @@ pub(crate) fn production_evidence_report() -> Result<BoidsProductionEvidenceRepo
         submitted_step_count: graph_fixed_step_regions
             .first()
             .map(|region| region.submitted_substeps)
-            .unwrap_or_else(|| state.submitted_step_count()),
+            .unwrap_or(0),
         graph_fixed_step_regions,
         camera_projection_evidence,
         aspect_correct_impostors: resize_pixel_evidence

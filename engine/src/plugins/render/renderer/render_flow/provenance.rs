@@ -401,12 +401,7 @@ pub fn resolve_shader_material_for_packet<'a>(
                     source: shader_registry
                         .source_or(scene_bundle.shader_path.as_str(), fallback_source),
                     shader_id: scene_bundle.shader_path.clone(),
-                    pipeline_identity: format!(
-                        "material-scene-bundle:{}:{}:{}",
-                        scene_bundle.shader_identity,
-                        scene_bundle.material_table_identity,
-                        scene_bundle.shader_cache_key
-                    ),
+                    pipeline_identity: material_scene_bundle_source_key(scene_bundle),
                     revision,
                     fallback_used: revision == 0,
                 };
@@ -426,6 +421,23 @@ pub fn resolve_shader_material_for_packet<'a>(
             resolve_shader_material(other, shader_registry, fallback_source, fallback_identity)
         }
     }
+}
+
+fn material_scene_bundle_source_key(
+    bundle: &crate::plugins::render::PreparedSceneMaterialBundle,
+) -> String {
+    // This is a renderer-local runtime lookup key, not a persisted material or
+    // compiler identity. Hash every complete field with tuple framing so the
+    // unbounded canonical encodings fit RunenGPU's bounded source-key contract.
+    // The source registry still rejects different WGSL under the same key/revision.
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    (
+        &bundle.shader_identity,
+        &bundle.material_table_identity,
+        &bundle.shader_cache_key,
+    )
+        .hash(&mut hasher);
+    format!("material-scene-bundle:v1:{:016x}", hasher.finish())
 }
 
 pub fn hash_view_signature(view_id: &str, surface_size: (u32, u32)) -> u64 {
@@ -752,6 +764,77 @@ mod tests {
         assert!(
             shader.fallback_used,
             "material scene passes must not silently use the fallback scene shader when no generated scene bundle is prepared"
+        );
+    }
+
+    #[test]
+    fn material_scene_bundle_key_is_bounded_and_tracks_complete_identity_fields() {
+        let bundle = PreparedSceneMaterialBundle::new(
+            "shader-artifact",
+            "cache".repeat(20_000),
+            "generated/material.wgsl",
+            "shader".repeat(20_000),
+            "table".repeat(20_000),
+        );
+        let key = material_scene_bundle_source_key(&bundle);
+        runen_gpu::GpuProgramSourceKey::new(&key).expect("large canonical identities must admit");
+        assert_eq!(key, material_scene_bundle_source_key(&bundle.clone()));
+        for field in 0..3 {
+            let mut changed = bundle.clone();
+            match field {
+                0 => changed.shader_identity.push('x'),
+                1 => changed.material_table_identity.push('x'),
+                _ => changed.shader_cache_key.push('x'),
+            }
+            assert_ne!(
+                key,
+                material_scene_bundle_source_key(&changed),
+                "complete field {field}"
+            );
+        }
+        let mut packet = packet_with_feature_gate(
+            MATERIAL_RENDER_FEATURE_ID,
+            FeatureExecutionGate {
+                status: FeatureContributionStatus::Ready,
+                fallback_policy: FeatureFallbackPolicy::FailFrame,
+            },
+        );
+        packet.prepared_material = Some(PreparedMaterialFeatureContribution {
+            scene_bundle: Some(bundle.clone()),
+            ..Default::default()
+        });
+        let registry = ShaderRegistryResource::new();
+        let resolved = resolve_shader_material_for_packet(
+            Some(&RenderShaderReference::MaterialSceneBundle {
+                fallback_asset: "fallback".into(),
+            }),
+            &packet,
+            &registry,
+            "fallback WGSL",
+            "builtin:graphics",
+        );
+        assert_eq!(resolved.pipeline_identity, key);
+        assert_eq!(resolved.shader_id, bundle.shader_path);
+        assert!(
+            resolved.fallback_used,
+            "missing generated source must still fail closed"
+        );
+        let evidence =
+            collect_pass_material_binding_evidence(&packet, &material_scene_fullscreen_pass());
+        assert_eq!(
+            evidence.scene_shader_identity.as_deref(),
+            Some(bundle.shader_identity.as_str())
+        );
+        assert_eq!(
+            evidence.material_table_identity.as_deref(),
+            Some(bundle.material_table_identity.as_str())
+        );
+        let first = PreparedSceneMaterialBundle::new("artifact", "cache", "path", "a:b", "c");
+        let second = PreparedSceneMaterialBundle::new("artifact", "cache", "path", "a", "b:c");
+        assert_ne!(
+            material_scene_bundle_source_key(&first),
+            material_scene_bundle_source_key(&second),
+            "identity field boundaries must be unambiguous"
         );
     }
 

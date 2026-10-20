@@ -17,6 +17,7 @@ impl RenderTextureInspectorState {
             let identity = &capture.identity;
             CapturedTextureViewEntry {
                 frame_index: identity.frame_index,
+                surface_id: identity.surface_id(),
                 flow_id: identity.flow_id().to_string(),
                 pass_id: identity.pass_id().to_string(),
                 pass_label: identity.pass_label.clone(),
@@ -41,6 +42,7 @@ impl RenderTextureInspectorState {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CapturedTextureViewEntry {
     pub frame_index: u64,
+    pub surface_id: u64,
     pub flow_id: String,
     pub pass_id: String,
     pub pass_label: String,

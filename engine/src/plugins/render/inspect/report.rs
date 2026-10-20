@@ -68,58 +68,101 @@ pub struct RenderTextureDiffResult {
     pub message: Option<RenderCaptureTerminalReason>,
 }
 
+// A host frame index is not unique across independently submitted surfaces.
+type ReportSourceKey = (u64, u64);
+
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
 pub struct RenderDebugFrameReportState {
+    /// Last completed report; its explicit surface_id is authoritative.
     pub latest: Option<RenderDebugFrameReport>,
-    capture_results_by_frame: BTreeMap<u64, (Vec<RenderCaptureSelectorResult>, Option<PathBuf>)>,
-    texture_diff_results_by_frame: BTreeMap<u64, Vec<RenderTextureDiffResult>>,
+    capture_results_by_source:
+        BTreeMap<ReportSourceKey, (Vec<RenderCaptureSelectorResult>, Option<PathBuf>)>,
+    texture_diff_results_by_source: BTreeMap<ReportSourceKey, Vec<RenderTextureDiffResult>>,
+}
+
+fn unique_frame_value<T>(records: &BTreeMap<ReportSourceKey, T>, frame_index: u64) -> Option<&T> {
+    let mut sources = records.range((frame_index, 0)..=(frame_index, u64::MAX));
+    let (_, value) = sources.next()?;
+    sources.next().is_none().then_some(value)
 }
 
 impl RenderDebugFrameReportState {
     pub fn observe_frame(&mut self, report: RenderDebugFrameReport) {
+        let source = (report.frame_index, report.surface_id);
         if !report.texture_diff_results.is_empty() {
-            self.texture_diff_results_by_frame
-                .insert(report.frame_index, report.texture_diff_results.clone());
-            while self.texture_diff_results_by_frame.len()
+            self.texture_diff_results_by_source
+                .insert(source, report.texture_diff_results.clone());
+            while self.texture_diff_results_by_source.len()
                 > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY
             {
-                let Some(oldest) = self.texture_diff_results_by_frame.keys().next().copied() else {
+                let Some(oldest) = self.texture_diff_results_by_source.keys().next().copied()
+                else {
                     break;
                 };
-                self.texture_diff_results_by_frame.remove(&oldest);
+                self.texture_diff_results_by_source.remove(&oldest);
             }
         }
         if !report.capture_results.is_empty() {
-            self.capture_results_by_frame.insert(
-                report.frame_index,
+            self.capture_results_by_source.insert(
+                source,
                 (
                     report.capture_results.clone(),
                     report.artifact_manifest_path.clone(),
                 ),
             );
-            while self.capture_results_by_frame.len() > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY
+            while self.capture_results_by_source.len()
+                > super::DEFAULT_RENDER_FRAME_HISTORY_CAPACITY
             {
-                let Some(oldest) = self.capture_results_by_frame.keys().next().copied() else {
+                let Some(oldest) = self.capture_results_by_source.keys().next().copied() else {
                     break;
                 };
-                self.capture_results_by_frame.remove(&oldest);
+                self.capture_results_by_source.remove(&oldest);
             }
         }
         self.latest = Some(report);
     }
 
+    pub fn capture_results_for_source(
+        &self,
+        frame_index: u64,
+        surface_id: u64,
+    ) -> Option<&[RenderCaptureSelectorResult]> {
+        self.capture_results_by_source
+            .get(&(frame_index, surface_id))
+            .map(|(results, _)| results.as_slice())
+    }
+
+    pub fn capture_artifact_manifest_for_source(
+        &self,
+        frame_index: u64,
+        surface_id: u64,
+    ) -> Option<&PathBuf> {
+        self.capture_results_by_source
+            .get(&(frame_index, surface_id))
+            .and_then(|(_, manifest)| manifest.as_ref())
+    }
+
+    pub fn texture_diff_results_for_source(
+        &self,
+        frame_index: u64,
+        surface_id: u64,
+    ) -> Option<&[RenderTextureDiffResult]> {
+        self.texture_diff_results_by_source
+            .get(&(frame_index, surface_id))
+            .map(Vec::as_slice)
+    }
+
+    /// Single-surface convenience. Refuses a frame shared by multiple sources.
     pub fn capture_results_for_frame(
         &self,
         frame_index: u64,
     ) -> Option<&[RenderCaptureSelectorResult]> {
-        self.capture_results_by_frame
-            .get(&frame_index)
+        unique_frame_value(&self.capture_results_by_source, frame_index)
             .map(|(results, _)| results.as_slice())
     }
 
     pub fn capture_artifact_manifest_for_frame(&self, frame_index: u64) -> Option<&PathBuf> {
-        self.capture_results_by_frame
-            .get(&frame_index)
+        unique_frame_value(&self.capture_results_by_source, frame_index)
             .and_then(|(_, manifest)| manifest.as_ref())
     }
 
@@ -127,15 +170,14 @@ impl RenderDebugFrameReportState {
         &self,
         frame_index: u64,
     ) -> Option<&[RenderTextureDiffResult]> {
-        self.texture_diff_results_by_frame
-            .get(&frame_index)
-            .map(Vec::as_slice)
+        unique_frame_value(&self.texture_diff_results_by_source, frame_index).map(Vec::as_slice)
     }
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct RenderDebugFrameReport {
     pub frame_index: u64,
+    pub surface_id: u64,
     pub provenance: Vec<crate::plugins::render::inspect::RenderPassProvenanceRecord>,
     pub capture_plan: ResolvedRenderCapturePlan,
     pub capture_results: Vec<RenderCaptureSelectorResult>,
@@ -148,18 +190,32 @@ pub struct RenderDebugFrameReport {
 
 impl RenderDebugFrameReport {
     pub fn validate_invariants(&self) -> Vec<String> {
-        match validate_selector_terminal_invariant(&self.capture_plan, &self.capture_results) {
-            Ok(()) => Vec::new(),
-            Err(violations) => violations
-                .into_iter()
-                .map(|violation| {
-                    format!(
-                        "selector invariant violation at index {}: {}",
-                        violation.selector_index, violation.message
-                    )
-                })
-                .collect(),
+        let mut errors = Vec::new();
+        for result in &self.capture_results {
+            if result.source_frame_index != self.frame_index
+                || result.source_surface_id != self.surface_id
+            {
+                errors.push(format!(
+                    "selector {} belongs to source ({}, {}), not report ({}, {})",
+                    result.selector_index,
+                    result.source_frame_index,
+                    result.source_surface_id,
+                    self.frame_index,
+                    self.surface_id
+                ));
+            }
         }
+        if let Err(violations) =
+            validate_selector_terminal_invariant(&self.capture_plan, &self.capture_results)
+        {
+            errors.extend(violations.into_iter().map(|violation| {
+                format!(
+                    "selector invariant violation at index {}: {}",
+                    violation.selector_index, violation.message
+                )
+            }));
+        }
+        errors
     }
 }
 
@@ -173,11 +229,15 @@ mod tests {
     fn selector_result(
         selector_index: usize,
         selector: RenderCaptureSelector,
+        source_frame_index: u64,
+        source_surface_id: u64,
     ) -> RenderCaptureSelectorResult {
         RenderCaptureSelectorResult {
             selector_index,
             capture_point: selector.stable_point_fallback(),
             selector,
+            source_frame_index,
+            source_surface_id,
             frame_identity: None,
             terminal: RenderCaptureTerminal::completed(),
             artifact_path: None,
@@ -198,7 +258,7 @@ mod tests {
 
         state.observe_frame(RenderDebugFrameReport {
             frame_index: 1,
-            capture_results: vec![selector_result(0, selector)],
+            capture_results: vec![selector_result(0, selector, 1, 0)],
             artifact_manifest_path: Some(manifest.clone()),
             ..RenderDebugFrameReport::default()
         });
@@ -218,6 +278,71 @@ mod tests {
         assert_eq!(
             state.capture_artifact_manifest_for_frame(1),
             Some(&manifest)
+        );
+    }
+
+    #[test]
+    fn report_invariants_reject_foreign_unmatched_result() {
+        let selector = RenderCaptureSelector::named_pass_surface_color("flow", "pass");
+        let report = RenderDebugFrameReport {
+            frame_index: 9,
+            surface_id: 1,
+            capture_results: vec![selector_result(0, selector, 9, 2)],
+            ..RenderDebugFrameReport::default()
+        };
+        assert!(
+            report
+                .validate_invariants()
+                .iter()
+                .any(|message| message.contains("not report (9, 1)"))
+        );
+    }
+
+    #[test]
+    fn same_frame_two_surfaces_retain_separate_reports_and_refuse_ambiguous_lookup() {
+        let selector = RenderCaptureSelector {
+            flow_id: Some("flow".to_string()),
+            pass_id: Some("pass".to_string()),
+            stage: CaptureStage::After,
+            resource_id: "surface.color".to_string(),
+            texture_class: CaptureTextureClass::ColorTarget,
+        };
+        let mut state = RenderDebugFrameReportState::default();
+        for surface_id in [1, 2] {
+            state.observe_frame(RenderDebugFrameReport {
+                frame_index: 9,
+                surface_id,
+                capture_results: vec![selector_result(
+                    surface_id as usize,
+                    selector.clone(),
+                    9,
+                    surface_id,
+                )],
+                artifact_manifest_path: Some(PathBuf::from(format!("surface-{surface_id}.json"))),
+                ..RenderDebugFrameReport::default()
+            });
+        }
+        assert!(state.capture_results_for_frame(9).is_none());
+        assert!(state.capture_artifact_manifest_for_frame(9).is_none());
+        assert_eq!(
+            state.capture_results_for_source(9, 1).unwrap()[0].selector_index,
+            1
+        );
+        assert_eq!(
+            state.capture_results_for_source(9, 2).unwrap()[0].selector_index,
+            2
+        );
+        assert_eq!(
+            state.capture_artifact_manifest_for_source(9, 1),
+            Some(&PathBuf::from("surface-1.json"))
+        );
+        assert_eq!(
+            state.capture_artifact_manifest_for_source(9, 2),
+            Some(&PathBuf::from("surface-2.json"))
+        );
+        assert_eq!(
+            state.latest.as_ref().map(|report| report.surface_id),
+            Some(2)
         );
     }
 

@@ -4,11 +4,13 @@ pub mod dynamic_texture_uploads;
 mod frame_diagnostics;
 pub mod frame_prepare;
 pub mod frame_submit;
+pub mod gpu_step_demand;
 
 use runen_ecs::SystemSet;
 
 pub use dynamic_targets::*;
 pub use dynamic_texture_uploads::*;
+pub use gpu_step_demand::*;
 
 pub(crate) use frame_diagnostics::{
     CompletedRenderFrameDiagnostics, RenderFrameDiagnosticsSnapshot,

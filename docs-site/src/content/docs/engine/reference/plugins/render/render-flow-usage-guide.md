@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-25
+last_reviewed: 2026-10-20
 publication: primary
 ---
 
@@ -255,6 +255,106 @@ The benchmark suite includes `render_population/prefix_scan_plan_4096`,
 
 Spatial hash and chunked unbounded populations are later milestones. They
 should not be treated as a fallback for the bounded-grid boids proof.
+
+## Stateful GPU execution and producer verification
+
+The renderer retains actual RunenGPU G5 submission handles independently of diagnostic capture
+or timing. A submission's physical `Accepted`, `Completed`, or `Failed` status does **not** by
+itself prove a producer's semantic simulation result or a successful display scanout. RunenGPU
+owns retained-resource hazards and terminal execution facts; the application owns source state
+and verification.
+
+### Execution progress and terminal receipts
+
+`RenderPlugin` observes GPU completion nonblockingly in `PreUpdate`, before source producers
+verify their state in `Update`. The first render for the same GPU context reuses that
+observation; a later surface or changed context performs ordinary render-time progress. This
+does not create another GPU execution scheduler.
+
+`Gfx::pending_gpu_frame_submissions()` exposes accepted submissions and their frame, surface,
+selected-flow, and GPU identities. Optional terminal event delivery can be enabled with
+`Gfx::set_gpu_frame_terminal_delivery(true)` and drained using
+`Gfx::take_gpu_frame_terminal_outcomes()`. Delivery is disabled by default; when enabled, the
+bounded stream reports lost outcomes explicitly. A notification gap never changes RunenGPU's
+submission truth and must not be used to infer missing semantic progress.
+
+Errors from `Gfx::render` may occur **after** the composed G5 submission has been accepted.
+`RenderGpuFramePostAcceptAssociationFailure` carries that submission's identity and affinity.
+Such an error is **not** permission to re-submit the same GPU writes: retain the accepted handle
+and resolve its terminal result first.
+
+### Immutable producer steps
+
+`RenderGpuStepDemand<T>` records application-authored historical inputs, without reconstructing
+old ECS state or taking ownership of domain time.
+
+-  `capture_batch(inputs)` admits a complete ordered batch or returns its original inputs
+  unchanged on capacity/identity failure. A zero-step batch does not advance state.
+-  `candidate(max_steps)` inspects the oldest pending prefix. `submit_with` submits that exact
+  prefix through a **freshly prepared** G5 graph; a rejected submission preserves pending
+  inputs.
+-  Acceptance associates the exact G5 handle with the immutable prefix. Only
+  `commit_verified(affinity, verifier)` on a physically completed submission, using
+  producer-validated GPU evidence, can advance the verified tick. Failure preserves accepted
+  history; accepted writes are never treated as unsubmitted.
+
+After an uncertain write or generation change, a producer must **either** explicitly reset into
+a new logical simulation state, **or** restore previously verified GPU contents before replay.
+For state-preserving recovery, `requeue_verified_after_reconstruction` requires a distinct
+completed reconstruction submission and successful producer verification of its actual bytes.
+Neither zero initialization nor a completed restore submission alone establishes the previous
+state. The Boids example deliberately chooses a new epoch instead of state preservation.
+
+### Ordinary RenderFlow integration
+
+`RenderGpuFlowStepStreams` registers a bounded producer per `RenderFlowId`. Each
+`RenderGpuFixedStepInput` captures the fixed-step region's per-pass uniform bytes,
+`RenderFixedStepIterationUniform`, and dispatch dimensions for **every** state-driven compute
+pass. Exact pass identities are checked before G5; current ECS projections never replace a
+deferred step's historical values. The current integration requires one fixed-step region per
+registered flow.
+
+An accepted predecessor blocks a second stateful source interval until semantic verification.
+Even a read-only presentation frame using the same registered flow defers while a previous
+physical submission for that flow is still in flight, since retained reads also participate in
+G5 hazards. Independent flows and surfaces can progress when their resources permit it; G5, not
+a parallel Runenwerk lock table, rejects conflicts on shared retained resources. No arbitrary
+cross-RenderFlow imported-buffer authoring or resource-granular splitting of a deferred surface
+frame is implied.
+
+`RenderFlow::storage_array_with_initialization` and the paired storage declaration API make the
+initial buffer contents explicit. The default remains `Uninitialized`; `Zeroed` supplies only an
+initial byte contract, never a recovery checkpoint. Reuse requires compatible type, length,
+lifetime, initialization, and both physical ping-pong identities.
+
+### Required GPU results and optional diagnostics
+
+A registered producer can require an exact post-pass texture capture with
+`RenderGpuFlowStepStreams::require_capture(flow, selector)` or a typed storage-buffer result
+with `require_buffer_readback`. These requirements are independent of optional debug controls
+and must be registered before an accepted interval. Missing, ambiguous, unsupported,
+conflicting, or over-budget requirements fail before G5 acceptance rather than silently skipping
+verification. A required capture of a pass repeated across substeps must uniquely identify the
+intended occurrence; an ambiguous final result is rejected.
+
+Producer-owned accepted readback descriptors are bound to the **same** G5 submission, source
+identity, and readback ID. The producer checks a physically completed receipt and `Ready` bytes,
+then validates the content within its own `commit_verified` callback. An image of moving pixels
+proves neither every agent's numerical state nor a full checkpoint. The required result is not
+derived from potentially evicted debug ECS image history; diagnostic capture remains optional.
+
+Capture and diagnostic identities distinguish `(frame_index, surface_id)`. Surface-qualified
+lookup avoids collisions between native windows with the same frame ordinal. Derived capture
+history is bounded (64 records / 64 MiB) and reports loss; it is **not** a lossless
+source-verification queue. Normal full-report diagnostics keep submission-time surface identity,
+capture policy, and simulation-tick provenance. Source-owned verification must fail closed if
+any evidence it actually requires is missing.
+
+The concrete GPU readback, retained-resource, multi-surface, failure/recovery, and Boids fixture
+commands are maintained in repository
+[TESTING.md](https://github.com/dornglut/runenwerk/blob/main/TESTING.md). A passed fixture
+establishes its stated boundary, not generic device-loss restoration, all-agent numerical
+correctness, or hardware scanout cadence.
 
 ## Scale Working-Set Residency Evidence
 

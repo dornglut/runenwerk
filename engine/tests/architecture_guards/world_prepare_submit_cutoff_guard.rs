@@ -102,3 +102,34 @@ fn render_submit_consumes_prepared_world_resources_only() {
         );
     }
 }
+
+#[test]
+fn retired_wind_fields_render_projection_does_not_return() {
+    // Guard only the retired projection names, not legitimate future wind
+    // simulation, vegetation motion, deformation, or field-based rendering.
+    for path in [
+        "src/plugins/render/features/mod.rs",
+        "src/plugins/render/plugin.rs",
+        "src/plugins/world/prepare/contributions.rs",
+        "src/plugins/render/frame/contributions.rs",
+        "src/plugins/render/runtime/frame_prepare.rs",
+        "src/plugins/render/renderer/prepare.rs",
+        "src/plugins/render/inspect/prepared_frame.rs",
+    ] {
+        let source = read(path);
+        for retired in [
+            "WIND_FIELDS_RENDER_FEATURE_LABEL",
+            "WIND_FIELDS_RENDER_FEATURE_ID",
+            "PreparedWindFieldFeatureResource",
+            "PreparedWindFieldFeatureContribution",
+            "PreparedWindFieldContribution",
+            "PreparedFeaturePayload::WindFields",
+            "insert_wind_fields",
+        ] {
+            assert!(
+                !source.contains(retired),
+                "retired WindFields render projection must not return (found '{retired}' in {path})"
+            );
+        }
+    }
+}

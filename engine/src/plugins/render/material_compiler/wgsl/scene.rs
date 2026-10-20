@@ -7,6 +7,7 @@ use super::super::MATERIAL_WGSL_COMPILER_CONTRACT_VERSION;
 use super::super::bindings::material_resource_declarations;
 use super::super::identity::output_target_label;
 use super::WgslMaterialProgram;
+use super::lighting::DIRECT_LIGHT_WGSL;
 
 pub(crate) struct SceneMaterialTableProgramSlot<'a> {
     pub(crate) slot_index: u32,
@@ -84,6 +85,7 @@ struct MaterialEvalOutput {{
 }};
 
 {resource_declarations}
+{lighting_wgsl}
 @vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VsOut {{
     let pos = array<vec2<f32>, 3>(
@@ -341,10 +343,9 @@ fn shade_model_mesh_region(hit: ModelMeshRegionHit) -> vec4<f32> {{
         1.0,
         clamp((local.y + 1.0) * 0.5, 0.0, 1.0),
     ));
-    let light_dir = normalize(vec3<f32>(0.3, 0.6, 0.75));
-    let diff = max(dot(normal, light_dir), 0.18);
+    // Screen-aligned model-region proxy: view vector is local +Z.
+    let color = rw_direct_material_light(material, normal, vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.1, 0.2, 0.97));
     let edge = smoothstep(0.88, 1.0, max(abs(local.x), abs(local.y)));
-    let color = material.base_color.rgb * diff + material.emissive;
     let framed = mix(color, vec3<f32>(0.025, 0.03, 0.04), edge * 0.45);
     return vec4<f32>(clamp(framed, vec3<f32>(0.0), vec3<f32>(1.0)), material.opacity);
 }}
@@ -385,16 +386,20 @@ fn fs_main(@builtin(position) position: vec4<f32>) -> @location(0) vec4<f32> {{
         1.0,
         0.0,
     ));
-    let light_dir = normalize(vec3<f32>(0.5, 0.8, 0.35));
-    let diff = max(dot(normal, light_dir), 0.1);
-    let rim = pow(max(1.0 - max(dot(normal, -ray_dir), 0.0), 0.0), 2.0);
-    let lit = material.base_color.rgb * diff + vec3<f32>(0.15, 0.20, 0.28) * rim + material.emissive;
-    return vec4<f32>(clamp(lit, vec3<f32>(0.0), vec3<f32>(1.0)), material.opacity);
+    // Camera-relative key light, consistent with the Material Lab preview
+    // rather than a claim of globally authored world-space illumination.
+    let key_light = rw_safe_direction(
+        -ray_dir + u.camera_right.xyz * 0.1 + u.camera_up.xyz * 0.2,
+        -ray_dir,
+    );
+    let lit = rw_direct_material_light(material, normal, -ray_dir, key_light);
+    return vec4<f32>(lit, material.opacity);
 }}
 "#,
         document_id = ir.document_id.raw(),
         output_target = output_target_label(ir.output_target),
         resource_declarations = resource_declarations,
+        lighting_wgsl = DIRECT_LIGHT_WGSL,
         base_color = output.base_color,
         roughness = output.roughness,
         metallic = output.metallic,

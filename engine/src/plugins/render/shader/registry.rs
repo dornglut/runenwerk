@@ -110,7 +110,8 @@ impl ShaderRegistryResource {
                 asset.path = path.clone();
                 asset.modified = None;
                 asset.source = None;
-                asset.revision = 0;
+                // The handle/source key survives path replacement. Retain its
+                // generation so different WGSL cannot reuse an admitted revision.
                 asset.last_error = None;
                 event = Some(ShaderRegistryEvent {
                     kind: ShaderRegistryEventKind::PathUpdated,
@@ -210,7 +211,15 @@ impl ShaderRegistryResource {
     }
 
     pub fn revision_for_handle(&self, handle: ShaderHandle) -> u64 {
-        self.asset(handle).map(|asset| asset.revision).unwrap_or(0)
+        self.asset(handle)
+            .filter(|asset| {
+                asset
+                    .source
+                    .as_ref()
+                    .is_some_and(|source| !source.trim().is_empty())
+            })
+            .map(|asset| asset.revision)
+            .unwrap_or(0)
     }
 
     pub fn statuses(&self) -> Vec<ShaderStatus> {
@@ -357,7 +366,9 @@ impl ShaderRegistryResource {
                     asset.id.clone(),
                     asset.path.clone(),
                     asset.modified,
-                    asset.revision,
+                    // Failure events describe an observable prior source, not
+                    // the retained generation counter of an unloaded replacement.
+                    self.revision_for_handle(handle),
                 )
             }) else {
                 continue;

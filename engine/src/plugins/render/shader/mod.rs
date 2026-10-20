@@ -92,6 +92,93 @@ mod tests {
     }
 
     #[test]
+    fn shader_path_replacement_retains_generation_and_rejects_unloaded_source() {
+        let root = temp_dir("shader_registry_path_revision");
+        let first_path = Path::new(&root).join("first.wgsl");
+        let second_path = Path::new(&root).join("second.wgsl");
+        let missing_path = Path::new(&root).join("missing.wgsl");
+        fs::write(&first_path, "fn first_source() {}\n").unwrap();
+        fs::write(&second_path, "fn second_source() {}\n").unwrap();
+        let mut registry = ShaderRegistryResource::with_roots(std::iter::empty::<String>());
+        let handle =
+            registry.register_shader_with_id("stable.preview", first_path.to_string_lossy());
+        registry.poll_updates();
+        let first_revision = registry.revision_for_handle(handle);
+        assert!(first_revision > 0);
+
+        assert_eq!(
+            registry.register_shader_with_id("stable.preview", second_path.to_string_lossy()),
+            handle
+        );
+        assert_eq!(registry.revision_for_handle(handle), 0);
+        assert!(!registry.is_loaded("stable.preview"));
+        assert_eq!(registry.source_or("stable.preview", "fallback"), "fallback");
+        registry.poll_updates();
+        let second_revision = registry.revision_for_handle(handle);
+        assert!(second_revision > first_revision);
+        assert_eq!(
+            registry.loaded_source("stable.preview"),
+            Some("fn second_source() {}\n")
+        );
+
+        // A failed edit of the current path preserves the last valid source.
+        registry.drain_messages();
+        fs::write(&second_path, "").unwrap();
+        registry.request_reload();
+        registry.poll_updates();
+        assert_eq!(registry.revision_for_handle(handle), second_revision);
+        assert_eq!(
+            registry.loaded_source("stable.preview"),
+            Some("fn second_source() {}\n")
+        );
+        assert_eq!(
+            registry
+                .read_messages()
+                .iter()
+                .find(|event| event.kind == ShaderRegistryEventKind::SkippedEmpty)
+                .unwrap()
+                .revision,
+            second_revision
+        );
+
+        // A replacement path has no valid source until its own load succeeds.
+        registry.drain_messages();
+        registry.register_shader_with_id("stable.preview", missing_path.to_string_lossy());
+        registry.poll_updates();
+        assert_eq!(registry.revision_for_handle(handle), 0);
+        assert!(!registry.is_loaded("stable.preview"));
+        assert_eq!(
+            registry
+                .read_messages()
+                .iter()
+                .find(|event| event.kind == ShaderRegistryEventKind::Failed)
+                .unwrap()
+                .revision,
+            0
+        );
+        registry.drain_messages();
+        fs::write(&missing_path, "").unwrap();
+        registry.request_reload();
+        registry.poll_updates();
+        assert_eq!(
+            registry
+                .read_messages()
+                .iter()
+                .find(|event| event.kind == ShaderRegistryEventKind::SkippedEmpty)
+                .unwrap()
+                .revision,
+            0
+        );
+        assert_eq!(registry.revision_for_handle(handle), 0);
+        fs::write(&missing_path, "fn third_source() {}\n").unwrap();
+        registry.request_reload();
+        registry.poll_updates();
+        assert!(registry.revision_for_handle(handle) > second_revision);
+        assert_eq!(registry.shader_count(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn shader_reload_poll_first_poll_is_immediate_then_throttled() {
         let root = temp_dir("shader_registry_throttle");
         let file = Path::new(&root).join("main.wgsl");

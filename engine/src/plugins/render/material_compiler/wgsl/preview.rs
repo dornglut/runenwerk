@@ -6,6 +6,7 @@ use super::super::bindings::material_resource_declarations;
 use super::super::identity::{fixture_id, output_target_label};
 use super::super::{MATERIAL_WGSL_COMPILER_CONTRACT_VERSION, MaterialPreviewFixture};
 use super::WgslMaterialProgram;
+use super::lighting::DIRECT_LIGHT_WGSL;
 
 pub(crate) fn material_program_wgsl(
     ir: &MaterialIr,
@@ -53,6 +54,7 @@ struct MaterialEvalOutput {{
 }};
 
 {resource_declarations}
+{lighting_wgsl}
 @vertex
 fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VsOut {{
     let pos = array<vec2<f32>, 3>(
@@ -141,12 +143,8 @@ fn fixture_context(uv: vec2<f32>) -> MaterialEvalContext {{
 fn fs_main(in: VsOut) -> @location(0) vec4<f32> {{
     let ctx = fixture_context(in.uv);
     let material = evaluate_material(ctx);
-    let light_dir = normalize(vec3<f32>(0.35, 0.75, 0.55));
-    let ndotl = max(dot(ctx.normal, light_dir), 0.12);
-    let roughness_lift = mix(0.2, 0.55, material.roughness);
-    let metal_tint = mix(material.base_color.rgb, vec3<f32>(0.95, 0.92, 0.85), material.metallic * 0.35);
-    let shaded = metal_tint * (ndotl + roughness_lift) + material.emissive;
-    return vec4<f32>(clamp(shaded, vec3<f32>(0.0), vec3<f32>(1.0)), material.opacity);
+    let shaded = rw_direct_material_light(material, ctx.normal, vec3<f32>(0.0, 0.0, 1.0), vec3<f32>(0.1, 0.2, 0.97));
+    return vec4<f32>(shaded, material.opacity);
 }}
 "#,
         document_id = ir.document_id.raw(),
@@ -154,6 +152,7 @@ fn fs_main(in: VsOut) -> @location(0) vec4<f32> {{
         fixture = fixture.label(),
         fixture_id = fixture_id(fixture),
         resource_declarations = resource_declarations,
+        lighting_wgsl = DIRECT_LIGHT_WGSL,
         base_color = output.base_color,
         roughness = output.roughness,
         metallic = output.metallic,
