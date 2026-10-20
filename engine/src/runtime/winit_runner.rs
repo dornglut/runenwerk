@@ -1233,7 +1233,9 @@ impl WinitRunner {
             };
         }
 
-        if m13_failure.is_none() && let Some(text) = committed_keyboard_text {
+        if m13_failure.is_none()
+            && let Some(text) = committed_keyboard_text
+        {
             // An original KeyEvent.text is native text evidence just as an
             // original Ime::Commit is. Record it with the already-selected
             // UI recipient before canonical text admission. The recipient
