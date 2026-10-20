@@ -12,7 +12,7 @@ use runen_gpu::{
     GpuAcquiredSurfaceImage, GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement,
     GpuContext, GpuContextDescriptor, GpuFormatRole, GpuPowerPreference, GpuPreferredFallback,
     GpuSurfaceAcquireErrorCategory, GpuSurfaceCapabilities, GpuSurfaceConfiguration,
-    GpuSurfaceErrorCategory, GpuSurfaceHandle, GpuTextureFormat,
+    GpuSurfaceHandle, GpuTextureFormat,
 };
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -295,6 +295,11 @@ impl RenderGpuContext {
         let selected = supported.as_ref().and_then(|modes| {
             select_surface_present_mode(modes, record.presentation_request.present_mode).ok()
         });
+        let attachment_epoch = state.and_then(|state| {
+            state.capabilities.as_ref()?;
+            let surface = state.surface?;
+            Some((surface.id(), surface.generation()))
+        });
         let applied = state.and_then(|state| {
             Some(RenderSurfaceAppliedPresentation {
                 request: RenderSurfacePresentationRequest::new(
@@ -329,6 +334,7 @@ impl RenderGpuContext {
             requested: record.presentation_request,
             request_revision: record.presentation_revision,
             supported_at_attachment: supported,
+            attachment_epoch,
             selected,
             applied,
             disposition,
@@ -358,8 +364,12 @@ impl RenderGpuContext {
                 && config.present_mode() == request.present_mode
                 && config.desired_maximum_frame_latency()
                     == request.desired_maximum_frame_latency.get()
-                && state.applied_revision == revision
         }) {
+            // Previously configured physical policy already satisfies this revision.
+            // Avoid an unnecessary GPU-idle swapchain reconfiguration.
+            if let Some(state) = self.surfaces.get_mut(&id) {
+                state.applied_revision = revision;
+            }
             return Ok(());
         }
         if state.config.is_none() || state.capabilities.is_none() || state.surface.is_none() {
@@ -536,16 +546,16 @@ impl RenderGpuContext {
             .and_then(|state| state.surface)
             .ok_or(RenderSurfaceAcquireError::Lost)?;
         let result = self.context.acquire_surface_image(surface);
-        if let Err(error) = &result {
-            if matches!(
+        if let Err(error) = &result
+            && matches!(
                 error.category(),
                 GpuSurfaceAcquireErrorCategory::Outdated
                     | GpuSurfaceAcquireErrorCategory::Lost
                     | GpuSurfaceAcquireErrorCategory::StaleGeneration
                     | GpuSurfaceAcquireErrorCategory::ContextOrDeviceUnavailableOrLost
-            ) {
-                self.invalidate_surface(id);
-            }
+            )
+        {
+            self.invalidate_surface(id);
         }
         result.map_err(|error| match error.category() {
             GpuSurfaceAcquireErrorCategory::Timeout | GpuSurfaceAcquireErrorCategory::Occluded => {

@@ -112,6 +112,8 @@ pub struct RenderSurfacePresentationSnapshot {
     pub request_revision: u64,
     /// Facts last sampled when RunenGPU attached this physical surface, not a live OS probe.
     pub supported_at_attachment: Option<Vec<GpuSurfacePresentMode>>,
+    /// Exact RunenGPU attachment identity and configuration generation (not live OS facts).
+    pub attachment_epoch: Option<(runen_gpu::GpuSurfaceId, GpuSurfaceGeneration)>,
     pub selected: Option<GpuSurfacePresentMode>,
     pub applied: Option<RenderSurfaceAppliedPresentation>,
     pub disposition: RenderSurfacePresentationDisposition,
@@ -345,7 +347,7 @@ impl RenderSurfaceRegistryResource {
 
     /// Associate an actual configuration result with the same logical request revision.
     /// Superseded attempts must not overwrite newer policy.
-    pub fn record_presentation_attempt(
+    pub(crate) fn record_presentation_attempt(
         &mut self,
         render_surface_id: RenderSurfaceId,
         attempt: RenderSurfacePresentationAttempt,
@@ -470,7 +472,7 @@ pub fn build_surface_config(
     if !capabilities.supports_alpha_mode(alpha_mode) {
         return Err(RenderSurfacePresentationError::NoCompatibleAlphaOrUsage);
     }
-    Ok(GpuSurfaceConfiguration::new(
+    GpuSurfaceConfiguration::new(
         width,
         height,
         format,
@@ -481,7 +483,7 @@ pub fn build_surface_config(
         request.desired_maximum_frame_latency.get(),
         [format],
     )
-    .map_err(|error| RenderSurfacePresentationError::Configuration(error.cause()))?)
+    .map_err(|error| RenderSurfacePresentationError::Configuration(error.cause()))
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 use engine::plugins::render::host::{
-    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfacePresentationAttempt,
-    RenderSurfacePresentationError, RenderSurfacePresentationRequest,
+    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfacePresentationError,
+    RenderSurfacePresentationRequest,
     RenderSurfaceRegistryResource,
 };
 use engine::plugins::render::inspect::inspect_prepared_render_frame;
@@ -141,15 +141,6 @@ fn two_native_surfaces_keep_independent_presentation_requests() {
     assert_eq!(
         registry.record(second).unwrap().presentation_request,
         relaxed
-    );
-    registry.record_presentation_attempt(
-        first,
-        RenderSurfacePresentationAttempt::Rejected {
-            revision: 1,
-            reason: RenderSurfacePresentationError::UnsupportedPresentMode(
-                GpuSurfacePresentMode::Mailbox,
-            ),
-        },
     );
     assert_eq!(registry.record(second).unwrap().presentation_attempt, None);
     assert_eq!(registry.record(first).unwrap().presentation_revision, 1);

@@ -1,8 +1,8 @@
 use super::super::render_integration_is_active;
 use super::super::renderer::Gfx;
 use super::{
-    RenderSurfaceId, RenderSurfacePresentationAttempt, RenderSurfacePresentationRequest,
-    RenderSurfaceRegistryResource,
+    RenderSurfaceId, RenderSurfacePresentationAttempt, RenderSurfacePresentationError,
+    RenderSurfacePresentationRequest, RenderSurfaceRegistryResource,
 };
 use crate::runtime::NativeWindowId;
 use anyhow::{Context, Result, anyhow};
@@ -86,7 +86,16 @@ pub(crate) fn attach_secondary(
             )
         })
     {
-        rollback_secondary(world, native_window_id);
+        // A failed physical attachment must not retire a reserved logical request.
+        let reason = err.downcast_ref::<RenderSurfacePresentationError>().copied();
+        if let Some(reason) = reason
+            && let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>()
+        {
+            registry.record_presentation_attempt(
+                render_surface_id,
+                RenderSurfacePresentationAttempt::Rejected { revision, reason },
+            );
+        }
         return Err(anyhow!("GPU surface attachment failed: {err:#}"));
     }
 
@@ -101,7 +110,10 @@ pub(crate) fn attach_secondary(
             )
         })
     {
-        rollback_secondary(world, native_window_id);
+        // Remove partial physical ownership, keeping logical policy for retry.
+        if let Ok(gfx) = world.resource_mut::<Gfx>() {
+            gfx.detach_surface(render_surface_id);
+        }
         return Err(anyhow!("render surface correlation failed: {err:#}"));
     }
 
