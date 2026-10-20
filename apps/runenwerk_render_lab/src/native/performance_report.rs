@@ -282,8 +282,7 @@ pub(super) fn build_report(
     gpu_adapter_facts: Option<&runen_gpu::GpuAdapterFacts>,
 ) -> PerformanceReport {
     let mut samples = Vec::with_capacity(history.len());
-    let mut groups: BTreeMap<(u64, [u32; 2], Option<[u32; 2]>), GroupAccumulator> =
-        BTreeMap::new();
+    let mut groups: BTreeMap<(u64, [u32; 2], Option<[u32; 2]>), GroupAccumulator> = BTreeMap::new();
 
     for observation in history.observations() {
         let size = [observation.target_size_px.0, observation.target_size_px.1];
