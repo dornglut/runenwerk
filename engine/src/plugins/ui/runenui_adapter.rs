@@ -2715,11 +2715,11 @@ mod tests {
             "text ingress requires actual focused RunenUI ownership"
         );
 
-        // Winit reports a physical KeyEvent and may separately report an
-        // Ime::Commit. The RunenUI-bound host routes the former as keyboard
-        // only, never as a second CommittedTextEvent. A focused M10 editor
-        // must not insert printable characters through keyboard defaults
-        // before the independent original native IME text arrives.
+        // Winit reports physical keyboard events and independent Ime::Commit.
+        // An M13 keyboard event alone NEVER inserts text; the host must
+        // separately prove the original KeyEvent.text candidate (below) or
+        // deliver the independent OS IME commit. LogicalKey alone is never a
+        // second text occurrence, including after composition retirement.
         let key_device = InputDeviceId::new(11).expect("checked original keyboard device");
         let key_receipt = slots
             .submit_native_keyboard(
