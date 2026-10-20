@@ -269,7 +269,7 @@ impl RenderGpuContext {
             .get(&id)
             .is_some_and(|state| state.surface.is_some())
     }
-    
+
     /// Stable logical attachment record survives failed physical reattachment.
     pub(crate) fn has_surface_record(&self, id: RenderSurfaceId) -> bool {
         self.surfaces.contains_key(&id)
