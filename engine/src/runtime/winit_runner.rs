@@ -1431,7 +1431,10 @@ mod tests {
             RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
         };
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
-        runner.state.world.init_resource::<RenderSurfaceRegistryResource>();
+        runner
+            .state
+            .world
+            .init_resource::<RenderSurfaceRegistryResource>();
         let requested = runner
             .state
             .world
@@ -1453,19 +1456,28 @@ mod tests {
             .confirm_surface_attachment(id, secondary, (640, 480))
             .unwrap();
         runner.owned_redraws.insert(secondary);
+        let input = runner
+            .input_adapter
+            .window_context(secondary, winit::event::DeviceId::dummy())
+            .unwrap();
+        let source = runner.input_adapter.window_source_context(secondary);
+        assert_eq!(source.map(|context| context.source), Some(input.source));
 
         let error = runner
             .authorize_secondary_close(secondary)
             .expect_err("an attached surface without GPU must fail closed");
         assert!(format!("{error:#}").contains("no GPU attachment"));
         assert!(runner.owned_redraws.contains(&secondary));
-        assert!(runner
-            .state
-            .world
-            .resource::<WindowStateRegistryResource>()
-            .unwrap()
-            .record(secondary)
-            .is_some());
+        assert_eq!(runner.input_adapter.window_source_context(secondary), source);
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .unwrap()
+                .record(secondary)
+                .is_some()
+        );
         let render = runner
             .state
             .world
@@ -1489,7 +1501,10 @@ mod tests {
     fn creation_failure_cannot_discard_unresolved_render_attachment() {
         use crate::plugins::render::host::RenderSurfaceRegistryResource;
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
-        runner.state.world.init_resource::<RenderSurfaceRegistryResource>();
+        runner
+            .state
+            .world
+            .init_resource::<RenderSurfaceRegistryResource>();
         let request = runner
             .state
             .world
@@ -1507,15 +1522,13 @@ mod tests {
             .world
             .resource_mut::<RenderSurfaceRegistryResource>()
             .unwrap()
-            .confirm_surface_attachment(
-                surface,
-                request.native_window_id,
-                (640, 480),
-            )
+            .confirm_surface_attachment(surface, request.native_window_id, (640, 480))
             .unwrap();
-        assert!(runner
-            .mark_window_creation_failed(request.native_window_id, "injected failure")
-            .is_err());
+        assert!(
+            runner
+                .mark_window_creation_failed(request.native_window_id, "injected failure")
+                .is_err()
+        );
         assert_ne!(
             runner
                 .state

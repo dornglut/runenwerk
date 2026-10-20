@@ -108,6 +108,8 @@ pub(crate) enum SecondaryRetireError {
     MissingGpuAttachment { surface: RenderSurfaceId },
     #[error("physical detach refused for secondary Render surface {surface:?}")]
     PhysicalDetachRefused { surface: RenderSurfaceId },
+    #[error("secondary Render surface {surface:?} has no logical record")]
+    MissingRenderRecord { surface: RenderSurfaceId },
 }
 
 /// A failed physical detach MUST leave the logical Render reservation intact.
@@ -156,27 +158,25 @@ fn try_retire_secondary_with(
     if native_window_id == NativeWindowId::primary() {
         return Err(SecondaryRetireError::PrimaryWindow);
     }
-    let Some((surface, lifecycle)) = world
-        .resource::<RenderSurfaceRegistryResource>()
-        .ok()
-        .and_then(|registry| {
-            let surface = registry.surface_for_native_window(native_window_id)?;
-            Some((surface, registry.record(surface)?.lifecycle_state))
-        })
-    else {
+    let Some(registry) = world.resource::<RenderSurfaceRegistryResource>().ok() else {
         return Ok(SecondaryRetireOutcome::NoAttachment);
     };
+    let Some(surface) = registry.surface_for_native_window(native_window_id) else {
+        return Ok(SecondaryRetireOutcome::NoAttachment);
+    };
+    let lifecycle = registry
+        .record(surface)
+        .ok_or(SecondaryRetireError::MissingRenderRecord { surface })?
+        .lifecycle_state;
     detach(world, surface, lifecycle)?;
     // There is no async gap: Host and Render consume the same synchronous World.
     let retired = world
         .resource_mut::<RenderSurfaceRegistryResource>()
         .expect("synchronous retirement must retain its Render registry")
         .retire_surface_for_native_window(native_window_id);
-    assert_eq!(
-        retired,
-        Some(surface),
-        "physical retirement must correspond to exactly one logical identity"
-    );
+    if retired != Some(surface) {
+        return Err(SecondaryRetireError::MissingRenderRecord { surface });
+    }
     Ok(SecondaryRetireOutcome::Retired)
 }
 
@@ -260,10 +260,15 @@ mod tests {
                 refused,
                 Err(SecondaryRetireError::PhysicalDetachRefused { surface })
             );
-            let registry = app.world().resource::<RenderSurfaceRegistryResource>().unwrap();
+            let registry = app
+                .world()
+                .resource::<RenderSurfaceRegistryResource>()
+                .unwrap();
             assert_eq!(registry.surface_for_native_window(secondary), Some(surface));
             assert_eq!(
-                registry.record(surface).map(|record| record.lifecycle_state),
+                registry
+                    .record(surface)
+                    .map(|record| record.lifecycle_state),
                 Some(if attached {
                     RenderSurfaceLifecycleState::Attached
                 } else {
