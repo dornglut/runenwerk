@@ -1,6 +1,9 @@
 use super::super::render_integration_is_active;
 use super::super::renderer::Gfx;
-use super::{RenderSurfaceId, RenderSurfaceRegistryResource};
+use super::{
+    RenderSurfaceId, RenderSurfaceRegistryResource, RenderSurfacePresentationRequest,
+    RenderSurfacePresentationAttempt,
+};
 use crate::runtime::NativeWindowId;
 use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
@@ -20,10 +23,21 @@ pub(crate) fn initialize_primary(
         ));
     }
 
-    let gfx = Gfx::new(window).context("failed to initialize runtime gfx")?;
+    let (request, revision) = world.resource::<RenderSurfaceRegistryResource>()
+        .ok()
+        .and_then(|registry| registry.record(RenderSurfaceId::primary()))
+        .map(|record| (record.presentation_request, record.presentation_revision))
+        .unwrap_or((RenderSurfacePresentationRequest::default(), 0));
+    let gfx = Gfx::new_with_presentation(window, request, revision)
+        .context("failed to initialize runtime gfx")?;
     world.insert_resource(gfx);
     confirm_primary_attachment(world, target_size_px)
-        .context("failed to confirm primary render surface attachment")
+        .context("failed to confirm primary render surface attachment")?;
+    if let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
+        registry.record_presentation_attempt(RenderSurfaceId::primary(),
+            RenderSurfacePresentationAttempt::Applied { revision });
+    }
+    Ok(())
 }
 
 pub(crate) fn attach_secondary(
@@ -37,21 +51,22 @@ pub(crate) fn attach_secondary(
         return Ok(());
     }
 
-    let render_surface_id = {
+    let (render_surface_id, request, revision) = {
         let registry = world
             .resource_mut::<RenderSurfaceRegistryResource>()
             .context("render surface registry is unavailable")?;
-        registry
-            .surface_for_native_window(native_window_id)
-            .unwrap_or_else(|| {
-                registry.reserve_surface_for_native_window(native_window_id, requested_size_px)
-            })
+        let id = registry.surface_for_native_window(native_window_id)
+            .unwrap_or_else(|| registry.reserve_surface_for_native_window(native_window_id, requested_size_px));
+        let record = registry.record(id).context("reserved render surface is absent")?;
+        (id, record.presentation_request, record.presentation_revision)
     };
 
     if let Err(err) = world
         .resource_mut::<Gfx>()
         .context("runtime gfx is unavailable")
-        .and_then(|gfx| gfx.attach_surface(render_surface_id, window, realized_size_px))
+        .and_then(|gfx| gfx.attach_surface_with_presentation(
+            render_surface_id, window, realized_size_px, request, revision,
+        ))
     {
         rollback_secondary(world, native_window_id);
         return Err(anyhow!("GPU surface attachment failed: {err:#}"));
@@ -72,6 +87,9 @@ pub(crate) fn attach_secondary(
         return Err(anyhow!("render surface correlation failed: {err:#}"));
     }
 
+    world.resource_mut::<RenderSurfaceRegistryResource>()?
+        .record_presentation_attempt(render_surface_id,
+            RenderSurfacePresentationAttempt::Applied { revision });
     Ok(())
 }
 

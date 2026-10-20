@@ -10,6 +10,7 @@ use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
 use crate::plugins::render::host::RenderSurfaceAcquireError;
 use crate::plugins::render::host::{
     RenderSurfaceDiagnostic, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+    RenderSurfacePresentationAttempt, RenderSurfacePresentationError, RenderSurfaceId,
 };
 use crate::plugins::render::renderer::RenderGpuFramePostAcceptAssociationFailure;
 use crate::plugins::render::runtime::{
@@ -649,6 +650,34 @@ fn reconcile_frame_history_policy(world: &mut WorldMut) {
     }
 }
 
+/// Exactly one owner performs Render policy reconciliation, before the surface-image lease.
+fn apply_surface_presentation(
+    world: &mut WorldMut,
+    gfx: &mut Gfx,
+    id: RenderSurfaceId,
+    target_size: (u32, u32),
+) -> anyhow::Result<()> {
+    let record = world.resource::<RenderSurfaceRegistryResource>()?
+        .record(id)
+        .cloned()
+        .ok_or(RenderSurfacePresentationError::UnknownSurface)?;
+    let outcome = gfx.configure_surface_presentation(
+        id, record.presentation_request, record.presentation_revision, target_size,
+    );
+    let attempt = match outcome {
+        Ok(()) => RenderSurfacePresentationAttempt::Applied {
+            revision: record.presentation_revision,
+        },
+        Err(reason) => RenderSurfacePresentationAttempt::Rejected {
+            revision: record.presentation_revision,
+            reason,
+        },
+    };
+    world.resource_mut::<RenderSurfaceRegistryResource>()?
+        .record_presentation_attempt(id, attempt);
+    outcome.map_err(anyhow::Error::new)
+}
+
 pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<()> {
     reconcile_frame_history_policy(&mut world);
     // Product withdrawal retires retained continuity even when no native frame is prepared.
@@ -764,10 +793,12 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             .target_size_px;
 
         let render_surface_id = prepared_frame.surface.render_surface_id;
-        let surface_size = gfx.surface_size(render_surface_id);
-        if surface_size != Some((target_w, target_h)) {
-            gfx.resize(render_surface_id, target_w, target_h);
+        if !gfx.is_surface_drawable(render_surface_id) {
+            primary_contribution_state = PrimaryContributionState::Deferred;
+            deferred_deterministic_contributions.extend(primary_deterministic_contributions.iter().cloned());
+            return Ok(());
         }
+        apply_surface_presentation(&mut world, &mut gfx, render_surface_id, (target_w, target_h))?;
 
         let ui_font_atlas = world
             .resource::<UiFontAtlasResource>()
@@ -1129,7 +1160,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                             primary_contribution_state = PrimaryContributionState::Deferred;
                             deferred_deterministic_contributions
                                 .extend(primary_deterministic_contributions.iter().cloned());
-                            gfx.resize(render_surface_id, target_w, target_h);
+                            gfx.invalidate_surface_presentation(render_surface_id);
                             Ok(())
                         }
                         RenderSurfaceAcquireError::Timeout
@@ -1456,9 +1487,17 @@ fn render_additional_surfaces(
                 error: anyhow!("prepared render frame is missing a main surface view"),
             });
         };
-        let surface_size = gfx.surface_size(render_surface_id);
-        if surface_size != Some((target_w, target_h)) {
-            gfx.resize(render_surface_id, target_w, target_h);
+        if !gfx.is_surface_drawable(render_surface_id) {
+            defer_contributions_for_surface(&mut deferred, deterministic_contributions, render_surface_id);
+            continue;
+        }
+        if let Err(error) = apply_surface_presentation(
+            world, gfx, render_surface_id, (target_w, target_h),
+        ) {
+            defer_contributions_for_remaining_surfaces(
+                &mut deferred, deterministic_contributions, prepared_frames, prepared_frame_index,
+            );
+            return Err(AdditionalSurfaceRenderFailure { deferred, error });
         }
 
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
@@ -1592,7 +1631,7 @@ fn render_additional_surfaces(
                 if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                     match surface_error {
                         RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
-                            gfx.resize(render_surface_id, target_w, target_h);
+                            gfx.invalidate_surface_presentation(render_surface_id);
                             AdditionalSurfaceRenderOutcome::Retry
                         }
                         RenderSurfaceAcquireError::Timeout
