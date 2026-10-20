@@ -799,18 +799,34 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             .target_size_px;
 
         let render_surface_id = prepared_frame.surface.render_surface_id;
-        if !gfx.is_surface_drawable(render_surface_id) {
+        // Presentation rejection or occlusion is scoped to this surface. A
+        // blocked primary must not suppress independent native secondary work.
+        let primary_can_render = if gfx.is_surface_drawable(render_surface_id) {
+            match apply_surface_presentation(
+                &mut world,
+                &mut gfx,
+                render_surface_id,
+                (target_w, target_h),
+            ) {
+                Ok(()) => true,
+                Err(error)
+                    if matches!(
+                        error.downcast_ref::<RenderSurfacePresentationError>(),
+                        Some(RenderSurfacePresentationError::UnsupportedPresentMode(_))
+                    ) =>
+                {
+                    false
+                }
+                Err(error) => return Err(error),
+            }
+        } else {
+            false
+        };
+        if !primary_can_render {
             primary_contribution_state = PrimaryContributionState::Deferred;
             deferred_deterministic_contributions
                 .extend(primary_deterministic_contributions.iter().cloned());
-            return Ok(());
         }
-        apply_surface_presentation(
-            &mut world,
-            &mut gfx,
-            render_surface_id,
-            (target_w, target_h),
-        )?;
 
         let ui_font_atlas = world
             .resource::<UiFontAtlasResource>()
@@ -842,7 +858,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             .map(|tick| tick.0)
             .unwrap_or_default();
 
-        let render_result = {
+        let render_result = if primary_can_render {
             let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
                 Ok(registry) => registry,
                 Err(_) => {
@@ -870,7 +886,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 .unwrap_or_default()
                 .retains_frame(prepared_frame.context.frame_index);
 
-            gfx.render(
+            Some(gfx.render(
                 &prepared_frame,
                 &mut gpu_step_streams,
                 &deterministic_contributions,
@@ -884,11 +900,14 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 &debug_control,
                 &debug_config,
                 composed_gpu_timing_requested,
-            )
+            ))
+        } else {
+            None
         };
 
         let result = match render_result {
-            Ok(timings) if !timings.submitted => {
+            None => Ok(()),
+            Some(Ok(timings)) if !timings.submitted => {
                 publish_progressed_gpu_captures(
                     &mut world,
                     &mut gfx,
@@ -905,7 +924,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 );
                 Ok(())
             }
-            Ok(timings) => {
+            Some(Ok(timings)) => {
                 primary_contribution_state = PrimaryContributionState::Submitted;
                 world.resource_mut::<DebugMetricsState>()?.last_timings = Some(timings);
 
@@ -1158,7 +1177,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 gfx.renderer.clear_published_gpu_observations();
                 Ok(())
             }
-            Err(err) => {
+            Some(Err(err)) => {
                 // Earlier GPU work may have completed even when this new
                 // primary surface cannot acquire, prepare, or submit.
                 publish_progressed_gpu_captures(
@@ -1510,6 +1529,19 @@ fn render_additional_surfaces(
         if let Err(error) =
             apply_surface_presentation(world, gfx, render_surface_id, (target_w, target_h))
         {
+            if matches!(
+                error.downcast_ref::<RenderSurfacePresentationError>(),
+                Some(RenderSurfacePresentationError::UnsupportedPresentMode(_))
+            ) {
+                // Strict policy rejection is local: this window never presents
+                // with a fallback, while other surfaces may still progress.
+                defer_contributions_for_surface(
+                    &mut deferred,
+                    deterministic_contributions,
+                    render_surface_id,
+                );
+                continue;
+            }
             defer_contributions_for_remaining_surfaces(
                 &mut deferred,
                 deterministic_contributions,
