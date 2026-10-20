@@ -11,6 +11,7 @@ use crate::plugins::render::host::RenderSurfaceAcquireError;
 use crate::plugins::render::host::{
     RenderSurfaceDiagnostic, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
+use crate::plugins::render::renderer::RenderGpuFramePostAcceptAssociationFailure;
 use crate::plugins::render::runtime::{
     CompletedRenderFrameDiagnostics, RenderFrameDiagnosticsSnapshot,
     RenderFrameDiagnosticsTransactionState,
@@ -45,7 +46,13 @@ enum AdditionalSurfaceRenderOutcome {
     Submitted,
     Deferred,
     Retry,
-    Fatal(anyhow::Error),
+    Fatal {
+        error: anyhow::Error,
+        // RunenGPU already accepted the composed submission. Retrying this
+        // surface would duplicate producer work, even though a later renderer
+        // association failed. Other unsubmitted surfaces remain deferrable.
+        submission_accepted: bool,
+    },
 }
 
 fn render_timing_logging_enabled() -> bool {
@@ -248,6 +255,35 @@ mod contribution_deferral_tests {
     }
 
     #[test]
+    fn unmatched_selector_results_never_change_their_originating_surface() {
+        let selector =
+            crate::plugins::render::inspect::RenderCaptureSelector::named_pass_surface_color(
+                "source.flow",
+                "source.pass",
+            );
+        let primary = crate::plugins::render::inspect::RenderCaptureSelectorResult::for_unmatched(
+            0,
+            selector.clone(),
+            22,
+            1,
+        );
+        let secondary = crate::plugins::render::inspect::RenderCaptureSelectorResult::for_unmatched(
+            0, selector, 22, 2,
+        );
+
+        let (current, delayed) = super::partition_source_capture_results(
+            vec![secondary.clone(), primary.clone()],
+            Some((22, 1)),
+        );
+        assert_eq!(current, vec![primary.clone()]);
+        assert_eq!(delayed, vec![secondary.clone()]);
+        let (current, delayed) =
+            super::partition_source_capture_results(vec![primary, secondary], None);
+        assert!(current.is_empty());
+        assert_eq!(delayed.len(), 2);
+    }
+
+    #[test]
     fn unsubmitted_surface_never_publishes_frame_history() {
         let policy = RenderFrameObservationPolicyResource::enabled(8);
         let mut history = RenderFrameHistoryState::default();
@@ -295,7 +331,10 @@ mod contribution_deferral_tests {
             &contributions,
             &prepared_frames,
             1,
-            AdditionalSurfaceRenderOutcome::Fatal(anyhow::anyhow!("surface B failed")),
+            AdditionalSurfaceRenderOutcome::Fatal {
+                error: anyhow::anyhow!("surface B failed"),
+                submission_accepted: false,
+            },
         )
         .expect_err("fatal surface should return a retryable deferred set");
         for (retained, source) in failure.deferred.iter().zip(&contributions[1..]) {
@@ -338,6 +377,96 @@ mod contribution_deferral_tests {
         )
         .expect("surface C should be retryable");
         assert!(retry_deferred.is_empty());
+    }
+
+    #[test]
+    fn accepted_primary_failure_never_requeues_accepted_work() {
+        let primary = RenderSurfaceId::primary();
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let tertiary = RenderSurfaceId::try_from_raw(3).expect("tertiary surface id");
+        let frames = [
+            prepared_frame(primary, 0),
+            prepared_frame(secondary, 1),
+            prepared_frame(tertiary, 2),
+        ];
+        let contributions = vec![
+            contribution(11, primary),
+            contribution(12, secondary),
+            contribution(13, tertiary),
+        ];
+        let mut deferred = Vec::new();
+        super::defer_unsubmitted_after_error(
+            &mut deferred,
+            &contributions,
+            &frames[1..],
+            super::PrimaryContributionState::Submitted,
+        );
+        assert_eq!(
+            deferred
+                .iter()
+                .map(|contribution| contribution.producer_id.raw())
+                .collect::<Vec<_>>(),
+            vec![12, 13],
+            "an accepted primary must never be restored on post-accept error"
+        );
+
+        let mut pre_accept_deferred = Vec::new();
+        super::defer_unsubmitted_after_error(
+            &mut pre_accept_deferred,
+            &contributions,
+            &frames[1..],
+            super::PrimaryContributionState::Unprocessed,
+        );
+        assert_eq!(
+            pre_accept_deferred
+                .iter()
+                .map(|contribution| contribution.producer_id.raw())
+                .collect::<Vec<_>>(),
+            vec![11, 12, 13],
+            "a failed pre-admission primary must retain its producer input"
+        );
+    }
+
+    #[test]
+    fn post_accept_secondary_failure_preserves_only_not_yet_submitted_work() {
+        let primary = RenderSurfaceId::primary();
+        let secondary = RenderSurfaceId::try_from_raw(2).expect("secondary surface id");
+        let tertiary = RenderSurfaceId::try_from_raw(3).expect("tertiary surface id");
+        let prepared_frames = vec![
+            prepared_frame(primary, 0),
+            prepared_frame(secondary, 1),
+            prepared_frame(tertiary, 2),
+        ];
+        let contributions = vec![
+            contribution(11, primary),
+            contribution(12, secondary),
+            contribution(13, tertiary),
+        ];
+        let already_deferred = contribution(14, secondary);
+        let mut deferred = vec![already_deferred.clone()];
+
+        let failure = apply_additional_surface_render_outcome(
+            &mut deferred,
+            &contributions,
+            &prepared_frames,
+            1,
+            AdditionalSurfaceRenderOutcome::Fatal {
+                error: anyhow::anyhow!("post-accept association failed"),
+                submission_accepted: true,
+            },
+        )
+        .expect_err("post-accept error must be propagated without replay");
+        assert_eq!(
+            failure
+                .deferred
+                .iter()
+                .map(|contribution| contribution.producer_id.raw())
+                .collect::<Vec<_>>(),
+            vec![14, 13],
+            "retain previously deferred work and later unsubmitted surfaces, never replay the accepted surface"
+        );
+        assert_eq!(failure.deferred[0].output, already_deferred.output);
+        assert_eq!(failure.deferred[1].output, contributions[2].output);
     }
 
     #[test]
@@ -411,7 +540,10 @@ mod contribution_deferral_tests {
             &contributions,
             &prepared_frames,
             1,
-            AdditionalSurfaceRenderOutcome::Fatal(anyhow::anyhow!("surface C failed")),
+            AdditionalSurfaceRenderOutcome::Fatal {
+                error: anyhow::anyhow!("surface C failed"),
+                submission_accepted: false,
+            },
         )
         .expect_err("surface C failure should be returned with deferred work");
 
@@ -602,6 +734,11 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     let mut primary_contribution_state = PrimaryContributionState::Unprocessed;
     let mut restore_contributions = true;
     let mut additional_failure_preserved_deferred = false;
+    // Producer-owned immutable step history lives across host frames even
+    // when rendering fails after physical G5 acceptance.
+    let mut gpu_step_streams = world
+        .remove_resource::<RenderGpuFlowStepStreams>()
+        .unwrap_or_default();
 
     let detached_result = (|| -> anyhow::Result<()> {
         // A producer publishing to two surfaces is an invalid frame contribution, not deferred
@@ -692,6 +829,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
             gfx.render(
                 &prepared_frame,
+                &mut gpu_step_streams,
                 &deterministic_contributions,
                 world.resource::<RenderDynamicTextureTargetRequestRegistryResource>()?,
                 &mut shader_registry,
@@ -708,6 +846,11 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
         let result = match render_result {
             Ok(timings) if !timings.submitted => {
+                publish_progressed_gpu_captures(
+                    &mut world,
+                    &mut gfx,
+                    prepared_frame.context.frame_index,
+                );
                 primary_contribution_state = PrimaryContributionState::Deferred;
                 deferred_deterministic_contributions
                     .extend(primary_deterministic_contributions.iter().cloned());
@@ -767,17 +910,15 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                     );
                 }
 
-                let published_capture_results =
-                    gfx.renderer.take_published_capture_selector_results();
-                let published_captures = gfx.renderer.take_published_captured_textures();
-                if let Ok(captured_textures) = world.resource_mut::<RenderCapturedTextureState>() {
-                    captured_textures
-                        .observe_frame(prepared_frame.context.frame_index, &published_captures);
-                }
-
-                if let Ok(texture_inspector) = world.resource_mut::<RenderTextureInspectorState>() {
-                    texture_inspector.observe_captures(&published_captures);
-                }
+                // Hand off previous terminal observations exactly once while
+                // retaining this primary source's captures for its own transaction.
+                let (current_captures, current_capture_results, mut completed_reports) =
+                    drain_progressed_gpu_captures(
+                        &mut world,
+                        &mut gfx,
+                        prepared_frame.context.frame_index,
+                        Some((prepared_frame.context.frame_index, render_surface_id.raw())),
+                    );
 
                 let total_ms = timings.acquire_ms
                     + timings.renderer.prepare_ui_ms
@@ -809,28 +950,15 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
 
                 let diagnostics_start = std::time::Instant::now();
                 let semantic_frame_index = prepared_frame.context.frame_index;
-                let (current_captures, delayed_captures): (Vec<_>, Vec<_>) = published_captures
-                    .into_iter()
-                    .partition(|capture| capture.identity.frame_index == semantic_frame_index);
-                let (current_capture_results, delayed_capture_results): (Vec<_>, Vec<_>) =
-                    published_capture_results.into_iter().partition(|result| {
-                        result
-                            .frame_identity
-                            .as_ref()
-                            .is_none_or(|identity| identity.frame_index == semantic_frame_index)
-                    });
-
                 let mut diagnostics_transactions = world
                     .remove_resource::<RenderFrameDiagnosticsTransactionState>()
                     .unwrap_or_default();
-                let mut completed_reports: Vec<CompletedRenderFrameDiagnostics> =
-                    diagnostics_transactions
-                        .observe_terminal_captures(delayed_captures, delayed_capture_results);
                 if full_diagnostics {
                     completed_reports.extend(
                         diagnostics_transactions.begin_frame(
                             RenderFrameDiagnosticsSnapshot {
                                 frame_index: semantic_frame_index,
+                                surface_id: render_surface_id.raw(),
                                 simulation_tick: diagnostics_simulation_tick,
                                 provenance: gfx.renderer.last_pass_provenance().to_vec(),
                                 capture_plan: gfx.renderer.last_capture_plan().clone(),
@@ -847,27 +975,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 }
                 world.insert_resource(diagnostics_transactions);
 
-                for completed in completed_reports {
-                    let simulation_tick = completed.simulation_tick;
-                    let mut frame_report = completed.report;
-                    frame_report
-                        .errors
-                        .extend(frame_report.validate_invariants());
-                    if let Err(err) = submit_render_frame_report_to_diagnostics(
-                        &mut world,
-                        &frame_report,
-                        simulation_tick,
-                    ) {
-                        tracing::warn!(
-                            frame = frame_report.frame_index,
-                            error = %err,
-                            "failed submitting render diagnostics report to canonical diagnostics core"
-                        );
-                    }
-                    if let Ok(report_state) = world.resource_mut::<RenderDebugFrameReportState>() {
-                        report_state.observe_frame(frame_report);
-                    }
-                }
+                publish_completed_render_frame_reports(&mut world, completed_reports);
                 let diagnostics_mode = if full_diagnostics {
                     "full"
                 } else {
@@ -1008,6 +1116,13 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 Ok(())
             }
             Err(err) => {
+                // Earlier GPU work may have completed even when this new
+                // primary surface cannot acquire, prepare, or submit.
+                publish_progressed_gpu_captures(
+                    &mut world,
+                    &mut gfx,
+                    prepared_frame.context.frame_index,
+                );
                 if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                     match surface_error {
                         RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
@@ -1026,6 +1141,16 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                         }
                     }
                 } else {
+                    // The renderer can fail during retained-session association
+                    // *after* G5 accepted the frame. Its typed failure proves
+                    // this primary producer was already submitted. Do not
+                    // republish it through the generic error restoration path.
+                    if err
+                        .downcast_ref::<RenderGpuFramePostAcceptAssociationFailure>()
+                        .is_some()
+                    {
+                        primary_contribution_state = PrimaryContributionState::Submitted;
+                    }
                     Err(err.context("render backend execution failed"))
                 }
             }
@@ -1038,11 +1163,14 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             &additional_prepared_frames,
             &deterministic_contributions,
             &mut gfx,
+            &mut gpu_step_streams,
             &mut shader_registry,
             &ui_font_atlas,
             preflight_config,
             &debug_control,
             &debug_config,
+            diagnostics_policy,
+            diagnostics_simulation_tick,
         ) {
             Ok(additional_deferred) => {
                 deferred_deterministic_contributions.extend(additional_deferred)
@@ -1057,20 +1185,12 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
     })();
 
     if detached_result.is_err() && !additional_failure_preserved_deferred {
-        match primary_contribution_state {
-            PrimaryContributionState::Unprocessed => {
-                deferred_deterministic_contributions
-                    .extend(deterministic_contributions.iter().cloned());
-            }
-            PrimaryContributionState::Deferred | PrimaryContributionState::Submitted => {
-                defer_contributions_for_remaining_surfaces(
-                    &mut deferred_deterministic_contributions,
-                    &deterministic_contributions,
-                    &additional_prepared_frames,
-                    0,
-                );
-            }
-        }
+        defer_unsubmitted_after_error(
+            &mut deferred_deterministic_contributions,
+            &deterministic_contributions,
+            &additional_prepared_frames,
+            primary_contribution_state,
+        );
     }
 
     if restore_contributions {
@@ -1090,7 +1210,114 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
         }
     }
     world.insert_resource(gfx);
+    world.insert_resource(gpu_step_streams);
     detached_result
+}
+
+/// Once-only handoff from renderer-owned readback lifecycle to derived ECS
+/// observations and already-existing source-keyed diagnostic transactions.
+/// Attribute every terminal selector outcome, including unmatched selectors,
+/// to its explicit source before transaction publication. Missing readback
+/// identity is not permission to claim the current render surface.
+fn partition_source_capture_results(
+    results: Vec<crate::plugins::render::inspect::RenderCaptureSelectorResult>,
+    current_source: Option<(u64, u64)>,
+) -> (
+    Vec<crate::plugins::render::inspect::RenderCaptureSelectorResult>,
+    Vec<crate::plugins::render::inspect::RenderCaptureSelectorResult>,
+) {
+    results.into_iter().partition(|result| {
+        current_source
+            .is_some_and(|source| (result.source_frame_index, result.source_surface_id) == source)
+    })
+}
+
+fn drain_progressed_gpu_captures(
+    world: &mut WorldMut,
+    gfx: &mut Gfx,
+    host_frame_index: u64,
+    current_source: Option<(u64, u64)>,
+) -> (
+    Vec<crate::plugins::render::inspect::RenderCapturedTexture>,
+    Vec<crate::plugins::render::inspect::RenderCaptureSelectorResult>,
+    Vec<CompletedRenderFrameDiagnostics>,
+) {
+    let captures = gfx.renderer.take_published_captured_textures();
+    let results = gfx.renderer.take_published_capture_selector_results();
+    if !captures.is_empty() {
+        if let Ok(state) = world.resource_mut::<RenderCapturedTextureState>() {
+            state.observe_frame(host_frame_index, &captures);
+        }
+        if let Ok(inspector) = world.resource_mut::<RenderTextureInspectorState>() {
+            inspector.observe_captures(&captures);
+        }
+    }
+    let (current, delayed): (Vec<_>, Vec<_>) = captures.into_iter().partition(|capture| {
+        current_source.is_some_and(|source| {
+            (capture.identity.frame_index, capture.identity.surface_id()) == source
+        })
+    });
+    let (current_results, delayed_results) =
+        partition_source_capture_results(results, current_source);
+    let mut transactions = world
+        .remove_resource::<RenderFrameDiagnosticsTransactionState>()
+        .unwrap_or_default();
+    let completed = transactions.observe_terminal_captures(delayed, delayed_results);
+    world.insert_resource(transactions);
+    (current, current_results, completed)
+}
+
+fn publish_completed_render_frame_reports(
+    world: &mut WorldMut,
+    completed_reports: Vec<CompletedRenderFrameDiagnostics>,
+) {
+    for completed in completed_reports {
+        let simulation_tick = completed.simulation_tick;
+        let mut frame_report = completed.report;
+        frame_report
+            .errors
+            .extend(frame_report.validate_invariants());
+        if let Err(err) =
+            submit_render_frame_report_to_diagnostics(world, &frame_report, simulation_tick)
+        {
+            tracing::warn!(
+                frame = frame_report.frame_index,
+                error = %err,
+                "failed submitting render diagnostics report to canonical diagnostics core"
+            );
+        }
+        if let Ok(report_state) = world.resource_mut::<RenderDebugFrameReportState>() {
+            report_state.observe_frame(frame_report);
+        }
+    }
+}
+
+/// Also retire older observations if the current frame defers or fails.
+/// No current-surface diagnostics or semantic completion are synthesized.
+fn publish_progressed_gpu_captures(world: &mut WorldMut, gfx: &mut Gfx, frame_index: u64) {
+    let (_, _, completed) = drain_progressed_gpu_captures(world, gfx, frame_index, None);
+    publish_completed_render_frame_reports(world, completed);
+}
+
+fn defer_unsubmitted_after_error(
+    deferred: &mut Vec<RenderDeterministicFrameContribution>,
+    contributions: &[RenderDeterministicFrameContribution],
+    additional_frames: &[PreparedRenderFrame],
+    primary_state: PrimaryContributionState,
+) {
+    match primary_state {
+        PrimaryContributionState::Unprocessed => {
+            deferred.extend(contributions.iter().cloned());
+        }
+        PrimaryContributionState::Deferred | PrimaryContributionState::Submitted => {
+            defer_contributions_for_remaining_surfaces(
+                deferred,
+                contributions,
+                additional_frames,
+                0,
+            );
+        }
+    }
 }
 
 fn restore_deterministic_contributions(
@@ -1155,12 +1382,18 @@ fn apply_additional_surface_render_outcome(
             );
             Ok(())
         }
-        AdditionalSurfaceRenderOutcome::Fatal(error) => {
+        AdditionalSurfaceRenderOutcome::Fatal {
+            error,
+            submission_accepted,
+        } => {
+            // Pre-admission failures may be retried by the owning producer.
+            // A post-accept failure may not: the exact GPU mutation can
+            // already be running, although later renderer bookkeeping failed.
             defer_contributions_for_remaining_surfaces(
                 deferred,
                 deterministic_contributions,
                 prepared_frames,
-                prepared_frame_index,
+                prepared_frame_index + usize::from(submission_accepted),
             );
             Err(AdditionalSurfaceRenderFailure {
                 deferred: std::mem::take(deferred),
@@ -1176,11 +1409,14 @@ fn render_additional_surfaces(
     prepared_frames: &[PreparedRenderFrame],
     deterministic_contributions: &[RenderDeterministicFrameContribution],
     gfx: &mut Gfx,
+    gpu_step_streams: &mut RenderGpuFlowStepStreams,
     shader_registry: &mut ShaderRegistryResource,
     ui_font_atlas: &UiFontAtlasResource,
     preflight_config: RenderPreflightValidationConfigResource,
     debug_control: &RenderDebugControlResource,
     debug_config: &RenderDebugConfigResource,
+    diagnostics_policy: RenderFrameDiagnosticsPolicyResource,
+    diagnostics_simulation_tick: u64,
 ) -> AdditionalSurfaceRenderResult {
     let mut deferred = Vec::new();
     for (prepared_frame_index, prepared_frame) in prepared_frames.iter().enumerate() {
@@ -1262,6 +1498,7 @@ fn render_additional_surfaces(
             let targets = world.resource::<RenderDynamicTextureTargetRequestRegistryResource>()?;
             gfx.render(
                 prepared_frame,
+                gpu_step_streams,
                 deterministic_contributions,
                 targets,
                 shader_registry,
@@ -1277,6 +1514,7 @@ fn render_additional_surfaces(
         })();
         let outcome = match render_result {
             Ok(timings) if !timings.submitted => {
+                publish_progressed_gpu_captures(world, gfx, prepared_frame.context.frame_index);
                 tracing::debug!(
                     frame = prepared_frame.context.frame_index,
                     surface = render_surface_id.raw(),
@@ -1285,6 +1523,52 @@ fn render_additional_surfaces(
                 AdditionalSurfaceRenderOutcome::Deferred
             }
             Ok(timings) => {
+                // Route terminal observations from other sources to their
+                // pending transactions, but keep this source's results for its
+                // own immutable submission-time diagnostics snapshot.
+                let (current_captures, current_results, mut completed_reports) =
+                    drain_progressed_gpu_captures(
+                        world,
+                        gfx,
+                        prepared_frame.context.frame_index,
+                        Some((prepared_frame.context.frame_index, render_surface_id.raw())),
+                    );
+                let workload_ms = timings.renderer.prepare_ui_ms
+                    + timings.renderer.prepare_mesh_ms
+                    + timings.renderer.world_prepare_ms
+                    + timings.renderer.preflight_ms
+                    + timings.renderer.flow_encode_ms
+                    + timings.renderer.encode_submit_ms;
+                if should_build_full_render_diagnostics(
+                    diagnostics_policy,
+                    debug_control,
+                    debug_config,
+                    workload_ms,
+                ) {
+                    let mut transactions = world
+                        .remove_resource::<RenderFrameDiagnosticsTransactionState>()
+                        .unwrap_or_default();
+                    completed_reports.extend(
+                        transactions.begin_frame(
+                            RenderFrameDiagnosticsSnapshot {
+                                frame_index: prepared_frame.context.frame_index,
+                                surface_id: render_surface_id.raw(),
+                                simulation_tick: diagnostics_simulation_tick,
+                                provenance: gfx.renderer.last_pass_provenance().to_vec(),
+                                capture_plan: gfx.renderer.last_capture_plan().clone(),
+                                pixel_probes: debug_config.pixel_probes.clone(),
+                                texture_diffs: debug_config.texture_diffs.clone(),
+                                artifact_output_dir: debug_control
+                                    .artifact_export_enabled
+                                    .then(|| debug_control.artifact_output_dir.clone()),
+                            },
+                            current_captures,
+                            current_results,
+                        ),
+                    );
+                    world.insert_resource(transactions);
+                }
+                publish_completed_render_frame_reports(world, completed_reports);
                 let history_enabled = observe_submitted_frame_history(
                     world,
                     prepared_frame,
@@ -1303,6 +1587,8 @@ fn render_additional_surfaces(
                 AdditionalSurfaceRenderOutcome::Submitted
             }
             Err(err) => {
+                // Gfx may have progressed an earlier GPU submission before error.
+                publish_progressed_gpu_captures(world, gfx, prepared_frame.context.frame_index);
                 if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                     match surface_error {
                         RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
@@ -1315,10 +1601,16 @@ fn render_additional_surfaces(
                         }
                     }
                 } else {
-                    AdditionalSurfaceRenderOutcome::Fatal(err.context(format!(
-                        "render backend execution failed for surface {}",
-                        render_surface_id.raw()
-                    )))
+                    let submission_accepted = err
+                        .downcast_ref::<RenderGpuFramePostAcceptAssociationFailure>()
+                        .is_some();
+                    AdditionalSurfaceRenderOutcome::Fatal {
+                        error: err.context(format!(
+                            "render backend execution failed for surface {}",
+                            render_surface_id.raw()
+                        )),
+                        submission_accepted,
+                    }
                 }
             }
         };

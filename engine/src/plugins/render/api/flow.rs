@@ -199,6 +199,29 @@ impl RenderFlow {
         Ok((self, handle))
     }
 
+    /// Declare a retained storage array with an explicit first-generation
+    /// initialization contract. This delegates initialization/coverage to
+    /// RunenGPU; it is not a retry, reset or semantic reconstruction policy.
+    /// The ordinary storage_array() remains uninitialized by default.
+    pub fn storage_array_with_initialization<T>(
+        mut self,
+        label: impl Into<String>,
+        len: u64,
+        initialization: GpuBufferInitialization,
+    ) -> Result<(Self, GpuBufferHandle), RenderFlowAuthoringError>
+    where
+        T: GpuParams + 'static,
+    {
+        let id = self.register_storage_array_with_lifetime_and_initialization::<T>(
+            label.into(),
+            len,
+            GpuResourceLifetime::Retained,
+            initialization,
+        )?;
+        let handle = self.buffer_handle(id)?;
+        Ok((self, handle))
+    }
+
     pub fn double_buffer_storage_array<T>(
         mut self,
         label: impl Into<String>,
@@ -222,6 +245,32 @@ impl RenderFlow {
         let base_label = label.into();
         let (a_id, b_id) =
             self.register_double_buffer_storage_array::<T>(base_label.clone(), len)?;
+        let handle = RenderDoubleBuffer::new(
+            base_label,
+            self.buffer_handle(a_id)?,
+            self.buffer_handle(b_id)?,
+        );
+        Ok((self, handle))
+    }
+
+    /// Explicit initial contents for BOTH retained ping-pong buffers. The
+    /// ordinary handle builder remains Uninitialized by default; a repeated
+    /// declaration must match each physical buffer's complete identity.
+    pub fn double_buffer_storage_array_with_handle_and_initialization<T>(
+        mut self,
+        label: impl Into<String>,
+        len: u64,
+        initialization: GpuBufferInitialization,
+    ) -> Result<(Self, RenderDoubleBuffer), RenderFlowAuthoringError>
+    where
+        T: GpuParams + 'static,
+    {
+        let base_label = label.into();
+        let (a_id, b_id) = self.register_double_buffer_storage_array_with_initialization::<T>(
+            base_label.clone(),
+            len,
+            initialization,
+        )?;
         let handle = RenderDoubleBuffer::new(
             base_label,
             self.buffer_handle(a_id)?,
@@ -606,6 +655,22 @@ impl RenderFlow {
         U: GpuParams + 'static,
     {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
+            let matches_type = self
+                .graph
+                .resources
+                .resources
+                .iter()
+                .find(|resource| *resource.id() == id)
+                .is_some_and(|resource| {
+                    matches!(
+                        resource,
+                        RenderResourceDeclaration::Uniform(existing)
+                            if existing.params_type_id() == core::any::TypeId::of::<U>()
+                    )
+                });
+            if !matches_type {
+                return Err(RenderFlowAuthoringError::ConflictingUniformDeclaration { label });
+            }
             return Ok(id);
         }
 
@@ -693,6 +758,7 @@ impl RenderFlow {
         T: GpuParams + 'static,
     {
         if let Some(id) = self.resolve_resource_id(label.as_str()) {
+            self.validate_storage_registration::<T>(id, &label, len, lifetime, &initialization)?;
             return Ok(id);
         }
 
@@ -709,6 +775,42 @@ impl RenderFlow {
         Ok(id)
     }
 
+    /// Validate exactly one physical storage declaration; reused by arrays and pairs.
+    fn validate_storage_registration<T: GpuParams + 'static>(
+        &self,
+        id: GpuWorkResourceId,
+        label: &str,
+        len: u64,
+        lifetime: GpuResourceLifetime,
+        initialization: &GpuBufferInitialization,
+    ) -> Result<(), RenderFlowAuthoringError> {
+        let Some(RenderResourceDeclaration::Storage(existing)) = self
+            .graph
+            .resources
+            .resources
+            .iter()
+            .find(|resource| *resource.id() == id)
+        else {
+            return Err(RenderFlowAuthoringError::ConflictingStorageDeclaration {
+                label: label.to_owned(),
+            });
+        };
+        if existing.params_type_id() != core::any::TypeId::of::<T>()
+            || existing.element_count() != len
+            || existing.handle().descriptor().common().lifetime() != lifetime
+        {
+            return Err(RenderFlowAuthoringError::ConflictingStorageDeclaration {
+                label: label.to_owned(),
+            });
+        }
+        if existing.handle().descriptor().initialization() != initialization {
+            return Err(RenderFlowAuthoringError::ConflictingStorageInitialization {
+                label: label.to_owned(),
+            });
+        }
+        Ok(())
+    }
+
     fn register_double_buffer_storage_array<T>(
         &mut self,
         base_label: String,
@@ -717,33 +819,74 @@ impl RenderFlow {
     where
         T: GpuParams + 'static,
     {
+        self.register_double_buffer_storage_array_with_initialization::<T>(
+            base_label,
+            len,
+            GpuBufferInitialization::Uninitialized,
+        )
+    }
+
+    fn register_double_buffer_storage_array_with_initialization<T>(
+        &mut self,
+        base_label: String,
+        len: u64,
+        initialization: GpuBufferInitialization,
+    ) -> Result<(GpuWorkResourceId, GpuWorkResourceId), RenderFlowAuthoringError>
+    where
+        T: GpuParams + 'static,
+    {
         if let Some(existing) = self.ping_pong_storage.get(base_label.as_str()) {
+            for (label, id) in [
+                (format!("{base_label}.a"), existing.a_id),
+                (format!("{base_label}.b"), existing.b_id),
+            ] {
+                if self.resolve_resource_id(&label) != Some(id) {
+                    return Err(RenderFlowAuthoringError::ConflictingStorageDeclaration {
+                        label: base_label,
+                    });
+                }
+                self.validate_storage_registration::<T>(
+                    id,
+                    &label,
+                    len,
+                    GpuResourceLifetime::Retained,
+                    &initialization,
+                )?;
+            }
             return Ok((existing.a_id, existing.b_id));
         }
 
         let a_label = format!("{base_label}.a");
-        let a = RenderResourceDeclaration::declare_storage_array::<T>(
-            &mut self.next_resource_id,
-            a_label.clone(),
-            len,
-        )?;
-        let a_id = *a.id();
-
         let b_label = format!("{base_label}.b");
-        let b = RenderResourceDeclaration::declare_storage_array::<T>(
-            &mut self.next_resource_id,
-            b_label.clone(),
-            len,
-        )?;
+        if self.resolve_resource_id(&a_label).is_some()
+            || self.resolve_resource_id(&b_label).is_some()
+        {
+            return Err(RenderFlowAuthoringError::ConflictingStorageDeclaration {
+                label: base_label,
+            });
+        }
+        let a =
+            RenderResourceDeclaration::declare_storage_array_with_lifetime_and_initialization::<T>(
+                &mut self.next_resource_id,
+                a_label.clone(),
+                len,
+                GpuResourceLifetime::Retained,
+                initialization.clone(),
+            )?;
+        let a_id = *a.id();
+        let b =
+            RenderResourceDeclaration::declare_storage_array_with_lifetime_and_initialization::<T>(
+                &mut self.next_resource_id,
+                b_label.clone(),
+                len,
+                GpuResourceLifetime::Retained,
+                initialization,
+            )?;
         let b_id = *b.id();
         self.upsert_labeled_resource(a_label, a_id, a);
         self.upsert_labeled_resource(b_label, b_id, b);
-
-        self.ping_pong_storage.insert(
-            base_label.clone(),
-            PingPongStorageRegistration { a_id, b_id },
-        );
-
+        self.ping_pong_storage
+            .insert(base_label, PingPongStorageRegistration { a_id, b_id });
         Ok((a_id, b_id))
     }
 
@@ -881,6 +1024,11 @@ mod tests {
         value: u32,
     }
 
+    #[derive(Debug, Clone, Copy, GpuStorage)]
+    struct OtherTestCell {
+        value: u32,
+    }
+
     #[derive(Debug, Clone, Copy, GpuUniform)]
     struct TestParams {
         value: u32,
@@ -1014,6 +1162,182 @@ mod tests {
                 if *resource_id == foreign_id
         )));
         drop(first_flow);
+    }
+
+    #[test]
+    fn uniform_redeclaration_rejects_mismatched_parameter_type_and_resource_kind() {
+        let (flow, first) = RenderFlow::new("uniform.reuse")
+            .uniform_buffer::<TestParams>("shared.uniform")
+            .expect("first uniform declaration");
+        let (flow, reused) = flow
+            .uniform_buffer::<TestParams>("shared.uniform")
+            .expect("identical uniform declaration may reuse its resource");
+        assert_eq!(first.diagnostic_identity(), reused.diagnostic_identity());
+        assert!(matches!(
+            flow.uniform_buffer::<OtherTestParams>("shared.uniform"),
+            Err(RenderFlowAuthoringError::ConflictingUniformDeclaration { label })
+                if label == "shared.uniform"
+        ));
+
+        let (flow, _) = RenderFlow::new("uniform.storage_collision")
+            .storage_array::<TestCell>("shared.uniform", 4)
+            .expect("storage declaration");
+        assert!(matches!(
+            flow.uniform_buffer::<TestParams>("shared.uniform"),
+            Err(RenderFlowAuthoringError::ConflictingUniformDeclaration { label })
+                if label == "shared.uniform"
+        ));
+
+        let flow = RenderFlow::new("uniform.texture_collision")
+            .with_color_target("shared.uniform")
+            .expect("color target declaration");
+        assert!(matches!(
+            flow.uniform_buffer::<TestParams>("shared.uniform"),
+            Err(RenderFlowAuthoringError::ConflictingUniformDeclaration { label })
+                if label == "shared.uniform"
+        ));
+    }
+
+    #[test]
+    fn retained_storage_initialization_redeclaration_rejects_conflicts() {
+        let (flow, ordinary) = RenderFlow::new("storage.initialization.default")
+            .storage_array::<TestCell>("cells", 4)
+            .expect("default retained storage");
+        assert_eq!(
+            ordinary.descriptor().initialization(),
+            &GpuBufferInitialization::Uninitialized
+        );
+
+        let (flow, same) = flow
+            .storage_array_with_initialization::<TestCell>(
+                "cells",
+                4,
+                GpuBufferInitialization::Uninitialized,
+            )
+            .expect("identical initialization may reuse the same retained storage");
+        assert_eq!(ordinary.diagnostic_identity(), same.diagnostic_identity());
+
+        let error = flow
+            .storage_array_with_initialization::<TestCell>(
+                "cells",
+                4,
+                GpuBufferInitialization::Zeroed,
+            )
+            .expect_err("an explicit initialization cannot silently reuse uninitialized storage");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageInitialization { label }
+                if label == "cells"
+        ));
+
+        let (flow, zeroed) = RenderFlow::new("storage.initialization.explicit")
+            .storage_array_with_initialization::<TestCell>(
+                "cells",
+                4,
+                GpuBufferInitialization::Zeroed,
+            )
+            .expect("explicit zeroed retained storage");
+        assert_eq!(
+            zeroed.descriptor().initialization(),
+            &GpuBufferInitialization::Zeroed
+        );
+        let error = flow
+            .storage_array::<TestCell>("cells", 4)
+            .expect_err("implicit uninitialized redeclaration must not override zeroed storage");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageInitialization { label }
+                if label == "cells"
+        ));
+    }
+
+    #[test]
+    fn retained_storage_redeclaration_rejects_conflicting_type_count_kind_and_lifetime() {
+        let (flow, first) = RenderFlow::new("storage.layout.invariant")
+            .storage_array::<TestCell>("cells", 4)
+            .expect("first retained storage");
+        let (flow, same) = flow
+            .storage_array::<TestCell>("cells", 4)
+            .expect("identical declaration may reuse retained storage");
+        assert_eq!(first.diagnostic_identity(), same.diagnostic_identity());
+
+        let mut flow = flow;
+        let error = flow
+            .register_storage_array::<TestCell>("cells".to_string(), 8)
+            .expect_err("larger storage must not reuse a four-element descriptor");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageDeclaration { label } if label == "cells"
+        ));
+        let error = flow
+            .register_storage_array::<OtherTestCell>("cells".to_string(), 4)
+            .expect_err("same-size different params type must not alias the existing storage");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageDeclaration { label } if label == "cells"
+        ));
+        let error = flow
+            .register_transient_storage_array::<TestCell>(
+                "cells".to_string(),
+                4,
+                GpuBufferInitialization::Uninitialized,
+            )
+            .expect_err("transient storage must not reuse retained lifetime");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageDeclaration { label } if label == "cells"
+        ));
+
+        let flow = RenderFlow::new("storage.kind.invariant")
+            .uniform_buffer::<TestParams>("cells")
+            .expect("uniform buffer")
+            .0;
+        let error = flow
+            .storage_array::<TestCell>("cells", 4)
+            .expect_err("uniform descriptor must not be treated as a storage array");
+        assert!(matches!(
+            error,
+            RenderFlowAuthoringError::ConflictingStorageDeclaration { label } if label == "cells"
+        ));
+    }
+
+    #[test]
+    fn ping_pong_storage_redeclaration_checks_both_descriptors_and_suffix_ownership() {
+        let mut flow = RenderFlow::new("storage.pair.invariant");
+        let (a, b) = flow
+            .register_double_buffer_storage_array::<TestCell>("pair".into(), 4)
+            .expect("first pair declaration");
+        assert_eq!(
+            flow.register_double_buffer_storage_array::<TestCell>("pair".into(), 4)
+                .expect("identical pair"),
+            (a, b)
+        );
+        assert!(matches!(
+            flow.register_double_buffer_storage_array::<TestCell>("pair".into(), 8),
+            Err(RenderFlowAuthoringError::ConflictingStorageDeclaration { .. })
+        ));
+        assert!(matches!(
+            flow.register_double_buffer_storage_array::<OtherTestCell>("pair".into(), 4),
+            Err(RenderFlowAuthoringError::ConflictingStorageDeclaration { .. })
+        ));
+        assert_eq!(flow.ping_pong_storage_ids("pair"), Some((a, b)));
+
+        let mut first_collision = RenderFlow::new("storage.pair.first_collision");
+        first_collision
+            .register_storage_array::<TestCell>("pair.a".into(), 4)
+            .expect("independent A declaration");
+        assert!(matches!(
+            first_collision.register_double_buffer_storage_array::<TestCell>("pair".into(), 4),
+            Err(RenderFlowAuthoringError::ConflictingStorageDeclaration { .. })
+        ));
+        let mut second_collision = RenderFlow::new("storage.pair.second_collision");
+        second_collision
+            .register_storage_array::<TestCell>("pair.b".into(), 4)
+            .expect("independent B declaration");
+        assert!(matches!(
+            second_collision.register_double_buffer_storage_array::<TestCell>("pair".into(), 4),
+            Err(RenderFlowAuthoringError::ConflictingStorageDeclaration { .. })
+        ));
     }
 
     #[test]
