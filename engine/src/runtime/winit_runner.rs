@@ -1233,11 +1233,22 @@ impl WinitRunner {
             };
         }
 
-        if m13_failure.is_none()
-            && let Some(text) = committed_keyboard_text
-            && let Err(error) = self.route_ui_committed_text(slot, text, Some(device))
-        {
-            m13_failure = Some(error);
+        if m13_failure.is_none() && let Some(text) = committed_keyboard_text {
+            // An original KeyEvent.text is native text evidence just as an
+            // original Ime::Commit is. Record it with the already-selected
+            // UI recipient before canonical text admission. The recipient
+            // tag forbids legacy Editor from consuming the same character.
+            // Failure to reserve the native journal must fail closed.
+            let result = self
+                .apply_event_group_for_recipient(
+                    window,
+                    [PlatformEvent::TextInput { text: text.clone() }],
+                    Some(NativeInputRecipient::RunenUiSlot(slot)),
+                )
+                .and_then(|()| self.route_ui_committed_text(slot, text, Some(device)));
+            if let Err(error) = result {
+                m13_failure = Some(error);
+            }
         }
         // Missing or ambiguous M13 evidence, runtime failure, UI exclusivity,
         // and translator suppression NEVER produce positive gameplay evidence.
@@ -5660,6 +5671,35 @@ mod tests {
                 .expect("admitted UI-targeted cursor")
                 .authorized_for_legacy_editor(),
             "selected RunenUI input cannot be double-dispatched to Editor"
+        );
+        // The original keyboard text route and the original IME Commit
+        // must use this same recipient-bound journal admission, never a
+        // default legacy TextInput. Exercise the real native journal path.
+        runner
+            .apply_event_group_for_recipient(
+                secondary,
+                [PlatformEvent::TextInput {
+                    text: String::from("é"),
+                }],
+                Some(NativeInputRecipient::RunenUiSlot(slot)),
+            )
+            .expect("original keyboard text admitted only to its selected UI owner");
+        let last = runner
+            .state
+            .world
+            .resource::<PlatformWindowEventQueueResource>()
+            .expect("original journal")
+            .events()
+            .last()
+            .expect("original UI-directed text journal entry");
+        assert_eq!(last.native_window_id, secondary);
+        assert!(
+            matches!(&last.event, PlatformEvent::TextInput { text } if text == "é"),
+            "original keyboard text must be present exactly as observed"
+        );
+        assert!(
+            !last.authorized_for_legacy_editor(),
+            "UI-bound keyboard text must never duplicate into the legacy Editor"
         );
         // A native button with no prior authentic cursor position cannot
         // manufacture a logical hit point or a new RunenUI pressed stream.
