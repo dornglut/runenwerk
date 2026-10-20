@@ -57,7 +57,8 @@ The execution case authors its own renderer scene, request, semantic surface inp
 
 ## Stateful RunenGPU G5 conformance
 
-The hosted native Vulkan lane must execute actual G5 work, not silently skip unavailable GPU adapters:
+The hosted native Vulkan lane must execute actual G5 work, not silently skip unavailable GPU
+adapters:
 
 ```bash
 RUNENWERK_G5_REQUIRE_GPU=1 cargo +stable test -p engine --test render_gpu_retained_cross_frame --locked -- --nocapture --test-threads=1
@@ -69,7 +70,10 @@ RUNENWERK_G5_REQUIRE_GPU=1 cargo +stable test -p engine --test render_gpu_fixed_
 | `render_gpu_retained_cross_frame` | Independent public G5 fragments sharing a real retained buffer: read/read participation, typed RAW/WAW/WAR conflicts, terminal release, and observed GPU bytes after fresh admission |
 | `render_gpu_fixed_step_continuity` | Immutable historical steps, accepted/verified tick separation, same-submission readback identity, capacity, refused semantic commit, verified checkpoint reimport, and safe replay after reconstruction |
 
-These tests exercise public RunenGPU G5 participation, **not** arbitrary application-level aliasing of separately authored `RenderFlow` buffers. Checkpoint reimport requires producer-supplied verified bytes; it does not prove old Boids state survives physical device loss or partial GPU writes.
+These tests exercise public RunenGPU G5 participation, **not** arbitrary application-level
+aliasing of separately authored `RenderFlow` buffers. Checkpoint reimport requires
+producer-supplied verified bytes; it does not prove old Boids state survives physical device
+loss or partial GPU writes.
 
 ## Native historical RenderFlow conformance
 
@@ -79,21 +83,40 @@ The native Host GPU hook is exercised under Mesa/Vulkan with an actual attached 
 RUNENWERK_NATIVE_HISTORICAL_GPU_SMOKE=1 cargo +stable test -p engine --test native_host_smoke --locked -- --nocapture --test-threads=1
 ```
 
-The fixture requires exact source-owned fixed-step dispatch and uniform inputs, source-correlated G5 receipts, terminal shader output (the accumulated counter changes from **6** to **15** across two accepted intervals), and no duplicate submission. It preserves an unverified accepted interval while capturing later immutable steps and rejects an over-capacity sixth input. A **genuinely attached second window** requesting the same flow must defer until verification; an unrelated flow must progress independently. It also exercises refused semantic verification and subsequent commit using exact GPU bytes, not the lossy diagnostic ECS image cache.
+The fixture requires exact source-owned fixed-step dispatch and uniform inputs,
+source-correlated G5 receipts, terminal shader output (the accumulated counter changes from
+**6** to **15** across two accepted intervals), and no duplicate submission. It preserves an
+unverified accepted interval while capturing later immutable steps and rejects an over-capacity
+sixth input. A **genuinely attached second window** requesting the same flow must defer until
+verification; an unrelated flow must progress independently. It also exercises refused semantic
+verification and subsequent commit using exact GPU bytes, not the lossy diagnostic ECS image
+cache.
 
-This is an executable native software-Vulkan contract test, not proof of physical driver-loss restoration, arbitrary cross-flow shared resources, or monitor scanout.
+This is an executable native software-Vulkan contract test, not proof of physical driver-loss
+restoration, arbitrary cross-flow shared resources, or monitor scanout.
 
 ## Boids example and native consumer qualification
 
-`cargo validate` runs workspace tests but does not run unit tests embedded in the Boids example target. The native Vulkan CI job additionally requires:
+`cargo validate` runs workspace tests but does not run unit tests embedded in the Boids example
+target. The native Vulkan CI job additionally requires:
 
 ```bash
 cargo +stable test -p engine --example boids_render_flow --locked
 ```
 
-CI exercises original and `--species` Boids with a real window and GPU, requiring 120 submitted Presents, correlated terminal GPU receipts and verified source ticks. Both visual modes must produce moving image evidence; the no-full-image-readback modes must still verify the mandatory compact GPU-written final-stage witness. The separate injected **source fault after tick 12** must fail stop and allow a fresh-process epoch in both laws, without replaying prior accepted state.
+CI exercises original and `--species` Boids with a real window and GPU, requiring 120 submitted
+Presents, correlated terminal GPU receipts and verified source ticks. Both visual modes must
+produce moving image evidence; the no-full-image-readback modes must still verify the mandatory
+compact GPU-written final-stage witness. The separate injected **source fault after tick 12**
+must fail stop and allow a fresh-process epoch in both laws, without replaying prior accepted
+state.
 
-The opt-in smoke settings, release performance measurements, and interactive close behavior are described in the [Boids example guide](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/engine/examples/boids-render-flow/README.md). Native software-Vulkan success does not substitute for a real-hardware performance measurement. A controlled application source failure does not prove arbitrary physical GPU-device loss, partially executed writes, or in-place reconstruction.
+The opt-in smoke settings, release performance measurements, and interactive close behavior are
+described in the [Boids example
+guide](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/engine/examples/boids-render-flow/README.md).
+Native software-Vulkan success does not substitute for a real-hardware performance measurement.
+A controlled application source failure does not prove arbitrary physical GPU-device loss,
+partially executed writes, or in-place reconstruction.
 
 ## Supplemental RunenRender GPU execution proof
 
