@@ -244,7 +244,7 @@ mod tests {
     fn active_render_missing_registry_cannot_masquerade_as_noop() {
         let mut app = App::new();
         app.world_mut()
-            .insert_resource(super::super::plugin::RenderIntegrationActivation);
+            .insert_resource(crate::plugins::render::plugin::RenderIntegrationActivation);
         assert_eq!(
             try_retire_secondary(app.world_mut(), secondary_window(2)),
             Err(SecondaryRetireError::MissingRenderRegistry)
