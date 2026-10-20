@@ -375,6 +375,7 @@ mod tests {
             "boids.grid.cell_offsets",
             "boids.grid.scatter_cursors",
             "boids.grid.sorted_indices",
+            "boids.simulation.witness",
         ] {
             let id = flow.resource_id(label).expect("declared storage identity");
             let resource = flow
@@ -560,7 +561,8 @@ mod tests {
             );
         }
 
-        assert_eq!(declarations.len(), 8);
+        // Uniform, six grid/particle buffers, iteration control, and GPU witness.
+        assert_eq!(declarations.len(), 9);
         let iteration = module
             .global_variables
             .iter()

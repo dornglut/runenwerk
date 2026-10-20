@@ -104,6 +104,10 @@ performance. An exact-head green hosted Vulkan lane is therefore a scoped
 integration result, not automatic completion of
 [Runenwerk #1291](https://github.com/dornglut/runenwerk/issues/1291).
 
+## Boids example-local test registration
+
+The native Vulkan CI job explicitly runs `cargo +stable test -p engine --example boids_render_flow --locked` before its original and `--species` native GPU smokes. `cargo validate` runs `cargo test --workspace --locked`, which does not execute unit tests embedded in the Boids example target. The explicit invocation is required to exercise the example's compute-shader binding inventory, retained-storage initialization, source capture/pacing and producer-witness unit assertions. This is supplementary executable conformance within an existing required CI job, not a second canonical workspace-validation command.
+
 ## Native historical RenderFlow execution proof
 
 The hosted Vulkan native-window lane runs the opt-in

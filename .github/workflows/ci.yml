@@ -131,6 +131,9 @@ jobs:
                 --test native_host_smoke \
                 --locked
 
+      - name: Run Boids example-local unit and shader-contract tests
+        run: cargo +stable test -p engine --example boids_render_flow --locked
+
       - name: Prove Boids producer fail-stop before fresh native source epoch
         env:
           RUST_BACKTRACE: '1'
