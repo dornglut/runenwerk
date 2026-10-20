@@ -441,7 +441,8 @@ impl RenderGpuContext {
             }
             return Ok(());
         }
-        if state.config.is_none() || state.capabilities.is_none() || state.surface.is_none() {
+        if state.capabilities.is_none() || state.surface.is_none() {
+            // Missing/stale attachment facts require a new physical registration.
             self.reattach_surface(id, request, revision, extent)?;
             return Ok(());
         }
@@ -454,23 +455,26 @@ impl RenderGpuContext {
                 .capabilities
                 .as_ref()
                 .ok_or(RenderSurfacePresentationError::RequiresReattachment)?;
-            let former = state
-                .config
-                .as_ref()
-                .ok_or(RenderSurfacePresentationError::RequiresReattachment)?;
-            // Retain the admitted physical format and usages, not a fresh product policy.
-            let config = GpuSurfaceConfiguration::new(
-                extent.0,
-                extent.1,
-                former.format(),
-                former.color_space(),
-                former.usages().iter().copied(),
-                request.present_mode,
-                former.alpha_mode(),
-                request.desired_maximum_frame_latency.get(),
-                former.view_formats().iter().copied(),
-            )
-            .map_err(|error| RenderSurfacePresentationError::Configuration(error.cause()))?;
+            // A valid, never-configured zero-size attachment may configure in place.
+            // Subsequent policy/resize changes preserve the existing physical format.
+            let config = if let Some(former) = state.config.as_ref() {
+                GpuSurfaceConfiguration::new(
+                    extent.0,
+                    extent.1,
+                    former.format(),
+                    former.color_space(),
+                    former.usages().iter().copied(),
+                    request.present_mode,
+                    former.alpha_mode(),
+                    request.desired_maximum_frame_latency.get(),
+                    former.view_formats().iter().copied(),
+                )
+                .map_err(|error| RenderSurfacePresentationError::Configuration(error.cause()))?
+            } else {
+                let format = preferred_surface_format(caps)
+                    .ok_or(RenderSurfacePresentationError::NoCompatibleFormat)?;
+                build_surface_config(extent.0, extent.1, format, caps, request)?
+            };
             select_surface_present_mode(caps.present_modes(), request.present_mode)?;
             (
                 state
