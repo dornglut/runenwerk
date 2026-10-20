@@ -47,7 +47,10 @@ impl NativeHostLaunchOverrides {
                     .map(OsString::from)
             };
             if let Some(value) = value {
-                ensure!(request.frame_pacing.is_none(), "duplicate --host-pacing argument");
+                ensure!(
+                    request.frame_pacing.is_none(),
+                    "duplicate --host-pacing argument"
+                );
                 let mode = value.to_str().context("--host-pacing MODE must be UTF-8")?;
                 request.frame_pacing = Some(parse_pacing(mode)?);
             } else {
@@ -73,19 +76,22 @@ impl NativeHostLaunchOverrides {
 
 fn parse_pacing(mode: &str) -> Result<FramePacingPolicyResource> {
     match mode {
-        "capped" => Ok(FramePacingPolicyResource::continuous_capped(DEFAULT_ANIMATION_FPS)),
+        "capped" => Ok(FramePacingPolicyResource::continuous_capped(
+            DEFAULT_ANIMATION_FPS,
+        )),
         "uncapped" => Ok(FramePacingPolicyResource::continuous_uncapped()),
         "on-demand" => Ok(FramePacingPolicyResource::on_demand()),
         _ => {
             let Some(raw_fps) = mode.strip_prefix("capped:") else {
-                bail!("invalid --host-pacing mode '{mode}'; expected capped[:FPS], uncapped, on-demand");
+                bail!(
+                    "invalid --host-pacing mode '{mode}'; expected capped[:FPS], uncapped, on-demand"
+                );
             };
-            let fps: u32 = raw_fps.parse().with_context(|| {
-                format!("invalid --host-pacing capped FPS '{raw_fps}'")
-            })?;
-            FramePacingPolicyResource::checked_continuous_capped(fps).with_context(|| {
-                format!("--host-pacing capped FPS {fps} is outside 1..=240")
-            })
+            let fps: u32 = raw_fps
+                .parse()
+                .with_context(|| format!("invalid --host-pacing capped FPS '{raw_fps}'"))?;
+            FramePacingPolicyResource::checked_continuous_capped(fps)
+                .with_context(|| format!("--host-pacing capped FPS {fps} is outside 1..=240"))
         }
     }
 }
@@ -108,7 +114,10 @@ mod tests {
         app.with_frame_pacing(FramePacingPolicyResource::on_demand());
         request.apply_to(&mut app).unwrap();
         assert_eq!(
-            app.world().resource::<FramePacingPolicyResource>().unwrap().mode,
+            app.world()
+                .resource::<FramePacingPolicyResource>()
+                .unwrap()
+                .mode,
             FramePacingMode::OnDemand
         );
     }
@@ -116,10 +125,22 @@ mod tests {
     #[test]
     fn all_native_host_modes_override_defaults_and_reach_runtime_observation() {
         for (mode, expected) in [
-            ("capped", FramePacingMode::ContinuousCapped { target_fps: 60 }),
-            ("capped:1", FramePacingMode::ContinuousCapped { target_fps: 1 }),
-            ("capped:120", FramePacingMode::ContinuousCapped { target_fps: 120 }),
-            ("capped:240", FramePacingMode::ContinuousCapped { target_fps: 240 }),
+            (
+                "capped",
+                FramePacingMode::ContinuousCapped { target_fps: 60 },
+            ),
+            (
+                "capped:1",
+                FramePacingMode::ContinuousCapped { target_fps: 1 },
+            ),
+            (
+                "capped:120",
+                FramePacingMode::ContinuousCapped { target_fps: 120 },
+            ),
+            (
+                "capped:240",
+                FramePacingMode::ContinuousCapped { target_fps: 240 },
+            ),
             ("uncapped", FramePacingMode::ContinuousUncapped),
             ("on-demand", FramePacingMode::OnDemand),
         ] {
@@ -130,12 +151,20 @@ mod tests {
             request.apply_to(&mut app).unwrap();
             app.prepare_windowed_frame_pacing();
             assert_eq!(
-                app.world().resource::<FramePacingPolicyResource>().unwrap().mode,
-                expected, "{mode}"
+                app.world()
+                    .resource::<FramePacingPolicyResource>()
+                    .unwrap()
+                    .mode,
+                expected,
+                "{mode}"
             );
             assert_eq!(
-                app.world().resource::<FramePacingRuntimeStateResource>().unwrap().mode,
-                expected, "{mode}"
+                app.world()
+                    .resource::<FramePacingRuntimeStateResource>()
+                    .unwrap()
+                    .mode,
+                expected,
+                "{mode}"
             );
         }
     }
@@ -144,7 +173,10 @@ mod tests {
     fn equals_form_and_foreign_product_arguments_remain_independent() {
         let (request, rest) =
             parse(&["--species", "--host-pacing=uncapped", "--evidence"]).unwrap();
-        assert_eq!(request.frame_pacing(), Some(FramePacingPolicyResource::continuous_uncapped()));
+        assert_eq!(
+            request.frame_pacing(),
+            Some(FramePacingPolicyResource::continuous_uncapped())
+        );
         assert_eq!(rest, ["--species", "--evidence"]);
     }
 
@@ -169,7 +201,10 @@ mod tests {
     fn double_dash_prevents_host_flag_capture() {
         let (request, remaining) =
             parse(&["--host-pacing=uncapped", "--", "--host-pacing=on-demand"]).unwrap();
-        assert_eq!(request.frame_pacing(), Some(FramePacingPolicyResource::continuous_uncapped()));
+        assert_eq!(
+            request.frame_pacing(),
+            Some(FramePacingPolicyResource::continuous_uncapped())
+        );
         assert_eq!(remaining, ["--", "--host-pacing=on-demand"]);
     }
 
@@ -190,8 +225,8 @@ mod tests {
         let raw = OsString::from_vec(vec![0xff]);
         let (_, rest) = NativeHostLaunchOverrides::extract([raw.clone()]).unwrap();
         assert_eq!(rest, [raw.clone()]);
-        assert!(NativeHostLaunchOverrides::extract([
-            OsString::from("--host-pacing"), raw
-        ]).is_err());
+        assert!(
+            NativeHostLaunchOverrides::extract([OsString::from("--host-pacing"), raw]).is_err()
+        );
     }
 }
