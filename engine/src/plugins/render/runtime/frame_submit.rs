@@ -1850,9 +1850,8 @@ mod tests {
             GpuSurfacePresentMode::Immediate,
             GpuSurfacePresentMode::FifoRelaxed,
         ] {
-            let rejection = anyhow::Error::new(
-                RenderSurfacePresentationError::UnsupportedPresentMode(mode),
-            );
+            let rejection =
+                anyhow::Error::new(RenderSurfacePresentationError::UnsupportedPresentMode(mode));
             assert!(is_local_surface_presentation_rejection(&rejection));
         }
         for physical_or_lifecycle_failure in [
@@ -1865,7 +1864,9 @@ mod tests {
                 &anyhow::Error::new(physical_or_lifecycle_failure),
             ));
         }
-        assert!(!is_local_surface_presentation_rejection(&anyhow!("unexpected GPU state")));
+        assert!(!is_local_surface_presentation_rejection(&anyhow!(
+            "unexpected GPU state"
+        )));
     }
 
     #[test]
