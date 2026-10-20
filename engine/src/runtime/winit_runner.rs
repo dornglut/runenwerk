@@ -44,6 +44,7 @@ use runenui_winit::keyboard_input::{
     KeyboardInputState, NativeKeyTransition,
 };
 use runenui_winit::mouse_input::{MouseButtonOutcome, MouseInputState, TranslatedPointerPoint};
+use runenui_winit::text_input::keyboard_committed_text_candidate;
 use runenui_winit::touch_input::TouchInputState;
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
@@ -993,6 +994,10 @@ impl WinitRunner {
         // missing finality is not merely a gameplay nonclaim: continuing the
         // host could preserve an unresolved framework keyboard lifetime.
         let mut m13_failure: Option<anyhow::Error> = None;
+        // The same original Winit key may carry ordinary committed text.
+        // Only a successful exact M13 keyboard settlement may authorize
+        // a separate source-correlated text submission in that same turn.
+        let mut committed_keyboard_text = None;
         // A genuine repeat retains its prior physical lifetime. This never
         // grants a new game Down, restores a revoked held action, or manufactures
         // an M13 sequence; ActionState remains the only gameplay permission owner.
@@ -1002,6 +1007,20 @@ impl WinitRunner {
                 event,
                 down_admission,
             } => {
+                let text_candidate = keyboard_committed_text_candidate(
+                    original.state,
+                    is_synthetic,
+                    self.native_ime_applied.contains(&window)
+                        && before.keyboard().focused_node().is_some()
+                        && before
+                            .keyboard()
+                            .text_input_capability()
+                            .accepts_committed_text(),
+                    composition,
+                    event.logical_key(),
+                    original.text.as_deref(),
+                )
+                .map(str::to_owned);
                 let submission = self
                     .state
                     .world
@@ -1044,11 +1063,14 @@ impl WinitRunner {
                                             &status,
                                         );
                                         match &evidence {
-                                            Ok(UiInputFinality::Committed(facts)) => matches!(
-                                                facts.conflict(),
-                                                UiInputConflict::Unclaimed
-                                                    | UiInputConflict::ObservedNonexclusive
-                                            ),
+                                            Ok(UiInputFinality::Committed(facts)) => {
+                                                committed_keyboard_text = text_candidate;
+                                                matches!(
+                                                    facts.conflict(),
+                                                    UiInputConflict::Unclaimed
+                                                        | UiInputConflict::ObservedNonexclusive
+                                                )
+                                            },
                                             _ => {
                                                 m13_failure = Some(anyhow!(
                                                     "native keyboard lacked exact committed M13 settlement: {evidence:?}"
@@ -1211,10 +1233,17 @@ impl WinitRunner {
             };
         }
 
+        if m13_failure.is_none() {
+            if let Some(text) = committed_keyboard_text {
+                if let Err(error) = self.route_ui_committed_text(slot, text, Some(device)) {
+                    m13_failure = Some(error);
+                }
+            }
+        }
         // Missing or ambiguous M13 evidence, runtime failure, UI exclusivity,
         // and translator suppression NEVER produce positive gameplay evidence.
         // Revocation happens before PreUpdate/CoreSet::Input.
-        if !permit
+        if (!permit || m13_failure.is_some())
             && !preserve_prior_held_permission
             && matches!(original.state, winit::event::ElementState::Pressed)
         {
@@ -1380,7 +1409,19 @@ impl WinitRunner {
     /// the last key or guess the keyboard's physical lifetime.
     fn route_ui_ime_commit(&mut self, slot: UiRuntimeSlotId, text: String) -> Result<()> {
         self.route_ui_ime_finish(slot, false)?;
-        let event = CommittedTextEvent::new(text, None)
+        self.route_ui_committed_text(slot, text, None)
+    }
+
+    /// One existing M13 text owner handles either original OS IME Commit
+    /// (device-free) or native KeyEvent.text (exact keyboard device). Never
+    /// infer the latter from the last key while handling an IME event.
+    fn route_ui_committed_text(
+        &mut self,
+        slot: UiRuntimeSlotId,
+        text: String,
+        device: Option<UiInputDeviceId>,
+    ) -> Result<()> {
+        let event = CommittedTextEvent::new(text, device)
             .context("empty original committed text must be filtered at native ingress")?;
         let slots = self
             .state
@@ -1423,7 +1464,7 @@ impl WinitRunner {
         let (batch, status) = slots
             .pump_native_input_records(slot)
             .map_err(|error| anyhow!("native IME M13 pump unavailable: {error:?}"))?;
-        let evidence = native_text_finality(before.scope(), None, submission, &batch, &status);
+        let evidence = native_text_finality(before.scope(), device, submission, &batch, &status);
         anyhow::ensure!(
             matches!(evidence, Ok(UiInputFinality::Committed(_))),
             "native IME text lacked exact committed M13 settlement: {evidence:?}"
