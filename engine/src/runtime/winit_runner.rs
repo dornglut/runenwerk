@@ -110,6 +110,24 @@ fn native_ime_payload_allowed_for_window(focused: bool, ime_permission_applied: 
     focused && ime_permission_applied
 }
 
+/// Original KeyEvent.text belongs to the focus lifetime observed before the
+/// corresponding native keyboard event, not a successor selected by that
+/// keyboard's own M13 processing. The public revision catches A-B-A changes
+/// even when the same node has focus again; Engine stores no focus session.
+fn native_keyboard_text_owner_unchanged(
+    before: &runenui_runtime::InputOwnershipSnapshot,
+    after: &runenui_runtime::InputOwnershipSnapshot,
+) -> bool {
+    before.status() == runenui_runtime::RuntimeStatus::Running
+        && after.status() == runenui_runtime::RuntimeStatus::Running
+        && before.scope() == after.scope()
+        && before.revision() == after.revision()
+        && before.keyboard().focused_node().is_some()
+        && before.keyboard().focused_node() == after.keyboard().focused_node()
+        && after.keyboard().text_input_capability().accepts_committed_text()
+        && after.keyboard().composition_generation().is_none()
+}
+
 fn native_ui_blocks_preframe_keyboard_gameplay(
     ownership: &runenui_runtime::InputOwnershipSnapshot,
 ) -> bool {
@@ -1252,9 +1270,35 @@ impl WinitRunner {
 
         if m13_failure.is_none()
             && let Some(text) = committed_keyboard_text
-            && let Err(error) = self.route_ui_committed_text(slot, text, Some(device))
         {
-            m13_failure = Some(error);
+            // M13 keyboard callbacks can change the focused recipient before
+            // this original key's committed text is enqueued. Never retarget
+            // that text to a successor, including A-B-A within one pump.
+            let latest = self
+                .state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .context("original keyboard text lost its canonical UI slot")?
+                .input_ownership(slot);
+            match latest {
+                Ok(after) if native_keyboard_text_owner_unchanged(&before, &after) => {
+                    if let Err(error) = self.route_ui_committed_text(slot, text, Some(device)) {
+                        m13_failure = Some(error);
+                    }
+                }
+                Ok(_) => {
+                    tracing::trace!(
+                        target: "engine.runtime.input",
+                        ?window,
+                        "original keyboard text skipped after canonical focus or composition transition"
+                    );
+                }
+                Err(error) => {
+                    m13_failure = Some(anyhow!(
+                        "original keyboard text could not verify M13 focus lifetime: {error:?}"
+                    ));
+                }
+            }
         }
         // Missing or ambiguous M13 evidence, runtime failure, UI exclusivity,
         // and translator suppression NEVER produce positive gameplay evidence.
@@ -3806,6 +3850,10 @@ mod tests {
             .expect("focus has canonical settlement");
         let before = runtime.input_ownership().expect("real M13 focus snapshot");
         assert!(
+            native_keyboard_text_owner_unchanged(&before, &before),
+            "unchanged focused typed text ownership permits original KeyEvent.text"
+        );
+        assert!(
             native_ime_allowed_for_m13(true, &before),
             "a text-capable focused M13 owner enables its selected native window's OS IME"
         );
@@ -3828,6 +3876,10 @@ mod tests {
         let composing = runtime
             .input_ownership()
             .expect("owner-authored active composition snapshot");
+        assert!(
+            !native_keyboard_text_owner_unchanged(&before, &composing),
+            "an intervening real M13 composition transition invalidates prior keyboard text"
+        );
         assert_eq!(
             native_keyboard_composition(&composing),
             KeyboardCompositionState::Active,
@@ -3842,6 +3894,10 @@ mod tests {
         let after = runtime
             .input_ownership()
             .expect("composition cancellation ownership observed");
+        assert!(
+            !native_keyboard_text_owner_unchanged(&before, &after),
+            "A-to-composition-to-A cannot reuse the earlier original keyboard text lifetime"
+        );
         assert_eq!(
             native_keyboard_composition(&after),
             KeyboardCompositionState::Inactive,
