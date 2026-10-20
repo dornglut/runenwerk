@@ -117,18 +117,25 @@ pub(crate) fn attach_secondary(
         })
     {
         // Remove partial physical ownership, keeping logical policy for retry.
-        if let Ok(gfx) = world.resource_mut::<Gfx>() {
-            gfx.detach_surface(render_surface_id);
+        if let Ok(gfx) = world.resource_mut::<Gfx>()
+            && !gfx.detach_surface(render_surface_id)
+        {
+            return Err(anyhow!(
+                "render surface correlation failed ({err:#}) and physical rollback failed"
+            ));
         }
         return Err(anyhow!("render surface correlation failed: {err:#}"));
     }
 
-    world
-        .resource_mut::<RenderSurfaceRegistryResource>()?
-        .record_presentation_attempt(
-            render_surface_id,
-            RenderSurfacePresentationAttempt::Applied { revision },
-        );
+    let configured = world.resource::<Gfx>()?.surface_size(render_surface_id).is_some();
+    if configured {
+        world
+            .resource_mut::<RenderSurfaceRegistryResource>()?
+            .record_presentation_attempt(
+                render_surface_id,
+                RenderSurfacePresentationAttempt::Applied { revision },
+            );
+    }
     Ok(())
 }
 
@@ -173,8 +180,11 @@ pub(crate) fn rollback_secondary(
 
     if let Some(render_surface_id) = render_surface_id
         && let Ok(gfx) = world.resource_mut::<Gfx>()
+        && gfx.has_recoverable_surface_record(render_surface_id)
+        && !gfx.detach_surface(render_surface_id)
     {
-        gfx.detach_surface(render_surface_id);
+        // Do not retire logical identity while a physical surface remains owned.
+        return false;
     }
 
     world

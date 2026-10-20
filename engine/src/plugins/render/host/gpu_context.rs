@@ -233,8 +233,16 @@ impl RenderGpuContext {
             let capabilities = self.context.surface_capabilities(physical)?;
             let format = preferred_surface_format(&capabilities)
                 .ok_or(RenderSurfacePresentationError::NoCompatibleFormat)?;
-            let config = build_surface_config(extent.0, extent.1, format, &capabilities, request)?;
-            let configured = self.context.configure_surface(physical, config.clone())?;
+            let config = if extent.0 > 0 && extent.1 > 0 {
+                Some(build_surface_config(extent.0, extent.1, format, &capabilities, request)?)
+            } else {
+                None
+            };
+            let configured = if let Some(config) = &config {
+                self.context.configure_surface(physical, config.clone())?
+            } else {
+                physical
+            };
             Ok((configured, capabilities, config))
         })();
         let (surface, capabilities, config) = match outcome {
@@ -251,7 +259,7 @@ impl RenderGpuContext {
                 surface: Some(surface),
                 window,
                 capabilities: Some(capabilities),
-                config: Some(config),
+                config,
                 applied_revision: revision,
             },
         );
@@ -300,7 +308,11 @@ impl RenderGpuContext {
         &self,
         record: &RenderSurfaceRecord,
     ) -> RenderSurfacePresentationSnapshot {
-        let state = self.surfaces.get(&record.render_surface_id);
+        // Only a confirmed logical attachment may publish current physical facts.
+        // Requested and retired records must not claim an applied configuration.
+        let state = (record.lifecycle_state == RenderSurfaceLifecycleState::Attached)
+            .then(|| self.surfaces.get(&record.render_surface_id))
+            .flatten();
         let supported = state
             .and_then(|state| state.capabilities.as_ref())
             .map(|caps| caps.present_modes().to_vec());
@@ -464,6 +476,9 @@ impl RenderGpuContext {
         revision: u64,
         extent: (u32, u32),
     ) -> Result<(), RenderSurfacePresentationError> {
+        if extent.0 == 0 || extent.1 == 0 {
+            return Err(RenderSurfacePresentationError::ZeroExtent);
+        }
         let state = self
             .surfaces
             .get(&id)
