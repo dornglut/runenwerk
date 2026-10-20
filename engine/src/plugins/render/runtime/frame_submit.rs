@@ -651,6 +651,15 @@ fn reconcile_frame_history_policy(world: &mut WorldMut) {
     }
 }
 
+/// A strictly rejected policy is isolated to its own logical window. Backend/lifecycle
+/// failures still fail stop; never treat an unproven physical configuration as a skip.
+fn is_local_surface_presentation_rejection(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<RenderSurfacePresentationError>(),
+        Some(RenderSurfacePresentationError::UnsupportedPresentMode(_))
+    )
+}
+
 /// Exactly one owner performs Render policy reconciliation, before the surface-image lease.
 fn apply_surface_presentation(
     world: &mut WorldMut,
@@ -809,14 +818,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 (target_w, target_h),
             ) {
                 Ok(()) => true,
-                Err(error)
-                    if matches!(
-                        error.downcast_ref::<RenderSurfacePresentationError>(),
-                        Some(RenderSurfacePresentationError::UnsupportedPresentMode(_))
-                    ) =>
-                {
-                    false
-                }
+                Err(error) if is_local_surface_presentation_rejection(&error) => false,
                 Err(error) => return Err(error),
             }
         } else {
@@ -1529,10 +1531,7 @@ fn render_additional_surfaces(
         if let Err(error) =
             apply_surface_presentation(world, gfx, render_surface_id, (target_w, target_h))
         {
-            if matches!(
-                error.downcast_ref::<RenderSurfacePresentationError>(),
-                Some(RenderSurfacePresentationError::UnsupportedPresentMode(_))
-            ) {
+            if is_local_surface_presentation_rejection(&error) {
                 // Strict policy rejection is local: this window never presents
                 // with a fallback, while other surfaces may still progress.
                 defer_contributions_for_surface(
@@ -1841,6 +1840,33 @@ mod tests {
     use super::*;
     use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::render::inspect::{RenderCaptureSelector, RenderPixelProbeRequest};
+
+    #[test]
+    fn only_strict_unsupported_mode_is_surface_local_nonfatal() {
+        use runen_gpu::GpuSurfacePresentMode;
+        for mode in [
+            GpuSurfacePresentMode::Fifo,
+            GpuSurfacePresentMode::Mailbox,
+            GpuSurfacePresentMode::Immediate,
+            GpuSurfacePresentMode::FifoRelaxed,
+        ] {
+            let rejection = anyhow::Error::new(
+                RenderSurfacePresentationError::UnsupportedPresentMode(mode),
+            );
+            assert!(is_local_surface_presentation_rejection(&rejection));
+        }
+        for physical_or_lifecycle_failure in [
+            RenderSurfacePresentationError::RequiresReattachment,
+            RenderSurfacePresentationError::ZeroExtent,
+            RenderSurfacePresentationError::UnknownSurface,
+            RenderSurfacePresentationError::NoCompatibleFormat,
+        ] {
+            assert!(!is_local_surface_presentation_rejection(
+                &anyhow::Error::new(physical_or_lifecycle_failure),
+            ));
+        }
+        assert!(!is_local_surface_presentation_rejection(&anyhow!("unexpected GPU state")));
+    }
 
     #[test]
     fn native_surface_binding_requires_attached_exact_correlation() {
