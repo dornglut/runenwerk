@@ -169,7 +169,8 @@ impl RenderGpuContext {
         // A newly created/minimized window may have no drawable extent yet.
         // Keep the attachment and logical policy, but do not invent a configured swapchain.
         let (surface, config) = if size.width > 0 && size.height > 0 {
-            let config = build_surface_config(size.width, size.height, format, &capabilities, request)?;
+            let config =
+                build_surface_config(size.width, size.height, format, &capabilities, request)?;
             let configured = context.configure_surface(surface, config.clone())?;
             (configured, Some(config))
         } else {
@@ -234,7 +235,13 @@ impl RenderGpuContext {
             let format = preferred_surface_format(&capabilities)
                 .ok_or(RenderSurfacePresentationError::NoCompatibleFormat)?;
             let config = if extent.0 > 0 && extent.1 > 0 {
-                Some(build_surface_config(extent.0, extent.1, format, &capabilities, request)?)
+                Some(build_surface_config(
+                    extent.0,
+                    extent.1,
+                    format,
+                    &capabilities,
+                    request,
+                )?)
             } else {
                 None
             };

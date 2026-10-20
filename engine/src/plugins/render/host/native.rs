@@ -127,7 +127,10 @@ pub(crate) fn attach_secondary(
         return Err(anyhow!("render surface correlation failed: {err:#}"));
     }
 
-    let configured = world.resource::<Gfx>()?.surface_size(render_surface_id).is_some();
+    let configured = world
+        .resource::<Gfx>()?
+        .surface_size(render_surface_id)
+        .is_some();
     if configured {
         world
             .resource_mut::<RenderSurfaceRegistryResource>()?
