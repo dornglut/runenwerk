@@ -1,8 +1,6 @@
-use super::*;
 use super::tests::runner_with_frame_pacing;
-use crate::plugins::render::host::{
-    RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
-};
+use super::*;
+use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 
 #[test]
 fn refused_secondary_close_preserves_host_identity_and_redraw() {
@@ -128,4 +126,3 @@ fn creation_failure_cannot_discard_unresolved_render_attachment() {
         Some(surface)
     );
 }
-
