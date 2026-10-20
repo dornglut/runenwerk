@@ -1449,6 +1449,105 @@ mod tests {
     }
 
     #[test]
+    fn continuous_uncapped_keeps_host_turns_ready_without_a_timer() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::continuous_uncapped());
+        let start = Instant::now();
+        runner.last_primary_redraw_at = Some(start);
+        assert!(runner.frame_is_ready(start));
+        assert!(runner.should_request_primary_redraw_now(start));
+        assert!(
+            runner.should_request_primary_redraw_now(start + std::time::Duration::from_nanos(1))
+        );
+        let policy = runner.frame_pacing_policy();
+        let next = runner.frame_pacing_schedule.decide(policy, start);
+        assert!(next.request_redraw);
+        assert!(
+            next.next_deadline.is_none(),
+            "uncapped Host never creates a timer deadline"
+        );
+    }
+
+    #[test]
+    fn live_uncapped_mode_switches_preserve_explicit_redraw_and_capped_readiness() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::continuous_uncapped());
+        let now = Instant::now();
+        runner.last_primary_redraw_at = Some(now);
+        assert!(runner.frame_is_ready(now));
+        let policy = runner.frame_pacing_policy();
+        let uncapped = runner.frame_pacing_schedule.decide(policy, now);
+        assert!(uncapped.request_redraw);
+        assert_eq!(uncapped.next_deadline, None);
+
+        // A secondary logical window's explicit redraw intent belongs to the
+        // window registry, not to the primary continuous pacing policy.
+        let secondary = runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("window registry")
+            .request_window("secondary", (640, 480))
+            .native_window_id;
+        runner.request_redraw_for_native_window(secondary);
+        assert!(runner.frame_requested);
+
+        *runner
+            .state
+            .world
+            .resource_mut::<FramePacingPolicyResource>()
+            .expect("frame pacing policy") = FramePacingPolicyResource::on_demand();
+        let policy = runner.frame_pacing_policy();
+        let on_demand = runner.frame_pacing_schedule.decide(policy, now);
+        assert!(!on_demand.request_redraw);
+        assert_eq!(on_demand.next_deadline, None);
+        assert!(runner.frame_is_ready(now));
+        assert!(runner.should_request_primary_redraw_now(now));
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .expect("window registry")
+                .record(secondary)
+                .expect("secondary record")
+                .redraw_requested,
+            "switching to on-demand must preserve an explicit secondary redraw"
+        );
+        runner.frame_requested = false;
+        assert!(
+            !runner
+                .frame_pacing_schedule
+                .decide(policy, now)
+                .request_redraw,
+            "on-demand must not keep the former uncapped automatic requests alive"
+        );
+
+        let capped = FramePacingPolicyResource::continuous_capped(30);
+        *runner
+            .state
+            .world
+            .resource_mut::<FramePacingPolicyResource>()
+            .expect("frame pacing policy") = capped;
+        let interval = capped.target_frame_interval().expect("30 FPS interval");
+        assert!(!runner.frame_is_ready(now));
+        let resumed = runner.frame_pacing_schedule.decide(capped, now);
+        assert!(resumed.request_redraw);
+        assert_eq!(resumed.next_deadline, Some(now + interval));
+        assert!(
+            !runner
+                .frame_pacing_schedule
+                .decide(capped, now + interval / 2)
+                .request_redraw
+        );
+        assert!(runner.frame_is_ready(now + interval));
+        assert!(
+            runner
+                .frame_pacing_schedule
+                .decide(capped, now + interval)
+                .request_redraw
+        );
+    }
+
+    #[test]
     fn primary_input_redraws_stay_immediate_on_demand() {
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
         let now = Instant::now();

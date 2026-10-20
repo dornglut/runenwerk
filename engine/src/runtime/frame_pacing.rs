@@ -6,7 +6,12 @@ const MAX_ANIMATION_FPS: u32 = 240;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FramePacingMode {
-    ContinuousCapped { target_fps: u32 },
+    ContinuousCapped {
+        target_fps: u32,
+    },
+    /// Schedule another host turn continuously without a synthetic FPS deadline.
+    /// Real surface presentation/backpressure remain independently configured.
+    ContinuousUncapped,
     OnDemand,
 }
 
@@ -14,6 +19,7 @@ impl FramePacingMode {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::ContinuousCapped { .. } => "continuous_capped",
+            Self::ContinuousUncapped => "continuous_uncapped",
             Self::OnDemand => "on_demand",
         }
     }
@@ -21,7 +27,7 @@ impl FramePacingMode {
     pub fn target_fps(self) -> Option<u32> {
         match self {
             Self::ContinuousCapped { target_fps } => Some(clamp_target_fps(target_fps)),
-            Self::OnDemand => None,
+            Self::ContinuousUncapped | Self::OnDemand => None,
         }
     }
 
@@ -48,6 +54,14 @@ impl FramePacingPolicyResource {
             mode: FramePacingMode::ContinuousCapped {
                 target_fps: clamp_target_fps(target_fps),
             },
+        }
+    }
+
+    /// Request a new native Host frame after every completed turn; this does
+    /// not bypass the Render surface's configured FIFO presentation policy.
+    pub fn continuous_uncapped() -> Self {
+        Self {
+            mode: FramePacingMode::ContinuousUncapped,
         }
     }
 
@@ -127,6 +141,14 @@ impl FramePacingSchedule {
             self.next_deadline = None;
         }
 
+        if matches!(policy.mode, FramePacingMode::ContinuousUncapped) {
+            self.next_deadline = None;
+            return FramePacingDecision {
+                request_redraw: true,
+                next_deadline: None,
+            };
+        }
+
         let Some(interval) = policy.target_frame_interval() else {
             self.next_deadline = None;
             return FramePacingDecision {
@@ -176,6 +198,13 @@ pub fn decide_frame_pacing(
     last_frame_at: Option<Instant>,
     now: Instant,
 ) -> FramePacingDecision {
+    if matches!(policy.mode, FramePacingMode::ContinuousUncapped) {
+        return FramePacingDecision {
+            request_redraw: true,
+            next_deadline: None,
+        };
+    }
+
     match next_continuous_frame_deadline(policy, last_frame_at, now) {
         Some(deadline) if now >= deadline => FramePacingDecision {
             request_redraw: true,
@@ -212,6 +241,63 @@ mod tests {
         assert_eq!(
             policy.target_frame_interval(),
             Some(Duration::from_secs_f64(1.0 / 60.0))
+        );
+    }
+
+    #[test]
+    fn uncapped_and_on_demand_have_distinct_redraw_intents_without_synthetic_deadlines() {
+        let now = Instant::now();
+        let policy = FramePacingPolicyResource::continuous_uncapped();
+        assert_eq!(policy.mode.as_str(), "continuous_uncapped");
+        assert_eq!(policy.mode.target_fps(), None);
+        assert_eq!(policy.target_frame_interval(), None);
+        assert_eq!(next_continuous_frame_deadline(policy, Some(now), now), None);
+        let decision = decide_frame_pacing(policy, Some(now), now);
+        assert_eq!(
+            decision,
+            FramePacingDecision {
+                request_redraw: true,
+                next_deadline: None
+            }
+        );
+        let demand = decide_frame_pacing(FramePacingPolicyResource::on_demand(), Some(now), now);
+        assert!(!demand.request_redraw);
+    }
+
+    #[test]
+    fn uncapped_schedule_continues_and_clears_stale_deadlines_on_mode_switch() {
+        let start = Instant::now();
+        let mut schedule = FramePacingSchedule::default();
+        let capped = FramePacingPolicyResource::continuous_capped(60);
+        let interval = capped.target_frame_interval().unwrap();
+        assert_eq!(
+            schedule.decide(capped, start).next_deadline,
+            Some(start + interval)
+        );
+
+        let uncapped = FramePacingPolicyResource::continuous_uncapped();
+        for time in [start, start + Duration::from_nanos(1)] {
+            assert_eq!(
+                schedule.decide(uncapped, time),
+                FramePacingDecision {
+                    request_redraw: true,
+                    next_deadline: None
+                }
+            );
+        }
+        assert_eq!(
+            schedule.decide(FramePacingPolicyResource::on_demand(), start),
+            FramePacingDecision {
+                request_redraw: false,
+                next_deadline: None
+            }
+        );
+        assert_eq!(
+            schedule.decide(capped, start),
+            FramePacingDecision {
+                request_redraw: true,
+                next_deadline: Some(start + interval)
+            }
         );
     }
 
