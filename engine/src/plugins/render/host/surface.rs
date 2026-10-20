@@ -2,10 +2,12 @@ use crate::runtime::NativeWindowId;
 use anyhow::{Result, anyhow};
 use id_macros::id;
 use runen_gpu::{
-    GpuSurfaceCapabilities, GpuSurfaceColorSpace, GpuSurfaceConfiguration, GpuSurfacePresentMode,
-    GpuTextureFormat, GpuTextureUsage,
+    GpuSurfaceCapabilities, GpuSurfaceColorSpace, GpuSurfaceConfiguration,
+    GpuSurfaceConfigurationCause, GpuSurfaceErrorCategory, GpuSurfaceGeneration,
+    GpuSurfacePresentMode, GpuTextureFormat, GpuTextureUsage,
 };
 use std::collections::BTreeMap;
+use std::num::NonZeroU32;
 
 #[id]
 pub struct RenderSurfaceId;
@@ -14,6 +16,117 @@ impl RenderSurfaceId {
     pub fn primary() -> Self {
         Self::try_from_raw(1).expect("primary render surface id must be non-zero")
     }
+}
+
+/// Declarative policy for one logical native render surface. It does not configure a swapchain.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderSurfacePresentationRequest {
+    pub present_mode: GpuSurfacePresentMode,
+    pub desired_maximum_frame_latency: NonZeroU32,
+}
+
+impl Default for RenderSurfacePresentationRequest {
+    fn default() -> Self {
+        Self {
+            present_mode: GpuSurfacePresentMode::Fifo,
+            desired_maximum_frame_latency: NonZeroU32::new(2).expect("nonzero FIFO default"),
+        }
+    }
+}
+
+impl RenderSurfacePresentationRequest {
+    pub fn new(
+        present_mode: GpuSurfacePresentMode,
+        desired_maximum_frame_latency: u32,
+    ) -> Result<Self, RenderSurfacePresentationError> {
+        let desired_maximum_frame_latency = NonZeroU32::new(desired_maximum_frame_latency)
+            .ok_or(RenderSurfacePresentationError::ZeroLatency)?;
+        Ok(Self {
+            present_mode,
+            desired_maximum_frame_latency,
+        })
+    }
+}
+
+/// Typed policy/configuration failure; a failed requested mode is never implicitly replaced.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub enum RenderSurfacePresentationError {
+    #[error("unknown render surface")]
+    UnknownSurface,
+    #[error("render surface has retired")]
+    RetiredSurface,
+    #[error("presentation request revision exhausted")]
+    RevisionExhausted,
+    #[error("desired maximum frame latency must be nonzero")]
+    ZeroLatency,
+    #[error("render surface has no drawable nonzero extent")]
+    ZeroExtent,
+    #[error("render surface has no compatible sRGB format")]
+    NoCompatibleFormat,
+    #[error("render surface has no compatible alpha mode or color-attachment usage")]
+    NoCompatibleAlphaOrUsage,
+    #[error("requested present mode {0:?} is unsupported on this attachment")]
+    UnsupportedPresentMode(GpuSurfacePresentMode),
+    #[error("current physical surface requires safe reattachment")]
+    RequiresReattachment,
+    #[error("RunenGPU rejected surface operation: {0:?}")]
+    Gpu(GpuSurfaceErrorCategory),
+    #[error("RunenGPU rejected surface configuration: {0:?}")]
+    Configuration(GpuSurfaceConfigurationCause),
+}
+
+/// An attempt is associated with an exact immutable logical request revision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderSurfacePresentationAttempt {
+    Applied {
+        revision: u64,
+    },
+    Rejected {
+        revision: u64,
+        reason: RenderSurfacePresentationError,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RenderSurfacePresentationDisposition {
+    Pending,
+    Applied,
+    Rejected(RenderSurfacePresentationError),
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderSurfaceAppliedPresentation {
+    pub request: RenderSurfacePresentationRequest,
+    pub surface_generation: GpuSurfaceGeneration,
+    /// The request revision that actually returned from RunenGPU configuration.
+    pub revision: u64,
+}
+
+/// Derived from the registry's logical request and the one Gfx physical owner.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderSurfacePresentationSnapshot {
+    pub render_surface_id: RenderSurfaceId,
+    pub native_window_id: NativeWindowId,
+    pub requested: RenderSurfacePresentationRequest,
+    pub request_revision: u64,
+    /// Facts last sampled when RunenGPU attached this physical surface, not a live OS probe.
+    pub supported_at_attachment: Option<Vec<GpuSurfacePresentMode>>,
+    pub selected: Option<GpuSurfacePresentMode>,
+    pub applied: Option<RenderSurfaceAppliedPresentation>,
+    pub disposition: RenderSurfacePresentationDisposition,
+    pub last_attempt: Option<RenderSurfacePresentationAttempt>,
+}
+
+/// Qualify strictly against facts about the exact physical attachment.
+/// Separate slice input permits honest pure tests without constructing private RunenGPU capabilities.
+pub fn select_surface_present_mode(
+    supported: &[GpuSurfacePresentMode],
+    requested: GpuSurfacePresentMode,
+) -> Result<GpuSurfacePresentMode, RenderSurfacePresentationError> {
+    supported.contains(&requested).then_some(requested).ok_or(
+        RenderSurfacePresentationError::UnsupportedPresentMode(requested),
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +142,9 @@ pub struct RenderSurfaceRecord {
     pub native_window_id: NativeWindowId,
     pub target_size_px: (u32, u32),
     pub lifecycle_state: RenderSurfaceLifecycleState,
+    pub presentation_request: RenderSurfacePresentationRequest,
+    pub presentation_revision: u64,
+    pub presentation_attempt: Option<RenderSurfacePresentationAttempt>,
 }
 
 impl RenderSurfaceRecord {
@@ -43,6 +159,9 @@ impl RenderSurfaceRecord {
             native_window_id,
             target_size_px: normalized_surface_extent(target_size_px),
             lifecycle_state,
+            presentation_request: RenderSurfacePresentationRequest::default(),
+            presentation_revision: 0,
+            presentation_attempt: None,
         }
     }
 }
@@ -199,6 +318,51 @@ impl RenderSurfaceRegistryResource {
         true
     }
 
+    /// Update a logical per-surface request; physical application is a later RenderSubmit event.
+    pub fn set_presentation_request(
+        &mut self,
+        render_surface_id: RenderSurfaceId,
+        request: RenderSurfacePresentationRequest,
+    ) -> Result<u64, RenderSurfacePresentationError> {
+        let record = self
+            .records
+            .get_mut(&render_surface_id)
+            .ok_or(RenderSurfacePresentationError::UnknownSurface)?;
+        if record.lifecycle_state == RenderSurfaceLifecycleState::Retired {
+            return Err(RenderSurfacePresentationError::RetiredSurface);
+        }
+        if record.presentation_request != request {
+            let revision = record
+                .presentation_revision
+                .checked_add(1)
+                .ok_or(RenderSurfacePresentationError::RevisionExhausted)?;
+            record.presentation_request = request;
+            record.presentation_revision = revision;
+            record.presentation_attempt = None;
+        }
+        Ok(record.presentation_revision)
+    }
+
+    /// Associate an actual configuration result with the same logical request revision.
+    /// Superseded attempts must not overwrite newer policy.
+    pub fn record_presentation_attempt(
+        &mut self,
+        render_surface_id: RenderSurfaceId,
+        attempt: RenderSurfacePresentationAttempt,
+    ) {
+        if let Some(record) = self.records.get_mut(&render_surface_id) {
+            let revision = match attempt {
+                RenderSurfacePresentationAttempt::Applied { revision }
+                | RenderSurfacePresentationAttempt::Rejected { revision, .. } => revision,
+            };
+            if record.lifecycle_state != RenderSurfaceLifecycleState::Retired
+                && record.presentation_revision == revision
+            {
+                record.presentation_attempt = Some(attempt);
+            }
+        }
+    }
+
     pub fn primary_surface_id(&self) -> Option<RenderSurfaceId> {
         self.primary_surface_id
     }
@@ -278,12 +442,22 @@ pub fn build_surface_config(
     height: u32,
     format: GpuTextureFormat,
     capabilities: &GpuSurfaceCapabilities,
-) -> Result<GpuSurfaceConfiguration> {
+    request: RenderSurfacePresentationRequest,
+) -> Result<GpuSurfaceConfiguration, RenderSurfacePresentationError> {
+    if width == 0 || height == 0 {
+        return Err(RenderSurfacePresentationError::ZeroExtent);
+    }
+    if !capabilities.supports_pair(format, GpuSurfaceColorSpace::Srgb)
+        || !capabilities.supports_usage(GpuTextureUsage::ColorAttachment)
+    {
+        return Err(RenderSurfacePresentationError::NoCompatibleFormat);
+    }
+    let mode = select_surface_present_mode(capabilities.present_modes(), request.present_mode)?;
     let alpha_mode = capabilities
         .alpha_modes()
         .first()
         .copied()
-        .ok_or_else(|| anyhow!("render surface reports no supported alpha mode"))?;
+        .ok_or(RenderSurfacePresentationError::NoCompatibleAlphaOrUsage)?;
     let mut usages = vec![GpuTextureUsage::ColorAttachment];
     for usage in [
         GpuTextureUsage::CopySource,
@@ -293,25 +467,125 @@ pub fn build_surface_config(
             usages.push(usage);
         }
     }
-    if !capabilities.supports_present_mode(GpuSurfacePresentMode::Fifo) {
-        return Err(anyhow!("render surface does not support FIFO presentation"));
-    }
     if !capabilities.supports_alpha_mode(alpha_mode) {
-        return Err(anyhow!(
-            "render surface alpha-mode selection became invalid"
-        ));
+        return Err(RenderSurfacePresentationError::NoCompatibleAlphaOrUsage);
     }
     Ok(GpuSurfaceConfiguration::new(
-        width.max(1),
-        height.max(1),
+        width,
+        height,
         format,
         GpuSurfaceColorSpace::Srgb,
         usages,
-        GpuSurfacePresentMode::Fifo,
+        mode,
         alpha_mode,
-        2,
+        request.desired_maximum_frame_latency.get(),
         [format],
-    )?)
+    )
+    .map_err(|error| RenderSurfacePresentationError::Configuration(error.cause()))?)
+}
+
+#[cfg(test)]
+mod presentation_policy_tests {
+    use super::*;
+
+    #[test]
+    fn default_and_explicit_hint_are_stable() {
+        let default = RenderSurfacePresentationRequest::default();
+        assert_eq!(default.present_mode, GpuSurfacePresentMode::Fifo);
+        assert_eq!(default.desired_maximum_frame_latency.get(), 2);
+        assert_eq!(
+            RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Mailbox, 0),
+            Err(RenderSurfacePresentationError::ZeroLatency)
+        );
+        assert_eq!(
+            RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Immediate, 5)
+                .unwrap()
+                .desired_maximum_frame_latency
+                .get(),
+            5
+        );
+    }
+
+    #[test]
+    fn strict_mode_selection_never_invents_fallback() {
+        for supported in [
+            vec![GpuSurfacePresentMode::Fifo],
+            vec![GpuSurfacePresentMode::Fifo, GpuSurfacePresentMode::Mailbox],
+            vec![
+                GpuSurfacePresentMode::Fifo,
+                GpuSurfacePresentMode::Immediate,
+            ],
+            vec![
+                GpuSurfacePresentMode::Fifo,
+                GpuSurfacePresentMode::FifoRelaxed,
+            ],
+            vec![],
+        ] {
+            for requested in [
+                GpuSurfacePresentMode::Fifo,
+                GpuSurfacePresentMode::Mailbox,
+                GpuSurfacePresentMode::Immediate,
+                GpuSurfacePresentMode::FifoRelaxed,
+            ] {
+                let result = select_surface_present_mode(&supported, requested);
+                if supported.contains(&requested) {
+                    assert_eq!(result, Ok(requested));
+                } else {
+                    assert_eq!(
+                        result,
+                        Err(RenderSurfacePresentationError::UnsupportedPresentMode(
+                            requested
+                        ))
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn request_updates_are_idempotent_revisioned_and_surface_isolated() {
+        let mut registry = RenderSurfaceRegistryResource::default();
+        let first =
+            registry.reserve_surface_for_native_window(NativeWindowId::primary(), (800, 600));
+        let second_native = NativeWindowId::try_from_raw(8).unwrap();
+        let second = registry.reserve_surface_for_native_window(second_native, (500, 400));
+        let request =
+            RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Mailbox, 1).unwrap();
+        assert_eq!(registry.set_presentation_request(first, request), Ok(1));
+        assert_eq!(registry.set_presentation_request(first, request), Ok(1));
+        assert_eq!(
+            registry.record(second).unwrap().presentation_request,
+            RenderSurfacePresentationRequest::default()
+        );
+        registry.record_presentation_attempt(
+            first,
+            RenderSurfacePresentationAttempt::Applied { revision: 0 },
+        );
+        assert_eq!(registry.record(first).unwrap().presentation_attempt, None);
+        registry.record_presentation_attempt(
+            first,
+            RenderSurfacePresentationAttempt::Rejected {
+                revision: 1,
+                reason: RenderSurfacePresentationError::UnsupportedPresentMode(
+                    GpuSurfacePresentMode::Mailbox,
+                ),
+            },
+        );
+        assert!(matches!(
+            registry.record(first).unwrap().presentation_attempt,
+            Some(RenderSurfacePresentationAttempt::Rejected { revision: 1, .. })
+        ));
+        assert_eq!(
+            registry.set_presentation_request(first, RenderSurfacePresentationRequest::default()),
+            Ok(2)
+        );
+        assert_eq!(registry.record(first).unwrap().presentation_attempt, None);
+        registry.retire_surface_for_native_window(second_native);
+        assert_eq!(
+            registry.set_presentation_request(second, request),
+            Err(RenderSurfacePresentationError::RetiredSurface)
+        );
+    }
 }
 
 #[cfg(test)]
