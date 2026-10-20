@@ -4461,6 +4461,7 @@ mod tests {
                     repeat: false,
                     origin: ObservationOrigin::SourceReport,
                 },
+                None,
             )
             .unwrap();
         // Settle the independent new KeyA against the pinned framework's
@@ -4567,6 +4568,7 @@ mod tests {
                         repeat: false,
                         origin: ObservationOrigin::SourceReport,
                     },
+                    None,
                 )
                 .is_err(),
             "an absent M13 ownership snapshot is never a game nonclaim"
