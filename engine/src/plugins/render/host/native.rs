@@ -34,12 +34,11 @@ pub(crate) fn initialize_primary(
     world.insert_resource(gfx);
     confirm_primary_attachment(world, target_size_px)
         .context("failed to confirm primary render surface attachment")?;
-    let configured = world.resource::<Gfx>()?
+    let configured = world
+        .resource::<Gfx>()?
         .surface_size(RenderSurfaceId::primary())
         .is_some();
-    if configured
-        && let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>()
-    {
+    if configured && let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
         registry.record_presentation_attempt(
             RenderSurfaceId::primary(),
             RenderSurfacePresentationAttempt::Applied { revision },
