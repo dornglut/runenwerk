@@ -100,6 +100,13 @@ fn native_ime_allowed_for_m13(
         && (capability.accepts_committed_text() || capability.accepts_composition())
 }
 
+/// Original native IME text requires both live window focus and the host's
+/// applied OS IME permission. A delayed OS payload after either lifetime
+/// retires is not authority to submit new RunenUI text or composition work.
+fn native_ime_payload_allowed_for_window(focused: bool, ime_permission_applied: bool) -> bool {
+    focused && ime_permission_applied
+}
+
 fn native_ui_blocks_preframe_keyboard_gameplay(
     ownership: &runenui_runtime::InputOwnershipSnapshot,
 ) -> bool {
@@ -3250,6 +3257,12 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             }
             WindowEvent::Ime(Ime::Enabled) => Ok(()),
             WindowEvent::Ime(Ime::Preedit(preedit, range)) => {
+                if !native_ime_payload_allowed_for_window(
+                    window.has_focus(),
+                    self.native_ime_applied.contains(&native_window_id),
+                ) {
+                    return Ok(());
+                }
                 match self.native_input_recipient(native_window_id) {
                     Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
                         self.route_ui_ime_preedit(slot, preedit, range)
@@ -3280,6 +3293,12 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 }
             }
             WindowEvent::Ime(Ime::Commit(text)) => {
+                if !native_ime_payload_allowed_for_window(
+                    window.has_focus(),
+                    self.native_ime_applied.contains(&native_window_id),
+                ) {
+                    return Ok(());
+                }
                 // Empty OS Commit still ends a live preedit generation, but
                 // must never manufacture empty durable text.
                 if text.is_empty() {
@@ -3611,6 +3630,17 @@ mod tests {
             .is_err(),
             "nonfinite wheel must not enter M13"
         );
+    }
+
+    #[test]
+    fn native_ime_payload_needs_focused_window_and_applied_os_permission() {
+        assert!(native_ime_payload_allowed_for_window(true, true));
+        for (focused, applied) in [(false, true), (true, false), (false, false)] {
+            assert!(
+                !native_ime_payload_allowed_for_window(focused, applied),
+                "stale IME payload must not enter RunenUI after native lifetime loss"
+            );
+        }
     }
 
     #[test]
