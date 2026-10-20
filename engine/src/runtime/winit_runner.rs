@@ -153,6 +153,15 @@ struct NativeUiKeyboardTranslator {
     keyboard: KeyboardInputState,
 }
 
+/// One original Winit keyboard callback and its pre-admission neutral Down
+/// generation. This is ephemeral source evidence, not an input queue or a
+/// second physical-key, framework-focus, or gameplay-permission authority.
+struct NativeUiKeyboardOriginal<'a> {
+    event: &'a winit::event::KeyEvent,
+    is_synthetic: bool,
+    previous_down_generation: Option<u64>,
+}
+
 /// Native mouse translation is transient. It never owns pointer gameplay
 /// permission; native window, physical source, binding epoch and M13 scope
 /// must agree before its active pointer stream may be reused.
@@ -891,10 +900,13 @@ impl WinitRunner {
         slot: UiRuntimeSlotId,
         binding_epoch: u64,
         context: InputContext,
-        original: &winit::event::KeyEvent,
-        is_synthetic: bool,
-        previous_down_generation: Option<u64>,
+        original: NativeUiKeyboardOriginal<'_>,
     ) -> Result<()> {
+        let NativeUiKeyboardOriginal {
+            event: original,
+            is_synthetic,
+            previous_down_generation,
+        } = original;
         // Same original event and normalized source; no alternate input owner.
         let physical_key = keyboard_input(original, is_synthetic).physical_key;
         let device = Self::native_ui_device(context)?;
@@ -3087,9 +3099,11 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             slot,
                             epoch,
                             context,
-                            &event,
-                            is_synthetic,
-                            previous_down_generation,
+                            NativeUiKeyboardOriginal {
+                                event: &event,
+                                is_synthetic,
+                                previous_down_generation,
+                            },
                         )
                     }
                     Err(error) => {
