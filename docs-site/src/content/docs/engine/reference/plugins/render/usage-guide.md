@@ -86,6 +86,43 @@ Runtime performance policy is split by ownership:
   provenance/capture/readback/pixel probes/texture diffs/export, slow frames,
   explicit requests, or full-every-frame policy.
 
+## Per-surface presentation policy
+
+`RenderSurfaceRegistryResource` stores a declarative
+`RenderSurfacePresentationRequest` for each `RenderSurfaceId`. Native windows
+default to `GpuSurfacePresentMode::Fifo` with a desired maximum frame-latency
+hint of 2. RunenGPU defines `Fifo`, `FifoRelaxed`, `Immediate`, and `Mailbox`.
+Requests are strict: unsupported modes are rejected without implicit fallback.
+
+For an existing or reserved Render surface, before or after native attachment:
+
+```rust
+let request = RenderSurfacePresentationRequest::new(
+    GpuSurfacePresentMode::Mailbox, 1,
+)?;
+let revision = registry.set_presentation_request(surface_id, request)?;
+```
+
+The revision records intent, not physical application. The existing RenderSubmit
+path reconciles requests before surface acquisition; it does not trigger Host redraws.
+
+`Gfx::surface_presentation(record)` returns a
+`RenderSurfacePresentationSnapshot` with requested, attachment-supported,
+selected and applied settings, the last attempt, and a
+`Pending | Applied | Rejected | Unavailable` disposition. A rejected new request
+may leave a previously applied configuration valid. The latency field remains
+a requested backend hint, not an observed effective frame latency.
+
+Supported modes are attachment-time facts, not live monitor capabilities.
+Physical loss or failed configuration invalidates cached facts and requires
+safe reattachment/requalification before claiming application; an unsupported
+mode request alone does not require recreation. Non-drawable surfaces defer
+configuration. Retired logical surfaces reject further policy updates.
+
+Host redraw pacing is independent of Render Present mode. Present submission,
+GPU completion, and physical display scanout are distinct; no selection
+guarantees FPS, tearing behavior, or input-to-photon latency.
+
 ## Prepared Frame Surface
 
 `PreparedRenderFrame` carries the prepare/submit boundary payload:
@@ -104,46 +141,3 @@ UI note:
 
 - UI travels as `PreparedFeaturePayload::Ui` carrying `PreparedUiFrameContribution`.
 - Each submission carries an owned `UiFrame` payload with ordered route/layer/priority metadata.
-
-## Per-surface presentation policy
-
-`RenderSurfaceRegistryResource` owns one declarative `RenderSurfacePresentationRequest`
-per existing `RenderSurfaceId`. FIFO with a desired maximum frame-latency hint
-of 2 is the compatibility default for primary and secondary native windows.
-`GpuSurfacePresentMode` is the accepted RunenGPU vocabulary: `Fifo`,
-`FifoRelaxed`, `Immediate`, and `Mailbox`. An explicit mode request is
-strict: if it is not in the capability set for that physical attachment,
-configuration is rejected, not silently changed to another mode.
-
-A consumer can reserve its window's Render surface, then call
-`registry.set_presentation_request(surface_id,
-RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Mailbox, 1)?)?`
-before the native window is attached, or update that request later. The
-returned revision records intent, **not** backend application. Runtime updates
-are reconciled by the existing invoker-thread RenderSubmit owner, before
-surface-image acquisition, and do not generate Host redraws.
-
-`Gfx::surface_presentation(record)` derives a `RenderSurfacePresentationSnapshot`
-from the logical request and its physical Gfx attachment. It distinguishes
-`requested`, `supported_at_attachment`, `selected`, `applied`,
-`last_attempt`, and `Pending | Applied | Rejected | Unavailable` dispositions.
-A rejected newer request can coexist with a still-valid earlier applied
-configuration; an uncertain physical configuration is not reported as
-applied. `applied.request.desired_maximum_frame_latency` is only the
-backend *requested hint*, not an observed or effective latency.
-
-RunenGPU snapshots supported modes at physical attachment; it does not
-provide a live in-place capability refresh. `Outdated`/lost and physical
-configuration failures invalidate cached facts. The next safe Render
-submission must detach/recreate the affected physical surface and requalify
-the current logical request, rather than invent current monitor capabilities.
-Window retirement discards its logical request. A non-drawable window defers
-configuration until a legitimate drawable opportunity; the Host scheduler
-remains independent.
-
-The native Host decides when to request a frame; it does **not** choose the
-surface Present mode. RunenGPU owns physical configuration, execution,
-terminal Present, and attachment generations. Submitted Present, confirmed
-GPU completion, and actual monitor scanout are distinct. Neither explicit
-Mailbox nor an uncapped Host mode promises unlimited displayed FPS, absence
-of tearing, or lower input-to-photon latency.
