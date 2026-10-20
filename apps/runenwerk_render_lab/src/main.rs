@@ -49,6 +49,19 @@ fn main() -> anyhow::Result<()> {
             window_size_px,
             radiance_size_px,
         ),
+        Command::NativePerformanceMeasurement {
+            output_path,
+            performance_report_path,
+            submitted_frame_limit,
+            window_size_px,
+            radiance_size_px,
+        } => runenwerk_render_lab::run_native_performance_measurement(
+            output_path,
+            performance_report_path,
+            submitted_frame_limit,
+            window_size_px,
+            radiance_size_px,
+        ),
         Command::TemporalQuality {
             output_root,
             submitted_frame_limit,
@@ -94,6 +107,13 @@ enum Command {
     AutomationScenario(PathBuf),
     NativeMeasurement {
         output_path: PathBuf,
+        submitted_frame_limit: Option<usize>,
+        window_size_px: Option<(u32, u32)>,
+        radiance_size_px: Option<(u32, u32)>,
+    },
+    NativePerformanceMeasurement {
+        output_path: PathBuf,
+        performance_report_path: PathBuf,
         submitted_frame_limit: Option<usize>,
         window_size_px: Option<(u32, u32)>,
         radiance_size_px: Option<(u32, u32)>,
@@ -319,6 +339,7 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
         let mut submitted_frame_limit = None;
         let mut window_size_px = None;
         let mut radiance_size_px = None;
+        let mut performance_report_path = None;
         while let Some(flag) = args.next() {
             if flag == "--submitted-frames" {
                 if submitted_frame_limit.is_some() {
@@ -335,12 +356,35 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
                     anyhow::bail!("duplicate --radiance-size-px argument");
                 }
                 radiance_size_px = Some(parse_radiance_size_px(args.next())?);
+            } else if flag == "--performance-report" {
+                if performance_report_path.is_some() {
+                    anyhow::bail!("duplicate --performance-report argument");
+                }
+                let value = args.next().ok_or_else(|| {
+                    anyhow::anyhow!("--performance-report requires a file path")
+                })?;
+                if value.is_empty() || value.to_string_lossy().starts_with("--") {
+                    anyhow::bail!("--performance-report requires a nonempty file path");
+                }
+                performance_report_path = Some(PathBuf::from(value));
             } else {
                 anyhow::bail!(
                     "unexpected RL2 measurement argument '{}'",
                     flag.to_string_lossy()
                 );
             }
+        }
+        if let Some(performance_report_path) = performance_report_path {
+            if performance_report_path == output_path {
+                anyhow::bail!("performance report path must differ from RL2 measurement path");
+            }
+            return Ok(Command::NativePerformanceMeasurement {
+                output_path,
+                performance_report_path,
+                submitted_frame_limit,
+                window_size_px,
+                radiance_size_px,
+            });
         }
         return Ok(Command::NativeMeasurement {
             output_path,
@@ -990,6 +1034,36 @@ mod tests {
             ],
         ] {
             assert!(parse_command(args(&values)).is_err(), "{values:?}");
+        }
+    }
+
+    #[test]
+    fn native_performance_report_is_opt_in_and_bounded_by_rl2_measurement() {
+        assert_eq!(
+            parse_command(args(&[
+                "--rl2-measure",
+                "evidence/gpu.json",
+                "--submitted-frames",
+                "40",
+                "--performance-report",
+                "evidence/performance.json",
+            ]))
+            .unwrap(),
+            Command::NativePerformanceMeasurement {
+                output_path: PathBuf::from("evidence/gpu.json"),
+                performance_report_path: PathBuf::from("evidence/performance.json"),
+                submitted_frame_limit: Some(40),
+                window_size_px: None,
+                radiance_size_px: None,
+            }
+        );
+        for bad_args in [
+            vec!["--rl2-measure", "--performance-report"],
+            vec!["--rl2-measure", "--performance-report", "--submitted-frames", "1"],
+            vec!["--rl2-measure", "gpu.json", "--performance-report", "gpu.json"],
+            vec!["--rl2-measure", "--performance-report", "a.json", "--performance-report", "b.json"],
+        ] {
+            assert!(parse_command(args(&bad_args)).is_err(), "{bad_args:?}");
         }
     }
 

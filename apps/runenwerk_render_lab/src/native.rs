@@ -7,6 +7,7 @@ use engine::prelude::FrameEnd;
 use std::path::{Path, PathBuf};
 
 mod comparison_evidence;
+mod performance_report;
 mod temporal_quality;
 
 use comparison_evidence::RenderLabComparisonEvidenceState;
@@ -43,6 +44,7 @@ enum RenderLabTemporalQualityScenario {
 #[derive(Debug, Clone, Default, runen_ecs::Resource)]
 struct RenderLabMeasurementConfig {
     output_path: Option<PathBuf>,
+    performance_report_path: Option<PathBuf>,
     submitted_frame_limit: Option<usize>,
     primary_window_size_px: Option<(u32, u32)>,
     radiance_target_size_px: Option<(u32, u32)>,
@@ -195,11 +197,50 @@ pub fn run_native_measurement(
     primary_window_size_px: Option<(u32, u32)>,
     radiance_target_size_px: Option<(u32, u32)>,
 ) -> Result<()> {
+    run_native_measurement_with_report(
+        output_path.into(),
+        None,
+        submitted_frame_limit,
+        primary_window_size_px,
+        radiance_target_size_px,
+    )
+}
+
+/// NP1 opt-in output; preserves the ordinary RL2 measurement artifact unchanged.
+pub fn run_native_performance_measurement(
+    output_path: impl Into<PathBuf>,
+    performance_report_path: impl Into<PathBuf>,
+    submitted_frame_limit: Option<usize>,
+    primary_window_size_px: Option<(u32, u32)>,
+    radiance_target_size_px: Option<(u32, u32)>,
+) -> Result<()> {
+    run_native_measurement_with_report(
+        output_path.into(),
+        Some(performance_report_path.into()),
+        submitted_frame_limit,
+        primary_window_size_px,
+        radiance_target_size_px,
+    )
+}
+
+fn run_native_measurement_with_report(
+    output_path: PathBuf,
+    performance_report_path: Option<PathBuf>,
+    submitted_frame_limit: Option<usize>,
+    primary_window_size_px: Option<(u32, u32)>,
+    radiance_target_size_px: Option<(u32, u32)>,
+) -> Result<()> {
     let submitted_frame_limit = validate_measurement_frame_limit(submitted_frame_limit)?;
     let primary_window_size_px = validate_measurement_window_size(primary_window_size_px)?;
     let radiance_target_size_px = validate_measurement_radiance_size(radiance_target_size_px)?;
+    if let Some(path) = performance_report_path.as_ref() {
+        if path.as_os_str().is_empty() || *path == output_path {
+            bail!("performance report requires a nonempty path distinct from RL2 measurement output");
+        }
+    }
     run_native_with_measurement(Some(RenderLabMeasurementConfig {
-        output_path: Some(output_path.into()),
+        output_path: Some(output_path),
+        performance_report_path,
         submitted_frame_limit,
         primary_window_size_px,
         radiance_target_size_px,
@@ -269,6 +310,7 @@ fn run_native_temporal_quality_scenario(
     let output_root = output_root.into();
     run_native_with_measurement(Some(RenderLabMeasurementConfig {
         output_path: Some(output_root.join("timing.json")),
+        performance_report_path: None,
         submitted_frame_limit,
         primary_window_size_px: Some(primary_window_size_px),
         radiance_target_size_px: Some(internal_size_px),
@@ -579,6 +621,8 @@ fn complete_render_lab_measurement_if_requested(
     windows: &mut WindowStateRegistryResource,
     measurement: &mut RenderLabMeasurementConfig,
     history: &RenderFrameHistoryState,
+    pacing_policy: FramePacingPolicyResource,
+    observation_policy: RenderFrameObservationPolicyResource,
     quality_execution: &RenderLabTemporalQualityExecutionState,
     debug_report: &RenderDebugFrameReportState,
     gfx: Option<&engine::plugins::render::Gfx>,
@@ -622,6 +666,16 @@ fn complete_render_lab_measurement_if_requested(
     if !measurement.completed {
         if let Some(output_path) = measurement.output_path.as_deref() {
             write_measurement_artifact(output_path, history, measurement)?;
+        }
+        if let Some(path) = measurement.performance_report_path.as_deref() {
+            let report = performance_report::build_report(
+                history,
+                measurement.radiance_target_size_px,
+                pacing_policy.mode,
+                observation_policy,
+            );
+            performance_report::write_report(path, &report)?;
+            eprintln!("{}", performance_report::terminal_summary(&report));
         }
         if let Some(capture) = quality_capture {
             let gfx = gfx.ok_or_else(|| {
@@ -806,6 +860,8 @@ fn approve_render_lab_close_system(
     mut measurement: ResMut<RenderLabMeasurementConfig>,
     mut comparison_resources: RenderLabComparisonCompletionResources<'_>,
     history: Res<RenderFrameHistoryState>,
+    pacing_policy: Res<FramePacingPolicyResource>,
+    observation_policy: Res<RenderFrameObservationPolicyResource>,
     quality_execution: Res<RenderLabTemporalQualityExecutionState>,
     debug_report: Res<RenderDebugFrameReportState>,
     gfx: Res<engine::plugins::render::Gfx>,
@@ -833,6 +889,8 @@ fn approve_render_lab_close_system(
         &mut windows,
         &mut measurement,
         &history,
+        *pacing_policy,
+        *observation_policy,
         &quality_execution,
         &debug_report,
         Some(&gfx),
@@ -1399,6 +1457,7 @@ mod tests {
         let mut history = RenderFrameHistoryState::default();
         let mut measurement = RenderLabMeasurementConfig {
             output_path: None,
+            performance_report_path: None,
             submitted_frame_limit: Some(2),
             primary_window_size_px: None,
             radiance_target_size_px: None,
@@ -1447,8 +1506,12 @@ mod tests {
             &[],
             RenderGpuTimingCapability::Unsupported,
         );
+        let artifact_dir = std::env::temp_dir().join(format!("runenwerk_np1_close_{}", std::process::id()));
+        let gpu_output = artifact_dir.join("gpu-v2.json");
+        let performance_output = artifact_dir.join("performance-v1.json");
         let mut measurement = RenderLabMeasurementConfig {
-            output_path: None,
+            output_path: Some(gpu_output.clone()),
+            performance_report_path: Some(performance_output.clone()),
             submitted_frame_limit: Some(1),
             primary_window_size_px: None,
             radiance_target_size_px: None,
@@ -1465,6 +1528,8 @@ mod tests {
             &mut windows,
             &mut measurement,
             &history,
+            FramePacingPolicyResource::continuous_capped(60),
+            rl2_measurement_policy(),
             &quality_execution,
             &debug_report,
             None,
@@ -1472,6 +1537,20 @@ mod tests {
         .unwrap();
 
         assert!(measurement.completed);
+        let gpu_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&gpu_output).unwrap()).unwrap();
+        let performance_bytes = fs::read(&performance_output).unwrap();
+        let performance_json: serde_json::Value =
+            serde_json::from_slice(&performance_bytes).unwrap();
+        assert_eq!(gpu_json["schema_version"], 2);
+        assert!(gpu_json.get("per_surface_extent").is_none());
+        assert_eq!(performance_json["schema_version"], 1);
+        assert_eq!(performance_json["retained_frame_count"], 1);
+        assert_eq!(performance_json["configuration"]["host_pacing_target_fps"], 60);
+        assert_eq!(
+            performance_json["per_surface_extent"][0]["composed_gpu"]["eligible_count"],
+            0
+        );
         let primary_record = windows.record(primary).expect("primary window");
         assert!(primary_record.close_requested);
         assert!(!primary_record.close_intent_pending);
@@ -1481,18 +1560,22 @@ mod tests {
             &mut windows,
             &mut measurement,
             &history,
+            FramePacingPolicyResource::continuous_capped(60),
+            rl2_measurement_policy(),
             &quality_execution,
             &debug_report,
             None,
         )
         .unwrap();
         assert!(measurement.completed);
+        assert_eq!(fs::read(&performance_output).unwrap(), performance_bytes);
         assert!(
             windows
                 .record(primary)
                 .expect("primary window")
                 .close_requested
         );
+        fs::remove_dir_all(&artifact_dir).unwrap();
     }
 
     #[test]
