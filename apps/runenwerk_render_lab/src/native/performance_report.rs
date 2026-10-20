@@ -70,7 +70,7 @@ struct PerformanceSample {
     output_size_px: [u32; 2],
     radiance_size_px: Option<[u32; 2]>,
     radiance_extent_provenance: &'static str,
-    cpu_stages_ms: BTreeMap<&'static str, Option<f32>>
+    cpu_stages_ms: BTreeMap<&'static str, Option<f32>>,
     cpu_passes: Vec<CpuPassSample>,
     composed_gpu: GpuDuration,
     gpu_pass_capability: &'static str,
