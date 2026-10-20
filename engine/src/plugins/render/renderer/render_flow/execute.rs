@@ -15,9 +15,11 @@ use crate::plugins::render::{
     RenderGpuWorkOccurrenceId, RenderPassId, ResolvedRenderGpuWorkNode, RunenUiMixedWork,
     prepare_render_gpu_frame_work, prepare_render_gpu_frame_work_with_mixed_ui,
 };
+use anyhow::Context;
 use runen_gpu::{
-    GpuPresentOperation, GpuRenderDraw, GpuResourceLabel, GpuResourceProvenance, GpuTextureHandle,
-    GpuTextureViewHandle, GpuWorkFragment, GpuWorkImport,
+    GpuBufferRegion, GpuPresentOperation, GpuReadbackId, GpuReadbackOperation, GpuRenderDraw,
+    GpuResourceLabel, GpuResourceProvenance, GpuTextureHandle, GpuTextureViewHandle,
+    GpuWorkFragment, GpuWorkImport,
 };
 use runen_render::execution_2d::{Render2dPreparedContribution, Render2dTarget};
 
@@ -69,7 +71,8 @@ struct RealizedFlowInvocation<'a> {
 struct RealizedScheduledPass<'a> {
     occurrence: RenderGpuWorkOccurrenceId,
     control_order_after: Vec<RenderGpuWorkOccurrenceId>,
-    fixed_step_upload: Option<RealizedLogicalBufferUpload>,
+    fixed_step_uploads: Vec<RealizedLogicalBufferUpload>,
+    historical_dispatch: Option<[u32; 3]>,
     execution: RealizedPassExecution<'a>,
 }
 
@@ -79,9 +82,26 @@ struct RealizedScheduledPass<'a> {
 struct RealizedPassExecution<'a> {
     pass: &'a CompiledPassExecutionPlan,
     timestamp_indices: Option<GpuPassTimestampIndices>,
-    pipeline: Option<PreparedPipelinePass>,
+    pipeline: Option<std::sync::Arc<PreparedPipelinePass>>,
     before_captures: Vec<PreparedCaptureReadback>,
     after_captures: Vec<PreparedCaptureReadback>,
+}
+
+/// G4 program, layout and runtime binding identity is stable for repeated occurrences of
+/// one compiled pass *within the same prepared invocation*. Historical uploads and
+/// dispatches remain distinct GPU operations; this cache only shares the immutable
+/// realized pipeline/bindings. Never cross an invocation, surface or frame boundary.
+fn realize_pass_once_per_invocation<K: Ord + Copy, T>(
+    cache: &mut BTreeMap<K, Option<std::sync::Arc<T>>>,
+    key: K,
+    realize: impl FnOnce() -> Result<Option<T>>,
+) -> Result<Option<std::sync::Arc<T>>> {
+    if let Some(existing) = cache.get(&key) {
+        return Ok(existing.clone());
+    }
+    let realized = realize()?.map(std::sync::Arc::new);
+    cache.insert(key, realized.clone());
+    Ok(realized)
 }
 
 impl Renderer {
@@ -89,6 +109,7 @@ impl Renderer {
     pub(crate) fn render_packet(
         &mut self,
         context: &GpuContext,
+        gpu_step_streams: &mut crate::plugins::render::RenderGpuFlowStepStreams,
         surface_texture: &GpuTextureHandle,
         surface_view: &GpuTextureViewHandle,
         acquired_surface_extent: (u32, u32),
@@ -117,6 +138,10 @@ impl Renderer {
         let flow_encode_start = Instant::now();
         // Phase one: all G4C1/G4C2/G4C3 realization plus renderer-owned logical G5 operation
         // formation completes without a raw device/queue loan.
+        let producer_required_captures =
+            gpu_step_streams.required_capture_selectors_for_frame(prepared_frame);
+        let producer_required_buffers =
+            gpu_step_streams.required_buffer_readbacks_for_frame(prepared_frame);
         let mut batch = self.realize_render_batch(
             context,
             surface_texture,
@@ -128,8 +153,12 @@ impl Renderer {
             shader_registry,
             debug_control,
             debug_config,
+            &producer_required_captures,
             gpu_timing_capability,
         )?;
+        // No source step can be physically accepted without its required
+        // verification readback being unambiguously authored in the same graph.
+        batch.capture_runtime.validate_required()?;
 
         let canonical_resolutions = batch
             .invocations
@@ -209,6 +238,26 @@ impl Renderer {
             }
             terminal_controls = final_capture_occurrences;
         }
+        // Required compact source observations must be actual G5 readbacks of
+        // GPU-written resources *after* the producer's authored work. Render
+        // supplies graph order; G3/G5 supply hazards and physical admission.
+        let mut required_buffer_receipts = Vec::new();
+        for (flow, buffer) in producer_required_buffers {
+            let id = GpuReadbackId::allocate()?;
+            let operation = GpuReadbackOperation::new(GpuBufferRegion::whole(&buffer)?.into(), id)?;
+            let occurrence = allocate_aux_occurrence(&mut batch.maximum_occurrence)?;
+            nodes.push(ResolvedRenderGpuWorkNode::capture_readback(
+                occurrence,
+                GpuResourceLabel::new(format!(
+                    "render.source.buffer-readback.{}",
+                    occurrence.raw()
+                ))?,
+                operation,
+                terminal_controls.iter().copied(),
+            ));
+            terminal_controls = vec![occurrence];
+            required_buffer_receipts.push((flow, id, buffer.descriptor().size_bytes()));
+        }
         let present_occurrence = allocate_aux_occurrence(&mut batch.maximum_occurrence)?;
         let present = GpuPresentOperation::new(
             surface_view.clone().into(),
@@ -260,6 +309,10 @@ impl Renderer {
             _ => None,
         };
 
+        // Stop before G5 graph formation. Previous revisions included the
+        // subsequent encode/submit span in this timer and then added both,
+        // exaggerating CPU frame costs.
+        timings.flow_encode_ms = flow_encode_start.elapsed().as_secs_f32() * 1000.0;
         let encode_submit_start = Instant::now();
         let _span = tracing::info_span!("renderer.prepare_submit").entered();
         let graph_label = GpuResourceLabel::new(format!(
@@ -270,6 +323,7 @@ impl Renderer {
         let timing_bracket = composed_gpu_timing
             .as_ref()
             .map(PreparedComposedGpuTiming::bracket);
+        let gpu_graph_build_start = Instant::now();
         let (graph, runenui_witnesses) = if batch.prepared_runenui.is_empty() {
             (
                 prepare_render_gpu_frame_work(
@@ -320,14 +374,66 @@ impl Renderer {
                 .collect::<Vec<_>>();
             (authored.graph, witnesses)
         };
+        timings.gpu_graph_build_ms = gpu_graph_build_start.elapsed().as_secs_f32() * 1000.0;
+        // Diagnostic-only, opt-in observation. RunenGPU remains the only retained
+        // continuity and actual submission-admission authority. No gating here.
+        let retained_trace = self.retained_submission_trace.before_submission(
+            &graph,
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
+        );
+        // Reject stale producer work before G5 rather than using latest ECS.
+        gpu_step_streams.validate_prepared(prepared_frame)?;
+        let gpu_prepare_start = Instant::now();
         let prepared = pollster::block_on(context.prepare_submission(graph))?;
+        timings.gpu_prepare_submission_ms = gpu_prepare_start.elapsed().as_secs_f32() * 1000.0;
+        // Preserve RunenGPU's typed public rejection rather than flattening it into
+        // a diagnostic string. Runenwerk policy may inspect the actual rejection
+        // kind, but G5 still owns the validity and retryability distinction.
+        let gpu_submit_start = Instant::now();
         let submission = context.submit_prepared(prepared).map_err(|rejection| {
-            anyhow::anyhow!(
-                "GPU frame submission rejected ({:?}): {}",
-                rejection.reason().kind(),
-                rejection.reason().detail()
-            )
+            self.retained_submission_trace.rejected(
+                retained_trace.as_ref(),
+                prepared_frame.context.frame_index,
+                prepared_frame.surface.render_surface_id.raw(),
+                rejection.reason(),
+            );
+            let (_prepared, reason) = rejection.into_parts();
+            runen_gpu::GpuWorkSubmissionError::SubmissionRejected(reason)
         })?;
+        timings.gpu_submit_prepared_ms = gpu_submit_start.elapsed().as_secs_f32() * 1000.0;
+        // Infallibly bind the exact historical source interval immediately at
+        // the real G5 admission boundary, before later renderer bookkeeping.
+        gpu_step_streams.accepted(prepared_frame, &submission);
+        for (flow, id, bytes) in required_buffer_receipts {
+            gpu_step_streams.associate_accepted_buffer_readback(&submission, flow, id, bytes);
+        }
+        self.retained_submission_trace.accepted(
+            submission.clone(),
+            retained_trace,
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
+        );
+        // Mandatory accepted-work lifecycle is independent of timing/capture/UI
+        // observation. RunenGPU alone owns retained participation and admission.
+        self.submission_lifecycle.accept(
+            context,
+            submission.clone(),
+            prepared_frame.context.frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
+            batch
+                .invocations
+                .iter()
+                .map(|invocation| {
+                    super::RenderGpuFrameInvocationReceipt::new(
+                        invocation.flow.flow_id,
+                        invocation.invocation.invocation_id.clone(),
+                    )
+                })
+                .collect(),
+        );
+        let accepted_submission_id = submission.id();
+        let accepted_submission_affinity = submission.affinity();
         let association_result = self
             .render_sessions
             .associate_composed_submission(deterministic.occurrences, &submission);
@@ -353,13 +459,36 @@ impl Renderer {
             })
             .collect::<Vec<_>>();
         capture_readbacks.append(&mut batch.final_captures);
+        // The producer already retains this exact G5 submission through its
+        // accepted immutable step interval. Associate only the source's
+        // canonical readback IDs before optional renderer/ECS diagnostic
+        // publication, so loss of that derived view cannot lose the proof.
+        for capture in capture_readbacks
+            .iter()
+            .filter(|capture| batch.capture_runtime.is_required(capture.selector_index))
+        {
+            gpu_step_streams.associate_accepted_capture(
+                &submission,
+                capture.identity.clone(),
+                capture.canonical_operation().id(),
+                capture.width,
+                capture.height,
+                capture.source_format,
+            );
+        }
+        // Required source proof is read straight from the producer's retained
+        // G5 submission; never funnel its bytes into bounded debug history.
+        let diagnostic_captures = capture_readbacks
+            .into_iter()
+            .filter(|capture| !batch.capture_runtime.is_required(capture.selector_index))
+            .collect();
         let mut observation_output = self.gpu_observations.accept(
             context,
             submission,
             super::observation::AcceptedFrameObservations {
                 timings: timing_frames,
                 composed_timing: composed_gpu_timing.map(PreparedComposedGpuTiming::into_frame),
-                captures: capture_readbacks,
+                captures: diagnostic_captures,
                 runenui: runenui_witnesses,
             },
             &mut batch.capture_runtime,
@@ -398,10 +527,9 @@ impl Renderer {
             .runenui_rejected
             .extend(runenui_rejected);
 
-        // Association failure cannot discard accepted timing/capture lifecycle handles. The
-        // affected continuity is quarantined by the session owner and this frame fails closed.
-        association_result?;
-
+        // G5 has accepted these uploads, independent of later retained-session
+        // association and optional provenance. Record their generation now;
+        // a post-accept failure cannot roll back the physical work.
         let accepted_upload_report = self
             .dynamic_texture_targets
             .record_accepted_uploads(&accepted_dynamic_uploads);
@@ -414,17 +542,33 @@ impl Renderer {
             );
         }
 
+        // Association failure cannot discard accepted timing/capture lifecycle
+        // handles or accepted upload generations. The affected continuity is
+        // quarantined by the session owner; the frame still fails closed.
+        association_result.with_context(|| {
+            super::RenderGpuFramePostAcceptAssociationFailure::new(
+                prepared_frame.context.frame_index,
+                prepared_frame.surface.render_surface_id.raw(),
+                accepted_submission_id,
+                accepted_submission_affinity,
+            )
+        })?;
+
         if debug_control.provenance_enabled {
-            let mut runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
+            // G5 has already accepted this frame, including its terminal Present.
+            // Optional diagnostics cannot retroactively turn acceptance into an
+            // error or cause a temporary ownership transfer to drop the cache.
+            // Borrow independent renderer fields directly instead of taking the
+            // entire flow runtime cache out of the renderer.
             for invocation in &batch.invocations {
-                let runtime_resources = runtime_cache
-                    .get_mut(&invocation.flow.flow_id)
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "flow '{}' lost runtime resources before accepted provenance publication",
-                            invocation.flow.flow_id
-                        )
-                    })?;
+                let Some(runtime_resources) = optional_accepted_provenance_resources(
+                    &mut self.flow_runtime_cache,
+                    invocation.flow.flow_id,
+                    prepared_frame.context.frame_index,
+                    &invocation.invocation.invocation_id,
+                ) else {
+                    continue;
+                };
                 runtime_resources.target_alias_bindings =
                     invocation.invocation.target_alias_bindings.clone();
                 runtime_resources.set_active_invocation_uniform_scope(
@@ -432,7 +576,7 @@ impl Renderer {
                 );
                 for scheduled in &invocation.scheduled_passes {
                     let pass = scheduled.execution.pass;
-                    let pipeline = scheduled.execution.pipeline.as_ref();
+                    let pipeline = scheduled.execution.pipeline.as_deref();
                     let evidence = EncodedPassEvidence {
                         shader_id: pipeline
                             .map(|prepared| prepared.shader_id.clone())
@@ -459,10 +603,8 @@ impl Renderer {
                 }
                 runtime_resources.clear_active_invocation_uniform_scope();
             }
-            self.flow_runtime_cache = runtime_cache;
         }
 
-        timings.flow_encode_ms = flow_encode_start.elapsed().as_secs_f32() * 1000.0;
         timings.encode_submit_ms = encode_submit_start.elapsed().as_secs_f32() * 1000.0;
         batch.capture_runtime.finalize_unresolved();
         let (capture_plan, capture_selector_results) =
@@ -486,6 +628,7 @@ impl Renderer {
         shader_registry: &ShaderRegistryResource,
         debug_control: &RenderDebugControlResource,
         debug_config: &RenderDebugConfigResource,
+        producer_required_captures: &[RenderCaptureSelector],
         gpu_timing_capability: RenderGpuTimingCapability,
     ) -> Result<RendererRealizationBatch<'a>> {
         let dynamic_target_history_signatures =
@@ -529,8 +672,13 @@ impl Renderer {
             .collect::<Vec<_>>();
 
         let frame_index = prepared_frame.context.frame_index;
-        let mut capture_runtime =
-            FrameCaptureRuntime::new(frame_index, debug_control, &debug_config.capture_selectors);
+        let mut capture_runtime = FrameCaptureRuntime::new_with_required(
+            frame_index,
+            prepared_frame.surface.render_surface_id.raw(),
+            debug_control,
+            &debug_config.capture_selectors,
+            producer_required_captures,
+        );
         let mut flow_runtime_cache = std::mem::take(&mut self.flow_runtime_cache);
         let realization_result = (|| -> Result<RealizedFrameInvocations<'a>> {
             let active_flow_ids = compiled_flows
@@ -584,6 +732,25 @@ impl Renderer {
                             Ok(true)
                         },
                     )?;
+                    if let Some(history) = invocation.inputs.fixed_step_history.as_ref() {
+                        anyhow::ensure!(
+                            flow.execution.fixed_step_regions.len() == 1,
+                            "producer-owned GPU history requires one fixed-step region"
+                        );
+                        let region = &flow.execution.fixed_step_regions[0];
+                        let actual = occurrences
+                            .iter()
+                            .filter(|entry| entry.fixed_step_iteration.is_some())
+                            .count();
+                        let required = history.steps.len() * region.pass_ids.len();
+                        anyhow::ensure!(
+                            actual == required,
+                            "GPU producer work for flow {:?} skipped a historical fixed-step pass ({} of {})",
+                            flow.flow_id,
+                            actual,
+                            required
+                        );
+                    }
                     scheduled_invocations.push_back((
                         flow.flow_id.to_string(),
                         invocation.invocation_id.0.clone(),
@@ -735,23 +902,103 @@ impl Renderer {
                             None => None,
                         };
                         let mut realized_passes = Vec::new();
+                        let mut pipeline_by_pass = BTreeMap::new();
+                        let mut pipeline_realization_count = 0_usize;
                         for (ordinal, occurrence) in occurrences.into_iter().enumerate() {
-                            let fixed_step_upload = occurrence
-                                .fixed_step_iteration
-                                .map(|iteration| {
-                                    self.realize_fixed_step_iteration_upload(
-                                        context,
-                                        invocation.invocation_id.0.as_str(),
-                                        runtime_resources,
-                                        iteration.region,
-                                        iteration
-                                            .schedule
-                                            .with_substep_index(iteration.substep_index),
-                                        &mut maximum_occurrence,
-                                        occurrence.control_order_after.clone(),
-                                    )
-                                })
-                                .transpose()?;
+                            let mut fixed_step_uploads = Vec::new();
+                            let mut historical_dispatch = None;
+                            if let Some(iteration) = occurrence.fixed_step_iteration {
+                                let source_control = if let Some(history) =
+                                    invocation.inputs.fixed_step_history.as_ref()
+                                {
+                                    let snapshot = history
+                                        .steps
+                                        .get(iteration.substep_index as usize)
+                                        .ok_or_else(|| {
+                                            anyhow::anyhow!("GPU historical step missing")
+                                        })?;
+                                    let mut control = snapshot
+                                        .input
+                                        .iteration
+                                        .with_substep_index(iteration.substep_index);
+                                    control.submitted_substeps =
+                                        iteration.schedule.submitted_substeps;
+                                    control
+                                } else {
+                                    iteration
+                                        .schedule
+                                        .with_substep_index(iteration.substep_index)
+                                };
+                                fixed_step_uploads.push(self.realize_fixed_step_iteration_upload(
+                                    context,
+                                    invocation.invocation_id.0.as_str(),
+                                    runtime_resources,
+                                    iteration.region,
+                                    source_control,
+                                    &mut maximum_occurrence,
+                                    occurrence.control_order_after.clone(),
+                                )?);
+                                if let Some(history) = invocation.inputs.fixed_step_history.as_ref()
+                                {
+                                    let snapshot = history
+                                        .steps
+                                        .get(iteration.substep_index as usize)
+                                        .ok_or_else(|| {
+                                            anyhow::anyhow!("GPU historical step missing")
+                                        })?;
+                                    let pass_id = execution_pass_id(occurrence.pass);
+                                    historical_dispatch =
+                                        snapshot.input.dispatch_workgroups.get(&pass_id).copied();
+                                    let pass_node = flow
+                                        .render_passes
+                                        .iter()
+                                        .find(|pass| pass.pass_id() == pass_id)
+                                        .ok_or_else(|| {
+                                            anyhow::anyhow!(
+                                                "compiled GPU step pass lacks authored bindings"
+                                            )
+                                        })?;
+                                    for binding in &pass_node.node().uniform_bindings {
+                                        let uniform_id = *binding.uniform_id();
+                                        let bytes = snapshot
+                                            .input
+                                            .uniforms
+                                            .get(&uniform_id)
+                                            .ok_or_else(|| {
+                                                anyhow::anyhow!(
+                                                    "producer step {} omits authored GPU uniform",
+                                                    snapshot.tick
+                                                )
+                                            })?;
+                                        let preceding = fixed_step_uploads
+                                            .last()
+                                            .expect("iteration upload exists")
+                                            .occurrence;
+                                        let prepared = runtime_resources
+                                            .prepare_uniform_upload(uniform_id, bytes)?;
+                                        let runtime_buffer = runtime_resources
+                                            .realize_invocation_uniform_buffer(
+                                                invocation.invocation_id.0.as_str(),
+                                                uniform_id,
+                                                prepared.layout().byte_len(),
+                                            )?;
+                                        anyhow::ensure!(
+                                            prepared.layout().byte_len() <= runtime_buffer.size,
+                                            "historical GPU uniform exceeds realized buffer capacity"
+                                        );
+                                        fixed_step_uploads.push(RealizedLogicalBufferUpload {
+                                            occurrence: allocate_aux_occurrence(
+                                                &mut maximum_occurrence,
+                                            )?,
+                                            operation: project_buffer_upload(
+                                                &runtime_buffer.handle,
+                                                prepared.as_bytes(),
+                                            )?,
+                                            control_order_after: vec![preceding],
+                                        });
+                                    }
+                                }
+                            }
                             let pass = occurrence.pass;
                             let mut before_captures = Vec::new();
                             if capture_runtime.should_attempt_stage(CaptureStage::Before) {
@@ -768,14 +1015,21 @@ impl Renderer {
                                     &mut before_captures,
                                 )?;
                             }
-                            let pipeline = self.realize_compiled_pass(
-                                context,
-                                &invocation_packet,
-                                flow,
-                                &invocation.inputs,
-                                pass,
-                                shader_registry,
-                                runtime_resources,
+                            let pipeline = realize_pass_once_per_invocation(
+                                &mut pipeline_by_pass,
+                                execution_pass_id(pass),
+                                || {
+                                    pipeline_realization_count += 1;
+                                    self.realize_compiled_pass(
+                                        context,
+                                        &invocation_packet,
+                                        flow,
+                                        &invocation.inputs,
+                                        pass,
+                                        shader_registry,
+                                        runtime_resources,
+                                    )
+                                },
                             )?;
                             let mut after_captures = Vec::new();
                             if capture_runtime.should_attempt_stage(CaptureStage::After) {
@@ -822,7 +1076,8 @@ impl Renderer {
                             realized_passes.push(RealizedScheduledPass {
                                 occurrence: occurrence.occurrence_id,
                                 control_order_after: occurrence.control_order_after,
-                                fixed_step_upload,
+                                fixed_step_uploads,
+                                historical_dispatch,
                                 execution: RealizedPassExecution {
                                     pass,
                                     timestamp_indices,
@@ -832,15 +1087,22 @@ impl Renderer {
                                 },
                             });
                         }
+                        tracing::trace!(
+                            target: "runenwerk_profile",
+                            pass_occurrences = realized_passes.len(),
+                            pipeline_realizations = pipeline_realization_count,
+                            "render.flow.invocation_pipeline_realizations"
+                        );
                         let canonical_projections = realized_passes
                             .iter()
                             .map(|scheduled| CanonicalPassProjection {
                                 occurrence: scheduled.occurrence,
                                 control_order_after: &scheduled.control_order_after,
                                 pass: scheduled.execution.pass,
-                                pipeline: scheduled.execution.pipeline.as_ref(),
+                                pipeline: scheduled.execution.pipeline.as_deref(),
                                 timestamp_indices: scheduled.execution.timestamp_indices,
-                                fixed_step_upload: scheduled.fixed_step_upload.as_ref(),
+                                fixed_step_uploads: &scheduled.fixed_step_uploads,
+                                historical_dispatch: scheduled.historical_dispatch,
                                 before_captures: &scheduled.execution.before_captures,
                                 after_captures: &scheduled.execution.after_captures,
                             })
@@ -1013,6 +1275,7 @@ impl Renderer {
     pub fn render(
         &mut self,
         context: &GpuContext,
+        gpu_step_streams: &mut crate::plugins::render::RenderGpuFlowStepStreams,
         surface_texture: &GpuTextureHandle,
         surface_view: &GpuTextureViewHandle,
         acquired_surface_extent: (u32, u32),
@@ -1042,6 +1305,7 @@ impl Renderer {
         )?;
         self.render_packet(
             context,
+            gpu_step_streams,
             surface_texture,
             surface_view,
             acquired_surface_extent,
@@ -1070,6 +1334,22 @@ impl Renderer {
     ) -> Result<Vec<RealizedLogicalBufferUpload>> {
         let mut uploads = Vec::new();
         for (buffer_id, bytes) in &flow_inputs.projected_uniform_bytes {
+            if flow_inputs.fixed_step_history.is_some()
+                && flow.render_passes.iter().any(|pass| {
+                    flow.execution.fixed_step_regions.iter().any(|region| {
+                        region.pass_ids.contains(&pass.pass_id())
+                            && pass
+                                .node()
+                                .uniform_bindings
+                                .iter()
+                                .any(|binding| binding.uniform_id() == buffer_id)
+                    })
+                })
+            {
+                // Each historical value is uploaded immediately ahead of its
+                // actual selected occurrence; latest ECS bytes are not replayed.
+                continue;
+            }
             if flow
                 .execution
                 .fixed_step_regions
@@ -1240,6 +1520,12 @@ impl Renderer {
             if !selector.matches_point(&capture_point) {
                 continue;
             }
+            if capture_runtime.is_required(selector_index) && existing_capture_point.is_some() {
+                anyhow::bail!(
+                    "producer-required GPU capture '{}' matched multiple pass occurrences before G5",
+                    selector.describe()
+                );
+            }
             if let Some(existing_capture_point) = existing_capture_point
                 && existing_capture_point != capture_point
             {
@@ -1258,6 +1544,7 @@ impl Renderer {
             }
             let identity = RenderCaptureIdentity {
                 frame_index: capture_runtime.frame_index,
+                surface_id: capture_runtime.surface_id,
                 pass_label: pass_label.clone(),
                 capture_point: capture_point.clone(),
             };
@@ -1309,6 +1596,7 @@ impl Renderer {
                     capture_runtime.set_terminal(selector_index, terminal.clone());
                     self.last_captured_textures.push(RenderCapturedTexture {
                         identity,
+                        submission_receipt: None,
                         width: 0,
                         height: 0,
                         format: "unknown".to_string(),
@@ -1358,6 +1646,7 @@ impl Renderer {
                     capture_runtime.set_terminal(selector_index, terminal.clone());
                     self.last_captured_textures.push(RenderCapturedTexture {
                         identity,
+                        submission_receipt: None,
                         width: capture_size.0,
                         height: capture_size.1,
                         format: format!("{:?}", capture_format),
@@ -1368,6 +1657,7 @@ impl Renderer {
                 }
             };
 
+            capture_runtime.budget_required_readback(selector_index, capture_size)?;
             match prepare_texture_capture_readback(
                 context,
                 selector_index,
@@ -1389,6 +1679,7 @@ impl Renderer {
                     self.last_captured_textures.push(RenderCapturedTexture {
                         identity: RenderCaptureIdentity {
                             frame_index: capture_runtime.frame_index,
+                            surface_id: capture_runtime.surface_id,
                             pass_label: pass_label.clone(),
                             capture_point: RenderCapturePointIdentity {
                                 flow_id: flow.flow_id.to_string(),
@@ -1398,6 +1689,7 @@ impl Renderer {
                                 texture_class,
                             },
                         },
+                        submission_receipt: None,
                         width: capture_size.0,
                         height: capture_size.1,
                         format: format!("{:?}", capture_format),
@@ -1455,6 +1747,7 @@ impl Renderer {
             }
             let identity = RenderCaptureIdentity {
                 frame_index: capture_runtime.frame_index,
+                surface_id: capture_runtime.surface_id,
                 pass_label: "frame.final".to_string(),
                 capture_point: capture_point.clone(),
             };
@@ -1468,6 +1761,7 @@ impl Renderer {
                 capture_runtime.set_terminal(selector_index, terminal.clone());
                 self.last_captured_textures.push(RenderCapturedTexture {
                     identity,
+                    submission_receipt: None,
                     width: acquired_surface_extent.0,
                     height: acquired_surface_extent.1,
                     format: format!("{:?}", packet.surface_format),
@@ -1489,6 +1783,7 @@ impl Renderer {
                 capture_runtime.set_terminal(selector_index, terminal.clone());
                 self.last_captured_textures.push(RenderCapturedTexture {
                     identity,
+                    submission_receipt: None,
                     width: acquired_surface_extent.0,
                     height: acquired_surface_extent.1,
                     format: format!("{:?}", packet.surface_format),
@@ -1521,6 +1816,7 @@ impl Renderer {
                     self.last_captured_textures.push(RenderCapturedTexture {
                         identity: RenderCaptureIdentity {
                             frame_index: capture_runtime.frame_index,
+                            surface_id: capture_runtime.surface_id,
                             pass_label: "frame.final".to_string(),
                             capture_point: RenderCapturePointIdentity {
                                 flow_id: "frame".to_string(),
@@ -1530,6 +1826,7 @@ impl Renderer {
                                 texture_class: selector.texture_class,
                             },
                         },
+                        submission_receipt: None,
                         width: acquired_surface_extent.0,
                         height: acquired_surface_extent.1,
                         format: format!("{:?}", packet.surface_format),
@@ -1559,6 +1856,28 @@ fn resolve_terminal_present_controls(
             controls
         },
     ))
+}
+
+/// Optional post-G5 provenance is not an admission or completion authority.
+/// Missing diagnostic cache entries are visible, but cannot roll back the
+/// already accepted submission or consume unrelated runtime cache entries.
+fn optional_accepted_provenance_resources<'a>(
+    cache: &'a mut BTreeMap<RenderFlowId, FlowRuntimeResources>,
+    flow: RenderFlowId,
+    frame: u64,
+    invocation: &crate::plugins::render::PreparedFlowInvocationId,
+) -> Option<&'a mut FlowRuntimeResources> {
+    let Some(resources) = cache.get_mut(&flow) else {
+        tracing::error!(
+            target: "runenwerk.render.provenance",
+            frame,
+            flow = %flow,
+            invocation = %invocation,
+            "accepted frame lacks optional pass-provenance runtime resource context"
+        );
+        return None;
+    };
+    Some(resources)
 }
 
 fn accepted_pass_provenance(
@@ -1810,6 +2129,102 @@ mod tests {
             renderer.temporal_execution_evidence[&0][0].evaluation_extent,
             (2, 2)
         );
+    }
+
+    #[test]
+    fn missing_post_accept_diagnostic_context_cannot_consume_unrelated_runtime_cache() {
+        let present_flow = RenderFlowId::try_from_raw(17).expect("valid test flow");
+        let missing_flow = RenderFlowId::try_from_raw(18).expect("valid test flow");
+        let invocation = crate::plugins::render::PreparedFlowInvocationId::new("absent");
+        let mut runtime_cache = BTreeMap::new();
+        runtime_cache.insert(present_flow, FlowRuntimeResources::default());
+
+        assert!(
+            optional_accepted_provenance_resources(
+                &mut runtime_cache,
+                missing_flow,
+                42,
+                &invocation,
+            )
+            .is_none()
+        );
+        assert_eq!(runtime_cache.len(), 1);
+        assert!(
+            optional_accepted_provenance_resources(
+                &mut runtime_cache,
+                present_flow,
+                42,
+                &invocation,
+            )
+            .is_some()
+        );
+    }
+
+    #[test]
+    fn invocation_pipeline_realization_reuses_each_pass_without_reusing_dynamic_occurrences() {
+        use std::cell::Cell;
+        use std::sync::Arc;
+
+        let mut cache = BTreeMap::<u32, Option<Arc<String>>>::new();
+        let calls = Cell::new(0_u32);
+        let mut resolve = |pass: u32| {
+            realize_pass_once_per_invocation(&mut cache, pass, || {
+                calls.set(calls.get() + 1);
+                Ok(Some(format!("pipeline.{pass}")))
+            })
+            .expect("realization succeeds")
+            .expect("pass has pipeline")
+        };
+        let first = resolve(1);
+        let repeated = resolve(1);
+        let other = resolve(2);
+        assert!(Arc::ptr_eq(&first, &repeated));
+        assert!(!Arc::ptr_eq(&first, &other));
+        assert_eq!(calls.get(), 2, "one realization per unique pass");
+        assert_eq!(&*first, "pipeline.1");
+        assert_eq!(&*other, "pipeline.2");
+
+        // Each physical invocation constructs its own cache: no cached GPU
+        // bindings survive a surface, view, or resource-generation transition.
+        let mut next_invocation = BTreeMap::new();
+        let fresh = realize_pass_once_per_invocation(&mut next_invocation, 1, || {
+            Ok(Some(String::from("pipeline.1")))
+        })
+        .expect("fresh invocation realization")
+        .expect("pass pipeline exists");
+        assert!(!Arc::ptr_eq(&first, &fresh));
+    }
+
+    #[test]
+    fn invocation_pipeline_realization_caches_no_pipeline_but_not_failed_realization() {
+        let mut cache = BTreeMap::<u32, Option<std::sync::Arc<String>>>::new();
+        let mut calls = 0;
+        for _ in 0..4 {
+            assert!(
+                realize_pass_once_per_invocation(&mut cache, 1, || {
+                    calls += 1;
+                    Ok(None::<String>)
+                })
+                .expect("no-pipeline pass succeeds")
+                .is_none()
+            );
+        }
+        assert_eq!(calls, 1);
+
+        assert!(
+            realize_pass_once_per_invocation(&mut cache, 2, || {
+                anyhow::bail!("realization refused")
+            })
+            .is_err()
+        );
+        assert!(
+            !cache.contains_key(&2),
+            "errors must not become valid cache entries"
+        );
+        let recovered =
+            realize_pass_once_per_invocation(&mut cache, 2, || Ok(Some(String::from("recovered"))))
+                .expect("a later attempt succeeds");
+        assert_eq!(recovered.as_deref().map(String::as_str), Some("recovered"));
     }
 
     #[test]

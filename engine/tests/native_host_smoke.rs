@@ -6,8 +6,14 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use engine::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
 };
+use engine::plugins::render::inspect::{
+    RenderCaptureSelector, RenderFrameHistoryState, RenderFrameObservationPolicyResource,
+};
 use engine::plugins::render::{
-    Gfx, RenderFlow, RenderFrameProducerId, SurfaceFrameSubmissionOrder,
+    Gfx, GpuParams, GpuStorage, GpuUniform, PreparedFlowInvocationRequest,
+    PreparedRenderFrameRequestResource, RenderFixedStepIterationUniform, RenderFlow, RenderFlowId,
+    RenderFrameProducerId, RenderGpuFixedStepInput, RenderGpuFlowStepStreams,
+    RenderGpuStepDemandError, ShaderRegistryResource, SurfaceFrameSubmissionOrder,
 };
 use engine::plugins::ui::{
     AppUiExt, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
@@ -20,6 +26,7 @@ use engine::runtime::{
     NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, NativeWindowLifecycleState,
     WindowStateRegistryResource,
 };
+use runen_gpu::{GpuBindingKey, GpuBufferInitialization, GpuSubmissionStatus};
 use runenui_core::{FontFamilyName, GenericFontFamily, StyleEnvironment};
 use ui_controls::BUTTON_CONTROL_KIND_ID;
 use ui_definition::{
@@ -33,6 +40,7 @@ use winit::window::Window;
 const NO_RENDER_ENV: &str = "RUNENWERK_NATIVE_NO_RENDER_SMOKE";
 const RENDER_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_HOST_SMOKE";
 const RENDER_UI_HOST_ENV: &str = "RUNENWERK_NATIVE_RENDER_UI_HOST_SMOKE";
+const HISTORICAL_GPU_ENV: &str = "RUNENWERK_NATIVE_HISTORICAL_GPU_SMOKE";
 
 const COUNTER_FONT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -106,9 +114,14 @@ fn native_counter_fonts() -> UiRuntimeFontConfiguration {
 fn main() {
     if let Ok(mode) = std::env::var("RUNENWERK_NATIVE_UI_READINESS_SMOKE") {
         assert!(
-            [NO_RENDER_ENV, RENDER_HOST_ENV, RENDER_UI_HOST_ENV]
-                .iter()
-                .all(|flag| std::env::var_os(flag).is_none()),
+            [
+                NO_RENDER_ENV,
+                RENDER_HOST_ENV,
+                RENDER_UI_HOST_ENV,
+                HISTORICAL_GPU_ENV
+            ]
+            .iter()
+            .all(|flag| std::env::var_os(flag).is_none()),
             "native Host smoke modes are mutually exclusive"
         );
         native_readiness::run(&mode).expect("native UI readiness smoke must succeed");
@@ -118,18 +131,22 @@ fn main() {
         std::env::var_os(NO_RENDER_ENV).is_some(),
         std::env::var_os(RENDER_HOST_ENV).is_some(),
         std::env::var_os(RENDER_UI_HOST_ENV).is_some(),
+        std::env::var_os(HISTORICAL_GPU_ENV).is_some(),
     ) {
-        (false, false, false) => {}
-        (true, false, false) => {
+        (false, false, false, false) => {}
+        (true, false, false, false) => {
             native_no_render_host_smoke().expect("native no-Render Host smoke should succeed")
         }
-        (false, true, false) => {
+        (false, true, false, false) => {
             native_render_host_smoke(false).expect("bare native Render Host smoke should succeed");
             run_native_render_ui_child_smoke()
                 .expect("native Render + UI Host child smoke should succeed");
         }
-        (false, false, true) => {
+        (false, false, true, false) => {
             native_render_host_smoke(true).expect("native Render + UI Host smoke should succeed")
+        }
+        (false, false, false, true) => {
+            native_historical_gpu_smoke().expect("native historical GPU RenderFlow must succeed")
         }
         _ => panic!("native Host smoke modes are mutually exclusive"),
     }
@@ -1121,5 +1138,868 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
         "native_render_host_smoke=pass ui_plugin={}",
         if with_ui { "selected" } else { "absent" }
     );
+    Ok(())
+}
+
+#[derive(Debug, Clone, Copy, runen_ecs::Resource)]
+struct NativeHistoricalSource {
+    latest: [u32; 4],
+}
+
+#[derive(Debug, Clone, Copy, GpuUniform)]
+struct NativeHistoricalUniform {
+    meta: [u32; 4],
+}
+
+#[derive(Debug, Clone, Copy, GpuStorage)]
+struct NativeHistoricalCounter {
+    value: u32,
+}
+
+fn native_historical_input(
+    uniform_id: runen_gpu::GpuWorkResourceId,
+    dispatch_pass: engine::plugins::render::RenderPassId,
+    value: u32,
+) -> RenderGpuFixedStepInput {
+    RenderGpuFixedStepInput {
+        uniforms: BTreeMap::from([(
+            uniform_id,
+            engine::plugins::render::bytemuck::bytes_of(
+                &NativeHistoricalUniform {
+                    meta: [value, 0, 0, 0],
+                }
+                .to_gpu(),
+            )
+            .to_vec(),
+        )]),
+        dispatch_workgroups: BTreeMap::from([(dispatch_pass, [1, 1, 1])]),
+        iteration: RenderFixedStepIterationUniform::new(
+            0,
+            1,
+            4,
+            value as u64,
+            1.0 / (value as f32),
+            0.0,
+        ),
+    }
+}
+
+struct NativeHistoricalGpuHook {
+    fatal_error: Arc<std::sync::Mutex<Option<String>>>,
+    flow: RenderFlowId,
+    uniform_id: runen_gpu::GpuWorkResourceId,
+    dispatch_pass: engine::plugins::render::RenderPassId,
+    display_pass: String,
+    frames: u32,
+    first_submission: Option<runen_gpu::GpuSubmissionId>,
+    second_submission: Option<runen_gpu::GpuSubmissionId>,
+    saw_terminal: bool,
+    saw_second_terminal: bool,
+    saw_gpu_frame: bool,
+    saw_second_gpu_frame: bool,
+    verified_pixel: bool,
+    verified_second_pixel: bool,
+    first_capture_frame: Option<u64>,
+    queued_while_in_flight: bool,
+    first_queued_frame: Option<u32>,
+    second_queued_during_deferral: bool,
+    terminal_hold_frames: u32,
+    overflow_rejected_without_loss: bool,
+    semantic_verification_refusal_preserved: bool,
+    semantic_committed: bool,
+    second_committed: bool,
+    independent_secondary_flow: RenderFlowId,
+    secondary_requested: bool,
+    secondary_surface: Option<RenderSurfaceId>,
+    secondary_submitted_while_primary_deferred: bool,
+    shared_secondary_start_frame: Option<u32>,
+    shared_secondary_deferral_verified: bool,
+    secondary_switched_to_independent: bool,
+}
+
+impl NativeWindowHook for NativeHistoricalGpuHook {
+    fn name(&self) -> &'static str {
+        "native_historical_gpu_render_flow"
+    }
+
+    fn frame(&mut self, window: &Window, world: &mut runen_ecs::World) -> anyhow::Result<()> {
+        let result = self.verify_frame(window, world);
+        if let Err(error) = &result {
+            // Native host hooks collect failures as diagnostics rather than
+            // terminating the event loop. A regression fixture must explicitly
+            // close the window and return its first failure to its test runner.
+            let mut recorded = self
+                .fatal_error
+                .lock()
+                .expect("native smoke failure storage poisoned");
+            if recorded.is_none() {
+                *recorded = Some(format!("{error:#}"));
+            }
+            if let Ok(windows) = world.resource_mut::<WindowStateRegistryResource>()
+                && let Some(primary) = windows.record_mut(NativeWindowId::primary())
+            {
+                primary.request_close();
+            }
+        }
+        result
+    }
+}
+
+impl NativeHistoricalGpuHook {
+    fn verify_frame(
+        &mut self,
+        window: &Window,
+        world: &mut runen_ecs::World,
+    ) -> anyhow::Result<()> {
+        self.frames += 1;
+        // Request the second window after initial GPU acceptance; create its
+        // scoped invocation only once it has a real attached render surface.
+        if self.first_submission.is_some() && !self.secondary_requested {
+            world
+                .resource_mut::<WindowStateRegistryResource>()?
+                .request_window("Native shared then independent GPU secondary", (320, 240));
+            self.secondary_requested = true;
+        }
+        if self.secondary_requested && self.secondary_surface.is_none() {
+            let secondary_window = world
+                .resource::<WindowStateRegistryResource>()?
+                .records()
+                .find(|record| {
+                    record.native_window_id != NativeWindowId::primary()
+                        && record.lifecycle_state == NativeWindowLifecycleState::Created
+                })
+                .map(|record| record.native_window_id);
+            if let Some(native) = secondary_window {
+                let surface = world
+                    .resource::<RenderSurfaceRegistryResource>()?
+                    .surface_for_native_window(native);
+                if let Some(surface) = surface
+                    && verify_secondary_render_attachment(world, native).is_ok()
+                {
+                    anyhow::ensure!(
+                        surface != RenderSurfaceId::primary(),
+                        "independent secondary must not alias the primary surface"
+                    );
+                    world
+                        .resource_mut::<PreparedRenderFrameRequestResource>()?
+                        .replace_surface_contribution_with_automatic_main_replacements(
+                            RenderFrameProducerId::try_from_raw(902)
+                                .expect("secondary request producer is nonzero"),
+                            surface,
+                            [],
+                            [PreparedFlowInvocationRequest::new(
+                                "native.history.shared.secondary",
+                                self.flow,
+                                "main",
+                            )],
+                            [],
+                        )?;
+                    self.secondary_surface = Some(surface);
+                    self.shared_secondary_start_frame = Some(self.frames);
+                }
+            }
+        }
+        // The second *real attached native surface* first requests the same
+        // retained producer. Until its accepted batch is producer-verified,
+        // both surfaces must defer this flow; G5 must not admit a second
+        // retained-state participant under a different surface identity.
+        // After several host opportunities switch to an unrelated flow and
+        // prove the secondary can still submit independently.
+        if let Some(surface) = self.secondary_surface
+            && !self.secondary_switched_to_independent
+        {
+            anyhow::ensure!(
+                world
+                    .resource::<PreparedRenderFrameRequestResource>()?
+                    .requested_flow_invocations_for_surface(surface)
+                    .iter()
+                    .any(|request| request.flow_id == self.flow),
+                "shared-flow secondary surface must have a live, surface-scoped invocation request"
+            );
+            let secondary_submissions = world
+                .resource::<RenderFrameHistoryState>()?
+                .observations()
+                .filter(|entry| entry.key.render_surface_id == surface.raw())
+                .count();
+            anyhow::ensure!(
+                secondary_submissions == 0,
+                "shared retained producer was submitted from the second native surface while prior source work remained unverified"
+            );
+            if self
+                .shared_secondary_start_frame
+                .is_some_and(|start| self.frames >= start + 4)
+            {
+                self.shared_secondary_deferral_verified = true;
+                world
+                    .resource_mut::<PreparedRenderFrameRequestResource>()?
+                    .replace_surface_contribution_with_automatic_main_replacements(
+                        RenderFrameProducerId::try_from_raw(902)
+                            .expect("secondary request producer is nonzero"),
+                        surface,
+                        [],
+                        [PreparedFlowInvocationRequest::new(
+                            "native.history.independent.secondary",
+                            self.independent_secondary_flow,
+                            "main",
+                        )],
+                        [],
+                    )?;
+                self.secondary_switched_to_independent = true;
+            }
+        }
+        if let Some(surface) = self.secondary_surface
+            && let Ok(history) = world.resource::<RenderFrameHistoryState>()
+        {
+            let primary_count = history
+                .observations()
+                .filter(|entry| entry.key.render_surface_id == RenderSurfaceId::primary().raw())
+                .count();
+            if self.first_submission.is_some() && !self.semantic_committed {
+                anyhow::ensure!(
+                    primary_count <= 1,
+                    "primary flow submitted again before semantic verification"
+                );
+                if self.secondary_switched_to_independent
+                    && history
+                        .observations()
+                        .any(|entry| entry.key.render_surface_id == surface.raw())
+                {
+                    self.secondary_submitted_while_primary_deferred = true;
+                }
+            }
+            // A fast Vulkan submission can become terminal before this host
+            // hook samples the renderer's *pending-only* receipt list.
+            // Actual source G5 identity and GPU pixels are checked separately;
+            // submitted-frame history proves the surface was truly admitted.
+            if self.first_submission.is_some() && primary_count >= 1 {
+                self.saw_gpu_frame = true;
+            }
+            if self.second_submission.is_some() && primary_count >= 2 {
+                self.saw_second_gpu_frame = true;
+            }
+        }
+        if let Ok(streams) = world.resource::<RenderGpuFlowStepStreams>() {
+            let producer = streams
+                .stream(self.flow)
+                .ok_or_else(|| anyhow::anyhow!("historical GPU producer disappeared"))?;
+            anyhow::ensure!(
+                producer.requested_tick()
+                    == if self.second_queued_during_deferral {
+                        5
+                    } else if self.queued_while_in_flight {
+                        4
+                    } else {
+                        3
+                    }
+                    && producer.completed_tick()
+                        == if self.second_committed {
+                            5
+                        } else if self.semantic_committed {
+                            3
+                        } else {
+                            0
+                        },
+                "native GPU execution must not invent verified semantic steps"
+            );
+            anyhow::ensure!(
+                producer.outstanding()
+                    == if self.second_committed {
+                        0
+                    } else if self.semantic_committed {
+                        2
+                    } else if self.second_queued_during_deferral {
+                        5
+                    } else if self.queued_while_in_flight {
+                        4
+                    } else {
+                        3
+                    },
+                "native GPU step history was lost or duplicated"
+            );
+            if let Some(gpu) = producer.accepted_submission() {
+                let gpu_id = gpu.id();
+                let expected = if self.semantic_committed {
+                    &mut self.second_submission
+                } else {
+                    &mut self.first_submission
+                };
+                if let Some(earlier) = expected.as_ref() {
+                    anyhow::ensure!(
+                        *earlier == gpu_id,
+                        "a deferred GPU producer was submitted more than once"
+                    );
+                } else {
+                    *expected = Some(gpu_id);
+                }
+                let expected_steps = if self.semantic_committed {
+                    vec![4, 5]
+                } else {
+                    vec![1, 2, 3]
+                };
+                anyhow::ensure!(
+                    producer
+                        .accepted_steps()
+                        .iter()
+                        .map(|step| step.tick())
+                        .collect::<Vec<_>>()
+                        == expected_steps,
+                    "accepted native RenderFlow did not retain its precise historical interval"
+                );
+                match gpu.status() {
+                    GpuSubmissionStatus::Accepted => {}
+                    GpuSubmissionStatus::Completed if self.semantic_committed => {
+                        self.saw_second_terminal = true;
+                    }
+                    GpuSubmissionStatus::Completed => self.saw_terminal = true,
+                    GpuSubmissionStatus::Failed(failure) => {
+                        anyhow::bail!("native RenderFlow G5 execution failed: {failure:?}");
+                    }
+                }
+            }
+        }
+        // A step-empty presentation still participates in G5 retained reads.
+        // Count exact accepted composed frame receipts, not semantic steps.
+        if let Ok(gfx) = world.resource::<Gfx>() {
+            let selected_count = gfx
+                .pending_gpu_frame_submissions()
+                .iter()
+                .filter(|receipt| {
+                    receipt
+                        .invocations()
+                        .iter()
+                        .any(|invocation| invocation.flow_id() == self.flow)
+                })
+                .count();
+            anyhow::ensure!(
+                selected_count <= 1,
+                "registered retained RenderFlow has concurrent accepted frames, including idle read-only presentation"
+            );
+        }
+        if let Ok(gfx) = world.resource::<Gfx>()
+            && !self.second_committed
+        {
+            for receipt in gfx.pending_gpu_frame_submissions() {
+                if receipt
+                    .invocations()
+                    .iter()
+                    .any(|invocation| invocation.flow_id() == self.flow)
+                {
+                    let source_id = if self.semantic_committed {
+                        self.second_submission
+                    } else {
+                        self.first_submission
+                    }
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("G5 frame receipt exists without source step acceptance")
+                    })?;
+                    anyhow::ensure!(
+                        receipt.submission().id() == source_id,
+                        "composed RenderFlow receipt did not identify the exact producer work"
+                    );
+                    if self.semantic_committed {
+                        self.saw_second_gpu_frame = true;
+                    } else {
+                        self.saw_gpu_frame = true;
+                    }
+                }
+            }
+        }
+
+        // Capture one immutable successor on each of two distinct host frames
+        // while the previous G5 batch remains semantically unverified. Neither
+        // the CPU's latest ECS projection nor a terminal physical GPU status
+        // may replace these historical inputs.
+        if self.first_submission.is_some() && !self.queued_while_in_flight {
+            let producer = world
+                .resource_mut::<RenderGpuFlowStepStreams>()?
+                .stream_mut(self.flow)
+                .ok_or_else(|| anyhow::anyhow!("native GPU history stream disappeared"))?;
+            anyhow::ensure!(
+                producer.accepted_steps().len() == 3 && producer.pending_len() == 0,
+                "first G5 interval changed before in-flight backlog capture"
+            );
+            producer
+                .capture(native_historical_input(
+                    self.uniform_id,
+                    self.dispatch_pass,
+                    4,
+                ))
+                .map_err(|(err, _)| {
+                    anyhow::anyhow!("first backlogged native step capture failed: {err}")
+                })?;
+            anyhow::ensure!(
+                producer.requested_tick() == 4
+                    && producer.completed_tick() == 0
+                    && producer.pending_len() == 1
+                    && producer.accepted_steps().len() == 3,
+                "first deferred host frame changed historical GPU demand"
+            );
+            self.queued_while_in_flight = true;
+            self.first_queued_frame = Some(self.frames);
+        }
+        if self.queued_while_in_flight
+            && !self.second_queued_during_deferral
+            && self
+                .first_queued_frame
+                .is_some_and(|frame| self.frames > frame)
+        {
+            let producer = world
+                .resource_mut::<RenderGpuFlowStepStreams>()?
+                .stream_mut(self.flow)
+                .ok_or_else(|| anyhow::anyhow!("second native GPU input stream disappeared"))?;
+            anyhow::ensure!(
+                producer.accepted_steps().len() == 3
+                    && producer.pending_len() == 1
+                    && producer.completed_tick() == 0,
+                "first batch was lost or committed before the next deferred host frame"
+            );
+            producer
+                .capture(native_historical_input(
+                    self.uniform_id,
+                    self.dispatch_pass,
+                    5,
+                ))
+                .map_err(|(err, _)| {
+                    anyhow::anyhow!("second deferred native step capture failed: {err}")
+                })?;
+            // The capacity includes the three G5-accepted steps and both
+            // later historical requests. Overflow cannot consume CPU input.
+            let overflow = native_historical_input(self.uniform_id, self.dispatch_pass, 99);
+            let (failure, returned) = producer
+                .capture(overflow.clone())
+                .expect_err("sixth native input must exceed five-step total capacity");
+            anyhow::ensure!(
+                failure == RenderGpuStepDemandError::CapacityExceeded
+                    && returned == overflow
+                    && producer.requested_tick() == 5
+                    && producer.completed_tick() == 0
+                    && producer.pending_len() == 2
+                    && producer.accepted_steps().len() == 3,
+                "capacity rejection changed second-frame immutable GPU history"
+            );
+            self.second_queued_during_deferral = true;
+            self.overflow_rejected_without_loss = true;
+        }
+
+        // The semantic producer reads its own accepted G5 readback directly.
+        // Renderer/ECS diagnostic history is bounded and may evict pixels;
+        // that derived cache cannot be the required source of GPU proof.
+        let step_streams = world.resource::<RenderGpuFlowStepStreams>()?;
+        let accepted_submission = step_streams
+            .stream(self.flow)
+            .and_then(|producer| producer.accepted_submission());
+        let capture = if let Some(submission) = accepted_submission {
+            anyhow::ensure!(
+                !matches!(
+                    submission.status(),
+                    runen_gpu::GpuSubmissionStatus::Failed(_)
+                ),
+                "native source G5 submission failed before semantic verification"
+            );
+            let readbacks = step_streams.accepted_capture_readbacks(self.flow)?;
+            let candidate = readbacks.iter().find(|capture| {
+                capture.identity.flow_id() == self.flow.to_string()
+                    && capture.identity.pass_id() == self.display_pass
+                    && !self.second_committed
+                    && (!self.semantic_committed
+                        || self
+                            .first_capture_frame
+                            .is_none_or(|first| capture.identity.frame_index > first))
+            });
+            if matches!(
+                submission.status(),
+                runen_gpu::GpuSubmissionStatus::Completed
+            ) {
+                anyhow::ensure!(
+                    candidate.is_some(),
+                    "completed producer G5 interval has no associated source capture readback"
+                );
+            }
+            candidate.and_then(|capture| {
+                capture.sample_center_rgba8(submission).map(|pixel| {
+                    (
+                        capture.identity.surface_id(),
+                        capture.identity.frame_index,
+                        pixel,
+                    )
+                })
+            })
+        } else {
+            None
+        };
+        if let Some((capture_surface, capture_frame, pixel)) = capture {
+            anyhow::ensure!(
+                capture_surface == RenderSurfaceId::primary().raw(),
+                "native producer capture came from wrong prepared surface {capture_surface}"
+            );
+            let expected = if self.semantic_committed {
+                [0, 0, 255, 255] // 6 + 4 + 5 = 15
+            } else {
+                [0, 255, 0, 255] // 1 + 2 + 3 = 6
+            };
+            anyhow::ensure!(
+                pixel == expected,
+                "GPU historical step inputs produced wrong retained state pixel: {pixel:?}"
+            );
+            if self.semantic_committed {
+                self.verified_second_pixel = true;
+            } else {
+                self.first_capture_frame = Some(capture_frame);
+                self.verified_pixel = true;
+            }
+        }
+
+        // Semantic completion is a separate producer-owned decision. It is
+        // committed only after the actual GPU pixel and exact accepted step
+        // lineage have both been verified; a failed/missing capture leaves
+        // the accepted interval intact.
+        if self.verified_pixel && self.saw_terminal && !self.semantic_committed {
+            self.terminal_hold_frames += 1;
+        }
+        // Keep the *completed* GPU receipt semantically unverified for several
+        // further native redraws. Fresh RenderPrepare must defer the same
+        // retained flow, preserving both independently captured successors.
+        if self.verified_pixel
+            && self.saw_terminal
+            && !self.semantic_committed
+            && self.second_queued_during_deferral
+            && self.secondary_submitted_while_primary_deferred
+            && self.terminal_hold_frames >= 5
+        {
+            let producer = world
+                .resource_mut::<RenderGpuFlowStepStreams>()?
+                .stream_mut(self.flow)
+                .ok_or_else(|| anyhow::anyhow!("native semantic producer disappeared"))?;
+            let affinity = producer
+                .accepted_submission()
+                .ok_or_else(|| anyhow::anyhow!("native result has no accepted G5 receipt"))?
+                .affinity();
+            let exact_id = self
+                .first_submission
+                .ok_or_else(|| anyhow::anyhow!("native source admission was never observed"))?;
+            // A physically completed G5 submission must remain uncommitted
+            // when the *producer's* semantic verifier refuses the result.
+            // Both pending steps and the original accepted prefix must
+            // survive the negative decision, without a new GPU admission.
+            let refused = producer
+                .commit_verified(affinity, |_submission, _steps| {
+                    Err::<(), anyhow::Error>(anyhow::anyhow!(
+                        "deliberately refuse this verified GPU-result candidate"
+                    ))
+                })
+                .expect_err("producer refusal must reject semantic completion");
+            anyhow::ensure!(
+                matches!(
+                    refused,
+                    engine::plugins::render::RenderGpuStepCommitError::Verification(_)
+                ) && producer.completed_tick() == 0
+                    && producer.requested_tick() == 5
+                    && producer.pending_len() == 2
+                    && producer.accepted_steps().len() == 3
+                    && producer
+                        .accepted_submission()
+                        .is_some_and(|gpu| gpu.id() == exact_id),
+                "rejected native semantic verification lost exact accepted or queued history"
+            );
+            self.semantic_verification_refusal_preserved = true;
+            let completed = producer
+                .commit_verified(affinity, |submission, steps| {
+                    anyhow::ensure!(
+                        submission.id() == exact_id
+                            && steps.iter().map(|step| step.tick()).collect::<Vec<_>>()
+                                == vec![1, 2, 3],
+                        "native semantic verification has wrong G5 lineage"
+                    );
+                    Ok::<(), anyhow::Error>(())
+                })
+                .map_err(|error| {
+                    anyhow::anyhow!("native producer GPU verification failed: {error}")
+                })?;
+            anyhow::ensure!(completed == 3, "native source committed wrong GPU tick");
+            // The distinct tick-4 and tick-5 inputs are still pending, without
+            // a second G5 admission or any recreation from latest ECS data.
+            anyhow::ensure!(
+                self.queued_while_in_flight
+                    && self.second_queued_during_deferral
+                    && self.terminal_hold_frames >= 5
+                    && self.secondary_submitted_while_primary_deferred
+                    && self.overflow_rejected_without_loss
+                    && producer.requested_tick() == 5
+                    && producer.completed_tick() == 3
+                    && producer.pending_len() == 2
+                    && producer.outstanding() == 2,
+                "first verification must expose the unchanged queued historical successor"
+            );
+            self.semantic_committed = true;
+        }
+
+        if self.verified_second_pixel && self.saw_second_terminal && !self.second_committed {
+            let producer = world
+                .resource_mut::<RenderGpuFlowStepStreams>()?
+                .stream_mut(self.flow)
+                .ok_or_else(|| anyhow::anyhow!("second native semantic producer disappeared"))?;
+            let affinity = producer
+                .accepted_submission()
+                .ok_or_else(|| anyhow::anyhow!("second native GPU result lacks G5 receipt"))?
+                .affinity();
+            let exact_id = self
+                .second_submission
+                .ok_or_else(|| anyhow::anyhow!("second native G5 admission missing"))?;
+            let last = producer
+                .commit_verified(affinity, |submission, steps| {
+                    anyhow::ensure!(
+                        submission.id() == exact_id
+                            && steps.iter().map(|step| step.tick()).collect::<Vec<_>>()
+                                == vec![4, 5],
+                        "second native GPU verification has incorrect exact history"
+                    );
+                    Ok::<(), anyhow::Error>(())
+                })
+                .map_err(|err| anyhow::anyhow!("second semantic GPU commit failed: {err}"))?;
+            anyhow::ensure!(last == 5, "second native GPU interval committed wrong tick");
+            self.second_committed = true;
+        }
+
+        if self.frames >= 80 {
+            anyhow::ensure!(
+                self.first_submission.is_some()
+                    && self.saw_terminal
+                    && self.saw_gpu_frame
+                    && self.verified_pixel
+                    && self.semantic_committed
+                    && self.second_submission.is_some()
+                    && self.saw_second_terminal
+                    && self.saw_second_gpu_frame
+                    && self.verified_second_pixel
+                    && self.second_committed
+                    && self.queued_while_in_flight
+                    && self.second_queued_during_deferral
+                    && self.terminal_hold_frames >= 5
+                    && self.secondary_submitted_while_primary_deferred
+                    && self.shared_secondary_deferral_verified
+                    && self.secondary_switched_to_independent
+                    && self.overflow_rejected_without_loss
+                    && self.semantic_verification_refusal_preserved,
+                "native RenderFlow must verify two G5 history batches, shared-state secondary deferral and independent secondary admission: first={:?}, terminal={}, first_pixel={}, committed={}, second={:?}, second_terminal={}, second_pixel={}, second_committed={}, queued={}, two_host_frames={}, terminal_hold={}, overflow={}, refusal={}, secondary_requested={}, secondary_surface={:?}, shared_deferral={}, independent_switch={}, secondary_submitted={}",
+                self.first_submission,
+                self.saw_terminal,
+                self.verified_pixel,
+                self.semantic_committed,
+                self.second_submission,
+                self.saw_second_terminal,
+                self.verified_second_pixel,
+                self.second_committed,
+                self.queued_while_in_flight,
+                self.second_queued_during_deferral,
+                self.terminal_hold_frames,
+                self.overflow_rejected_without_loss,
+                self.semantic_verification_refusal_preserved,
+                self.secondary_requested,
+                self.secondary_surface,
+                self.shared_secondary_deferral_verified,
+                self.secondary_switched_to_independent,
+                self.secondary_submitted_while_primary_deferred,
+            );
+            // The renderer may already have retired its observation receipt at
+            // terminal; source-owned G5 handles remain the execution truth.
+            world
+                .resource_mut::<WindowStateRegistryResource>()?
+                .record_mut(NativeWindowId::primary())
+                .ok_or_else(|| anyhow::anyhow!("native primary window record is missing"))?
+                .request_close();
+        } else {
+            window.request_redraw();
+        }
+        Ok(())
+    }
+}
+
+fn native_historical_gpu_smoke() -> anyhow::Result<()> {
+    let mut app = App::new();
+    app.set_title("Native historical RenderFlow GPU continuity");
+    app.add_plugins(default_plugins());
+    app.add_plugin(RenderPlugin);
+
+    // Explicit absolute asset path: never accept a fallback empty kernel.
+    let asset_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../assets/shaders/native_historical_gpu_step_smoke.wgsl"
+    );
+    let display_asset_path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../assets/shaders/native_historical_gpu_observe_smoke.wgsl"
+    );
+    let shader_registry = app.world_mut().resource_mut::<ShaderRegistryResource>()?;
+    let shader =
+        shader_registry.register_shader_with_id("native.historical.gpu.compute", asset_path);
+    let display_shader = shader_registry
+        .register_shader_with_id("native.historical.gpu.display", display_asset_path);
+    shader_registry.poll_updates();
+    anyhow::ensure!(
+        shader_registry.revision_for_handle(shader) > 0
+            && shader_registry
+                .loaded_source(asset_path)
+                .is_some_and(|source| source.contains("fn cs_main()"))
+            && shader_registry.revision_for_handle(display_shader) > 0
+            && shader_registry
+                .loaded_source(display_asset_path)
+                .is_some_and(|source| source.contains("fn fs_main()")),
+        "native historical GPU probe requires both loaded compute and display WGSL"
+    );
+
+    let (flow, uniform) = RenderFlow::new("native.historical.gpu")
+        .explicit_invocations_only()
+        .with_state::<NativeHistoricalSource>()
+        .with_surface_color()?
+        .uniform_buffer::<NativeHistoricalUniform>("native.historical.uniform")?;
+    let (flow, counter) = flow.storage_array_with_initialization::<NativeHistoricalCounter>(
+        "native.historical.counter",
+        1,
+        GpuBufferInitialization::Zeroed,
+    )?;
+    let flow = flow
+        .compute_pass("native.historical.step")
+        .shader(shader)
+        .uniform_from_state_to(
+            GpuBindingKey::try_new(0, 0)?,
+            uniform.clone(),
+            |source: &NativeHistoricalSource| NativeHistoricalUniform {
+                meta: source.latest,
+            },
+        )
+        .bind_storage(GpuBindingKey::try_new(0, 1)?, counter.clone())
+        .dispatch_from_state(|source: &NativeHistoricalSource| [source.latest[1], 1, 1])
+        .finish()
+        .fixed_step_region(
+            "native.historical.region",
+            4,
+            [("native.historical.step", GpuBindingKey::try_new(0, 2)?)],
+        )?
+        .fullscreen_pass("native.historical.surface")
+        .shader(display_shader)
+        .bind_storage(GpuBindingKey::try_new(0, 0)?, counter)
+        .main_surface_only()
+        .clear_color([0.0, 0.0, 0.0, 1.0])
+        .write_surface_color()?
+        .finish()
+        .present_pass("native.historical.present")?
+        .main_surface_only()
+        .surface_color()?
+        .finish()
+        .validate()?;
+    let flow_id = flow.id();
+    let dispatch_pass = flow
+        .pass_id("native.historical.step")
+        .ok_or_else(|| anyhow::anyhow!("native historical dispatch pass missing"))?;
+    let display_pass = flow
+        .pass_id("native.historical.surface")
+        .ok_or_else(|| anyhow::anyhow!("native historical display pass missing"))?
+        .to_string();
+    // Producer-authored result requirements must not need debug controls.
+    // The source-required readback is realized in the same G5 graph even when
+    // capture/readback telemetry is disabled.
+    app.update_render_debug_config(|config| config.capture_selectors.clear());
+    app.update_render_debug_control(|control| {
+        control.capture_enabled = false;
+        control.readback_enabled = false;
+        control.artifact_export_enabled = false;
+    });
+    let mut sources = RenderGpuFlowStepStreams::default();
+    sources.register(flow_id, 0, 5)?;
+    sources.require_capture(
+        flow_id,
+        RenderCaptureSelector::named_pass_surface_color(flow_id.to_string(), display_pass.clone()),
+    )?;
+    let input =
+        |value| native_historical_input(uniform.diagnostic_identity(), dispatch_pass, value);
+    sources
+        .stream_mut(flow_id)
+        .unwrap()
+        .capture_batch(vec![input(1), input(2), input(3)])
+        .map_err(|(reason, _)| anyhow::anyhow!("producer refused input history: {reason}"))?;
+    app.insert_resource(NativeHistoricalSource {
+        latest: [999, 0, 0, 0],
+    });
+    app.insert_resource(sources);
+    app.add_render_flow(flow);
+
+    // First request the same retained producer on a distinct native surface
+    // while its G5 interval remains unverified, then swap to an independent
+    // secondary graphics flow to qualify both denial and independent admission.
+    let independent = RenderFlow::new("native.historical.independent")
+        .explicit_invocations_only()
+        .with_surface_color()?
+        .fullscreen_pass("native.historical.independent.clear")
+        .main_surface_only()
+        .clear_color([0.25, 0.0, 0.0, 1.0])
+        .write_surface_color()?
+        .finish()
+        .present_pass("native.historical.independent.present")?
+        .main_surface_only()
+        .surface_color()?
+        .finish()
+        .validate()?;
+    let independent_secondary_flow = independent.id();
+    app.add_render_flow(independent);
+    app.insert_resource(RenderFrameObservationPolicyResource::enabled(256));
+    app.init_resource::<PreparedRenderFrameRequestResource>();
+    app.world_mut()
+        .resource_mut::<PreparedRenderFrameRequestResource>()?
+        .replace_surface_contribution_with_automatic_main_replacements(
+            RenderFrameProducerId::try_from_raw(901).expect("primary request producer is nonzero"),
+            RenderSurfaceId::primary(),
+            [],
+            [PreparedFlowInvocationRequest::new(
+                "native.history.primary",
+                flow_id,
+                "main",
+            )],
+            [],
+        )?;
+    app.init_resource::<NativeWindowHookRegistryResource>();
+    let fatal_error = Arc::new(std::sync::Mutex::new(None));
+    app.world_mut()
+        .resource_mut::<NativeWindowHookRegistryResource>()?
+        .register_hook(NativeHistoricalGpuHook {
+            fatal_error: Arc::clone(&fatal_error),
+            flow: flow_id,
+            uniform_id: uniform.diagnostic_identity(),
+            dispatch_pass,
+            display_pass,
+            frames: 0,
+            first_submission: None,
+            second_submission: None,
+            saw_terminal: false,
+            saw_second_terminal: false,
+            saw_gpu_frame: false,
+            saw_second_gpu_frame: false,
+            verified_pixel: false,
+            verified_second_pixel: false,
+            first_capture_frame: None,
+            queued_while_in_flight: false,
+            first_queued_frame: None,
+            second_queued_during_deferral: false,
+            terminal_hold_frames: 0,
+            overflow_rejected_without_loss: false,
+            semantic_verification_refusal_preserved: false,
+            semantic_committed: false,
+            second_committed: false,
+            independent_secondary_flow,
+            secondary_requested: false,
+            secondary_surface: None,
+            secondary_submitted_while_primary_deferred: false,
+            shared_secondary_start_frame: None,
+            shared_secondary_deferral_verified: false,
+            secondary_switched_to_independent: false,
+        });
+    app.run()?;
+    if let Some(error) = fatal_error
+        .lock()
+        .map_err(|_| anyhow::anyhow!("native historical GPU test failure storage poisoned"))?
+        .as_ref()
+    {
+        anyhow::bail!("native historical GPU frame assertion failed: {error}");
+    }
+    println!("native_historical_gpu_render_flow=pass");
     Ok(())
 }

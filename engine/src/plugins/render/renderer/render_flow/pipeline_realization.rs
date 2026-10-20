@@ -29,6 +29,21 @@ impl Renderer {
                     DEFAULT_COMPUTE_SHADER,
                     "builtin:compute",
                 );
+                // A producer-backed GPU step cannot silently become an empty
+                // fallback kernel and consume historical semantic work.
+                if flow_inputs.fixed_step_history.is_some()
+                    && flow
+                        .execution
+                        .fixed_step_regions
+                        .iter()
+                        .any(|region| region.pass_ids.contains(&value.pass_id))
+                {
+                    anyhow::ensure!(
+                        !shader.fallback_used,
+                        "producer-owned GPU fixed-step pass '{}' has no loaded shader; refusing fallback no-op submission",
+                        value.pass_id
+                    );
+                }
                 let specialization =
                     compute_specialization_from_constants(&value.shader_constants)?;
                 flow_inputs

@@ -125,6 +125,8 @@ product ownership.
   - `GpuPrimitiveExecutionPlan`
   - `GpuPrimitiveStep`
 - bounded population support:
+  - `RenderFlow::storage_array_with_initialization`
+  - `RenderFlow::double_buffer_storage_array_with_handle_and_initialization`
   - `BoundedUniformGrid2dConfig`
   - `BoundedUniformGrid2dBuildPlan`
   - `BoundedUniformGrid2dResources`
@@ -144,6 +146,12 @@ Contract:
   expectations.
 - GPU primitive descriptors validate labels, real storage-array lengths,
   capacity, and aliasing. Invalid capacity is a diagnostic, not silent drift.
+- Storage-array declarations remain `Uninitialized` by default. The opt-in
+  typed initialization overloads preserve all physical declaration identity:
+  element type, count, retained lifetime, and initialization must agree for
+  repeated use, including **both** physical ping-pong buffers.
+  `Zeroed` guarantees descriptor-level initial bytes but does not replace
+  shader-authored semantic seeding, GPU readback verification or recovery.
 - `BoundedUniformGrid2dBuildPlan` records the canonical clear counts, count
   cells, scan counts, reset cursors, scatter sorted indices, neighbor
   simulation, and publish/draw stage order. Cell resources are total-count-sized

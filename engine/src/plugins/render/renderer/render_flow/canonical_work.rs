@@ -28,7 +28,8 @@ pub(super) struct CanonicalPassProjection<'a> {
     pub(super) pass: &'a CompiledPassExecutionPlan,
     pub(super) pipeline: Option<&'a PreparedPipelinePass>,
     pub(super) timestamp_indices: Option<GpuPassTimestampIndices>,
-    pub(super) fixed_step_upload: Option<&'a RealizedLogicalBufferUpload>,
+    pub(super) fixed_step_uploads: &'a [RealizedLogicalBufferUpload],
+    pub(super) historical_dispatch: Option<[u32; 3]>,
     pub(super) before_captures: &'a [PreparedCaptureReadback],
     pub(super) after_captures: &'a [PreparedCaptureReadback],
 }
@@ -171,7 +172,7 @@ pub(super) fn resolve_canonical_invocation(
         *maximum_occurrence = (*maximum_occurrence).max(projected.occurrence.raw());
         let mut pass_control =
             effective_controls_after_omissions(projected.control_order_after, &omitted_controls);
-        if let Some(upload) = projected.fixed_step_upload {
+        for upload in projected.fixed_step_uploads {
             *maximum_occurrence = (*maximum_occurrence).max(upload.occurrence.raw());
             nodes.push(ResolvedRenderGpuWorkNode::upload(
                 upload.occurrence,
@@ -206,7 +207,13 @@ pub(super) fn resolve_canonical_invocation(
                     )
                 })?;
                 let timing = timestamp_projection(timing, projected.timestamp_indices)?;
-                project_compute_operation(pass, flow_inputs, pipeline, timing)?
+                project_compute_operation(
+                    pass,
+                    flow_inputs,
+                    projected.historical_dispatch,
+                    pipeline,
+                    timing,
+                )?
             }
             CompiledPassExecutionPlan::Fullscreen(_) | CompiledPassExecutionPlan::Graphics(_) => {
                 let pipeline = projected.pipeline.ok_or_else(|| {

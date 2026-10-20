@@ -1211,6 +1211,7 @@ mod tests {
         let capture_point = selector.stable_point_fallback();
         let identity = RenderCaptureIdentity {
             frame_index: 42,
+            surface_id: 1,
             pass_label: "resolve".to_string(),
             capture_point: capture_point.clone(),
         };
@@ -1221,6 +1222,8 @@ mod tests {
                 selector_index: 0,
                 selector,
                 capture_point,
+                source_frame_index: 42,
+                source_surface_id: 1,
                 frame_identity: Some(identity),
                 terminal: RenderCaptureTerminal::completed(),
                 artifact_path: Some(artifact_path.clone()),

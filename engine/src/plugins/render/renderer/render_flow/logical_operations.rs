@@ -22,6 +22,7 @@ use runen_gpu::{
 pub(super) fn project_compute_operation(
     pass: &CompiledComputeExecutionPlan,
     flow_inputs: &PreparedFlowInputs,
+    historical_dispatch: Option<[u32; 3]>,
     pipeline: &PreparedPipelinePass,
     timing: Option<(&LogicalGpuPassTiming, GpuPassTimestampIndices)>,
 ) -> Result<GpuWorkOperation> {
@@ -31,10 +32,13 @@ pub(super) fn project_compute_operation(
             pass.pass_id
         );
     };
-    let dispatch = flow_inputs
-        .projected_dispatch_workgroups
-        .get(&pass.pass_id)
-        .copied()
+    let dispatch = historical_dispatch
+        .or_else(|| {
+            flow_inputs
+                .projected_dispatch_workgroups
+                .get(&pass.pass_id)
+                .copied()
+        })
         .ok_or_else(|| {
             anyhow::anyhow!(
                 "compute pass '{}' is missing its prepared dispatch projection",

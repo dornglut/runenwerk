@@ -687,12 +687,14 @@ mod tests {
         RenderCapturedTexture {
             identity: RenderCaptureIdentity {
                 frame_index,
+                surface_id: 1,
                 pass_label: selector
                     .pass_id
                     .clone()
                     .unwrap_or_else(|| "pass".to_string()),
                 capture_point: selector.stable_point_fallback(),
             },
+            submission_receipt: None,
             width: 1,
             height: 1,
             format: "Rgba8Unorm".to_string(),

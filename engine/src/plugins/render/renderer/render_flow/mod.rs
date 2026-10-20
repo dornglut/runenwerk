@@ -40,7 +40,9 @@ mod pipeline_realization;
 mod preflight_cache;
 mod program_sources;
 mod provenance;
+mod retained_submission_trace;
 mod runtime_resources;
+mod submission_lifecycle;
 
 /// Opaque G4C3 pipeline realization retained between the renderer's realization and G5
 /// execution phases. No raw backend pipeline reference crosses this boundary.
@@ -81,6 +83,13 @@ pub(super) use provenance::{
     feature_runtime_version, hash_view_signature, material_specialization_fragment_hash,
     pass_consumes_material_resources, resolve_shader_material, resolve_shader_material_for_packet,
 };
+pub(super) use retained_submission_trace::RetainedSubmissionTrace;
 pub(crate) use runtime_resources::{
     FlowRuntimeResources, ResolvedTextureRef, RuntimeResourceKey, RuntimeResourceKind,
+};
+pub(super) use submission_lifecycle::RendererSubmissionLifecycle;
+pub use submission_lifecycle::{
+    RenderGpuFrameInvocationReceipt, RenderGpuFramePostAcceptAssociationFailure,
+    RenderGpuFrameSubmissionReceipt, RenderGpuFrameTerminalBatch,
+    RenderGpuFrameTerminalDisposition, RenderGpuFrameTerminalOutcome,
 };
