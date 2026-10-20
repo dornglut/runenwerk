@@ -1378,6 +1378,7 @@ impl WinitRunner {
     /// Retire the actually disconnected keyboard device without destroying
     /// other keys in the same window/slot/source lifetime. The translator owns
     /// its pressed keys; this host tracks only observed hardware membership.
+    #[cfg(test)]
     fn cancel_native_ui_keyboard_device(
         &mut self,
         window: NativeWindowId,
@@ -1450,194 +1451,28 @@ impl WinitRunner {
         Ok(())
     }
 
-    /// Retire one original touch hardware device only. Keep the same adapter
-    /// alive so foreign device B retains contact and pointer ID continuity.
-    fn cancel_native_ui_touch_device(
-        &mut self,
-        window: NativeWindowId,
-        backend_device: winit::event::DeviceId,
-        device: UiInputDeviceId,
-    ) -> Result<()> {
-        let Some((recipient, epoch, scope)) =
-            self.native_ui_touches.get(&window).and_then(|lifetime| {
-                lifetime.backend_devices.contains(&backend_device).then(|| {
-                    (
-                        lifetime.recipient,
-                        lifetime.binding_epoch,
-                        lifetime.scope.clone(),
-                    )
-                })
-            })
-        else {
-            return Ok(());
-        };
-        if !matches!(
-            self.native_input_recipient_for_cancellation(window),
-            Ok((NativeInputRecipient::RunenUiSlot(slot), Some(current)))
-                if slot == recipient && current == epoch
-        ) {
-            self.native_ui_touches.remove(&window);
-            return Ok(());
-        }
-        let slots = self
-            .state
-            .world
-            .resource_mut::<UiRuntimeSlotsResource>()
-            .context("device-specific touch cancellation lost its pinned slot")?;
-        let before = slots.input_ownership(recipient).map_err(|error| {
-            anyhow!("native touch device-loss M13 ownership unavailable: {error:?}")
-        })?;
-        anyhow::ensure!(
-            before.scope() == &scope,
-            "native touch device-loss Cancel crossed its original M13 scope"
-        );
-        let events = {
-            let lifetime = self
-                .native_ui_touches
-                .get_mut(&window)
-                .context("original native touch lifetime vanished")?;
-            lifetime.backend_devices.remove(&backend_device);
-            lifetime.touch.cancel_device(device)
-        };
-        for event in events {
-            let pointer = event.pointer_id();
-            // Retain the original displayed surface identity after the
-            // framework takes ownership of the cancellation event.
-            let surface = event.surface_context().surface_id().clone();
-            let submission = slots
-                .submit_native_pointer(recipient, event)
-                .map_err(|error| {
-                    anyhow!("native touch device-loss M13 submission rejected: {error:?}")
-                })?;
-            let (batch, status) = slots
-                .pump_native_input_records(recipient)
-                .map_err(|error| anyhow!("native touch device-loss M13 pump failed: {error:?}"))?;
-            let evidence = native_pointer_finality(
-                before.scope(),
-                device,
-                pointer,
-                &surface,
-                submission,
-                &batch,
-                &status,
-            );
-            anyhow::ensure!(
-                matches!(evidence, Ok(UiInputFinality::Committed(_))),
-                "native touch device-loss Cancel lacked exact M13 settlement: {evidence:?}"
-            );
-        }
-        Ok(())
-    }
-
     fn apply_raw_device_removal(&mut self, device_id: winit::event::DeviceId) -> Result<bool> {
-        // Winit window events and DeviceEvents have separately allocated
-        // RunenInput identities. They share only the original backend DeviceId.
-        // Preflight both identity namespaces and retire them atomically BEFORE
-        // mutating a UI translator. A fallible allocation or missing raw source
-        // must not leave RunenUI cancelled while neutral held keys remain live.
-        let (window_contexts, raw_context) =
-            self.native_input_mut().retire_backend_device(device_id)?;
-        // UI Cancels still use the original pinned M13 recipient and scope;
-        // the removed physical IDs remain preserved in window_contexts.
-        let windows: Vec<_> = self
-            .native_ui_mice
-            .iter()
-            .filter_map(|(window, lifetime)| {
-                (lifetime.backend_device == device_id).then_some(*window)
-            })
-            .collect();
-        let mut cancellation_failure: Option<anyhow::Error> = None;
-        for window in windows.iter().copied() {
-            if let Err(error) = self.cancel_native_ui_mouse(window)
-                && cancellation_failure.is_none()
-            {
-                cancellation_failure = Some(error);
-            }
-        }
-        let touch_windows: Vec<_> = self
-            .native_ui_touches
-            .iter()
-            .filter_map(|(window, lifetime)| {
-                lifetime
-                    .backend_devices
-                    .contains(&device_id)
-                    .then_some(*window)
-            })
-            .collect();
-        // Exactly one RunenInput window-device identity exists for this backend
-        // device across its window sources. Raw identity is a separate namespace.
-        if let Some(retired_device) = window_contexts.first().and_then(|context| context.device) {
-            let ui_device = UiInputDeviceId::new(retired_device.raw())
-                .context("retired keyboard/touch device identity is zero")?;
-            for window in touch_windows.iter().copied() {
-                if let Err(error) = self.cancel_native_ui_touch_device(window, device_id, ui_device)
-                {
-                    tracing::warn!(
-                        target: "engine.runtime.input",
-                        ?window,
-                        ?error,
-                        "native touch device cancellation failed during device removal"
-                    );
-                    if cancellation_failure.is_none() {
-                        cancellation_failure = Some(error);
-                    }
-                }
-            }
-            let keyboard_windows: Vec<_> = self
-                .native_ui_keyboards
-                .iter()
-                .filter_map(|(window, lifetime)| {
-                    lifetime.devices.contains(&ui_device).then_some(*window)
-                })
-                .collect();
-            for window in keyboard_windows {
-                if let Err(error) = self.cancel_native_ui_keyboard_device(window, ui_device) {
-                    // Neutral physical loss and ActionState revocation remain
-                    // mandatory even when stale M13 cancellation cannot settle.
-                    tracing::warn!(
-                        target: "engine.runtime.input",
-                        ?window,
-                        ?error,
-                        "native keyboard device cancellation failed during device removal"
-                    );
-                    if cancellation_failure.is_none() {
-                        cancellation_failure = Some(error);
-                    }
-                }
-            }
-        } else if !touch_windows.is_empty() {
-            // A tracked original touch stream cannot outlive its checked
-            // window-device identity. Missing that identity makes an exact
-            // M13 device Cancel impossible: success would strand contacts.
-            cancellation_failure = Some(anyhow!(
-                "native touch device loss lacks its original window-device identity"
-            ));
-        }
-        if window_contexts.is_empty() && raw_context.is_none() {
-            if let Some(error) = cancellation_failure {
-                return Err(error);
-            }
-            return Ok(!windows.is_empty() || !touch_windows.is_empty());
-        }
-        {
-            let input = self
-                .state
-                .world
-                .resource_mut::<InputState>()
-                .context("missing InputState resource")?;
-            for context in window_contexts {
-                input.handle_continuity_loss(context, ContinuityLoss::Device);
-            }
-            if let Some(context) = raw_context {
-                input.handle_continuity_loss(context, ContinuityLoss::Source);
-            }
-        }
-        // Original device removal is an immediate action-lifetime boundary,
-        // not a permission change deferred to the next input system frame.
+        // A missing neutral reducer must not consume a raw device lifetime
+        // before its original source-loss event can be applied.
+        self.state
+            .world
+            .resource::<InputState>()
+            .context("native raw-device removal lost its neutral input owner")?;
+        // Winit raw DeviceEvent and window-local keyboard/touch/pointer
+        // DeviceIds are not guaranteed to name the same OS device. In
+        // particular a colliding raw Removed is NOT proof of a window event
+        // source's loss. Retire only the raw observation's own generation.
+        // Verified window focus/recipient/source retirement separately owns
+        // its window keyboard, touch, mouse, M13 and ActionState cleanup.
+        let Some(context) = self.native_input_mut().retire_raw_device(device_id)? else {
+            return Ok(false);
+        };
+        self.state
+            .world
+            .resource_mut::<InputState>()
+            .context("native raw-device removal lost its neutral input owner")?
+            .handle_continuity_loss(context, ContinuityLoss::Source);
         self.project_actions_after_native_continuity()?;
-        if let Some(error) = cancellation_failure {
-            return Err(error);
-        }
         Ok(true)
     }
 
@@ -5957,126 +5792,67 @@ mod tests {
         );
         assert!(lifetime.devices.contains(&second_device));
 
-        // Backend device removal retracts that framework lifetime BEFORE
-        // its neutral physical device generation is reallocated, without
-        // destroying the native window's logical source.
+        // A colliding raw Removed is not evidence of this window keyboard
+        // device's disappearance. It must preserve the original M13
+        // translator pressed-device membership and modifiers.
         let backend = winit::event::DeviceId::dummy();
         let original = runner
             .native_input_mut()
             .window_context(secondary, backend)
-            .expect("one checked backend device");
+            .expect("window-observed device");
+        let ui_device = WinitRunner::native_ui_device(original).expect("original device");
         runner.native_ui_keyboard_translator(
-            secondary,
-            slot,
-            original.source,
-            WinitRunner::native_ui_device(original).expect("checked UI device"),
-            new_epoch,
+            secondary, slot, original.source, ui_device, new_epoch,
         );
-        runner
-            .native_ui_modifiers
-            .insert(secondary, KeyModifiers::SHIFT);
-        assert!(
-            runner
-                .apply_raw_device_removal(backend)
-                .expect("original native backend device loss")
+        runner.native_ui_modifiers.insert(secondary, KeyModifiers::SHIFT);
+        let raw = runner
+            .native_input_mut()
+            .raw_device_context(backend)
+            .expect("independent raw device");
+        assert!(runner.apply_raw_device_removal(backend).expect("raw removal"));
+        let next_raw = runner
+            .native_input_mut()
+            .raw_device_context(backend)
+            .expect("raw ID reincarnation");
+        assert_ne!(next_raw.source, raw.source);
+        assert_ne!(next_raw.device, raw.device);
+        assert_eq!(
+            runner.native_input_mut().window_context(secondary, backend),
+            Ok(original),
+            "raw removal cannot reincarnate a live window keyboard device"
         );
         assert!(
-            runner
-                .native_ui_keyboards
+            runner.native_ui_keyboards
                 .get(&secondary)
-                .is_some_and(|lifetime| lifetime.devices.is_empty()),
-            "device removal retires only its membership, not the reusable window translator"
+                .is_some_and(|lifetime| lifetime.devices.contains(&ui_device)),
+            "raw-device name collision cannot synthesize a UI Cancel"
         );
-        assert!(
-            !runner.native_ui_modifiers.contains_key(&secondary),
-            "last device removal must clear stale physical modifier evidence"
+        assert_eq!(
+            runner.native_ui_modifiers.get(&secondary),
+            Some(&KeyModifiers::SHIFT),
+            "raw Removed carries no original window modifier authority"
         );
-        let successor = runner
-            .native_input_mut()
-            .window_context(secondary, backend)
-            .expect("device can reappear with another checked generation");
-        assert_eq!(successor.source, original.source);
-        assert_ne!(successor.device, original.device);
+
         let scope = runner
-            .state
-            .world
-            .resource_mut::<UiRuntimeSlotsResource>()
-            .expect("mounted framework is retained")
+            .state.world.resource_mut::<UiRuntimeSlotsResource>()
+            .expect("mounted RunenUI")
             .input_ownership(slot)
-            .expect("live UI M13 scope")
-            .scope()
-            .clone();
-        let actual_context = runner
-            .native_input_mut()
-            .window_context(secondary, winit::event::DeviceId::dummy())
-            .expect("fresh device generation");
-        runner.native_ui_mice.insert(
-            secondary,
-            NativeUiMouseTranslator {
-                recipient: slot,
-                source: actual_context.source,
-                backend_device: winit::event::DeviceId::dummy(),
-                device: WinitRunner::native_ui_device(actual_context)
-                    .expect("checked native UI device"),
-                binding_epoch: new_epoch,
-                scope,
-                mouse: MouseInputState::default(),
-            },
-        );
-        assert!(
-            runner
-                .retire_native_input_recipient(secondary)
-                .expect("explicit UI input recipient retirement")
-        );
+            .expect("live M13 scope")
+            .scope().clone();
+        runner.native_ui_mice.insert(secondary, NativeUiMouseTranslator {
+            recipient: slot,
+            source: original.source,
+            backend_device: backend,
+            device: ui_device,
+            binding_epoch: new_epoch,
+            scope,
+            mouse: MouseInputState::default(),
+        });
+        assert!(runner.retire_native_input_recipient(secondary)
+            .expect("actual verified UI recipient retirement"));
         assert!(
             !runner.native_ui_mice.contains_key(&secondary),
-            "no previous mouse stream can survive semantic recipient retirement"
-        );
-        assert!(
-            runner.state.world.has_resource::<UiRuntimeSlotsResource>(),
-            "retirement rejection cannot discard the native UI runtime"
-        );
-        // A retained UI touch backend with no original window-device mapping
-        // must never be silently reported as a successfully retired contact.
-        let stale_backend = winit::event::DeviceId::dummy();
-        let retired = runner
-            .native_input_mut()
-            .retire_window_device(stale_backend)
-            .expect("checked physical identity retires");
-        assert!(!retired.is_empty());
-        let stale_scope = runner
-            .state
-            .world
-            .resource_mut::<UiRuntimeSlotsResource>()
-            .expect("mounted UI source remains")
-            .input_ownership(slot)
-            .expect("original framework scope")
-            .scope()
-            .clone();
-        runner.native_ui_touches.insert(
-            secondary,
-            NativeUiTouchTranslator {
-                recipient: slot,
-                source: actual_context.source,
-                binding_epoch: new_epoch,
-                scope: stale_scope,
-                backend_devices: HashSet::from([stale_backend]),
-                touch: TouchInputState::default(),
-            },
-        );
-        let missing = runner
-            .apply_raw_device_removal(stale_backend)
-            .expect_err("missing original touch device ID must fail closed");
-        assert!(
-            format!("{missing:#}").contains("lacks its original window-device identity"),
-            "diagnostic retains the missing original identity: {missing:#}"
-        );
-        assert!(
-            runner
-                .native_ui_touches
-                .get(&secondary)
-                .is_some_and(|state| state.backend_devices.contains(&stale_backend)),
-            "a missing identity must not be reported as a settled M13 Cancel"
+            "verified recipient retirement still retires the native pointer"
         );
     }
 
@@ -6382,7 +6158,139 @@ mod tests {
     }
 
     #[test]
-    fn original_device_removal_retires_window_and_raw_devices_without_destroying_window_source() {
+    fn raw_removal_does_not_revoke_original_window_keyboard_or_game_held_press() {
+        use crate::plugins::{ActionState, action};
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        let backend = winit::event::DeviceId::dummy();
+        let original = runner
+            .native_input_mut()
+            .window_context(NativeWindowId::primary(), backend)
+            .expect("original window-keyboard identity");
+        let raw = runner
+            .native_input_mut()
+            .raw_device_context(backend)
+            .expect("independent raw-device identity");
+        let key = runen_input::PhysicalKeyIdentity::code("KeyW");
+        let keyboard_event = |state| PlatformEvent::KeyboardInput {
+            context: original,
+            input: runen_input::KeyboardInput {
+                physical_key: key.clone(),
+                logical_key: runen_input::LogicalKey::Native(
+                    runen_input::NativeLogicalKey::Unidentified,
+                ),
+                location: runen_input::KeyLocation::Standard,
+                state,
+                repeat: false,
+                origin: runen_input::ObservationOrigin::SourceReport,
+            },
+        };
+        runner
+            .apply_event(keyboard_event(runen_input::DigitalState::Pressed))
+            .expect("original window-keyboard Down enters neutral input");
+        {
+            let mut actions = runner
+                .state
+                .world
+                .remove_resource::<ActionState>()
+                .expect("game action owner");
+            actions.project(
+                runner
+                    .state
+                    .world
+                    .resource::<InputState>()
+                    .expect("neutral input"),
+            );
+            runner.state.world.insert_resource(actions);
+        }
+        assert!(
+            runner
+                .state.world.resource::<ActionState>()
+                .expect("game actions")
+                .action_down(action::WORLD_MOVE_UP),
+            "legitimate game-held key is live before unrelated raw removal"
+        );
+        assert!(
+            runner.apply_raw_device_removal(backend).expect("raw Removed"),
+            "original raw source must retire"
+        );
+        assert_eq!(
+            runner
+                .native_input_mut()
+                .window_context(NativeWindowId::primary(), backend),
+            Ok(original),
+            "a colliding raw ID must not reincarnate a window-keyboard identity"
+        );
+        assert_eq!(
+            runner.native_input_mut().retire_raw_device(backend),
+            Ok(None),
+            "raw source is retired exactly once"
+        );
+        assert!(
+            runner
+                .state.world.resource::<InputState>()
+                .expect("neutral input")
+                .physical_key_down_in(original, &key),
+            "physical window key must survive raw source retirement"
+        );
+        assert!(
+            runner
+                .state.world.resource::<ActionState>()
+                .expect("game actions")
+                .action_down(action::WORLD_MOVE_UP),
+            "raw removal must not revoke an independent held gameplay action"
+        );
+        let reincarnated = runner
+            .native_input_mut()
+            .raw_device_context(backend)
+            .expect("new raw generation");
+        assert_ne!(reincarnated.source, raw.source);
+        assert_ne!(reincarnated.device, raw.device);
+        runner
+            .apply_event(keyboard_event(runen_input::DigitalState::Released))
+            .expect("genuine original window-keyboard Up");
+        let mut actions = runner
+            .state.world.remove_resource::<ActionState>()
+            .expect("game action owner");
+        actions.project(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("neutral input"),
+        );
+        runner.state.world.insert_resource(actions);
+        assert!(
+            !runner
+                .state.world.resource::<ActionState>()
+                .expect("game actions")
+                .action_down(action::WORLD_MOVE_UP),
+            "only an actual original keyboard release ends that held key"
+        );
+    }
+
+    #[test]
+    fn raw_removal_failure_preserves_original_raw_device_identity() {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        let backend = winit::event::DeviceId::dummy();
+        let raw = runner
+            .native_input_mut()
+            .raw_device_context(backend)
+            .expect("allocated original raw device");
+        assert!(
+            runner.apply_raw_device_removal(backend).is_err(),
+            "missing neutral input owner must reject before raw identity retirement"
+        );
+        assert_eq!(
+            runner.native_input_mut().raw_device_context(backend),
+            Ok(raw),
+            "failure before source-loss delivery cannot reincarnate hardware"
+        );
+    }
+
+    #[test]
+    fn raw_device_removal_retires_only_raw_source_and_preserves_window_device() {
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
         runner.state.world.insert_resource(InputState::new());
         let backend_device = winit::event::DeviceId::dummy();
@@ -6414,9 +6322,9 @@ mod tests {
             replacement_window.source, window.source,
             "device loss is not destruction of the native window's input source"
         );
-        assert_ne!(
+        assert_eq!(
             replacement_window.device, window.device,
-            "removed hardware must not reuse the old window-event device identity"
+            "a raw Removed cannot certify or reincarnate a window-event device"
         );
         assert_ne!(
             replacement_window.device, replacement.device,
