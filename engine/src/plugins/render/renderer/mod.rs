@@ -1087,7 +1087,7 @@ impl Gfx {
     }
 
     /// Reconcile one pending policy and/or resize before acquiring the next surface image.
-    pub fn configure_surface_presentation(
+    pub(crate) fn configure_surface_presentation(
         &mut self,
         id: crate::plugins::render::host::RenderSurfaceId,
         request: crate::plugins::render::host::RenderSurfacePresentationRequest,
@@ -1097,7 +1097,7 @@ impl Gfx {
         self.ctx.configure_presentation(id, request, revision, size)
     }
 
-    pub fn invalidate_surface_presentation(
+    pub(crate) fn invalidate_surface_presentation(
         &mut self,
         id: crate::plugins::render::host::RenderSurfaceId,
     ) {
