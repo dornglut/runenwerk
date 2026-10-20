@@ -675,6 +675,7 @@ fn complete_render_lab_measurement_if_requested(
                 measurement.radiance_target_size_px,
                 pacing_policy.mode,
                 observation_policy,
+                gfx.map(|gfx| gfx.adapter_facts()),
             );
             performance_report::write_report(path, &report)?;
             eprintln!("{}", performance_report::terminal_summary(&report));
@@ -1550,7 +1551,7 @@ mod tests {
         assert_eq!(performance_json["schema_version"], 1);
         assert_eq!(performance_json["retained_frame_count"], 1);
         assert_eq!(
-            performance_json["configuration"]["host_pacing_target_fps"],
+            performance_json["configuration"]["host_pacing_target_fps_at_close"],
             60
         );
         assert_eq!(

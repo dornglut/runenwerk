@@ -42,9 +42,13 @@ snapshot report; it performs no new GPU readbacks or wait-for-GPU drain.
   output extent and internal extent. The report also records all four Render
   history drop counters. Groups do not establish device-generation equality.
 - Present submission is **not** display scanout. Actual Host frame wall time,
-  display FPS, 1%-lows, queue completion timing, physical adapter/backend,
-  actual Present mode and source fixed-step timing are **unknown** unless a
-  qualified owner supplies them. A pacing target is a configuration, not FPS.
+  display FPS, 1%-lows, queue completion timing, actual Present mode and
+  source fixed-step timing remain **unknown**. The report includes the existing
+  Render Lab GPU-adapter facts when attached, plus the current Host pacing
+  policy sampled at close; these are **not** per-frame historical facts.
+  An optional `RUNENWERK_SOURCE_REVISION` environment value is preserved
+  specifically as an unverified source-revision claim, not independently
+  attested repository provenance. A pacing target is a configuration, not FPS.
 
 ## Qualification and overhead
 
