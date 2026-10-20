@@ -5720,11 +5720,17 @@ mod tests {
             .expect("original journal");
         assert_eq!(journal.events().len(), prior_len + 2);
         let pair = &journal.events()[prior_len..];
-        assert!(matches!(&pair[0].event, PlatformEvent::KeyboardInput { .. }));
+        assert!(matches!(
+            &pair[0].event,
+            PlatformEvent::KeyboardInput { .. }
+        ));
         assert!(matches!(&pair[1].event, PlatformEvent::TextInput { text } if text == "é"));
-        assert!(pair.iter().all(|entry| {
-            entry.native_window_id == secondary && !entry.authorized_for_legacy_editor()
-        }), "original UI keyboard/text may not leak to Editor");
+        assert!(
+            pair.iter().all(|entry| {
+                entry.native_window_id == secondary && !entry.authorized_for_legacy_editor()
+            }),
+            "original UI keyboard/text may not leak to Editor"
+        );
 
         // Leave room for exactly one record: neither the original Down nor
         // its text can enter a bounded journal until BOTH fit. This failure
@@ -5744,7 +5750,9 @@ mod tests {
             )
         };
         while journal.events().len() < 4095 {
-            journal.publish(empty_text()).expect("test fills journal up to one slot");
+            journal
+                .publish(empty_text())
+                .expect("test fills journal up to one slot");
         }
         let reject_context = original_context;
         let rejected_key = runen_input::KeyboardInput {
@@ -5761,10 +5769,7 @@ mod tests {
                 .world
                 .resource::<InputState>()
                 .expect("neutral input")
-                .keyboard_down_generation_in(
-                    reject_context,
-                    &PhysicalKeyIdentity::code("KeyZ"),
-                )
+                .keyboard_down_generation_in(reject_context, &PhysicalKeyIdentity::code("KeyZ"),)
                 .is_none()
         );
         assert!(
@@ -5796,10 +5801,7 @@ mod tests {
                 .world
                 .resource::<InputState>()
                 .expect("neutral input")
-                .keyboard_down_generation_in(
-                    reject_context,
-                    &PhysicalKeyIdentity::code("KeyZ"),
-                )
+                .keyboard_down_generation_in(reject_context, &PhysicalKeyIdentity::code("KeyZ"),)
                 .is_none(),
             "failed grouped journal preflight cannot partially admit a neutral keyboard Down"
         );
