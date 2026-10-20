@@ -2940,6 +2940,83 @@ mod tests {
                 .composition_generation()
                 .is_none()
         );
+
+        // The other legitimate original text path is KeyEvent.text while no
+        // IME composition is active. The accepted winit adapter classifies
+        // this candidate; only M13 owns the actual typed text mutation and
+        // its source/device-qualified finality.
+        let keyboard_owner = slots
+            .input_ownership(slot)
+            .expect("same text focus survives composition cancellation");
+        assert!(keyboard_owner.keyboard().focused_node().is_some());
+        assert!(
+            keyboard_owner
+                .keyboard()
+                .text_input_capability()
+                .accepts_committed_text()
+        );
+        let key_text = runenui_winit::text_input::keyboard_committed_text_candidate(
+            winit::event::ElementState::Pressed,
+            false,
+            true,
+            KeyboardCompositionState::Inactive,
+            &LogicalKey::Character("x".into()),
+            Some("x"),
+        )
+        .expect("real original keyboard text is eligible without composition");
+        assert_eq!(
+            runenui_winit::text_input::keyboard_committed_text_candidate(
+                winit::event::ElementState::Pressed,
+                false,
+                true,
+                KeyboardCompositionState::Active,
+                &LogicalKey::Character("x".into()),
+                Some("x"),
+            ),
+            None,
+            "a composing keyboard key cannot duplicate an IME Commit"
+        );
+        let key_text_receipt = slots
+            .submit_native_text(
+                slot,
+                CommittedTextEvent::new(key_text, Some(key_device))
+                    .expect("original keyboard device and text are nonempty"),
+            )
+            .expect("actual focused typed text field admits original keyboard text");
+        let (key_text_batch, key_text_status) = slots
+            .pump_native_input_records(slot)
+            .expect("original keyboard text receives real M13 settlement");
+        assert_eq!(key_text_status, Ok(()));
+        assert!(matches!(
+            native_text_finality(
+                keyboard_owner.scope(),
+                Some(key_device),
+                key_text_receipt,
+                &key_text_batch,
+                &key_text_status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert_eq!(
+            native_text_finality(
+                keyboard_owner.scope(),
+                None,
+                key_text_receipt,
+                &key_text_batch,
+                &key_text_status,
+            ),
+            Err(UiRuntimeNativeTextEvidenceFailure::WrongDevice),
+            "ordinary keyboard text must never impersonate device-free IME Commit"
+        );
+        let edited = &slots
+            .slot_mut(slot)
+            .expect("typed text slot survives")
+            .runtime
+            .typed_mut::<NativeTextApp>()
+            .expect("focused text owner")
+            .state()
+            .text;
+        assert_eq!(edited, "漢字éΩx", "one keyboard text input, one inserted character");
     }
 
     #[test]
