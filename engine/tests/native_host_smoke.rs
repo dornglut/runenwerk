@@ -140,8 +140,8 @@ fn main() {
                 HISTORICAL_GPU_ENV,
                 UNCAP_HOST_ENV,
             ]
-                .iter()
-                .all(|flag| std::env::var_os(flag).is_none()),
+            .iter()
+            .all(|flag| std::env::var_os(flag).is_none()),
             "native Host smoke modes are mutually exclusive"
         );
         native_uncapped_transition::run()
@@ -157,8 +157,8 @@ fn main() {
                 HISTORICAL_GPU_ENV,
                 UNCAP_TRANSITION_ENV,
             ]
-                .iter()
-                .all(|flag| std::env::var_os(flag).is_none()),
+            .iter()
+            .all(|flag| std::env::var_os(flag).is_none()),
             "native Host smoke modes are mutually exclusive"
         );
         native_uncapped_host_smoke().expect("native uncapped Host smoke should succeed");
