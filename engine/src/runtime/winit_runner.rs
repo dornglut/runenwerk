@@ -1434,7 +1434,7 @@ mod tests {
         runner
             .state
             .world
-            .init_resource::<RenderSurfaceRegistryResource>();
+            .insert_resource(RenderSurfaceRegistryResource::default());
         let requested = runner
             .state
             .world
@@ -1507,7 +1507,7 @@ mod tests {
         runner
             .state
             .world
-            .init_resource::<RenderSurfaceRegistryResource>();
+            .insert_resource(RenderSurfaceRegistryResource::default());
         let request = runner
             .state
             .world
