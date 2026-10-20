@@ -77,6 +77,10 @@ pub(crate) fn attach_secondary(
         )
     };
 
+    // Host's logical WindowState projection normalizes dimensions; that value is
+    // not evidence of a drawable swapchain. Read the real Winit extent here.
+    let physical_size = window.inner_size();
+    let physical_extent = (physical_size.width, physical_size.height);
     if let Err(err) = world
         .resource_mut::<Gfx>()
         .context("runtime gfx is unavailable")
@@ -84,7 +88,7 @@ pub(crate) fn attach_secondary(
             gfx.attach_surface_with_presentation(
                 render_surface_id,
                 window,
-                realized_size_px,
+                physical_extent,
                 request,
                 revision,
             )
