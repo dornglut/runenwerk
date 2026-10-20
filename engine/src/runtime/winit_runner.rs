@@ -7119,7 +7119,9 @@ mod tests {
                     .expect("fill one exact frame admission limit");
             }
             assert!(
-                runner.apply_native_geometry_change(window, event.clone()).is_err(),
+                runner
+                    .apply_native_geometry_change(window, event.clone())
+                    .is_err(),
                 "original geometry observation cannot cancel UI input before journal admission"
             );
             assert_eq!(
