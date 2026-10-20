@@ -5802,14 +5802,24 @@ mod tests {
             .expect("window-observed device");
         let ui_device = WinitRunner::native_ui_device(original).expect("original device");
         runner.native_ui_keyboard_translator(
-            secondary, slot, original.source, ui_device, new_epoch,
+            secondary,
+            slot,
+            original.source,
+            ui_device,
+            new_epoch,
         );
-        runner.native_ui_modifiers.insert(secondary, KeyModifiers::SHIFT);
+        runner
+            .native_ui_modifiers
+            .insert(secondary, KeyModifiers::SHIFT);
         let raw = runner
             .native_input_mut()
             .raw_device_context(backend)
             .expect("independent raw device");
-        assert!(runner.apply_raw_device_removal(backend).expect("raw removal"));
+        assert!(
+            runner
+                .apply_raw_device_removal(backend)
+                .expect("raw removal")
+        );
         let next_raw = runner
             .native_input_mut()
             .raw_device_context(backend)
@@ -5822,7 +5832,8 @@ mod tests {
             "raw removal cannot reincarnate a live window keyboard device"
         );
         assert!(
-            runner.native_ui_keyboards
+            runner
+                .native_ui_keyboards
                 .get(&secondary)
                 .is_some_and(|lifetime| lifetime.devices.contains(&ui_device)),
             "raw-device name collision cannot synthesize a UI Cancel"
@@ -5834,22 +5845,31 @@ mod tests {
         );
 
         let scope = runner
-            .state.world.resource_mut::<UiRuntimeSlotsResource>()
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
             .expect("mounted RunenUI")
             .input_ownership(slot)
             .expect("live M13 scope")
-            .scope().clone();
-        runner.native_ui_mice.insert(secondary, NativeUiMouseTranslator {
-            recipient: slot,
-            source: original.source,
-            backend_device: backend,
-            device: ui_device,
-            binding_epoch: new_epoch,
-            scope,
-            mouse: MouseInputState::default(),
-        });
-        assert!(runner.retire_native_input_recipient(secondary)
-            .expect("actual verified UI recipient retirement"));
+            .scope()
+            .clone();
+        runner.native_ui_mice.insert(
+            secondary,
+            NativeUiMouseTranslator {
+                recipient: slot,
+                source: original.source,
+                backend_device: backend,
+                device: ui_device,
+                binding_epoch: new_epoch,
+                scope,
+                mouse: MouseInputState::default(),
+            },
+        );
+        assert!(
+            runner
+                .retire_native_input_recipient(secondary)
+                .expect("actual verified UI recipient retirement")
+        );
         assert!(
             !runner.native_ui_mice.contains_key(&secondary),
             "verified recipient retirement still retires the native pointer"
@@ -6206,13 +6226,17 @@ mod tests {
         }
         assert!(
             runner
-                .state.world.resource::<ActionState>()
+                .state
+                .world
+                .resource::<ActionState>()
                 .expect("game actions")
                 .action_down(action::WORLD_MOVE_UP),
             "legitimate game-held key is live before unrelated raw removal"
         );
         assert!(
-            runner.apply_raw_device_removal(backend).expect("raw Removed"),
+            runner
+                .apply_raw_device_removal(backend)
+                .expect("raw Removed"),
             "original raw source must retire"
         );
         assert_eq!(
@@ -6229,14 +6253,18 @@ mod tests {
         );
         assert!(
             runner
-                .state.world.resource::<InputState>()
+                .state
+                .world
+                .resource::<InputState>()
                 .expect("neutral input")
                 .physical_key_down_in(original, &key),
             "physical window key must survive raw source retirement"
         );
         assert!(
             runner
-                .state.world.resource::<ActionState>()
+                .state
+                .world
+                .resource::<ActionState>()
                 .expect("game actions")
                 .action_down(action::WORLD_MOVE_UP),
             "raw removal must not revoke an independent held gameplay action"
@@ -6251,7 +6279,9 @@ mod tests {
             .apply_event(keyboard_event(runen_input::DigitalState::Released))
             .expect("genuine original window-keyboard Up");
         let mut actions = runner
-            .state.world.remove_resource::<ActionState>()
+            .state
+            .world
+            .remove_resource::<ActionState>()
             .expect("game action owner");
         actions.project(
             runner
@@ -6263,7 +6293,9 @@ mod tests {
         runner.state.world.insert_resource(actions);
         assert!(
             !runner
-                .state.world.resource::<ActionState>()
+                .state
+                .world
+                .resource::<ActionState>()
                 .expect("game actions")
                 .action_down(action::WORLD_MOVE_UP),
             "only an actual original keyboard release ends that held key"
