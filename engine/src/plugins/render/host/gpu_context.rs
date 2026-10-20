@@ -166,8 +166,15 @@ impl RenderGpuContext {
         let capabilities = context.surface_capabilities(surface)?;
         let format = preferred_surface_format(&capabilities)
             .ok_or(RenderSurfacePresentationError::NoCompatibleFormat)?;
-        let config = build_surface_config(size.width, size.height, format, &capabilities, request)?;
-        let surface = context.configure_surface(surface, config.clone())?;
+        // A newly created/minimized window may have no drawable extent yet.
+        // Keep the attachment and logical policy, but do not invent a configured swapchain.
+        let (surface, config) = if size.width > 0 && size.height > 0 {
+            let config = build_surface_config(size.width, size.height, format, &capabilities, request)?;
+            let configured = context.configure_surface(surface, config.clone())?;
+            (configured, Some(config))
+        } else {
+            (surface, None)
+        };
         Ok(Self {
             context,
             surfaces: BTreeMap::from([(
@@ -176,7 +183,7 @@ impl RenderGpuContext {
                     surface: Some(surface),
                     window,
                     capabilities: Some(capabilities),
-                    config: Some(config),
+                    config,
                     applied_revision: revision,
                 },
             )]),
