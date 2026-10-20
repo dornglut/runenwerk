@@ -8,6 +8,7 @@ use crate::plugins::ui::{
     native_composition_finality, native_keyboard_finality,
     native_no_focused_keyboard_claim_witness, native_original_keyboard_release_nonclaim,
     native_original_keyboard_repeat_nonclaim, native_pointer_finality, native_text_finality,
+    native_unfocused_game_keyboard_snapshot,
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
@@ -39,7 +40,7 @@ use runenui_core::{
 };
 use runenui_runtime::{UiInputConflict, UiInputFinality};
 use runenui_winit::keyboard_input::{
-    KeyboardInputOutcome, KeyboardInputState, NativeKeyTransition,
+    KeyboardIngressDiagnostic, KeyboardInputOutcome, KeyboardInputState, NativeKeyTransition,
 };
 use runenui_winit::mouse_input::{MouseButtonOutcome, MouseInputState, TranslatedPointerPoint};
 use runenui_winit::touch_input::TouchInputState;
@@ -892,6 +893,7 @@ impl WinitRunner {
         context: InputContext,
         original: &winit::event::KeyEvent,
         is_synthetic: bool,
+        previous_down_generation: Option<u64>,
     ) -> Result<()> {
         // Same original event and normalized source; no alternate input owner.
         let physical_key = keyboard_input(original, is_synthetic).physical_key;
@@ -1055,6 +1057,31 @@ impl WinitRunner {
                         }
                     },
                 }
+            }
+            KeyboardInputOutcome::Suppressed(KeyboardIngressDiagnostic::DuplicatePress)
+                if !is_synthetic
+                    && !original.repeat
+                    && matches!(original.state, winit::event::ElementState::Pressed)
+                    && native_unfocused_game_keyboard_snapshot(&before) =>
+            {
+                // Same pinned translator, matching original device and binding
+                // lifetime; a duplicate physical Down has no new M13 sequence.
+                // The immutable pre-admission generation prevents cross-press
+                // resurrection after an original Up followed by a new Down.
+                preserve_prior_held_permission = match (
+                    self.state.world.resource::<InputState>(),
+                    self.state.world.resource::<ActionState>(),
+                ) {
+                    (Ok(input), Ok(actions)) => actions
+                        .original_native_held_generation_remains_eligible(
+                            input,
+                            context,
+                            &physical_key,
+                            previous_down_generation,
+                        ),
+                    _ => false,
+                };
+                false
             }
             KeyboardInputOutcome::Suppressed(_) => false,
         };
@@ -3040,6 +3067,12 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     Ok((NativeInputRecipient::RunenUiSlot(slot), epoch)) => {
                         let epoch =
                             epoch.context("selected native UI slot has no binding epoch")?;
+                        let previous_down_generation = self
+                            .state
+                            .world
+                            .resource::<InputState>()
+                            .context("native UI keyboard lacks original physical input owner")?
+                            .keyboard_down_generation_in(context, &physical_key);
                         // The exact same admission order is exercised by
                         // the source-level regression; M13 finality follows.
                         self.admit_native_ui_keyboard_for_recipient(
@@ -3056,6 +3089,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             context,
                             &event,
                             is_synthetic,
+                            previous_down_generation,
                         )
                     }
                     Err(error) => {

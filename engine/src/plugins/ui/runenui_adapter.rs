@@ -486,17 +486,29 @@ fn native_unfocused_keyboard_rejection_witness(
     {
         return false;
     }
-    let keyboard = before.keyboard();
+    native_unfocused_game_keyboard_snapshot(before)
+}
+
+/// Reuse the single authoritative no-focus M13 snapshot for both rejected
+/// original input and an already eligible suppressed duplicate. This is a
+/// read-only proof over RunenUI ownership, not an Engine focus cache.
+pub(crate) fn native_unfocused_game_keyboard_snapshot(
+    snapshot: &InputOwnershipSnapshot,
+) -> bool {
+    if snapshot.status() != runenui_runtime::RuntimeStatus::Running {
+        return false;
+    }
+    let keyboard = snapshot.keyboard();
     keyboard.focused_node().is_none()
         && keyboard.composition_generation().is_none()
         && keyboard.composition_device_id().is_none()
         && keyboard.space_activation_owner().is_none()
         && keyboard.space_activation_device_id().is_none()
-        && before
+        && snapshot
             .surfaces()
             .iter()
             .all(|surface| surface.modal_blocker().is_none())
-        && before
+        && snapshot
             .pointers()
             .iter()
             .all(|pointer| pointer.capture_owner().is_none() && pointer.pressed_owner().is_none())

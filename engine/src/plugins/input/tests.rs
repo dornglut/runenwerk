@@ -1723,3 +1723,51 @@ fn native_ui_pointer_truth_does_not_leak_into_legacy_gameplay_projection() {
             [InputObservation::Contact(_)]
         )));
 }
+
+#[test]
+fn native_duplicate_retains_only_eligible_same_source_down_generation() {
+    let mut input = InputState::new();
+    let mut actions = ActionState::new();
+    let a = InputContext::new(InputSourceId::new(177), Some(InputDeviceId::new(31)));
+    let b = InputContext::new(InputSourceId::new(178), Some(InputDeviceId::new(32)));
+    let key = physical_key(KeyCode::KeyW);
+    assert!(!actions.original_native_held_generation_remains_eligible(
+        &input, a, &key, None
+    ));
+    input.handle_normalized_keyboard(a, &normalized_key(DigitalState::Pressed));
+    let first = input.keyboard_down_generation_in(a, &key);
+    assert!(first.is_some());
+    actions.project(&input);
+    assert!(actions.action_down(action::WORLD_MOVE_UP));
+    assert!(actions.original_native_held_generation_remains_eligible(
+        &input, a, &key, first
+    ));
+    assert!(!actions.original_native_held_generation_remains_eligible(
+        &input, b, &key, first
+    ));
+    // Actual neutral repeated observation does not mint a second Down.
+    let mut repeat = normalized_key(DigitalState::Pressed);
+    repeat.repeat = true;
+    input.handle_normalized_keyboard(a, &repeat);
+    assert!(actions.original_native_held_generation_remains_eligible(
+        &input, a, &key, first
+    ));
+    actions.revoke_source_keyboard_for_ui_ownership(&input, a.source);
+    assert!(!actions.action_down(action::WORLD_MOVE_UP));
+    assert!(!actions.original_native_held_generation_remains_eligible(
+        &input, a, &key, first
+    ));
+    // Only a genuine Up followed by a fresh Down may create a new eligible
+    // generation, and it can never match the previously retained generation.
+    input.handle_normalized_keyboard(a, &normalized_key(DigitalState::Released));
+    actions.project(&input);
+    input.handle_normalized_keyboard(a, &normalized_key(DigitalState::Pressed));
+    let next = input.keyboard_down_generation_in(a, &key);
+    assert_ne!(next, first);
+    assert!(!actions.original_native_held_generation_remains_eligible(
+        &input, a, &key, first
+    ));
+    assert!(actions.original_native_held_generation_remains_eligible(
+        &input, a, &key, next
+    ));
+}

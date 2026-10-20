@@ -640,6 +640,22 @@ impl ActionState {
         self.recompute_action_down_states(input);
     }
 
+    /// A suppressed duplicate original Down may preserve only its previously
+    /// eligible, same-source genuine physical generation. This observation
+    /// cannot grant permission or resurrect a revoked keyboard lifetime.
+    pub(crate) fn original_native_held_generation_remains_eligible(
+        &self,
+        input: &InputState,
+        context: InputContext,
+        key: &PhysicalKeyIdentity,
+        previous_generation: Option<u64>,
+    ) -> bool {
+        previous_generation.is_some_and(|generation| {
+            input.keyboard_down_generation_in(context, key) == Some(generation)
+                && self.eligible_held_key(input, context, key)
+        })
+    }
+
     fn keyboard_generation_eligible(
         &self,
         context: InputContext,
