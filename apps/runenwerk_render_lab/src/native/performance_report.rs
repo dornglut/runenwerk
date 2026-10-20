@@ -1,8 +1,8 @@
 //! Read-only NP1 reduction of the Render owner's bounded frame-history snapshot.
 //! This is a Render Lab output format, not another recording/timing authority.
 
-use super::*;
 use super::temporal_quality::{RenderLabTemporalQualityGpuEvidence, temporal_quality_gpu_evidence};
+use super::*;
 use engine::plugins::render::inspect::{
     RenderFrameHistoryState, RenderFrameObservation, RenderGpuTimingCapability,
     RenderGpuTimingDiagnostic, RenderTimingSource,
@@ -213,9 +213,18 @@ fn stages(frame: &RenderFrameObservation) -> BTreeMap<&'static str, Option<f32>>
         ("renderer.preflight_ms", r.preflight_ms),
         ("renderer.flow_encode_ms", r.flow_encode_ms),
         ("renderer.encode_submit_ms", r.encode_submit_ms),
-        ("renderer.encode_submit_ms.gpu_graph_build_ms", r.gpu_graph_build_ms),
-        ("renderer.encode_submit_ms.gpu_prepare_submission_ms", r.gpu_prepare_submission_ms),
-        ("renderer.encode_submit_ms.gpu_submit_prepared_ms", r.gpu_submit_prepared_ms),
+        (
+            "renderer.encode_submit_ms.gpu_graph_build_ms",
+            r.gpu_graph_build_ms,
+        ),
+        (
+            "renderer.encode_submit_ms.gpu_prepare_submission_ms",
+            r.gpu_prepare_submission_ms,
+        ),
+        (
+            "renderer.encode_submit_ms.gpu_submit_prepared_ms",
+            r.gpu_submit_prepared_ms,
+        ),
     ]
     .into_iter()
     .map(|(name, ms)| (name, valid_duration(ms)))
@@ -490,7 +499,13 @@ mod tests {
         history: &RenderFrameHistoryState,
         policy: RenderFrameObservationPolicyResource,
     ) -> PerformanceReport {
-        build_report(history, None, FramePacingMode::ContinuousUncapped, policy, None)
+        build_report(
+            history,
+            None,
+            FramePacingMode::ContinuousUncapped,
+            policy,
+            None,
+        )
     }
 
     #[test]
