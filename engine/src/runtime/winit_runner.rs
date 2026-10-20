@@ -491,11 +491,7 @@ impl WinitRunner {
         Ok(())
     }
 
-    fn apply_native_focus_change(
-        &mut self,
-        window: NativeWindowId,
-        focused: bool,
-    ) -> Result<()> {
+    fn apply_native_focus_change(&mut self, window: NativeWindowId, focused: bool) -> Result<()> {
         if !focused {
             // Without this reservation, a full journal can reject physical
             // focus loss after UI translators already issued their Cancels.
@@ -5189,7 +5185,10 @@ mod tests {
             .expect("bounded native journal");
         for _ in 0..4094 {
             journal
-                .publish(PlatformWindowEvent::new(window, PlatformEvent::RedrawRequested))
+                .publish(PlatformWindowEvent::new(
+                    window,
+                    PlatformEvent::RedrawRequested,
+                ))
                 .expect("fill journal without overflowing it");
         }
         assert_eq!(journal.events().len(), 4095);
