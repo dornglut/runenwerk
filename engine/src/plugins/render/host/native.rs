@@ -110,6 +110,8 @@ pub(crate) enum SecondaryRetireError {
     PhysicalDetachRefused { surface: RenderSurfaceId },
     #[error("secondary Render surface {surface:?} has no logical record")]
     MissingRenderRecord { surface: RenderSurfaceId },
+    #[error("active Render integration has no surface registry for secondary retirement")]
+    MissingRenderRegistry,
 }
 
 /// A failed physical detach MUST leave the logical Render reservation intact.
@@ -159,7 +161,11 @@ fn try_retire_secondary_with(
         return Err(SecondaryRetireError::PrimaryWindow);
     }
     let Some(registry) = world.resource::<RenderSurfaceRegistryResource>().ok() else {
-        return Ok(SecondaryRetireOutcome::NoAttachment);
+        return if render_integration_is_active(world) || world.has_resource::<Gfx>() {
+            Err(SecondaryRetireError::MissingRenderRegistry)
+        } else {
+            Ok(SecondaryRetireOutcome::NoAttachment)
+        };
     };
     let Some(surface) = registry.surface_for_native_window(native_window_id) else {
         return Ok(SecondaryRetireOutcome::NoAttachment);
@@ -231,6 +237,17 @@ mod tests {
         assert_eq!(
             try_retire_secondary(app.world_mut(), NativeWindowId::primary()),
             Err(SecondaryRetireError::PrimaryWindow)
+        );
+    }
+
+    #[test]
+    fn active_render_missing_registry_cannot_masquerade_as_noop() {
+        let mut app = App::new();
+        app.world_mut()
+            .insert_resource(super::super::plugin::RenderIntegrationActivation);
+        assert_eq!(
+            try_retire_secondary(app.world_mut(), secondary_window(2)),
+            Err(SecondaryRetireError::MissingRenderRegistry)
         );
     }
 
