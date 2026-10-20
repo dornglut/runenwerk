@@ -416,7 +416,7 @@ impl WinitRunner {
         let window = match self.window_realizer.realize_secondary(event_loop, &request) {
             Ok(window) => window,
             Err(err) => {
-                self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"));
+                self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"))?;
                 return Ok(());
             }
         };
@@ -430,7 +430,7 @@ impl WinitRunner {
             request.size_px,
             realized_size_px,
         ) {
-            self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"));
+            self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"))?;
             return Ok(());
         }
 
@@ -447,7 +447,11 @@ impl WinitRunner {
                 );
             });
         if let Err(err) = logical_commit {
-            render_native_host::rollback_secondary(&mut self.state.world, request.native_window_id);
+            render_native_host::try_rollback_secondary(
+                &mut self.state.world,
+                request.native_window_id,
+            )
+            .context("secondary correlation rollback was refused")?;
             return Err(err);
         }
 
@@ -462,16 +466,25 @@ impl WinitRunner {
         &mut self,
         native_window_id: NativeWindowId,
         reason: impl Into<String>,
-    ) {
-        render_native_host::rollback_secondary(&mut self.state.world, native_window_id);
-        if let Ok(registry) = self
+    ) -> Result<()> {
+        render_native_host::try_rollback_secondary(&mut self.state.world, native_window_id)
+            .context("secondary creation rollback was refused")?;
+        let registry = self
             .state
             .world
             .resource_mut::<WindowStateRegistryResource>()
-        {
-            self.window_realizer
-                .mark_creation_failed(registry, native_window_id, reason);
-        }
+            .context("native Host window registry is unavailable")?;
+        self.window_realizer
+            .mark_creation_failed(registry, native_window_id, reason);
+        Ok(())
+    }
+
+    /// Explicit Render handoff must succeed before Input or native-window retirement.
+    fn authorize_secondary_close(&mut self, native_window_id: NativeWindowId) -> Result<()> {
+        render_native_host::try_retire_secondary(&mut self.state.world, native_window_id)
+            .context("secondary physical Render surface retirement was refused")?;
+        self.retire_window_input_source(native_window_id)?;
+        Ok(())
     }
 
     fn dispatch_native_window_event(&mut self, window: &Window, event: &WindowEvent) {
@@ -510,8 +523,7 @@ impl WinitRunner {
                     event_loop.exit();
                     return Ok(());
                 }
-                self.retire_window_input_source(native_window_id)?;
-                render_native_host::retire_secondary(&mut self.state.world, native_window_id);
+                self.authorize_secondary_close(native_window_id)?;
                 if let Ok(window_registry) = self
                     .state
                     .world
@@ -1392,7 +1404,9 @@ mod tests {
             .expect("window registry should exist")
             .request_window("Secondary", (900, 600));
 
-        runner.mark_window_creation_failed(request.native_window_id, "test realization failure");
+        runner
+            .mark_window_creation_failed(request.native_window_id, "test realization failure")
+            .unwrap();
 
         let windows = runner
             .state
@@ -1408,6 +1422,119 @@ mod tests {
         assert!(
             runner.window_realizer.realized_windows().is_empty(),
             "failed realization must not publish physical correlation"
+        );
+    }
+
+    #[test]
+    fn refused_secondary_close_preserves_host_identity_and_redraw() {
+        use crate::plugins::render::host::{
+            RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+        };
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.init_resource::<RenderSurfaceRegistryResource>();
+        let requested = runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .unwrap()
+            .request_window("secondary", (640, 480));
+        let secondary = requested.native_window_id;
+        let id = runner
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .reserve_surface_for_native_window(secondary, (640, 480));
+        runner
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .confirm_surface_attachment(id, secondary, (640, 480))
+            .unwrap();
+        runner.owned_redraws.insert(secondary);
+
+        let error = runner
+            .authorize_secondary_close(secondary)
+            .expect_err("an attached surface without GPU must fail closed");
+        assert!(format!("{error:#}").contains("no GPU attachment"));
+        assert!(runner.owned_redraws.contains(&secondary));
+        assert!(runner
+            .state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .unwrap()
+            .record(secondary)
+            .is_some());
+        let render = runner
+            .state
+            .world
+            .resource::<RenderSurfaceRegistryResource>()
+            .unwrap();
+        assert_eq!(render.surface_for_native_window(secondary), Some(id));
+        assert_eq!(
+            render.record(id).map(|record| record.lifecycle_state),
+            Some(RenderSurfaceLifecycleState::Attached)
+        );
+        assert!(
+            !runner
+                .window_realizer
+                .realized_windows()
+                .iter()
+                .any(|(_, id, _)| *id == secondary)
+        );
+    }
+
+    #[test]
+    fn creation_failure_cannot_discard_unresolved_render_attachment() {
+        use crate::plugins::render::host::RenderSurfaceRegistryResource;
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.init_resource::<RenderSurfaceRegistryResource>();
+        let request = runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .unwrap()
+            .request_window("secondary", (640, 480));
+        let surface = runner
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .reserve_surface_for_native_window(request.native_window_id, (640, 480));
+        runner
+            .state
+            .world
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .confirm_surface_attachment(
+                surface,
+                request.native_window_id,
+                (640, 480),
+            )
+            .unwrap();
+        assert!(runner
+            .mark_window_creation_failed(request.native_window_id, "injected failure")
+            .is_err());
+        assert_ne!(
+            runner
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .unwrap()
+                .record(request.native_window_id)
+                .unwrap()
+                .lifecycle_state,
+            crate::runtime::NativeWindowLifecycleState::CreationFailed
+        );
+        assert_eq!(
+            runner
+                .state
+                .world
+                .resource::<RenderSurfaceRegistryResource>()
+                .unwrap()
+                .surface_for_native_window(request.native_window_id),
+            Some(surface)
         );
     }
 
