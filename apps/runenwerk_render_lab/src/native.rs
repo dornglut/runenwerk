@@ -235,7 +235,9 @@ fn run_native_measurement_with_report(
     let radiance_target_size_px = validate_measurement_radiance_size(radiance_target_size_px)?;
     if let Some(path) = performance_report_path.as_ref() {
         if path.as_os_str().is_empty() || *path == output_path {
-            bail!("performance report requires a nonempty path distinct from RL2 measurement output");
+            bail!(
+                "performance report requires a nonempty path distinct from RL2 measurement output"
+            );
         }
     }
     run_native_with_measurement(Some(RenderLabMeasurementConfig {
@@ -1506,7 +1508,8 @@ mod tests {
             &[],
             RenderGpuTimingCapability::Unsupported,
         );
-        let artifact_dir = std::env::temp_dir().join(format!("runenwerk_np1_close_{}", std::process::id()));
+        let artifact_dir =
+            std::env::temp_dir().join(format!("runenwerk_np1_close_{}", std::process::id()));
         let gpu_output = artifact_dir.join("gpu-v2.json");
         let performance_output = artifact_dir.join("performance-v1.json");
         let mut measurement = RenderLabMeasurementConfig {
@@ -1546,7 +1549,10 @@ mod tests {
         assert!(gpu_json.get("per_surface_extent").is_none());
         assert_eq!(performance_json["schema_version"], 1);
         assert_eq!(performance_json["retained_frame_count"], 1);
-        assert_eq!(performance_json["configuration"]["host_pacing_target_fps"], 60);
+        assert_eq!(
+            performance_json["configuration"]["host_pacing_target_fps"],
+            60
+        );
         assert_eq!(
             performance_json["per_surface_extent"][0]["composed_gpu"]["eligible_count"],
             0

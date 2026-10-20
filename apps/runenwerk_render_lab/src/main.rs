@@ -360,9 +360,9 @@ fn parse_command(args: impl IntoIterator<Item = OsString>) -> anyhow::Result<Com
                 if performance_report_path.is_some() {
                     anyhow::bail!("duplicate --performance-report argument");
                 }
-                let value = args.next().ok_or_else(|| {
-                    anyhow::anyhow!("--performance-report requires a file path")
-                })?;
+                let value = args
+                    .next()
+                    .ok_or_else(|| anyhow::anyhow!("--performance-report requires a file path"))?;
                 if value.is_empty() || value.to_string_lossy().starts_with("--") {
                     anyhow::bail!("--performance-report requires a nonempty file path");
                 }
@@ -1059,9 +1059,25 @@ mod tests {
         );
         for bad_args in [
             vec!["--rl2-measure", "--performance-report"],
-            vec!["--rl2-measure", "--performance-report", "--submitted-frames", "1"],
-            vec!["--rl2-measure", "gpu.json", "--performance-report", "gpu.json"],
-            vec!["--rl2-measure", "--performance-report", "a.json", "--performance-report", "b.json"],
+            vec![
+                "--rl2-measure",
+                "--performance-report",
+                "--submitted-frames",
+                "1",
+            ],
+            vec![
+                "--rl2-measure",
+                "gpu.json",
+                "--performance-report",
+                "gpu.json",
+            ],
+            vec![
+                "--rl2-measure",
+                "--performance-report",
+                "a.json",
+                "--performance-report",
+                "b.json",
+            ],
         ] {
             assert!(parse_command(args(&bad_args)).is_err(), "{bad_args:?}");
         }

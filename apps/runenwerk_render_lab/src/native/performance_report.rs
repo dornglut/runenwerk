@@ -570,12 +570,24 @@ mod tests {
         let policy = RenderFrameObservationPolicyResource::enabled(2).with_sampling(2);
         let mut history = RenderFrameHistoryState::default();
         for i in 0..6 {
-            add(&mut history, policy, i, 1, if i == 4 { 1024 } else { 800 }, 5.0);
+            add(
+                &mut history,
+                policy,
+                i,
+                1,
+                if i == 4 { 1024 } else { 800 },
+                5.0,
+            );
         }
         history.observe_gpu_pass_timing_evidence(
             policy,
             &[RenderPassTimingEvidence::gpu_sample(
-                None, Some(1), "f", "p", "compute", 1.0,
+                None,
+                Some(1),
+                "f",
+                "p",
+                "compute",
+                1.0,
             )],
         );
         history.observe_composed_gpu_timing_evidence(
@@ -590,7 +602,12 @@ mod tests {
         assert_eq!(report.drop_stats.dropped_correlated_evidence, 1);
         assert_eq!(report.per_surface_extent.len(), 2);
         assert_eq!(report.samples[1].output_size_px, [1024, 600]);
-        assert!(report.samples.iter().all(|s| s.composed_gpu.duration_ms.is_none()));
+        assert!(
+            report
+                .samples
+                .iter()
+                .all(|s| s.composed_gpu.duration_ms.is_none())
+        );
     }
 
     #[test]
@@ -601,8 +618,18 @@ mod tests {
         add(&mut history, policy, 1, 1, 800, 4.0);
         let report = build(&history, policy);
         let metric = &report.per_surface_extent[0].cpu_stages["renderer.flow_encode_ms"];
-        assert_eq!((metric.observed_count, metric.eligible_count, metric.missing_count), (2, 1, 1));
-        assert_eq!(report.samples[0].cpu_stages_ms["renderer.flow_encode_ms"], None);
+        assert_eq!(
+            (
+                metric.observed_count,
+                metric.eligible_count,
+                metric.missing_count
+            ),
+            (2, 1, 1)
+        );
+        assert_eq!(
+            report.samples[0].cpu_stages_ms["renderer.flow_encode_ms"],
+            None
+        );
         assert!(serde_json::to_vec(&report).is_ok());
     }
 
@@ -613,7 +640,10 @@ mod tests {
         let report = build(&history, policy);
         let json = serde_json::to_value(&report).unwrap();
         assert_eq!(json["schema_version"], 1);
-        assert_eq!(json["configuration"]["host_pacing_mode"], "continuous_uncapped");
+        assert_eq!(
+            json["configuration"]["host_pacing_mode"],
+            "continuous_uncapped"
+        );
         assert_eq!(json["configuration"]["present_applied"], "unknown");
         assert!(json.get("fps").is_none());
         assert_eq!(json["per_surface_extent"].as_array().unwrap().len(), 0);
