@@ -6257,7 +6257,8 @@ mod tests {
                 .world
                 .resource::<InputState>()
                 .expect("neutral input")
-                .physical_key_down_in(original, &key),
+                .keyboard_down_generation_in(original, &key)
+                .is_some(),
             "physical window key must survive raw source retirement"
         );
         assert!(
