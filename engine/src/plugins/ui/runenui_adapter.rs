@@ -3016,7 +3016,10 @@ mod tests {
             .expect("focused text owner")
             .state()
             .text;
-        assert_eq!(edited, "漢字éΩx", "one keyboard text input, one inserted character");
+        assert_eq!(
+            edited, "漢字éΩx",
+            "one keyboard text input, one inserted character"
+        );
     }
 
     #[test]

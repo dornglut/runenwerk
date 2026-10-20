@@ -1070,7 +1070,7 @@ impl WinitRunner {
                                                     UiInputConflict::Unclaimed
                                                         | UiInputConflict::ObservedNonexclusive
                                                 )
-                                            },
+                                            }
                                             _ => {
                                                 m13_failure = Some(anyhow!(
                                                     "native keyboard lacked exact committed M13 settlement: {evidence:?}"
