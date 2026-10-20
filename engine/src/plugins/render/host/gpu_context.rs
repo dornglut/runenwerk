@@ -309,9 +309,7 @@ impl RenderGpuContext {
                             applied_revision: 0,
                         },
                     );
-                    return Err(
-                        RenderSurfacePresentationError::Gpu(detach_error.category()).into(),
-                    );
+                    return Err(RenderSurfacePresentationError::Gpu(detach_error.category()).into());
                 }
                 return Err(error.into());
             }
@@ -667,7 +665,7 @@ mod tests {
 
     #[test]
     fn strict_pre_attach_rejection_is_visible_and_retirement_hides_physical_state() {
-        use super::super::{RenderSurfaceRegistryResource, RenderSurfacePresentationAttempt};
+        use super::super::{RenderSurfacePresentationAttempt, RenderSurfaceRegistryResource};
         use crate::runtime::NativeWindowId;
         use runen_gpu::GpuSurfacePresentMode;
 
