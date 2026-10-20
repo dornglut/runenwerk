@@ -237,7 +237,7 @@ mod tests {
         use std::os::unix::ffi::OsStringExt;
         let raw = OsString::from_vec(vec![0xff]);
         let (_, rest) = NativeHostLaunchOverrides::extract([raw.clone()]).unwrap();
-        assert_eq!(rest, [raw.clone()]);
+        assert_eq!(rest.as_slice(), std::slice::from_ref(&raw));
         assert!(
             NativeHostLaunchOverrides::extract([OsString::from("--host-pacing"), raw]).is_err()
         );

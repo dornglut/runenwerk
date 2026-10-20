@@ -116,7 +116,6 @@ impl BoidsSourcePacing {
 pub(crate) fn run(rule: BoidsRuleFamily, host: NativeHostLaunchOverrides) -> Result<()> {
     let mut app = App::new();
     app.set_title(rule.window_title());
-    host.apply_to(&mut app)?;
     app.add_plugins(default_plugins());
     app.add_plugin(ScenePlugin);
     app.add_plugin(RenderPlugin);
@@ -185,6 +184,8 @@ pub(crate) fn run(rule: BoidsRuleFamily, host: NativeHostLaunchOverrides) -> Res
     } else {
         None
     };
+    // Launch intent must win over all explicit product/plugin defaults.
+    host.apply_to(&mut app)?;
     app.run()?;
     if let Some(proof) = smoke {
         super::smoke::assert_finished(&proof)?;
