@@ -455,6 +455,45 @@ impl WinitRunner {
         self.apply_event_for_native_window(NativeWindowId::primary(), event)
     }
 
+    /// A native resize or DPI callback is one original journal occurrence.
+    /// Preserve the UI pointer lifetime if admission would fail: cancelling
+    /// the old displayed stream before reserving this observation would
+    /// discard framework state while the Host still records old geometry.
+    fn apply_native_geometry_change(
+        &mut self,
+        window: NativeWindowId,
+        event: PlatformEvent,
+    ) -> Result<()> {
+        anyhow::ensure!(
+            matches!(
+                &event,
+                PlatformEvent::Resized { .. } | PlatformEvent::ScaleFactorChanged { .. }
+            ),
+            "native geometry boundary requires an original size or scale event"
+        );
+        self.state
+            .world
+            .resource::<WindowStateRegistryResource>()?
+            .record(window)
+            .context("native geometry event targets an unknown window")?;
+        if window == NativeWindowId::primary() {
+            self.state
+                .world
+                .resource::<PrimaryPresentationMetricsResource>()
+                .context("native geometry has no primary presentation authority")?;
+        }
+        self.state
+            .world
+            .resource_mut::<PlatformWindowEventQueueResource>()?
+            .reserve_native_group(std::slice::from_ref(&event))?;
+        // This synchronous callback cannot admit another original event
+        // between this reservation and the actual canonical journal commit.
+        let mouse = self.cancel_native_ui_mouse(window);
+        let touch = self.cancel_native_ui_touch(window);
+        self.apply_event_for_native_window(window, event)?;
+        mouse.and(touch)
+    }
+
     /// Reserve the complete original focus/continuity occurrence before any
     /// derived M13 cancellation can mutate a framework-owned input lifetime.
     /// The native callback is synchronous: no other journal producer may
@@ -3289,31 +3328,23 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             WindowEvent::Focused(focused) => {
                 self.apply_native_focus_change(native_window_id, focused)
             }
-            WindowEvent::Resized(size) => {
-                let mouse = self.cancel_native_ui_mouse(native_window_id);
-                let touch = self.cancel_native_ui_touch(native_window_id);
-                self.apply_event_for_native_window(
-                    native_window_id,
-                    PlatformEvent::Resized {
-                        width: size.width,
-                        height: size.height,
-                    },
-                )?;
-                mouse.and(touch)
-            }
+            WindowEvent::Resized(size) => self.apply_native_geometry_change(
+                native_window_id,
+                PlatformEvent::Resized {
+                    width: size.width,
+                    height: size.height,
+                },
+            ),
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                let mouse = self.cancel_native_ui_mouse(native_window_id);
-                let touch = self.cancel_native_ui_touch(native_window_id);
                 let size = window.inner_size();
-                self.apply_event_for_native_window(
+                self.apply_native_geometry_change(
                     native_window_id,
                     PlatformEvent::ScaleFactorChanged {
                         scale_factor,
                         width: size.width,
                         height: size.height,
                     },
-                )?;
-                mouse.and(touch)
+                )
             }
             WindowEvent::KeyboardInput {
                 device_id,
@@ -6974,6 +7005,190 @@ mod tests {
                 .resource::<PlatformWindowEventQueueResource>()
                 .is_ok()
         );
+    }
+
+    #[test]
+    fn saturated_native_geometry_preserves_selected_pointer_lifetimes_until_admission() {
+        use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+
+        struct GeometryProbe;
+        impl runenui_core::UiApp for GeometryProbe {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::text("native geometry admission")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        for scale_change in [false, true] {
+            let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+            runner.state.world.insert_resource(InputState::new());
+            let window = NativeWindowId::primary();
+            let backend_device = winit::event::DeviceId::dummy();
+            let context = runner
+                .native_input_mut()
+                .window_context(window, backend_device)
+                .expect("checked original window source and device");
+            let device = WinitRunner::native_ui_device(context).expect("checked UI input device");
+            let mut slots = UiRuntimeSlotsResource::default();
+            let slot = slots
+                .mount_app::<GeometryProbe>(
+                    UiTypedScreenId::new("native.geometry.admission"),
+                    (),
+                    &UiRuntimeFontConfiguration::default(),
+                )
+                .slot_id()
+                .expect("real typed RunenUI owner");
+            let mut recipients = UiNativeInputRecipientsResource::default();
+            recipients
+                .bind(
+                    window,
+                    NativeInputRecipient::RunenUiSlot(slot),
+                    runner
+                        .state
+                        .world
+                        .resource::<WindowStateRegistryResource>()
+                        .expect("real native window"),
+                    &mut slots,
+                )
+                .expect("selected original pointer recipient");
+            let epoch = recipients
+                .binding_epoch_for_window(window)
+                .expect("live original binding epoch");
+            let scope = slots
+                .input_ownership(slot)
+                .expect("real M13 scope")
+                .scope()
+                .clone();
+            runner.state.world.insert_resource(slots);
+            runner.state.world.insert_resource(recipients);
+            runner.native_ui_mice.insert(
+                window,
+                NativeUiMouseTranslator {
+                    recipient: slot,
+                    source: context.source,
+                    backend_device,
+                    device,
+                    binding_epoch: epoch,
+                    scope: scope.clone(),
+                    mouse: MouseInputState::default(),
+                },
+            );
+            runner.native_ui_touches.insert(
+                window,
+                NativeUiTouchTranslator {
+                    recipient: slot,
+                    source: context.source,
+                    binding_epoch: epoch,
+                    scope,
+                    backend_devices: HashSet::new(),
+                    touch: TouchInputState::default(),
+                },
+            );
+            let event = if scale_change {
+                PlatformEvent::ScaleFactorChanged {
+                    scale_factor: 2.0,
+                    width: 1600,
+                    height: 900,
+                }
+            } else {
+                PlatformEvent::Resized {
+                    width: 1600,
+                    height: 900,
+                }
+            };
+            let journal = runner
+                .state
+                .world
+                .resource_mut::<PlatformWindowEventQueueResource>()
+                .expect("bounded original native journal");
+            for _ in 0..4096 {
+                journal
+                    .publish(PlatformWindowEvent::new(
+                        window,
+                        PlatformEvent::RedrawRequested,
+                    ))
+                    .expect("fill one exact frame admission limit");
+            }
+            assert!(
+                runner.apply_native_geometry_change(window, event.clone()).is_err(),
+                "original geometry observation cannot cancel UI input before journal admission"
+            );
+            assert_eq!(
+                runner
+                    .state
+                    .world
+                    .resource::<PlatformWindowEventQueueResource>()
+                    .expect("original journal")
+                    .events()
+                    .len(),
+                4096,
+                "rejected geometry must not append a partial journal event"
+            );
+            assert!(
+                runner.native_ui_mice.contains_key(&window)
+                    && runner.native_ui_touches.contains_key(&window),
+                "unadmitted resize or scale cannot retire the original M13 pointer translators"
+            );
+            let native_window = runner
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .expect("native window")
+                .record(window)
+                .expect("original window identity");
+            assert_eq!(native_window.size_px, (1280, 720));
+            assert_eq!(native_window.scale_factor, 1.0);
+            assert_eq!(
+                runner
+                    .state
+                    .world
+                    .resource::<PrimaryPresentationMetricsResource>()
+                    .expect("original primary metrics")
+                    .size_px(),
+                (1280, 720)
+            );
+            runner
+                .state
+                .world
+                .resource_mut::<PlatformWindowEventQueueResource>()
+                .expect("original journal")
+                .retire_frame();
+            runner
+                .apply_native_geometry_change(window, event)
+                .expect("admitted original geometry retires stale pointer streams");
+            assert!(
+                !runner.native_ui_mice.contains_key(&window)
+                    && !runner.native_ui_touches.contains_key(&window),
+                "admitted new geometry invalidates old pointer translator lifetimes"
+            );
+            let changed = runner
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .expect("window owner")
+                .record(window)
+                .expect("same original native window");
+            assert_eq!(changed.size_px, (1600, 900));
+            assert_eq!(changed.scale_factor, if scale_change { 2.0 } else { 1.0 });
+            assert_eq!(
+                runner
+                    .state
+                    .world
+                    .resource::<PrimaryPresentationMetricsResource>()
+                    .expect("primary presentation owner")
+                    .size_px(),
+                (1600, 900)
+            );
+        }
     }
 
     #[test]
