@@ -455,6 +455,86 @@ impl WinitRunner {
         self.apply_event_for_native_window(NativeWindowId::primary(), event)
     }
 
+    /// Reserve the complete original focus/continuity occurrence before any
+    /// derived M13 cancellation can mutate a framework-owned input lifetime.
+    /// The native callback is synchronous: no other journal producer may
+    /// interleave between this preflight and the final original group.
+    fn preflight_native_focus_loss(&mut self, window: NativeWindowId) -> Result<()> {
+        let original_source = self.native_input().window_source_context(window);
+        self.state
+            .world
+            .resource::<WindowStateRegistryResource>()?
+            .record(window)
+            .context("native focus-loss preflight targets an unknown window")?;
+        if original_source.is_some() {
+            self.state
+                .world
+                .resource::<InputState>()
+                .context("native focus-loss preflight has no physical input owner")?;
+        }
+        let journal = self
+            .state
+            .world
+            .resource_mut::<PlatformWindowEventQueueResource>()
+            .context("native focus-loss preflight has no original journal")?;
+        if let Some(context) = original_source {
+            journal.reserve_native_group(&[
+                PlatformEvent::Focused { focused: false },
+                PlatformEvent::InputContinuityLost {
+                    context,
+                    loss: ContinuityLoss::Source,
+                },
+            ])?;
+        } else {
+            journal.reserve_native_group(&[PlatformEvent::Focused { focused: false }])?;
+        }
+        Ok(())
+    }
+
+    fn apply_native_focus_change(
+        &mut self,
+        window: NativeWindowId,
+        focused: bool,
+    ) -> Result<()> {
+        if !focused {
+            // Without this reservation, a full journal can reject physical
+            // focus loss after UI translators already issued their Cancels.
+            self.preflight_native_focus_loss(window)?;
+        }
+        // Preserve the accepted framework order: pointer cancellation first,
+        // then keyboard cancellation while composition is active, then IME.
+        let pointer_cancellation = if !focused {
+            let mouse = self.cancel_native_ui_mouse(window);
+            let touch = self.cancel_native_ui_touch(window);
+            mouse.and(touch)
+        } else {
+            Ok(())
+        };
+        let cancellation = if !focused {
+            match self.native_input_recipient(window) {
+                Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
+                    let keys = self.cancel_native_ui_keyboard(window, slot);
+                    let composition = self.route_ui_ime_finish(slot, true);
+                    keys.and(composition)
+                }
+                Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => Ok(()),
+                Err(error)
+                    if error.downcast_ref::<NativeInputRecipientError>()
+                        == Some(&NativeInputRecipientError::MissingRecipient) =>
+                {
+                    Ok(())
+                }
+                Err(error) => Err(error),
+            }
+        } else {
+            Ok(())
+        };
+        // Once the original group is admitted, any framework failure remains
+        // fatal, but may not suppress physical continuity or game revocation.
+        self.apply_window_focus_event(window, focused)?;
+        pointer_cancellation.and(cancellation)
+    }
+
     fn apply_window_focus_event(
         &mut self,
         native_window_id: NativeWindowId,
@@ -3211,40 +3291,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 self.apply_event_for_native_window(native_window_id, PlatformEvent::CloseRequested)
             }
             WindowEvent::Focused(focused) => {
-                // Attempt framework cancellation before the original focus
-                // transition, but report failure only after its mandatory
-                // physical continuity and game-action revocation complete.
-                let pointer_cancellation = if !focused {
-                    let mouse = self.cancel_native_ui_mouse(native_window_id);
-                    let touch = self.cancel_native_ui_touch(native_window_id);
-                    mouse.and(touch)
-                } else {
-                    Ok(())
-                };
-                let cancellation = if !focused {
-                    match self.native_input_recipient(native_window_id) {
-                        Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
-                            // Preserve pinned reference ordering: cancel
-                            // native keyboard contributors while composition
-                            // is still active, then cancel that generation.
-                            let keys = self.cancel_native_ui_keyboard(native_window_id, slot);
-                            let composition = self.route_ui_ime_finish(slot, true);
-                            keys.and(composition)
-                        }
-                        Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => Ok(()),
-                        Err(error)
-                            if error.downcast_ref::<NativeInputRecipientError>()
-                                == Some(&NativeInputRecipientError::MissingRecipient) =>
-                        {
-                            Ok(())
-                        }
-                        Err(error) => Err(error),
-                    }
-                } else {
-                    Ok(())
-                };
-                self.apply_window_focus_event(native_window_id, focused)?;
-                pointer_cancellation.and(cancellation)
+                self.apply_native_focus_change(native_window_id, focused)
             }
             WindowEvent::Resized(size) => {
                 let mouse = self.cancel_native_ui_mouse(native_window_id);
@@ -5052,7 +5099,7 @@ mod tests {
         );
 
         runner
-            .apply_window_focus_event(NativeWindowId::primary(), false)
+            .apply_native_focus_change(NativeWindowId::primary(), false)
             .expect("focus loss should apply");
 
         assert!(
@@ -5069,6 +5116,124 @@ mod tests {
                 .window_source_context(NativeWindowId::primary())
                 .map(|value| value.source),
             Some(context.source)
+        );
+    }
+
+    #[test]
+    fn saturated_focus_loss_does_not_partially_cancel_a_selected_ui_keyboard() {
+        use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+
+        struct FocusProbe;
+        impl runenui_core::UiApp for FocusProbe {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::text("focus-loss journal preflight")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        let window = NativeWindowId::primary();
+        let context = runner
+            .native_input_mut()
+            .window_context(window, winit::event::DeviceId::dummy())
+            .expect("checked native physical keyboard identity");
+        runner
+            .apply_event(normalized_shift_press(context))
+            .expect("original Down enters physical state and journal");
+        let device = WinitRunner::native_ui_device(context).expect("checked framework device");
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<FocusProbe>(
+                UiTypedScreenId::new("native.focus.journal.preflight"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("real RunenUI runtime");
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                window,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .expect("original native window"),
+                &mut slots,
+            )
+            .expect("explicit selected native UI recipient");
+        let epoch = recipients
+            .binding_epoch_for_window(window)
+            .expect("checked native binding epoch");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+        runner.native_ui_keyboard_translator(window, slot, context.source, device, epoch);
+
+        // One slot remains, but a focus loss with an original source needs
+        // TWO adjacent records (Focused + physical ContinuityLoss).
+        let journal = runner
+            .state
+            .world
+            .resource_mut::<PlatformWindowEventQueueResource>()
+            .expect("bounded native journal");
+        for _ in 0..4094 {
+            journal
+                .publish(PlatformWindowEvent::new(window, PlatformEvent::RedrawRequested))
+                .expect("fill journal without overflowing it");
+        }
+        assert_eq!(journal.events().len(), 4095);
+        assert!(
+            runner.apply_native_focus_change(window, false).is_err(),
+            "insufficient original journal capacity must reject before M13 cancellation"
+        );
+        assert_eq!(
+            runner
+                .state
+                .world
+                .resource::<PlatformWindowEventQueueResource>()
+                .expect("original journal")
+                .events()
+                .len(),
+            4095,
+            "no partial original focus record may be published"
+        );
+        assert!(
+            runner
+                .native_ui_keyboards
+                .get(&window)
+                .is_some_and(|translator| translator.devices.contains(&device)),
+            "a rejected original focus group cannot prematurely discard the UI keyboard lifetime"
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("physical reducer")
+                .shift_down(),
+            "a rejected original group cannot mutate neutral Down truth"
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .expect("window owner")
+                .record(window)
+                .expect("created window")
+                .focused,
+            "a rejected original group cannot partially update window focus"
         );
     }
 
