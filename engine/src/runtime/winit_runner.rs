@@ -40,8 +40,8 @@ use runenui_core::{
 };
 use runenui_runtime::{UiInputConflict, UiInputFinality};
 use runenui_winit::keyboard_input::{
-    KeyboardDownAdmission, KeyboardDownDecision, KeyboardIngressDiagnostic,
-    KeyboardInputOutcome, KeyboardInputState, NativeKeyTransition,
+    KeyboardDownAdmission, KeyboardDownDecision, KeyboardIngressDiagnostic, KeyboardInputOutcome,
+    KeyboardInputState, NativeKeyTransition,
 };
 use runenui_winit::mouse_input::{MouseButtonOutcome, MouseInputState, TranslatedPointerPoint};
 use runenui_winit::touch_input::TouchInputState;
@@ -906,10 +906,14 @@ impl WinitRunner {
     ) -> Result<()> {
         self.native_ui_keyboards
             .get_mut(&window)
-            .context("original native keyboard translator disappeared before admission acknowledgment")?
+            .context(
+                "original native keyboard translator disappeared before admission acknowledgment",
+            )?
             .keyboard
             .resolve_down_admission(admission, decision)
-            .map_err(|error| anyhow!("original native keyboard admission acknowledgment failed: {error:?}"))
+            .map_err(|error| {
+                anyhow!("original native keyboard admission acknowledgment failed: {error:?}")
+            })
     }
 
     fn route_ui_keyboard(
@@ -1027,7 +1031,9 @@ impl WinitRunner {
                                     .state
                                     .world
                                     .resource_mut::<UiRuntimeSlotsResource>()
-                                    .context("selected UI runtime vanished during original input pump")?;
+                                    .context(
+                                        "selected UI runtime vanished during original input pump",
+                                    )?;
                                 match slots.pump_native_input_records(slot) {
                                     Ok((batch, status)) => {
                                         let evidence = native_keyboard_finality(
@@ -1066,7 +1072,9 @@ impl WinitRunner {
                             .state
                             .world
                             .resource_mut::<UiRuntimeSlotsResource>()
-                            .context("selected UI runtime vanished before rejected-input observation")?
+                            .context(
+                                "selected UI runtime vanished before rejected-input observation",
+                            )?
                             .input_ownership(slot);
                         match after {
                             Ok(after)
@@ -1499,9 +1507,11 @@ impl WinitRunner {
         let cancelled = lifetime
             .keyboard
             .cancel_all(KeyModifiers::NONE, native_keyboard_composition(&before))
-            .map_err(|error| anyhow!(
-                "native keyboard cancellation has unresolved original Down admission: {error:?}"
-            ))?;
+            .map_err(|error| {
+                anyhow!(
+                    "native keyboard cancellation has unresolved original Down admission: {error:?}"
+                )
+            })?;
         for event in cancelled {
             let device = event
                 .device_id()
