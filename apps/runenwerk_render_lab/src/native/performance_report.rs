@@ -10,6 +10,7 @@ use engine::plugins::render::inspect::{
 use engine::runtime::FramePacingMode;
 use serde::Serialize;
 use std::collections::BTreeMap;
+use std::io::Write;
 
 const SCHEMA_VERSION: u32 = 1;
 
@@ -158,7 +159,7 @@ impl DurationAccumulator {
         let eligible_count = self.values.len();
         let median_ms = if eligible_count == 0 {
             None
-        } else if eligible_count % 2 == 0 {
+        } else if eligible_count.is_multiple_of(2) {
             let upper = eligible_count / 2;
             Some(self.values[upper - 1] / 2.0 + self.values[upper] / 2.0)
         } else {
@@ -439,8 +440,19 @@ pub(super) fn write_report(path: &std::path::Path, report: &PerformanceReport) -
     }
     let bytes = serde_json::to_vec_pretty(report)
         .context("serialize native Render Lab performance report")?;
-    std::fs::write(path, bytes)
-        .with_context(|| format!("write Render Lab performance report {}", path.display()))
+    // No overwrite: a differently spelled path, symlink, or hardlink must never
+    // replace the existing schema-v2 artifact or an older performance report.
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .with_context(|| format!("create new Render Lab performance report {}", path.display()))?;
+    if let Err(error) = file.write_all(&bytes).and_then(|()| file.flush()) {
+        drop(file);
+        let _ = std::fs::remove_file(path);
+        return Err(error).with_context(|| format!("write Render Lab performance report {}", path.display()));
+    }
+    Ok(())
 }
 
 pub(super) fn terminal_summary(report: &PerformanceReport) -> String {
@@ -689,6 +701,22 @@ mod tests {
         );
         assert_eq!(nonfinite.state, "invalid_or_missing_sample");
         assert_eq!(nonfinite.duration_ms, None);
+    }
+
+    #[test]
+    fn report_writer_never_overwrites_an_existing_measurement() {
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk_np1_no_overwrite_{}.json",
+            std::process::id()
+        ));
+        std::fs::write(&path, b"existing schema-v2 evidence").unwrap();
+        let report = build(
+            &RenderFrameHistoryState::default(),
+            RenderFrameObservationPolicyResource::enabled(4),
+        );
+        assert!(write_report(&path, &report).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"existing schema-v2 evidence".to_vec());
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

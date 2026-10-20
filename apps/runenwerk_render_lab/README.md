@@ -15,7 +15,9 @@ cargo run --release -p runenwerk_render_lab --bin runenwerk-render-lab -- \
   --radiance-size-px 1280x720
 ~~~
 
-The output files must differ. Omitting `--performance-report` preserves the
+The output files must differ. The optional NP1 report MUST use a new, nonexisting path;
+the writer refuses overwrites, including symlink/hardlink aliases of old artifacts.
+Omitting `--performance-report` preserves the
 existing RL2 schema-v2 artifact and default behavior. Omitting
 `--submitted-frames` preserves interactive close; an explicit positive limit
 must not exceed the Render Lab's retained-history capacity (4096). This is a
