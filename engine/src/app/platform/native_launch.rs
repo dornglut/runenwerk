@@ -68,6 +68,10 @@ impl NativeHostLaunchOverrides {
                 matches!(app.host_selection, AppHostSelection::NativeWindow),
                 "--host-pacing requires a native-window App"
             );
+            ensure!(
+                app.lifecycle.is_configuring(),
+                "--host-pacing requires an App that is still configuring"
+            );
             app.with_frame_pacing(policy);
         }
         Ok(())
@@ -216,6 +220,15 @@ mod tests {
         assert!(app.world().resource::<FramePacingPolicyResource>().is_err());
         let (absent, _) = parse(&[]).unwrap();
         absent.apply_to(&mut app).unwrap();
+    }
+
+    #[test]
+    fn post_configuration_override_cannot_mutate_host_policy() {
+        let (request, _) = parse(&["--host-pacing=uncapped"]).unwrap();
+        let mut app = App::new();
+        app.prepare_lifecycle_for_execution().unwrap();
+        assert!(request.apply_to(&mut app).is_err());
+        assert!(app.world().resource::<FramePacingPolicyResource>().is_err());
     }
 
     #[cfg(unix)]
