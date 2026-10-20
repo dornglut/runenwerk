@@ -1,6 +1,6 @@
 use super::super::render_integration_is_active;
 use super::super::renderer::Gfx;
-use super::{RenderSurfaceId, RenderSurfaceRegistryResource};
+use super::{RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::runtime::NativeWindowId;
 use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
@@ -53,7 +53,8 @@ pub(crate) fn attach_secondary(
         .context("runtime gfx is unavailable")
         .and_then(|gfx| gfx.attach_surface(render_surface_id, window, realized_size_px))
     {
-        rollback_secondary(world, native_window_id);
+        try_rollback_secondary(world, native_window_id)
+            .context("failed to rollback rejected secondary GPU attachment")?;
         return Err(anyhow!("GPU surface attachment failed: {err:#}"));
     }
 
@@ -68,7 +69,8 @@ pub(crate) fn attach_secondary(
             )
         })
     {
-        rollback_secondary(world, native_window_id);
+        try_rollback_secondary(world, native_window_id)
+            .context("failed to rollback rejected secondary surface correlation")?;
         return Err(anyhow!("render surface correlation failed: {err:#}"));
     }
 
@@ -91,40 +93,91 @@ pub(crate) fn project_primary_extent(
         })
 }
 
-pub(crate) fn retire_secondary(
-    world: &mut runen_ecs::World,
-    native_window_id: NativeWindowId,
-) -> bool {
-    if native_window_id == NativeWindowId::primary() {
-        return false;
-    }
-    rollback_secondary(world, native_window_id)
+/// Host-observable outcome: an absent Render surface is a successful no-op.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum SecondaryRetireOutcome {
+    NoAttachment,
+    Retired,
 }
 
-pub(crate) fn rollback_secondary(
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+pub(crate) enum SecondaryRetireError {
+    #[error("primary native window cannot be retired as a secondary")]
+    PrimaryWindow,
+    #[error("attached secondary Render surface {surface:?} has no GPU attachment")]
+    MissingGpuAttachment { surface: RenderSurfaceId },
+    #[error("physical detach refused for secondary Render surface {surface:?}")]
+    PhysicalDetachRefused { surface: RenderSurfaceId },
+}
+
+/// A failed physical detach MUST leave the logical Render reservation intact.
+pub(crate) fn try_retire_secondary(
     world: &mut runen_ecs::World,
     native_window_id: NativeWindowId,
-) -> bool {
-    if native_window_id == NativeWindowId::primary() {
-        return false;
-    }
+) -> std::result::Result<SecondaryRetireOutcome, SecondaryRetireError> {
+    try_retire_secondary_with(world, native_window_id, |world, surface, lifecycle| {
+        match world.resource_mut::<Gfx>() {
+            Ok(gfx) => {
+                if gfx.has_surface(surface) {
+                    if !gfx.detach_surface(surface) {
+                        return Err(SecondaryRetireError::PhysicalDetachRefused { surface });
+                    }
+                } else if lifecycle == RenderSurfaceLifecycleState::Attached {
+                    return Err(SecondaryRetireError::MissingGpuAttachment { surface });
+                }
+            }
+            Err(_) if lifecycle == RenderSurfaceLifecycleState::Attached => {
+                return Err(SecondaryRetireError::MissingGpuAttachment { surface });
+            }
+            Err(_) => {}
+        }
+        Ok(())
+    })
+}
 
-    let render_surface_id = world
+/// Creation rollback and final close use the same idempotent physical handoff.
+pub(crate) fn try_rollback_secondary(
+    world: &mut runen_ecs::World,
+    native_window_id: NativeWindowId,
+) -> std::result::Result<SecondaryRetireOutcome, SecondaryRetireError> {
+    try_retire_secondary(world, native_window_id)
+}
+
+/// Test seam is local: only Render performs the real Gfx operation.
+fn try_retire_secondary_with(
+    world: &mut runen_ecs::World,
+    native_window_id: NativeWindowId,
+    detach: impl FnOnce(
+        &mut runen_ecs::World,
+        RenderSurfaceId,
+        RenderSurfaceLifecycleState,
+    ) -> std::result::Result<(), SecondaryRetireError>,
+) -> std::result::Result<SecondaryRetireOutcome, SecondaryRetireError> {
+    if native_window_id == NativeWindowId::primary() {
+        return Err(SecondaryRetireError::PrimaryWindow);
+    }
+    let Some((surface, lifecycle)) = world
         .resource::<RenderSurfaceRegistryResource>()
         .ok()
-        .and_then(|registry| registry.surface_for_native_window(native_window_id));
-
-    if let Some(render_surface_id) = render_surface_id
-        && let Ok(gfx) = world.resource_mut::<Gfx>()
-    {
-        gfx.detach_surface(render_surface_id);
-    }
-
-    world
+        .and_then(|registry| {
+            let surface = registry.surface_for_native_window(native_window_id)?;
+            Some((surface, registry.record(surface)?.lifecycle_state))
+        })
+    else {
+        return Ok(SecondaryRetireOutcome::NoAttachment);
+    };
+    detach(world, surface, lifecycle)?;
+    // There is no async gap: Host and Render consume the same synchronous World.
+    let retired = world
         .resource_mut::<RenderSurfaceRegistryResource>()
-        .ok()
-        .and_then(|registry| registry.retire_surface_for_native_window(native_window_id))
-        .is_some()
+        .expect("synchronous retirement must retain its Render registry")
+        .retire_surface_for_native_window(native_window_id);
+    assert_eq!(
+        retired,
+        Some(surface),
+        "physical retirement must correspond to exactly one logical identity"
+    );
+    Ok(SecondaryRetireOutcome::Retired)
 }
 
 fn confirm_primary_attachment(
@@ -156,6 +209,76 @@ mod tests {
 
     fn secondary_window(raw: u64) -> NativeWindowId {
         NativeWindowId::try_from_raw(raw).expect("secondary native window id should be valid")
+    }
+
+    #[test]
+    fn no_render_and_missing_secondary_are_idempotent_successful_noops() {
+        let mut app = App::new();
+        let secondary = secondary_window(2);
+        assert_eq!(
+            try_retire_secondary(app.world_mut(), secondary),
+            Ok(SecondaryRetireOutcome::NoAttachment)
+        );
+        assert_eq!(
+            try_rollback_secondary(app.world_mut(), secondary),
+            Ok(SecondaryRetireOutcome::NoAttachment)
+        );
+        app.init_resource::<RenderSurfaceRegistryResource>();
+        assert_eq!(
+            try_retire_secondary(app.world_mut(), secondary),
+            Ok(SecondaryRetireOutcome::NoAttachment)
+        );
+        assert_eq!(
+            try_retire_secondary(app.world_mut(), NativeWindowId::primary()),
+            Err(SecondaryRetireError::PrimaryWindow)
+        );
+    }
+
+    #[test]
+    fn injected_detach_refusal_preserves_precommit_and_committed_identity() {
+        for attached in [false, true] {
+            let mut app = App::new();
+            app.init_resource::<RenderSurfaceRegistryResource>();
+            let secondary = secondary_window(3);
+            let surface = app
+                .world_mut()
+                .resource_mut::<RenderSurfaceRegistryResource>()
+                .unwrap()
+                .reserve_surface_for_native_window(secondary, (640, 480));
+            if attached {
+                app.world_mut()
+                    .resource_mut::<RenderSurfaceRegistryResource>()
+                    .unwrap()
+                    .confirm_surface_attachment(surface, secondary, (640, 480))
+                    .unwrap();
+            }
+            let refused = try_retire_secondary_with(app.world_mut(), secondary, |_, id, _| {
+                assert_eq!(id, surface);
+                Err(SecondaryRetireError::PhysicalDetachRefused { surface })
+            });
+            assert_eq!(
+                refused,
+                Err(SecondaryRetireError::PhysicalDetachRefused { surface })
+            );
+            let registry = app.world().resource::<RenderSurfaceRegistryResource>().unwrap();
+            assert_eq!(registry.surface_for_native_window(secondary), Some(surface));
+            assert_eq!(
+                registry.record(surface).map(|record| record.lifecycle_state),
+                Some(if attached {
+                    RenderSurfaceLifecycleState::Attached
+                } else {
+                    RenderSurfaceLifecycleState::Requested
+                })
+            );
+            assert_eq!(
+                try_retire_secondary_with(app.world_mut(), secondary, |_, _, _| Ok(())),
+                Ok(SecondaryRetireOutcome::Retired)
+            );
+            assert_eq!(
+                try_retire_secondary(app.world_mut(), secondary),
+                Ok(SecondaryRetireOutcome::NoAttachment)
+            );
+        }
     }
 
     #[test]
@@ -204,7 +327,10 @@ mod tests {
             .unwrap()
             .reserve_surface_for_native_window(secondary, (900, 600));
 
-        assert!(rollback_secondary(app.world_mut(), secondary));
+        assert_eq!(
+            try_rollback_secondary(app.world_mut(), secondary),
+            Ok(SecondaryRetireOutcome::Retired)
+        );
 
         let registry = app
             .world()
@@ -246,7 +372,12 @@ mod tests {
             .confirm_surface_attachment(secondary_surface, secondary, (900, 600))
             .unwrap();
 
-        assert!(retire_secondary(app.world_mut(), secondary));
+        assert_eq!(
+            try_retire_secondary(app.world_mut(), secondary),
+            Err(SecondaryRetireError::MissingGpuAttachment {
+                surface: secondary_surface
+            })
+        );
 
         let registry = app
             .world()
@@ -263,7 +394,7 @@ mod tests {
             registry
                 .record(secondary_surface)
                 .map(|record| record.lifecycle_state),
-            Some(RenderSurfaceLifecycleState::Retired)
+            Some(RenderSurfaceLifecycleState::Attached)
         );
     }
 }
