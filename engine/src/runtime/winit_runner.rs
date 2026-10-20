@@ -124,7 +124,10 @@ fn native_keyboard_text_owner_unchanged(
         && before.revision() == after.revision()
         && before.keyboard().focused_node().is_some()
         && before.keyboard().focused_node() == after.keyboard().focused_node()
-        && after.keyboard().text_input_capability().accepts_committed_text()
+        && after
+            .keyboard()
+            .text_input_capability()
+            .accepts_committed_text()
         && after.keyboard().composition_generation().is_none()
 }
 
