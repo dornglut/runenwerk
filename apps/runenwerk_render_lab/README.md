@@ -26,8 +26,11 @@ snapshot report; it performs no new GPU readbacks or wait-for-GPU drain.
 ## Interpretation
 
 - A row is keyed by `(frame_index, render_surface_id)` and carries
-  `prepare_epoch` and explicit output/internal extents. Retention and
-  correlation are supplied by the Render owner, not reconstructed from clocks.
+  `prepare_epoch` and output extent. RL2's primary-surface internal radiance
+  extent comes from the scenario configuration (or the primary output default);
+  a secondary surface's internal extent is explicitly unknown, **never**
+  inferred from the primary's configuration. Retention and correlation are
+  supplied by the Render owner, not reconstructed from clocks.
 - CPU stages have their **renderer-defined names** and units of milliseconds.
   The three `encode_submit_ms.*` children are nested within their parent,
   so **do not sum them**. CPU pass samples are separate observations.

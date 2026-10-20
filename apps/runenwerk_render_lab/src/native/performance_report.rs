@@ -3,6 +3,7 @@
 
 use super::temporal_quality::{RenderLabTemporalQualityGpuEvidence, temporal_quality_gpu_evidence};
 use super::*;
+use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::inspect::{
     RenderFrameHistoryState, RenderFrameObservation, RenderGpuTimingCapability,
     RenderGpuTimingDiagnostic, RenderTimingSource,
@@ -67,8 +68,9 @@ struct PerformanceSample {
     render_surface_id: u64,
     prepare_epoch: u64,
     output_size_px: [u32; 2],
-    radiance_size_px: [u32; 2],
-    cpu_stages_ms: BTreeMap<&'static str, Option<f32>>,
+    radiance_size_px: Option<[u32; 2]>,
+    radiance_extent_provenance: &'static str,
+    cpu_stages_ms: BTreeMap<&'static str, Option<f32>>
     cpu_passes: Vec<CpuPassSample>,
     composed_gpu: GpuDuration,
     gpu_pass_capability: &'static str,
@@ -122,7 +124,7 @@ struct DurationDistribution {
 struct SurfaceExtentSummary {
     render_surface_id: u64,
     output_size_px: [u32; 2],
-    radiance_size_px: [u32; 2],
+    radiance_size_px: Option<[u32; 2]>,
     retained_frame_count: usize,
     cpu_stages: BTreeMap<&'static str, DurationDistribution>,
     composed_gpu: DurationDistribution,
@@ -280,12 +282,27 @@ pub(super) fn build_report(
     gpu_adapter_facts: Option<&runen_gpu::GpuAdapterFacts>,
 ) -> PerformanceReport {
     let mut samples = Vec::with_capacity(history.len());
-    let mut groups: BTreeMap<(u64, [u32; 2], [u32; 2]), GroupAccumulator> = BTreeMap::new();
+    let mut groups: BTreeMap<(u64, [u32; 2], Option<[u32; 2]>), GroupAccumulator> =
+        BTreeMap::new();
 
     for observation in history.observations() {
         let size = [observation.target_size_px.0, observation.target_size_px.1];
-        let source = radiance_override.unwrap_or(observation.target_size_px);
-        let radiance = [source.0, source.1];
+        // RL2's radiance target is main_surface_only. Secondary-frame history has
+        // no qualified source extent; do not borrow the primary's configuration.
+        let (radiance, radiance_extent_provenance) =
+            if observation.key.render_surface_id == RenderSurfaceId::primary().raw() {
+                let extent = radiance_override.unwrap_or(observation.target_size_px);
+                (
+                    Some([extent.0, extent.1]),
+                    if radiance_override.is_some() {
+                        "configured_primary_radiance"
+                    } else {
+                        "primary_output_default"
+                    },
+                )
+            } else {
+                (None, "unavailable_non_primary")
+            };
         let group = groups
             .entry((observation.key.render_surface_id, size, radiance))
             .or_default();
@@ -347,6 +364,7 @@ pub(super) fn build_report(
             prepare_epoch: observation.prepare_epoch,
             output_size_px: size,
             radiance_size_px: radiance,
+            radiance_extent_provenance,
             cpu_stages_ms,
             cpu_passes,
             composed_gpu,
@@ -422,7 +440,7 @@ pub(super) fn build_report(
             host_frame_wall_time: "unavailable",
             gpu_queue_submission_completion: "unavailable in this frame history; never inferred from Render composition duration",
             percentile_method: "median = middle value (mean of two middle values for even N); p95 = nearest rank ceil(0.95*N), among eligible observations only",
-            grouping: "surface identity + output extent + radiance extent; adapter and Host policy facts are sampled only at report close, not per frame; device generation and cross-clock synchronization unavailable, so comparisons require external run configuration",
+            grouping: "surface identity + output extent + qualified RL2 radiance extent (primary only); adapter and Host policy facts are sampled only at report close, not per frame; device generation and cross-clock synchronization unavailable, so comparisons require external run configuration",
         },
     }
 }
@@ -572,6 +590,21 @@ mod tests {
         );
         assert_eq!(b.gpu_passes[0].timings.eligible_count, 1);
         assert_eq!(report.configuration.host_pacing_target_fps_at_close, None);
+        assert_eq!(report.samples[0].radiance_size_px, Some([800, 600]));
+        assert_eq!(report.samples[1].radiance_size_px, None);
+        assert_eq!(
+            report.samples[1].radiance_extent_provenance,
+            "unavailable_non_primary"
+        );
+        let fixed = build_report(
+            &history,
+            Some((640, 480)),
+            FramePacingMode::ContinuousUncapped,
+            policy,
+            None,
+        );
+        assert_eq!(fixed.samples[0].radiance_size_px, Some([640, 480]));
+        assert_eq!(fixed.samples[1].radiance_size_px, None);
     }
 
     #[test]
