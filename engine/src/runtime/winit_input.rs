@@ -499,7 +499,9 @@ mod tests {
         let second = NativeWindowId::try_from_raw(2).expect("secondary window");
         let a = adapter.window_context(first, backend).expect("window A");
         let b = adapter.window_context(second, backend).expect("window B");
-        let raw = adapter.raw_device_context(backend).expect("raw motion source");
+        let raw = adapter
+            .raw_device_context(backend)
+            .expect("raw motion source");
 
         assert_eq!(adapter.retire_raw_device(backend), Ok(Some(raw)));
         assert_eq!(adapter.retire_raw_device(backend), Ok(None));
@@ -510,7 +512,9 @@ mod tests {
             Some(InputContext::new(a.source, None))
         );
 
-        let reincarnated = adapter.raw_device_context(backend).expect("raw reappearance");
+        let reincarnated = adapter
+            .raw_device_context(backend)
+            .expect("raw reappearance");
         assert_ne!(reincarnated.source, raw.source);
         assert_ne!(reincarnated.device, raw.device);
         assert_eq!(adapter.window_context(first, backend), Ok(a));
@@ -521,10 +525,15 @@ mod tests {
         let mut adapter = WinitInputAdapter::default();
         let backend = DeviceId::dummy();
         let window = NativeWindowId::primary();
-        let original = adapter.window_context(window, backend).expect("window source");
+        let original = adapter
+            .window_context(window, backend)
+            .expect("window source");
         let raw = adapter.raw_device_context(backend).expect("raw source");
         let raw_device = raw.device.expect("raw context device");
-        let raw_source = adapter.raw_sources.remove(&raw_device).expect("raw mapping");
+        let raw_source = adapter
+            .raw_sources
+            .remove(&raw_device)
+            .expect("raw mapping");
 
         assert_eq!(
             adapter.retire_raw_device(backend),
