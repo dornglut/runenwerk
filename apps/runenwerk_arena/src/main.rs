@@ -37,12 +37,17 @@ mod tests {
     #[test]
     fn capped_uncapped_and_on_demand_are_supported() {
         for (mode, policy) in [
-            ("capped:144", FramePacingPolicyResource::continuous_capped(144)),
+            (
+                "capped:144",
+                FramePacingPolicyResource::continuous_capped(144),
+            ),
             ("uncapped", FramePacingPolicyResource::continuous_uncapped()),
             ("on-demand", FramePacingPolicyResource::on_demand()),
         ] {
             assert_eq!(
-                parse_launch(["--host-pacing", mode]).unwrap().frame_pacing(),
+                parse_launch(["--host-pacing", mode])
+                    .unwrap()
+                    .frame_pacing(),
                 Some(policy)
             );
         }

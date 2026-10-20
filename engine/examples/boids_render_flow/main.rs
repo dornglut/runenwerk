@@ -17,9 +17,15 @@ where
             Some("--evidence") if !evidence => evidence = true,
             Some("--species") if !species => species = true,
             Some("--evidence") | Some("--species") => {
-                bail!("duplicate Boids launch argument '{}'", arg.to_string_lossy());
+                bail!(
+                    "duplicate Boids launch argument '{}'",
+                    arg.to_string_lossy()
+                );
             }
-            _ => bail!("unexpected Boids launch argument '{}'", arg.to_string_lossy()),
+            _ => bail!(
+                "unexpected Boids launch argument '{}'",
+                arg.to_string_lossy()
+            ),
         }
     }
     ensure!(
