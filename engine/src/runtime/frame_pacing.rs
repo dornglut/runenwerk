@@ -49,6 +49,13 @@ impl Default for FramePacingPolicyResource {
 }
 
 impl FramePacingPolicyResource {
+    /// Reject unsupported FPS rather than silently clamping a launch request.
+    pub fn checked_continuous_capped(target_fps: u32) -> Option<Self> {
+        (MIN_ANIMATION_FPS..=MAX_ANIMATION_FPS)
+            .contains(&target_fps)
+            .then(|| Self::continuous_capped(target_fps))
+    }
+
     pub fn continuous_capped(target_fps: u32) -> Self {
         Self {
             mode: FramePacingMode::ContinuousCapped {

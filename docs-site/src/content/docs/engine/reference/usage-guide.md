@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-25
+last_reviewed: 2026-10-21
 publication: primary
 ---
 
@@ -135,6 +135,57 @@ configuring it on `App::headless()` is rejected during composition admission. Na
 lifecycle/effect intent is keyed by `NativeWindowId` in
 `WindowStateRegistryResource`; headless App state does not manufacture a native-window
 surrogate.
+
+## Native application launch configuration
+
+Native Host pacing is distinct from Render surface Present modes and fixed
+simulation cadence. Programmatic selection continues to use the existing
+`AppNativeHostExt::with_frame_pacing`. Applications can optionally admit
+strict launch requests through the ephemeral `NativeHostLaunchOverrides`:
+
+```rust
+use anyhow::{Result, ensure};
+use engine::app::NativeHostLaunchOverrides;
+use engine::prelude::App;
+
+fn main() -> Result<()> {
+    let (host, app_args) =
+        NativeHostLaunchOverrides::extract(std::env::args_os().skip(1))?;
+    ensure!(app_args.is_empty(), "unknown application argument");
+    let mut app = App::new();
+    app.set_title("Configured Window");
+    // Product defaults and explicit owner configuration are applied first.
+    host.apply_to(&mut app)?; // only explicit launch intent overrides defaults
+    app.run()
+}
+```
+
+Both maintained Boids and Arena accept the following native Host controls:
+
+```text
+--host-pacing capped          # continuous capped 60 FPS
+--host-pacing capped:120      # validated FPS 1..=240
+--host-pacing uncapped        # continuous without synthetic Host FPS deadline
+--host-pacing on-demand       # redraw only on explicit event/invalidation
+```
+
+For example:
+
+```text
+cargo run -p engine --example boids_render_flow -- --species --host-pacing uncapped
+cargo run -p runenwerk_arena -- --host-pacing capped:120
+```
+
+`--species` and `--evidence` remain Boids-owned. The shared ingress consumes
+only its namespaced Host option; all other argument bytes are preserved for
+each product's strict parser, and `--` stops further Host extraction.
+Unknown arguments, duplicate/malformed/unsupported native options, and a
+Host request on the Boids `--evidence` path fail before launching.
+An explicit native Host request on headless App is rejected without mutation.
+No supplied Host flag means existing programmatic settings and the default
+capped-60 Host policy are left unchanged. Uncapped native redraw does not
+disable Render FIFO/VSync, guarantee monitor scanout rates, affect fixed-step
+cadence, or change GPU execution.
 
 ## Schedules You Will Use Most
 
