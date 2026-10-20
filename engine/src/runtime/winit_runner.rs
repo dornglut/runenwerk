@@ -1468,7 +1468,10 @@ mod tests {
             .expect_err("an attached surface without GPU must fail closed");
         assert!(format!("{error:#}").contains("no GPU attachment"));
         assert!(runner.owned_redraws.contains(&secondary));
-        assert_eq!(runner.input_adapter.window_source_context(secondary), source);
+        assert_eq!(
+            runner.input_adapter.window_source_context(secondary),
+            source
+        );
         assert!(
             runner
                 .state
