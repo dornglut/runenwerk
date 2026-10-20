@@ -40,7 +40,8 @@ use runenui_core::{
 };
 use runenui_runtime::{UiInputConflict, UiInputFinality};
 use runenui_winit::keyboard_input::{
-    KeyboardIngressDiagnostic, KeyboardInputOutcome, KeyboardInputState, NativeKeyTransition,
+    KeyboardDownAdmission, KeyboardDownDecision, KeyboardIngressDiagnostic,
+    KeyboardInputOutcome, KeyboardInputState, NativeKeyTransition,
 };
 use runenui_winit::mouse_input::{MouseButtonOutcome, MouseInputState, TranslatedPointerPoint};
 use runenui_winit::touch_input::TouchInputState;
@@ -894,6 +895,23 @@ impl WinitRunner {
         Ok(())
     }
 
+    /// Resolve the one adapter-owned pending original Down with the actual
+    /// M13 queue-admission outcome, not its later settlement or game decision.
+    /// This is a same-turn acknowledgment, never a second keyboard ledger.
+    fn resolve_native_ui_down_admission(
+        &mut self,
+        window: NativeWindowId,
+        admission: KeyboardDownAdmission,
+        decision: KeyboardDownDecision,
+    ) -> Result<()> {
+        self.native_ui_keyboards
+            .get_mut(&window)
+            .context("original native keyboard translator disappeared before admission acknowledgment")?
+            .keyboard
+            .resolve_down_admission(admission, decision)
+            .map_err(|error| anyhow!("original native keyboard admission acknowledgment failed: {error:?}"))
+    }
+
     fn route_ui_keyboard(
         &mut self,
         window: NativeWindowId,
@@ -976,104 +994,167 @@ impl WinitRunner {
         // an M13 sequence; ActionState remains the only gameplay permission owner.
         let mut preserve_prior_held_permission = false;
         let permit = match translated {
-            KeyboardInputOutcome::Submit(event) => {
-                let slots = self
+            KeyboardInputOutcome::Submit {
+                event,
+                down_admission,
+            } => {
+                let submission = self
                     .state
                     .world
                     .resource_mut::<UiRuntimeSlotsResource>()
-                    .context("selected UI runtime vanished from native host")?;
-                match slots.submit_native_keyboard(slot, event) {
-                    Ok(submission) => match slots.pump_native_input_records(slot) {
-                        Ok((batch, status)) => {
-                            let evidence = native_keyboard_finality(
-                                before.scope(),
-                                device,
-                                submission,
-                                &batch,
-                                &status,
-                            );
-                            match &evidence {
-                                Ok(UiInputFinality::Committed(facts)) => matches!(
-                                    facts.conflict(),
-                                    UiInputConflict::Unclaimed
-                                        | UiInputConflict::ObservedNonexclusive
-                                ),
-                                _ => {
-                                    m13_failure = Some(anyhow!(
-                                        "native keyboard lacked exact committed M13 settlement: {evidence:?}"
-                                    ));
-                                    false
+                    .context("selected UI runtime vanished from native host")?
+                    .submit_native_keyboard(slot, event);
+                match submission {
+                    Ok(submission) => {
+                        // Runtime queue admission is distinct from M13 settlement.
+                        // A queued original Down must be acknowledged BEFORE
+                        // pumping so a later failure cannot mislabel it rejected.
+                        let acknowledgment = match down_admission {
+                            Some(token) => self.resolve_native_ui_down_admission(
+                                window,
+                                token,
+                                KeyboardDownDecision::Queued,
+                            ),
+                            None => Ok(()),
+                        };
+                        match acknowledgment {
+                            Err(error) => {
+                                m13_failure = Some(error);
+                                false
+                            }
+                            Ok(()) => {
+                                let slots = self
+                                    .state
+                                    .world
+                                    .resource_mut::<UiRuntimeSlotsResource>()
+                                    .context("selected UI runtime vanished during original input pump")?;
+                                match slots.pump_native_input_records(slot) {
+                                    Ok((batch, status)) => {
+                                        let evidence = native_keyboard_finality(
+                                            before.scope(),
+                                            device,
+                                            submission,
+                                            &batch,
+                                            &status,
+                                        );
+                                        match &evidence {
+                                            Ok(UiInputFinality::Committed(facts)) => matches!(
+                                                facts.conflict(),
+                                                UiInputConflict::Unclaimed
+                                                    | UiInputConflict::ObservedNonexclusive
+                                            ),
+                                            _ => {
+                                                m13_failure = Some(anyhow!(
+                                                    "native keyboard lacked exact committed M13 settlement: {evidence:?}"
+                                                ));
+                                                false
+                                            }
+                                        }
+                                    }
+                                    Err(error) => {
+                                        m13_failure = Some(anyhow!(
+                                            "native keyboard admitted M13 work but its pump failed: {error:?}"
+                                        ));
+                                        false
+                                    }
                                 }
                             }
                         }
-                        Err(error) => {
-                            m13_failure = Some(anyhow!(
-                                "native keyboard admitted M13 work but its pump failed: {error:?}"
-                            ));
-                            false
+                    }
+                    Err(error) => {
+                        let after = self
+                            .state
+                            .world
+                            .resource_mut::<UiRuntimeSlotsResource>()
+                            .context("selected UI runtime vanished before rejected-input observation")?
+                            .input_ownership(slot);
+                        match after {
+                            Ok(after)
+                                if !is_synthetic
+                                    && !original.repeat
+                                    && matches!(
+                                        original.state,
+                                        winit::event::ElementState::Pressed
+                                    )
+                                    && native_no_focused_keyboard_claim_witness(
+                                        device, &before, &after, &error,
+                                    ) =>
+                            {
+                                // Only this exact definitive pre-queue rejection
+                                // can leave a physical tombstone without a
+                                // fabricated M13 Cancel on future source loss.
+                                let acknowledged = down_admission
+                                    .context("original no-focus Down lacked admission identity")
+                                    .and_then(|token| {
+                                        self.resolve_native_ui_down_admission(
+                                            window,
+                                            token,
+                                            KeyboardDownDecision::RejectedBeforeQueue,
+                                        )
+                                    });
+                                match acknowledged {
+                                    Ok(()) => true,
+                                    Err(reason) => {
+                                        m13_failure = Some(reason);
+                                        false
+                                    }
+                                }
+                            }
+                            Ok(after)
+                                if !is_synthetic
+                                    && original.repeat
+                                    && matches!(
+                                        original.state,
+                                        winit::event::ElementState::Pressed
+                                    )
+                                    && native_original_keyboard_repeat_nonclaim(
+                                        device, &before, &after, &error,
+                                    ) =>
+                            {
+                                // A legitimate original repeat can retain only
+                                // independently established prior ActionState
+                                // eligibility. A repeat never grants a Down.
+                                preserve_prior_held_permission = true;
+                                false
+                            }
+                            Ok(after)
+                                if !is_synthetic
+                                    && matches!(
+                                        original.state,
+                                        winit::event::ElementState::Released
+                                    )
+                                    && native_original_keyboard_release_nonclaim(
+                                        device, &before, &after, &error,
+                                    ) =>
+                            {
+                                // A physical Up is neutral truth, not a new
+                                // game press or a synthetic M13 settlement.
+                                false
+                            }
+                            Ok(_) => {
+                                m13_failure = Some(anyhow!(
+                                    "native keyboard M13 admission rejected without exact original no-focus evidence: {error:?}"
+                                ));
+                                false
+                            }
+                            Err(observation) => {
+                                m13_failure = Some(anyhow!(
+                                    "native keyboard M13 admission rejected and post-state observation failed: {error:?}; {observation:?}"
+                                ));
+                                false
+                            }
                         }
-                    },
-                    Err(error) => match slots.input_ownership(slot) {
-                        Ok(after)
-                            if !is_synthetic
-                                && !original.repeat
-                                && matches!(
-                                    original.state,
-                                    winit::event::ElementState::Pressed
-                                )
-                                && native_no_focused_keyboard_claim_witness(
-                                    device, &before, &after, &error,
-                                ) =>
-                        {
-                            true
-                        }
-                        Ok(after)
-                            if !is_synthetic
-                                && original.repeat
-                                && matches!(
-                                    original.state,
-                                    winit::event::ElementState::Pressed
-                                )
-                                && native_original_keyboard_repeat_nonclaim(
-                                    device, &before, &after, &error,
-                                ) =>
-                        {
-                            preserve_prior_held_permission = true;
-                            false
-                        }
-                        Ok(after)
-                            if !is_synthetic
-                                && matches!(
-                                    original.state,
-                                    winit::event::ElementState::Released
-                                )
-                                && native_original_keyboard_release_nonclaim(
-                                    device, &before, &after, &error,
-                                ) =>
-                        {
-                            // Genuine physical Up remains neutral-only. A
-                            // release never supplies gameplay press authority.
-                            false
-                        }
-                        Ok(_) => {
-                            m13_failure = Some(anyhow!(
-                                "native keyboard M13 admission rejected without exact original no-focus evidence: {error:?}"
-                            ));
-                            false
-                        }
-                        Err(observation) => {
-                            m13_failure = Some(anyhow!(
-                                "native keyboard M13 admission rejected and post-state observation failed: {error:?}; {observation:?}"
-                            ));
-                            false
-                        }
-                    },
+                    }
                 }
             }
-            KeyboardInputOutcome::Suppressed(KeyboardIngressDiagnostic::DuplicatePress)
+            KeyboardInputOutcome::Suppressed(diagnostic)
                 if !is_synthetic
-                    && !original.repeat
                     && matches!(original.state, winit::event::ElementState::Pressed)
+                    && matches!(
+                        (diagnostic, original.repeat),
+                        (KeyboardIngressDiagnostic::DuplicatePress, false)
+                            | (KeyboardIngressDiagnostic::RepeatOfRejectedDown, true)
+                    )
                     && native_unfocused_game_keyboard_snapshot(&before) =>
             {
                 // Same pinned translator, matching original device and binding
@@ -1096,7 +1177,31 @@ impl WinitRunner {
                 false
             }
             KeyboardInputOutcome::Suppressed(_) => false,
+            KeyboardInputOutcome::Failed(failure) => {
+                m13_failure = Some(anyhow!(
+                    "native keyboard translator failed closed before M13 admission: {failure:?}"
+                ));
+                false
+            }
         };
+        if preserve_prior_held_permission {
+            // A suppressed repeat (even with an exact framework nonclaim)
+            // can preserve only previously eligible, source-qualified physical
+            // Down. Reuse the same one ActionState predicate as duplicate Down.
+            preserve_prior_held_permission = match (
+                self.state.world.resource::<InputState>(),
+                self.state.world.resource::<ActionState>(),
+            ) {
+                (Ok(input), Ok(actions)) => actions
+                    .original_native_held_generation_remains_eligible(
+                        input,
+                        context,
+                        &physical_key,
+                        previous_down_generation,
+                    ),
+                _ => false,
+            };
+        }
 
         // Missing or ambiguous M13 evidence, runtime failure, UI exclusivity,
         // and translator suppression NEVER produce positive gameplay evidence.
@@ -1391,10 +1496,13 @@ impl WinitRunner {
         let before = slots.input_ownership(slot).map_err(|reason| {
             anyhow!("native keyboard cancellation lacked M13 pre-state: {reason:?}")
         })?;
-        for event in lifetime
+        let cancelled = lifetime
             .keyboard
             .cancel_all(KeyModifiers::NONE, native_keyboard_composition(&before))
-        {
+            .map_err(|error| anyhow!(
+                "native keyboard cancellation has unresolved original Down admission: {error:?}"
+            ))?;
+        for event in cancelled {
             let device = event
                 .device_id()
                 .context("native keyboard Cancel lost its original device identity")?;
@@ -1459,10 +1567,14 @@ impl WinitRunner {
                 .native_ui_keyboards
                 .get_mut(&window)
                 .context("selected original native keyboard lifetime vanished")?;
-            lifetime.devices.remove(&device);
-            lifetime
+            let events = lifetime
                 .keyboard
                 .cancel_device(device, modifiers, native_keyboard_composition(&before))
+                .map_err(|error| anyhow!(
+                    "native keyboard device-loss cancellation has unresolved original Down: {error:?}"
+                ))?;
+            lifetime.devices.remove(&device);
+            events
         };
         // The winit modifier callback is window-wide; no original hardware
         // identity proves whether Shift/Ctrl belonged to removed A or live B.
