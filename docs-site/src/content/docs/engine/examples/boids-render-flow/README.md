@@ -1,236 +1,83 @@
 ---
 title: Boids Render Flow Example
-description: Production procedural boids render-flow example with fixed-step evidence, procedural pass authoring, and aspect-correct impostors.
+description: GPU-resident flocking and species examples using ordinary RenderFlow fixed-step execution.
 status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-10-18
+last_reviewed: 2026-10-20
 publication: primary
 ---
 
 # Boids Render Flow Example
 
-Windowed boids simulation sample built on the public `RenderFlow` and
-procedural population authoring APIs.
+A windowed, GPU-resident particle simulation authored through the public `RenderFlow` and procedural population APIs. Both the original flocking law and an alternative three-species interaction law use the same eight-stage compute graph, grid-based neighbor search, instanced draw, and Present path.
 
-What it demonstrates:
-
-- ECS simulation state (`BoidsRenderState`) projected into flow uniforms.
-- ping-pong storage simulation (`boids.instances`) on a compute pass;
-  both retained buffers and all count/scan/scatter scratch arrays opt into
-  descriptor-guaranteed zero initialization for strict GPU read/write admission.
-- procedural-owned draw authoring through `RenderFlow::procedural_pass_builder(...)`.
-- bounded uniform-grid neighbor lookup instead of a production O(n^2) all-boids loop.
-- reusable procedural camera projection through `ProceduralCamera2d`,
-  `ProceduralCamera2dUniform`, and `ProceduralSpriteSizing`.
-- smoothed visual heading stored separately from simulation velocity.
-- graph-level fixed-step catch-up evidence; multi-step catch-up is owned by the
-  render-flow graph, not hidden in this example.
-- flow-owned color target and explicit terminal present pass.
-- pure builtin compiled runtime path (no custom executor hooks).
-- production evidence for no silent grid overflow, bounded submitted work,
-  unsupported timing diagnostics, and pixel-space resize/aspect checks.
-
-Flow chain:
-
-- `boids.seed_or_hold` (compute, `assets/shaders/boids_compute.wgsl`)
-- `boids.grid.clear_counts`
-- `boids.grid.count_cells`
-- `boids.grid.scan_counts`
-- `boids.grid.reset_cursors`
-- `boids.grid.scatter_sorted_indices`
-- `boids.grid.simulate_neighbors` (compute over adjacent grid cells)
-- `boids.grid.publish_draw` (compute publish to the render-facing instance buffer)
-- `boids.draw` (graphics, `assets/shaders/boids_compose.wgsl`)
-- `boids.present` (present, `boids.color` -> surface)
-
-The grid path is bounded and total-count-sized. Cell counts, scan offsets,
-scatter cursors, and sorted indices are explicit flow resources; dense cells
-must not silently overflow or drop neighbors. Spatial hash and chunked
-unbounded populations are intentionally out of scope for this example.
-
-The simulation region is declared as `boids.fixed_step`. `BoidsGpuStepSchema`
-captures immutable source-time uniforms and dispatch sizes for all eight compute
-passes using exact IDs from the authored `RenderFlow`. The ECS fixed-time
-counter describes **requested** source steps, never proof that GPU state has
-advanced. The Engine admits an ordered, bounded prefix to RunenGPU G5 and
-retains accepted source steps until its exact completed submission and producer-owned
-source interval verification. Normal simulation requires a **24-byte final-stage
-GPU storage-buffer witness** from its exact accepted G5 submission: the GPU publishes
-the last source tick, sums the current grid-cell populations, and includes one
-particle's simulated position and velocity. The producer rejects a stale tick,
-wrong population, or invalid sampled state before advancing its verified tick.
-This is a bounded numerical invariant, **not** an exhaustive verification of all
-particle positions or a recoverable GPU checkpoint. GPU-resident normal
-simulation does not require a GPU-to-CPU color readback. The native smoke
-explicitly opts into the full-frame texture witness to test rendered pixels
-and motion.
-
-On the first accepted source step, the shader seeds the retained boid population;
-later source steps advance their own captured ticks, not a reconstructed host
-frame delta. Both retained boid buffers and grid scratch resources use explicit
-GPU descriptor `Zeroed` initialization for strict read-before-write admission.
-Zero bytes are only safe descriptor coverage; they are **not** populated boids.
-
-In ordinary execution the example accepts GPU progress after the exact G5
-submission has terminated successfully, with its original device affinity
-and immutable ordered source-tick interval verified. It does **not** claim
-a CPU-side numerical oracle or full retained Boids-buffer verification.
-A failed/unknown GPU write remains quarantined and requires fail-stop and
-clean restart, never speculative replay.
-
-The fixed-time counter remains the target for requested source ticks. The
-producer captures at most one render-region batch (four steps) per Update
-and never exceeds 512 outstanding inputs, including accepted/unverified work.
-If GPU execution stalls, CPU fixed time may advance, but source capture is
-**paused at capacity**: the uncaptured tick range remains an explicit
-difference between the CPU target and the producer's requested cursor.
-Once capacity returns the same tick identities are captured in order.
-The example's simulation law and tick-dependent inputs are fixed at startup,
-making this deferred generation equivalent to source-time generation.
-A consumer with changing inputs must retain actual historical snapshots
-instead. This is bounded, lossless tick-debt pacing, **not** a promise to
-synchronize with wall time under sustained GPU overload.
-
-Only the opt-in native conformance mode requires a full GPU draw readback.
-It checks the exact G5 source receipt, byte format/length and nonbackground
-image, then fingerprints deterministic pixel samples. Moving fingerprints
-are visual evidence, not an agent/grid numerical oracle or checkpoint.
-Normal Boids rendering does not request these mandatory pixel transfers.
-Full buffer checkpointing and verified contents restoration remain unqualified.
-
-Following a successfully verified batch, the source records its exact GPU
-context/device generation. A subsequent generation mismatch **fails closed
-before newer steps are admitted**. The bounded recovery policy is to stop and
-clean-restart the application, beginning a new simulation from tick zero; it
-does not replay prior accepted writes or pretend zero-initialized descriptors
-restore the previous simulation. Device-failure injection and live
-generation-reconstruction still require their own native evidence under
-[#1291](https://github.com/dornglut/runenwerk/issues/1291).
-
-The native CI also runs a **controlled source-owner failure fixture** after
-twelve verified GPU ticks in each mode. It expects the windowed application to
-return an error rather than accepting further source work, then launches a
-fresh process for the ordinary 120-frame success qualification. This proves
-fail-stop propagation and clean-start behavior across two distinct processes;
-it does **not** simulate a real device loss, partially executed shader write,
-or in-place recreation of a GPU context.
-
-Native hosted Mesa/Vulkan smoke is opt-in with `RUNENWERK_BOIDS_NATIVE_SMOKE=1`
-for both executable modes. Its default capture-enabled mode checks at least
-120 **submitted Present opportunities**, correlated terminal G5 receipts,
-semantically verified GPU steps, and changing GPU-rendered boid images, then
-closes its window. Set `RUNENWERK_BOIDS_NATIVE_NO_READBACK=1` *alongside*
-the smoke flag to test the actual GPU-resident normal-execution path without
-the mandatory RGBA capture. In that mode the test requires 120 Present
-submissions and terminal source progress but does **not** assert pixel content
-or motion. Hosted CI runs both variants on each Boids law.
-
-Each native smoke prints the host-observed submitted-Present rate, its
-95th-percentile interval, maximum immutable steps outstanding, and maximum
-CPU fixed-time ticks not yet captured into the GPU producer. Rates exclude
-startup prior to the first submitted Present and are **not** GPU execution
-times, actual monitor scanout, or stable benchmark measurements. Run the
-no-readback mode in a **release build** on the owner GPU for the comparison
-against the capture-enabled diagnostic mode. The hosted software Vulkan
-figures cannot qualify RX 7900 XTX responsiveness.
-
-This is not a complete Boids-buffer proof or a substitute for owner-native
-original/species acceptance.
-
-The draw pass uses a producer-owned `ProceduralCamera2d` with
-`FillViewport { fixed_axis: Vertical }`. Renderer procedural code derives the
-projection uniform from camera intent and target size; `PreparedViewFrame` does
-not own camera truth. The boids shader projects world positions through
-`ProceduralCamera2dUniform`, so landscape, portrait, square, and extreme aspect
-surfaces keep equal projected world x/y scale.
-
-Run the original flocking law:
+## Run
 
 ```bash
 cargo run -p engine --example boids_render_flow
-```
-
-Run the **alternative three-species local-rule experiment** through the same
-Runenwerk App, ECS state, RenderFlow, fixed-step, GPU grid and instanced
-impostor renderer:
-
-```bash
 cargo run -p engine --example boids_render_flow -- --species
 ```
 
-The three example-local species use deterministic instance-index identities.
-Their asymmetric attraction/repulsion law and short-range exclusion produce
-different interactions from the default alignment/cohesion/separation model.
-The color indicates species; the geometric impostor is **not** a world-solid
-or the authority for any simulation state. Both laws remain shader-defined,
-not general-purpose authored rule programs. There is no validated CPU oracle,
-adaptive split/merge, persistent world truth, SDF interaction, or guaranteed
-numerical determinism across backends. The goal is a bounded, visual
-**Runenwerk-native feasibility comparison**, not architectural adoption.
+The `--species` mode assigns deterministic instance-index identities to three species with asymmetric attraction, repulsion, and short-range exclusion. The original law uses alignment, cohesion, and separation. Colors distinguish species; neither mode is a general-purpose authored rule system.
 
-Evidence:
+## Flow and ownership
+
+The authored passes execute in this order:
+
+1. `boids.seed_or_hold` — initialize on the first source step; preserve retained state thereafter
+2. `boids.grid.clear_counts`
+3. `boids.grid.count_cells`
+4. `boids.grid.scan_counts`
+5. `boids.grid.reset_cursors`
+6. `boids.grid.scatter_sorted_indices`
+7. `boids.grid.simulate_neighbors`
+8. `boids.grid.publish_draw` — publish the final GPU witness and render-facing instances
+9. `boids.draw` — procedural impostors through `assets/shaders/boids_compose.wgsl`
+10. `boids.present` — present `boids.color` to the native surface
+
+The eight compute passes use `assets/shaders/boids_compute.wgsl`. The bounded uniform grid uses explicit cell counts, offsets, cursors, and agent-count-sized sorted indices; it rejects overflow rather than dropping neighbors. Retained ping-pong buffers and grid scratch storage request descriptor-level zero initialization. Zero-filled buffers are **not** equivalent to semantically seeded particle state.
+
+The renderer owns GPU preparation and submission through RunenGPU G5. The Boids producer owns source-time inputs and simulation meaning; GPU terminal completion alone never advances its verified simulation clock. `BoidsGpuStepSchema` captures each compute pass's uniform bytes and dispatch dimensions at source time. The procedural camera uses `ProceduralCamera2d` with a vertical-axis viewport fit so impostors maintain consistent world-space proportions across aspect ratios.
+
+## Fixed-step pacing and verification
+
+`boids.fixed_step` admits a maximum of **four outstanding source steps**, including accepted but unverified work. Inputs already captured remain immutable and ordered. If the GPU cannot accept additional work, excess host fixed-time opportunities are **explicitly time-dilated**, not queued for later replay or counted as completed Boids ticks. The source's requested and verified tick identities therefore remain contiguous, but its simulation may run slower than wall time under sustained pressure. A consumer with mutable external inputs must snapshot those inputs at its own source time.
+
+Each accepted batch requires a **24-byte GPU-produced final-stage buffer witness** from its exact G5 submission: final source tick, GPU-derived grid population, and the position/velocity of one simulated particle. Only a completed submission with the expected identity, ready readback, correct source tick, population, and valid sampled motion permits `commit_verified`. This is a bounded integrity and freshness check, **not** a numerical oracle for every particle.
+
+Full-frame RGBA/BGRA readback is **not** part of ordinary Boids execution. Opt-in native visual conformance additionally checks actual GPU-rendered image content and changes between frames. Rendered motion does not prove full particle-buffer correctness.
+
+## Failure and recovery
+
+Failed or uncertain accepted GPU work, failed required readback, and a changed GPU-context generation **fail closed** before further source admission. Do not retry an accepted interval against unverified retained state.
+
+The accepted recovery policy for this **ephemeral example** is to terminate the old run and start a **new process, GPU context, RenderFlow, and simulation epoch at tick zero**. Previous particle positions and velocities are **not restored**. A controlled native source-failure test verifies fail-stop and successful fresh-process startup for both laws; it does **not** inject physical device loss, partial GPU writes, or prove in-process restoration. State-preserving consumers need their own verified checkpoint/reimport contract.
+
+## Tests and diagnostics
 
 ```bash
+cargo +stable test -p engine --example boids_render_flow --locked
 cargo run -p engine --example boids_render_flow -- --evidence
-```
-
-The evidence output includes the canonical pass order, fixed-step contract,
-grid capacity counters, unsupported GPU timing diagnostics, CPU preflight
-timing, benchmark command, camera projection evidence for landscape, portrait,
-square, and extreme aspect surfaces, and resize pixel evidence proving sprite
-aspect reconstruction.
-
-Benchmarks:
-
-```bash
 cargo bench -p engine --bench render_flow_planning
 ```
 
-The benchmark suite includes procedural population cases for prefix scan
-planning, scan/scatter/indirect-args planning, bounded-grid build planning,
-boids production flow planning/preflight, and boids production evidence
-reporting.
+The example tests cover graph and shader declarations, historical source capture, resource initialization, pacing, and verification. The `--evidence` mode prints authored pass, bounded-grid, timing-availability, and camera/resize evidence; the benchmark measures planning and evidence generation, not GPU shader time.
 
-Tests:
+To run the actual native GPU smoke (repeat with `-- --species` for the second law):
 
 ```bash
-cargo test -p engine --example boids_render_flow
+RUNENWERK_BOIDS_NATIVE_SMOKE=1 cargo +stable run -p engine --example boids_render_flow --locked
 ```
 
-### Sustained native performance qualification
+| Setting | Effect |
+| --- | --- |
+| `RUNENWERK_BOIDS_NATIVE_SMOKE=1` | Require 120 native submitted Presents by default, terminal GPU results, verified ticks, and changing images |
+| `RUNENWERK_BOIDS_NATIVE_NO_READBACK=1` | With smoke enabled, omit **full-image** readback; the mandatory compact GPU witness remains required |
+| `RUNENWERK_BOIDS_NATIVE_PRESENT_TARGET=600` | With smoke enabled, request a longer bounded run (supported range: 120–1200) |
+| `RUNENWERK_BOIDS_NATIVE_SOURCE_FAULT_AFTER_TICK=12` | With smoke enabled, deliberately stop after the specified verified tick for the controlled failure fixture |
 
-The native smoke defaults to 120 submitted Presents. For a longer bounded
-release-build run, set `RUNENWERK_BOIDS_NATIVE_PRESENT_TARGET=600` together
-with `RUNENWERK_BOIDS_NATIVE_SMOKE=1`; the valid target is 120–1200. The test
-retains enough native frame observations for that target and still enforces its
-existing 180-second fail-closed deadline. Compare normal no-readback execution
-(`RUNENWERK_BOIDS_NATIVE_NO_READBACK=1`) with the capture-enabled diagnostic
-mode at the same resolution, adapter and law. The report additionally prints
-averages of the existing renderer CPU-stage sum, flow encode and encode/submit
-timings; the sum does not include the complete ECS Update or GPU execution.
-Host-observed submitted-Present pacing is not display scanout latency.
+The smoke has a 180-second safety deadline and closes its native window on success. It records submitted-Present rates, intervals, CPU encoding stages, bounded outstanding demand, and deferred/time-dilated steps. These are **host observations**, not hardware scanout FPS or GPU shader duration. The CI lane exercises both simulation laws with and without optional image capture.
 
-### Native window closure and GPU stage profiling
-
-The Boids example has no unsaved state. Its Update policy approves a pending
-native primary-window close intent, allowing winit to exit on the next host
-effect application; it does not request further GPU step work after that
-decision. This is example-local and does not weaken Engine/editor product close
-policies. An external console interrupt (Windows `STATUS_CONTROL_C_EXIT`) is
-not equivalent to native-window closure. The native smoke also has a separate
-bounded `Present` completion policy, so manually closing the smoke before
-its requested frame target is not a successful qualification.
-
-Earlier revisions mistakenly measured `cpu_flow_encode_ms_avg` around
-`cpu_encode_submit_ms_avg`, then added both in the renderer CPU total.
-The fixed timer boundaries now make these top-level values **disjoint**,
-so the reported renderer CPU total does not double-count the encode/submit
-span. New, nonoverlapping nested GPU graph-stage measurements distinguish
-`gpu_graph_build_ms_avg`, `gpu_prepare_submission_ms_avg` (including the
-awaited RunenGPU preparation), and `gpu_submit_prepared_ms_avg`. The
-difference between `cpu_encode_submit_ms_avg` and those three values
-includes source validation and post-G5 renderer bookkeeping. None is a GPU
-shader-duration, GPU terminal-latency or display-scanout measurement. Profile
-both modes on the owner adapter in release before inferring bottleneck causes.
+The ordinary interactive example approves native close intent without further GPU-step admission. Console interruption is not equivalent to a normal window close. For validation requirements and native test commands, see the repository [TESTING.md](https://github.com/dornglut/runenwerk/blob/main/TESTING.md).
