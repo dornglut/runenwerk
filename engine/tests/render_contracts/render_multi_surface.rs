@@ -1,7 +1,6 @@
 use engine::plugins::render::host::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfacePresentationError,
-    RenderSurfacePresentationRequest,
-    RenderSurfaceRegistryResource,
+    RenderSurfacePresentationRequest, RenderSurfaceRegistryResource,
 };
 use engine::plugins::render::inspect::inspect_prepared_render_frame;
 use engine::plugins::render::{

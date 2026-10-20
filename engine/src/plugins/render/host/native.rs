@@ -87,7 +87,9 @@ pub(crate) fn attach_secondary(
         })
     {
         // A failed physical attachment must not retire a reserved logical request.
-        let reason = err.downcast_ref::<RenderSurfacePresentationError>().copied();
+        let reason = err
+            .downcast_ref::<RenderSurfacePresentationError>()
+            .copied();
         if let Some(reason) = reason
             && let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>()
         {

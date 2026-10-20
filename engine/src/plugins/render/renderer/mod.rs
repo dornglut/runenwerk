@@ -1131,6 +1131,15 @@ impl Gfx {
         self.ctx.has_surface(render_surface_id)
     }
 
+    /// A registered attachment may be temporarily invalid and still recoverable.
+    /// Unlike has_surface(), this does not claim current physical configuration.
+    pub(crate) fn has_recoverable_surface_record(
+        &self,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
+    ) -> bool {
+        self.ctx.has_surface_record(render_surface_id)
+    }
+
     pub fn surface_size(
         &self,
         render_surface_id: crate::plugins::render::host::RenderSurfaceId,

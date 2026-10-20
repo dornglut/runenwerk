@@ -1782,7 +1782,11 @@ fn validate_prepared_frame_gfx_attachment(
     prepared_frame: &PreparedRenderFrame,
 ) -> anyhow::Result<()> {
     let surface = prepared_frame.surface.render_surface_id;
-    if gfx.has_surface(surface) {
+    // A failed reattachment can leave the logical surface without a physical
+    // handle. Preserve the ordinary RenderSubmit retry path while rejecting
+    // genuinely unknown surface IDs. Physical admission still occurs only
+    // through the strict configure step before image acquisition.
+    if gfx.has_recoverable_surface_record(surface) {
         return Ok(());
     }
     let message = format!(
