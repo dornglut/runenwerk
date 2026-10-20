@@ -1233,12 +1233,11 @@ impl WinitRunner {
             };
         }
 
-        if m13_failure.is_none() {
-            if let Some(text) = committed_keyboard_text {
-                if let Err(error) = self.route_ui_committed_text(slot, text, Some(device)) {
-                    m13_failure = Some(error);
-                }
-            }
+        if m13_failure.is_none()
+            && let Some(text) = committed_keyboard_text
+            && let Err(error) = self.route_ui_committed_text(slot, text, Some(device))
+        {
+            m13_failure = Some(error);
         }
         // Missing or ambiguous M13 evidence, runtime failure, UI exclusivity,
         // and translator suppression NEVER produce positive gameplay evidence.
