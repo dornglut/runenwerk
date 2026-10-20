@@ -809,6 +809,7 @@ impl WinitRunner {
         binding_epoch: u64,
         context: InputContext,
         input: runen_input::KeyboardInput,
+        native_text: Option<String>,
     ) -> Result<()> {
         let physical_key = input.physical_key.clone();
         let pressed = input.state == runen_input::DigitalState::Pressed;
@@ -818,11 +819,27 @@ impl WinitRunner {
             binding_epoch,
             context.source,
         );
-        self.apply_event_group_for_recipient(
-            window,
-            [PlatformEvent::KeyboardInput { context, input }],
-            Some(NativeInputRecipient::RunenUiSlot(slot)),
-        )?;
+        // Original KeyEvent.text belongs to this SAME Winit callback as its
+        // physical keyboard observation, even though M13 may later reject
+        // text for focus/capability/composition reasons. Reserve the full
+        // original group before admitting either neutral observation.
+        // UI-directed text is never dispatched to the legacy Editor.
+        let recipient = Some(NativeInputRecipient::RunenUiSlot(slot));
+        match native_text {
+            Some(text) => self.apply_event_group_for_recipient(
+                window,
+                [
+                    PlatformEvent::KeyboardInput { context, input },
+                    PlatformEvent::TextInput { text },
+                ],
+                recipient,
+            )?,
+            None => self.apply_event_group_for_recipient(
+                window,
+                [PlatformEvent::KeyboardInput { context, input }],
+                recipient,
+            )?,
+        }
         if let Err(error) = preflight {
             // Failed pre-observation cannot suppress the original neutral
             // Down or permit it as a game-held action.
@@ -1235,22 +1252,9 @@ impl WinitRunner {
 
         if m13_failure.is_none()
             && let Some(text) = committed_keyboard_text
+            && let Err(error) = self.route_ui_committed_text(slot, text, Some(device))
         {
-            // An original KeyEvent.text is native text evidence just as an
-            // original Ime::Commit is. Record it with the already-selected
-            // UI recipient before canonical text admission. The recipient
-            // tag forbids legacy Editor from consuming the same character.
-            // Failure to reserve the native journal must fail closed.
-            let result = self
-                .apply_event_group_for_recipient(
-                    window,
-                    [PlatformEvent::TextInput { text: text.clone() }],
-                    Some(NativeInputRecipient::RunenUiSlot(slot)),
-                )
-                .and_then(|()| self.route_ui_committed_text(slot, text, Some(device)));
-            if let Err(error) = result {
-                m13_failure = Some(error);
-            }
+            m13_failure = Some(error);
         }
         // Missing or ambiguous M13 evidence, runtime failure, UI exclusivity,
         // and translator suppression NEVER produce positive gameplay evidence.
@@ -3268,6 +3272,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             epoch,
                             context,
                             input,
+                            text_input(&event, is_synthetic),
                         )?;
                         self.route_ui_keyboard(
                             native_window_id,
@@ -5674,35 +5679,134 @@ mod tests {
                 .authorized_for_legacy_editor(),
             "selected RunenUI input cannot be double-dispatched to Editor"
         );
-        // The original keyboard text route and the original IME Commit
-        // must use this same recipient-bound journal admission, never a
-        // default legacy TextInput. Exercise the real native journal path.
-        runner
-            .apply_event_group_for_recipient(
-                secondary,
-                [PlatformEvent::TextInput {
-                    text: String::from("é"),
-                }],
-                Some(NativeInputRecipient::RunenUiSlot(slot)),
-            )
-            .expect("original keyboard text admitted only to its selected UI owner");
-        let last = runner
+        // Original window-keyboard text is reserved and admitted in the
+        // same callback group as the physical Down. A later text settlement
+        // cannot retrospectively add the observation to the neutral journal.
+        let original_context = runner
+            .native_input_mut()
+            .window_context(secondary, winit::event::DeviceId::dummy())
+            .expect("actual window-scoped keyboard source");
+        let original_key = runen_input::KeyboardInput {
+            physical_key: PhysicalKeyIdentity::code("KeyE"),
+            logical_key: runen_input::LogicalKey::Character(String::from("é")),
+            location: runen_input::KeyLocation::Standard,
+            state: runen_input::DigitalState::Pressed,
+            repeat: false,
+            origin: runen_input::ObservationOrigin::SourceReport,
+        };
+        let prior_len = runner
             .state
             .world
             .resource::<PlatformWindowEventQueueResource>()
             .expect("original journal")
             .events()
-            .last()
-            .expect("original UI-directed text journal entry");
-        assert_eq!(last.native_window_id, secondary);
+            .len();
+        runner
+            .admit_native_ui_keyboard_for_recipient(
+                secondary,
+                slot,
+                bound_epoch,
+                original_context,
+                original_key,
+                Some(String::from("é")),
+            )
+            .expect("original UI keyboard and text group admitted atomically");
+        let journal = runner
+            .state
+            .world
+            .resource::<PlatformWindowEventQueueResource>()
+            .expect("original journal");
+        assert_eq!(journal.events().len(), prior_len + 2);
+        let pair = &journal.events()[prior_len..];
+        assert!(matches!(&pair[0].event, PlatformEvent::KeyboardInput { .. }));
+        assert!(matches!(&pair[1].event, PlatformEvent::TextInput { text } if text == "é"));
+        assert!(pair.iter().all(|entry| {
+            entry.native_window_id == secondary && !entry.authorized_for_legacy_editor()
+        }), "original UI keyboard/text may not leak to Editor");
+
+        // Leave room for exactly one record: neither the original Down nor
+        // its text can enter a bounded journal until BOTH fit. This failure
+        // must leave physical Down generation and journal unchanged.
+        let journal = runner
+            .state
+            .world
+            .resource_mut::<PlatformWindowEventQueueResource>()
+            .expect("bounded original journal");
+        journal.retire_frame();
+        let empty_text = || {
+            PlatformWindowEvent::new(
+                secondary,
+                PlatformEvent::TextInput {
+                    text: String::new(),
+                },
+            )
+        };
+        while journal.events().len() < 4095 {
+            journal.publish(empty_text()).expect("test fills journal up to one slot");
+        }
+        let reject_context = original_context;
+        let rejected_key = runen_input::KeyboardInput {
+            physical_key: PhysicalKeyIdentity::code("KeyZ"),
+            logical_key: runen_input::LogicalKey::Character(String::from("z")),
+            location: runen_input::KeyLocation::Standard,
+            state: runen_input::DigitalState::Pressed,
+            repeat: false,
+            origin: runen_input::ObservationOrigin::SourceReport,
+        };
         assert!(
-            matches!(&last.event, PlatformEvent::TextInput { text } if text == "é"),
-            "original keyboard text must be present exactly as observed"
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("neutral input")
+                .keyboard_down_generation_in(
+                    reject_context,
+                    &PhysicalKeyIdentity::code("KeyZ"),
+                )
+                .is_none()
         );
         assert!(
-            !last.authorized_for_legacy_editor(),
-            "UI-bound keyboard text must never duplicate into the legacy Editor"
+            runner
+                .admit_native_ui_keyboard_for_recipient(
+                    secondary,
+                    slot,
+                    bound_epoch,
+                    reject_context,
+                    rejected_key,
+                    Some(String::from("z")),
+                )
+                .is_err(),
+            "capacity for one must reject the entire original keyboard+text group"
         );
+        assert_eq!(
+            runner
+                .state
+                .world
+                .resource::<PlatformWindowEventQueueResource>()
+                .expect("bounded journal")
+                .events()
+                .len(),
+            4095
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("neutral input")
+                .keyboard_down_generation_in(
+                    reject_context,
+                    &PhysicalKeyIdentity::code("KeyZ"),
+                )
+                .is_none(),
+            "failed grouped journal preflight cannot partially admit a neutral keyboard Down"
+        );
+        runner
+            .state
+            .world
+            .resource_mut::<PlatformWindowEventQueueResource>()
+            .expect("restore journal capacity")
+            .retire_frame();
         // A native button with no prior authentic cursor position cannot
         // manufacture a logical hit point or a new RunenUI pressed stream.
         let unknown_position_context = runner
