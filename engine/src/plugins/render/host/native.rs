@@ -1,6 +1,9 @@
 use super::super::render_integration_is_active;
 use super::super::renderer::Gfx;
-use super::{RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
+use super::{
+    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfacePresentationAttempt,
+    RenderSurfacePresentationError, RenderSurfacePresentationRequest, RenderSurfaceRegistryResource,
+};
 use crate::runtime::NativeWindowId;
 use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
@@ -20,10 +23,28 @@ pub(crate) fn initialize_primary(
         ));
     }
 
-    let gfx = Gfx::new(window).context("failed to initialize runtime gfx")?;
+    let (request, revision) = world
+        .resource::<RenderSurfaceRegistryResource>()
+        .ok()
+        .and_then(|registry| registry.record(RenderSurfaceId::primary()))
+        .map(|record| (record.presentation_request, record.presentation_revision))
+        .unwrap_or((RenderSurfacePresentationRequest::default(), 0));
+    let gfx = Gfx::new_with_presentation(window, request, revision)
+        .context("failed to initialize runtime gfx")?;
     world.insert_resource(gfx);
     confirm_primary_attachment(world, target_size_px)
-        .context("failed to confirm primary render surface attachment")
+        .context("failed to confirm primary render surface attachment")?;
+    let configured = world
+        .resource::<Gfx>()?
+        .surface_size(RenderSurfaceId::primary())
+        .is_some();
+    if configured && let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>() {
+        registry.record_presentation_attempt(
+            RenderSurfaceId::primary(),
+            RenderSurfacePresentationAttempt::Applied { revision },
+        );
+    }
+    Ok(())
 }
 
 pub(crate) fn attach_secondary(
@@ -37,24 +58,57 @@ pub(crate) fn attach_secondary(
         return Ok(());
     }
 
-    let render_surface_id = {
+    let (render_surface_id, request, revision) = {
         let registry = world
             .resource_mut::<RenderSurfaceRegistryResource>()
             .context("render surface registry is unavailable")?;
-        registry
+        let id = registry
             .surface_for_native_window(native_window_id)
             .unwrap_or_else(|| {
                 registry.reserve_surface_for_native_window(native_window_id, requested_size_px)
-            })
+            });
+        let record = registry
+            .record(id)
+            .context("reserved render surface is absent")?;
+        (
+            id,
+            record.presentation_request,
+            record.presentation_revision,
+        )
     };
 
+    // Host's logical WindowState projection normalizes dimensions; that value is
+    // not evidence of a drawable swapchain. Read the real Winit extent here.
+    let physical_size = window.inner_size();
+    let physical_extent = (physical_size.width, physical_size.height);
     if let Err(err) = world
         .resource_mut::<Gfx>()
         .context("runtime gfx is unavailable")
-        .and_then(|gfx| gfx.attach_surface(render_surface_id, window, realized_size_px))
+        .and_then(|gfx| {
+            gfx.attach_surface_with_presentation(
+                render_surface_id,
+                window,
+                physical_extent,
+                request,
+                revision,
+            )
+        })
     {
+        // Preserve the exact-revision typed rejection, then perform the accepted
+        // fail-closed Host rollback before releasing native window ownership.
+        let reason = err
+            .downcast_ref::<RenderSurfacePresentationError>()
+            .copied();
+        if let Some(reason) = reason
+            && let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>()
+        {
+            registry.record_presentation_attempt(
+                render_surface_id,
+                RenderSurfacePresentationAttempt::Rejected { revision, reason },
+            );
+        }
         try_rollback_secondary(world, native_window_id)
-            .context("failed to rollback rejected secondary GPU attachment")?;
+            .context("failed to roll back rejected secondary GPU attachment")?;
         return Err(anyhow!("GPU surface attachment failed: {err:#}"));
     }
 
@@ -70,10 +124,22 @@ pub(crate) fn attach_secondary(
         })
     {
         try_rollback_secondary(world, native_window_id)
-            .context("failed to rollback rejected secondary surface correlation")?;
+            .context("failed to roll back rejected secondary surface correlation")?;
         return Err(anyhow!("render surface correlation failed: {err:#}"));
     }
 
+    let configured = world
+        .resource::<Gfx>()?
+        .surface_size(render_surface_id)
+        .is_some();
+    if configured {
+        world
+            .resource_mut::<RenderSurfaceRegistryResource>()?
+            .record_presentation_attempt(
+                render_surface_id,
+                RenderSurfacePresentationAttempt::Applied { revision },
+            );
+    }
     Ok(())
 }
 
@@ -122,7 +188,9 @@ pub(crate) fn try_retire_secondary(
     try_retire_secondary_with(world, native_window_id, |world, surface, lifecycle| {
         match world.resource_mut::<Gfx>() {
             Ok(gfx) => {
-                if gfx.has_surface(surface) {
+                // A temporarily lost or unconfigured surface may retain the native Window
+                // even without a current RunenGPU handle. Release that record too.
+                if gfx.has_recoverable_surface_record(surface) {
                     if !gfx.detach_surface(surface) {
                         return Err(SecondaryRetireError::PhysicalDetachRefused { surface });
                     }

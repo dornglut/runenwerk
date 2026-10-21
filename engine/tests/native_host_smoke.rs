@@ -4,7 +4,8 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use engine::plugins::render::host::{
-    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfacePresentationDisposition,
+    RenderSurfacePresentationRequest, RenderSurfaceRegistryResource,
 };
 use engine::plugins::render::inspect::{
     RenderCaptureSelector, RenderFrameHistoryState, RenderFrameObservationPolicyResource,
@@ -26,7 +27,9 @@ use engine::runtime::{
     NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, NativeWindowLifecycleState,
     WindowStateRegistryResource,
 };
-use runen_gpu::{GpuBindingKey, GpuBufferInitialization, GpuSubmissionStatus};
+use runen_gpu::{
+    GpuBindingKey, GpuBufferInitialization, GpuSubmissionStatus, GpuSurfacePresentMode,
+};
 use runenui_core::{FontFamilyName, GenericFontFamily, StyleEnvironment};
 use ui_controls::BUTTON_CONTROL_KIND_ID;
 use ui_definition::{
@@ -1532,6 +1535,18 @@ struct NativeHistoricalGpuHook {
     shared_secondary_start_frame: Option<u32>,
     shared_secondary_deferral_verified: bool,
     secondary_switched_to_independent: bool,
+    secondary_policy_initial_verified: bool,
+    alternative_modes: Vec<GpuSurfacePresentMode>,
+    pending_alternative: Option<(GpuSurfacePresentMode, usize)>,
+    applied_alternatives: Vec<GpuSurfacePresentMode>,
+    alternative_inventory_queried: bool,
+    supported_alternative_count: usize,
+    primary_alternative_modes: Vec<GpuSurfacePresentMode>,
+    pending_primary_alternative: Option<(GpuSurfacePresentMode, usize)>,
+    applied_primary_alternatives: Vec<GpuSurfacePresentMode>,
+    primary_alternative_inventory_queried: bool,
+    primary_supported_alternative_count: usize,
+    primary_mode_change_started: bool,
 }
 
 impl NativeWindowHook for NativeHistoricalGpuHook {
@@ -1572,9 +1587,18 @@ impl NativeHistoricalGpuHook {
         // Request the second window after initial GPU acceptance; create its
         // scoped invocation only once it has a real attached render surface.
         if self.first_submission.is_some() && !self.secondary_requested {
-            world
+            let new_window = world
                 .resource_mut::<WindowStateRegistryResource>()?
                 .request_window("Native shared then independent GPU secondary", (320, 240));
+            // The logical secondary intent exists before the Winit/RunenGPU physical attachment.
+            // FIFO with desired latency 1 must not leak into the default FIFO/2 primary surface.
+            let surfaces = world.resource_mut::<RenderSurfaceRegistryResource>()?;
+            let id = surfaces
+                .reserve_surface_for_native_window(new_window.native_window_id, new_window.size_px);
+            surfaces.set_presentation_request(
+                id,
+                RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Fifo, 1)?,
+            )?;
             self.secondary_requested = true;
         }
         if self.secondary_requested && self.secondary_surface.is_none() {
@@ -1614,6 +1638,183 @@ impl NativeHistoricalGpuHook {
                     self.secondary_surface = Some(surface);
                     self.shared_secondary_start_frame = Some(self.frames);
                 }
+            }
+        }
+        // The secondary must retain its preattachment FIFO/1 request while
+        // the primary's own policy remains FIFO/2. Alternative modes are only
+        // attempted when RunenGPU advertises support for this actual attachment.
+        if let Some(secondary) = self.secondary_surface {
+            let records = world.resource::<RenderSurfaceRegistryResource>()?;
+            let primary_record = records
+                .record(RenderSurfaceId::primary())
+                .ok_or_else(|| anyhow::anyhow!("native primary presentation record disappeared"))?
+                .clone();
+            let secondary_record = records
+                .record(secondary)
+                .ok_or_else(|| anyhow::anyhow!("native secondary presentation record disappeared"))?
+                .clone();
+            let gfx = world.resource::<Gfx>()?;
+            let primary = gfx.surface_presentation(&primary_record);
+            let secondary_state = gfx.surface_presentation(&secondary_record);
+            if !self.primary_mode_change_started {
+                anyhow::ensure!(
+                    primary.applied.is_some_and(|value| {
+                        value.request.present_mode == GpuSurfacePresentMode::Fifo
+                            && value.request.desired_maximum_frame_latency.get() == 2
+                    }),
+                    "secondary presentation policy changed the primary FIFO/2 configuration"
+                );
+            } else {
+                let expected_secondary = self
+                    .applied_alternatives
+                    .last()
+                    .copied()
+                    .unwrap_or(GpuSurfacePresentMode::Fifo);
+                anyhow::ensure!(
+                    secondary_state.disposition == RenderSurfacePresentationDisposition::Applied
+                        && secondary_state.applied.is_some_and(|value| {
+                            value.request.present_mode == expected_secondary
+                                && value.request.desired_maximum_frame_latency.get() == 1
+                        }),
+                    "primary presentation mode change affected independent secondary configuration"
+                );
+            }
+            if !self.secondary_policy_initial_verified {
+                anyhow::ensure!(
+                    secondary_state.disposition == RenderSurfacePresentationDisposition::Applied
+                        && secondary_state
+                            .applied
+                            .is_some_and(|value| value.request.present_mode
+                                == GpuSurfacePresentMode::Fifo
+                                && value.request.desired_maximum_frame_latency.get() == 1),
+                    "secondary initial attachment did not apply its reserved FIFO/1 policy"
+                );
+                self.secondary_policy_initial_verified = true;
+            }
+            if !self.alternative_inventory_queried {
+                let supported = secondary_state
+                    .supported_at_attachment
+                    .as_ref()
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("attached secondary did not expose capability snapshot")
+                    })?;
+                for mode in [
+                    GpuSurfacePresentMode::Mailbox,
+                    GpuSurfacePresentMode::Immediate,
+                    GpuSurfacePresentMode::FifoRelaxed,
+                ] {
+                    if supported.contains(&mode) {
+                        self.alternative_modes.push(mode);
+                        self.supported_alternative_count += 1;
+                    } else {
+                        println!("native_present_mode=unsupported mode={mode:?} surface=secondary");
+                    }
+                }
+                self.alternative_inventory_queried = true;
+            }
+            let submissions = world
+                .resource::<RenderFrameHistoryState>()?
+                .observations()
+                .filter(|entry| entry.key.render_surface_id == secondary.raw())
+                .count();
+            if let Some((mode, before)) = self.pending_alternative
+                && secondary_state.disposition == RenderSurfacePresentationDisposition::Applied
+                && secondary_state
+                    .applied
+                    .is_some_and(|value| value.request.present_mode == mode)
+                && submissions > before
+            {
+                self.applied_alternatives.push(mode);
+                self.pending_alternative = None;
+                println!(
+                    "native_present_mode=configured_and_submitted mode={mode:?} surface=secondary"
+                );
+            }
+            // Do not request a new mode until the prior configuration has
+            // both succeeded and the secondary has subsequently submitted a frame.
+            if self.secondary_switched_to_independent
+                && submissions > 0
+                && self.pending_alternative.is_none()
+                && !self.alternative_modes.is_empty()
+            {
+                let mode = self.alternative_modes.remove(0);
+                world
+                    .resource_mut::<RenderSurfaceRegistryResource>()?
+                    .set_presentation_request(
+                        secondary,
+                        RenderSurfacePresentationRequest::new(mode, 1)?,
+                    )?;
+                self.pending_alternative = Some((mode, submissions));
+            }
+        }
+        // Once both G5 history batches have been verified and the secondary
+        // alternatives have submitted, exercise the actual primary attachment
+        // independently. No GPU selection is inferred from an abstract mode list.
+        if self.second_committed
+            && self.alternative_inventory_queried
+            && self.alternative_modes.is_empty()
+            && self.pending_alternative.is_none()
+            && self.applied_alternatives.len() == self.supported_alternative_count
+        {
+            let primary_id = RenderSurfaceId::primary();
+            let record = world
+                .resource::<RenderSurfaceRegistryResource>()?
+                .record(primary_id)
+                .ok_or_else(|| anyhow::anyhow!("native primary presentation record missing"))?
+                .clone();
+            let snapshot = world.resource::<Gfx>()?.surface_presentation(&record);
+            if !self.primary_alternative_inventory_queried {
+                let supported = snapshot.supported_at_attachment.as_ref().ok_or_else(|| {
+                    anyhow::anyhow!("native primary lacks attachment-epoch capabilities")
+                })?;
+                for mode in [
+                    GpuSurfacePresentMode::Mailbox,
+                    GpuSurfacePresentMode::Immediate,
+                    GpuSurfacePresentMode::FifoRelaxed,
+                ] {
+                    if supported.contains(&mode) {
+                        self.primary_alternative_modes.push(mode);
+                        self.primary_supported_alternative_count += 1;
+                    } else {
+                        println!("native_present_mode=unsupported mode={mode:?} surface=primary");
+                    }
+                }
+                self.primary_alternative_inventory_queried = true;
+            }
+            let primary_submissions = world
+                .resource::<RenderFrameHistoryState>()?
+                .observations()
+                .filter(|entry| {
+                    entry.key.render_surface_id == primary_id.raw()
+                        && entry.presentation.present_operation_submitted
+                })
+                .count();
+            if let Some((mode, before)) = self.pending_primary_alternative
+                && snapshot.disposition == RenderSurfacePresentationDisposition::Applied
+                && snapshot.applied.is_some_and(|value| {
+                    value.request.present_mode == mode
+                        && value.request.desired_maximum_frame_latency.get() == 2
+                })
+                && primary_submissions > before
+            {
+                self.applied_primary_alternatives.push(mode);
+                self.pending_primary_alternative = None;
+                println!(
+                    "native_present_mode=configured_and_submitted mode={mode:?} surface=primary"
+                );
+            }
+            if self.pending_primary_alternative.is_none()
+                && !self.primary_alternative_modes.is_empty()
+            {
+                let mode = self.primary_alternative_modes.remove(0);
+                world
+                    .resource_mut::<RenderSurfaceRegistryResource>()?
+                    .set_presentation_request(
+                        primary_id,
+                        RenderSurfacePresentationRequest::new(mode, 2)?,
+                    )?;
+                self.pending_primary_alternative = Some((mode, primary_submissions));
+                self.primary_mode_change_started = true;
             }
         }
         // The second *real attached native surface* first requests the same
@@ -2096,7 +2297,17 @@ impl NativeHistoricalGpuHook {
                     && self.shared_secondary_deferral_verified
                     && self.secondary_switched_to_independent
                     && self.overflow_rejected_without_loss
-                    && self.semantic_verification_refusal_preserved,
+                    && self.semantic_verification_refusal_preserved
+                    && self.secondary_policy_initial_verified
+                    && self.alternative_inventory_queried
+                    && self.alternative_modes.is_empty()
+                    && self.pending_alternative.is_none()
+                    && self.applied_alternatives.len() == self.supported_alternative_count
+                    && self.primary_alternative_inventory_queried
+                    && self.primary_alternative_modes.is_empty()
+                    && self.pending_primary_alternative.is_none()
+                    && self.applied_primary_alternatives.len()
+                        == self.primary_supported_alternative_count,
                 "native RenderFlow must verify two G5 history batches, shared-state secondary deferral and independent secondary admission: first={:?}, terminal={}, first_pixel={}, committed={}, second={:?}, second_terminal={}, second_pixel={}, second_committed={}, queued={}, two_host_frames={}, terminal_hold={}, overflow={}, refusal={}, secondary_requested={}, secondary_surface={:?}, shared_deferral={}, independent_switch={}, secondary_submitted={}",
                 self.first_submission,
                 self.saw_terminal,
@@ -2308,6 +2519,18 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             shared_secondary_start_frame: None,
             shared_secondary_deferral_verified: false,
             secondary_switched_to_independent: false,
+            secondary_policy_initial_verified: false,
+            alternative_modes: Vec::new(),
+            pending_alternative: None,
+            applied_alternatives: Vec::new(),
+            alternative_inventory_queried: false,
+            supported_alternative_count: 0,
+            primary_alternative_modes: Vec::new(),
+            pending_primary_alternative: None,
+            applied_primary_alternatives: Vec::new(),
+            primary_alternative_inventory_queried: false,
+            primary_supported_alternative_count: 0,
+            primary_mode_change_started: false,
         });
     app.run()?;
     if let Some(error) = fatal_error

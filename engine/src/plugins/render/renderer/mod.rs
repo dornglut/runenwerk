@@ -948,7 +948,19 @@ pub struct GfxFrameTimings {
 
 impl Gfx {
     pub fn new(window: Arc<Window>) -> Result<Self> {
-        let ctx = RenderGpuContext::new(window)?;
+        Self::new_with_presentation(
+            window,
+            crate::plugins::render::host::RenderSurfacePresentationRequest::default(),
+            0,
+        )
+    }
+
+    pub fn new_with_presentation(
+        window: Arc<Window>,
+        request: crate::plugins::render::host::RenderSurfacePresentationRequest,
+        revision: u64,
+    ) -> Result<Self> {
+        let ctx = RenderGpuContext::new_with_presentation(window, request, revision)?;
         Ok(Self {
             ctx,
             renderer: Renderer::new(),
@@ -1049,6 +1061,53 @@ impl Gfx {
             .attach_surface(render_surface_id, window, target_size_px)
     }
 
+    pub fn attach_surface_with_presentation(
+        &mut self,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
+        window: Arc<Window>,
+        target_size_px: (u32, u32),
+        request: crate::plugins::render::host::RenderSurfacePresentationRequest,
+        revision: u64,
+    ) -> Result<()> {
+        self.ctx.attach_surface_with_presentation(
+            render_surface_id,
+            window,
+            target_size_px,
+            request,
+            revision,
+        )
+    }
+
+    /// Read-only composite of Render policy and RunenGPU-attached physical configuration.
+    pub fn surface_presentation(
+        &self,
+        record: &crate::plugins::render::host::RenderSurfaceRecord,
+    ) -> crate::plugins::render::host::RenderSurfacePresentationSnapshot {
+        self.ctx.presentation_snapshot(record)
+    }
+
+    /// Reconcile one pending policy and/or resize before acquiring the next surface image.
+    pub(crate) fn configure_surface_presentation(
+        &mut self,
+        id: crate::plugins::render::host::RenderSurfaceId,
+        request: crate::plugins::render::host::RenderSurfacePresentationRequest,
+        revision: u64,
+        size: (u32, u32),
+    ) -> Result<(), crate::plugins::render::host::RenderSurfacePresentationError> {
+        self.ctx.configure_presentation(id, request, revision, size)
+    }
+
+    pub(crate) fn invalidate_surface_presentation(
+        &mut self,
+        id: crate::plugins::render::host::RenderSurfaceId,
+    ) {
+        self.ctx.invalidate_surface(id);
+    }
+
+    pub fn is_surface_drawable(&self, id: crate::plugins::render::host::RenderSurfaceId) -> bool {
+        self.ctx.is_surface_drawable(id)
+    }
+
     pub fn detach_surface(
         &mut self,
         render_surface_id: crate::plugins::render::host::RenderSurfaceId,
@@ -1070,6 +1129,15 @@ impl Gfx {
         render_surface_id: crate::plugins::render::host::RenderSurfaceId,
     ) -> bool {
         self.ctx.has_surface(render_surface_id)
+    }
+
+    /// A registered attachment may be temporarily invalid and still recoverable.
+    /// Unlike has_surface(), this does not claim current physical configuration.
+    pub(crate) fn has_recoverable_surface_record(
+        &self,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
+    ) -> bool {
+        self.ctx.has_surface_record(render_surface_id)
     }
 
     pub fn surface_size(

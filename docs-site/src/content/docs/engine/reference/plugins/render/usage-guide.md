@@ -86,6 +86,43 @@ Runtime performance policy is split by ownership:
   provenance/capture/readback/pixel probes/texture diffs/export, slow frames,
   explicit requests, or full-every-frame policy.
 
+## Per-surface presentation policy
+
+`RenderSurfaceRegistryResource` stores a declarative
+`RenderSurfacePresentationRequest` for each `RenderSurfaceId`. Native windows
+default to `GpuSurfacePresentMode::Fifo` with a desired maximum frame-latency
+hint of 2. RunenGPU defines `Fifo`, `FifoRelaxed`, `Immediate`, and `Mailbox`.
+Requests are strict: unsupported modes are rejected without implicit fallback.
+
+For an existing or reserved Render surface, before or after native attachment:
+
+```rust
+let request = RenderSurfacePresentationRequest::new(
+    GpuSurfacePresentMode::Mailbox, 1,
+)?;
+let revision = registry.set_presentation_request(surface_id, request)?;
+```
+
+The revision records intent, not physical application. The existing RenderSubmit
+path reconciles requests before surface acquisition; it does not trigger Host redraws.
+
+`Gfx::surface_presentation(record)` returns a
+`RenderSurfacePresentationSnapshot` with requested, attachment-supported,
+selected and applied settings, the last attempt, and a
+`Pending | Applied | Rejected | Unavailable` disposition. A rejected new request
+may leave a previously applied configuration valid. The latency field remains
+a requested backend hint, not an observed effective frame latency.
+
+Supported modes are attachment-time facts, not live monitor capabilities.
+Physical loss or failed configuration invalidates cached facts and requires
+safe reattachment/requalification before claiming application; an unsupported
+mode request alone does not require recreation. Non-drawable surfaces defer
+configuration. Retired logical surfaces reject further policy updates.
+
+Host redraw pacing is independent of Render Present mode. Present submission,
+GPU completion, and physical display scanout are distinct; no selection
+guarantees FPS, tearing behavior, or input-to-photon latency.
+
 ## Prepared Frame Surface
 
 `PreparedRenderFrame` carries the prepare/submit boundary payload:
