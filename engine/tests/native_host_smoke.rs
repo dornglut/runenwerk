@@ -4,8 +4,10 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use engine::plugins::render::host::{
-    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfacePresentationDisposition,
-    RenderSurfacePresentationRequest, RenderSurfaceRegistryResource,
+    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfacePresentationAttempt,
+    RenderSurfacePresentationDisposition, RenderSurfacePresentationError,
+    RenderSurfacePresentationRequest, RenderSurfacePresentationSnapshot,
+    RenderSurfaceRegistryResource,
 };
 use engine::plugins::render::inspect::{
     RenderCaptureSelector, RenderFrameHistoryState, RenderFrameObservationPolicyResource,
@@ -1547,6 +1549,12 @@ struct NativeHistoricalGpuHook {
     primary_alternative_inventory_queried: bool,
     primary_supported_alternative_count: usize,
     primary_mode_change_started: bool,
+    pending_secondary_unsupported: Option<(GpuSurfacePresentMode, u64, usize)>,
+    secondary_unsupported_recovery: bool,
+    secondary_unsupported_checked: bool,
+    pending_primary_unsupported: Option<(GpuSurfacePresentMode, u64, usize)>,
+    primary_unsupported_recovery: bool,
+    primary_unsupported_checked: bool,
 }
 
 impl NativeWindowHook for NativeHistoricalGpuHook {
@@ -1575,6 +1583,38 @@ impl NativeWindowHook for NativeHistoricalGpuHook {
         }
         result
     }
+}
+
+/// A backend-advertised unsupported mode must never be submitted, and a valid
+/// previous FIFO configuration must remain separately observable after rejection.
+fn verify_strict_native_unsupported_mode(
+    snapshot: &RenderSurfacePresentationSnapshot,
+    mode: GpuSurfacePresentMode,
+    revision: u64,
+    before: usize,
+    submissions: usize,
+    fifo_latency: u32,
+) -> anyhow::Result<()> {
+    let reason = RenderSurfacePresentationError::UnsupportedPresentMode(mode);
+    anyhow::ensure!(
+        snapshot.request_revision == revision
+            && snapshot.requested.present_mode == mode
+            && snapshot.selected.is_none()
+            && snapshot
+                .supported_at_attachment
+                .as_ref()
+                .is_some_and(|modes| !modes.contains(&mode))
+            && snapshot.disposition == RenderSurfacePresentationDisposition::Rejected(reason)
+            && snapshot.last_attempt
+                == Some(RenderSurfacePresentationAttempt::Rejected { revision, reason })
+            && snapshot.applied.is_some_and(|applied| {
+                applied.request.present_mode == GpuSurfacePresentMode::Fifo
+                    && applied.request.desired_maximum_frame_latency.get() == fifo_latency
+            })
+            && submissions == before,
+        "unsupported native mode was not strictly rejected without a new Present"
+    );
+    Ok(())
 }
 
 impl NativeHistoricalGpuHook {
@@ -1720,6 +1760,65 @@ impl NativeHistoricalGpuHook {
                         && entry.presentation.present_operation_submitted
                 })
                 .count();
+            if let Some((mode, revision, before)) = self.pending_secondary_unsupported {
+                verify_strict_native_unsupported_mode(
+                    &secondary_state,
+                    mode,
+                    revision,
+                    before,
+                    submissions,
+                    1,
+                )?;
+                world
+                    .resource_mut::<RenderSurfaceRegistryResource>()?
+                    .set_presentation_request(
+                        secondary,
+                        RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Fifo, 1)?,
+                    )?;
+                self.pending_secondary_unsupported = None;
+                self.secondary_unsupported_recovery = true;
+                println!("native_present_mode=strictly_rejected mode={mode:?} surface=secondary");
+            }
+            if self.secondary_unsupported_recovery
+                && secondary_state.disposition == RenderSurfacePresentationDisposition::Applied
+                && secondary_state.applied.is_some_and(|applied| {
+                    applied.request.present_mode == GpuSurfacePresentMode::Fifo
+                        && applied.request.desired_maximum_frame_latency.get() == 1
+                })
+            {
+                self.secondary_unsupported_recovery = false;
+                self.secondary_unsupported_checked = true;
+            }
+            if self.secondary_switched_to_independent
+                && submissions > 0
+                && !self.secondary_unsupported_checked
+                && !self.secondary_unsupported_recovery
+                && self.pending_secondary_unsupported.is_none()
+            {
+                let unsupported = [
+                    GpuSurfacePresentMode::Mailbox,
+                    GpuSurfacePresentMode::Immediate,
+                    GpuSurfacePresentMode::FifoRelaxed,
+                ]
+                .into_iter()
+                .find(|mode| {
+                    secondary_state
+                        .supported_at_attachment
+                        .as_ref()
+                        .is_some_and(|modes| !modes.contains(mode))
+                });
+                if let Some(mode) = unsupported {
+                    let revision = world
+                        .resource_mut::<RenderSurfaceRegistryResource>()?
+                        .set_presentation_request(
+                            secondary,
+                            RenderSurfacePresentationRequest::new(mode, 1)?,
+                        )?;
+                    self.pending_secondary_unsupported = Some((mode, revision, submissions));
+                } else {
+                    self.secondary_unsupported_checked = true;
+                }
+            }
             if let Some((mode, before)) = self.pending_alternative
                 && secondary_state.disposition == RenderSurfacePresentationDisposition::Applied
                 && secondary_state
@@ -1738,6 +1837,7 @@ impl NativeHistoricalGpuHook {
             if self.secondary_switched_to_independent
                 && submissions > 0
                 && self.pending_alternative.is_none()
+                && self.secondary_unsupported_checked
                 && !self.alternative_modes.is_empty()
             {
                 let mode = self.alternative_modes.remove(0);
@@ -1758,6 +1858,7 @@ impl NativeHistoricalGpuHook {
             && self.alternative_modes.is_empty()
             && self.pending_alternative.is_none()
             && self.applied_alternatives.len() == self.supported_alternative_count
+            && self.secondary_unsupported_checked
         {
             let primary_id = RenderSurfaceId::primary();
             let record = world
@@ -1792,6 +1893,64 @@ impl NativeHistoricalGpuHook {
                         && entry.presentation.present_operation_submitted
                 })
                 .count();
+            if let Some((mode, revision, before)) = self.pending_primary_unsupported {
+                verify_strict_native_unsupported_mode(
+                    &snapshot,
+                    mode,
+                    revision,
+                    before,
+                    primary_submissions,
+                    2,
+                )?;
+                world
+                    .resource_mut::<RenderSurfaceRegistryResource>()?
+                    .set_presentation_request(
+                        primary_id,
+                        RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Fifo, 2)?,
+                    )?;
+                self.pending_primary_unsupported = None;
+                self.primary_unsupported_recovery = true;
+                println!("native_present_mode=strictly_rejected mode={mode:?} surface=primary");
+            }
+            if self.primary_unsupported_recovery
+                && snapshot.disposition == RenderSurfacePresentationDisposition::Applied
+                && snapshot.applied.is_some_and(|applied| {
+                    applied.request.present_mode == GpuSurfacePresentMode::Fifo
+                        && applied.request.desired_maximum_frame_latency.get() == 2
+                })
+            {
+                self.primary_unsupported_recovery = false;
+                self.primary_unsupported_checked = true;
+            }
+            if !self.primary_unsupported_checked
+                && !self.primary_unsupported_recovery
+                && self.pending_primary_unsupported.is_none()
+            {
+                let unsupported = [
+                    GpuSurfacePresentMode::Mailbox,
+                    GpuSurfacePresentMode::Immediate,
+                    GpuSurfacePresentMode::FifoRelaxed,
+                ]
+                .into_iter()
+                .find(|mode| {
+                    snapshot
+                        .supported_at_attachment
+                        .as_ref()
+                        .is_some_and(|modes| !modes.contains(mode))
+                });
+                if let Some(mode) = unsupported {
+                    let revision = world
+                        .resource_mut::<RenderSurfaceRegistryResource>()?
+                        .set_presentation_request(
+                            primary_id,
+                            RenderSurfacePresentationRequest::new(mode, 2)?,
+                        )?;
+                    self.pending_primary_unsupported =
+                        Some((mode, revision, primary_submissions));
+                } else {
+                    self.primary_unsupported_checked = true;
+                }
+            }
             if let Some((mode, before)) = self.pending_primary_alternative
                 && snapshot.disposition == RenderSurfacePresentationDisposition::Applied
                 && snapshot.applied.is_some_and(|value| {
@@ -1807,6 +1966,7 @@ impl NativeHistoricalGpuHook {
                 );
             }
             if self.pending_primary_alternative.is_none()
+                && self.primary_unsupported_checked
                 && !self.primary_alternative_modes.is_empty()
             {
                 let mode = self.primary_alternative_modes.remove(0);
@@ -2306,11 +2466,17 @@ impl NativeHistoricalGpuHook {
                     && self.alternative_modes.is_empty()
                     && self.pending_alternative.is_none()
                     && self.applied_alternatives.len() == self.supported_alternative_count
+                    && self.secondary_unsupported_checked
+                    && self.pending_secondary_unsupported.is_none()
+                    && !self.secondary_unsupported_recovery
                     && self.primary_alternative_inventory_queried
                     && self.primary_alternative_modes.is_empty()
                     && self.pending_primary_alternative.is_none()
                     && self.applied_primary_alternatives.len()
-                        == self.primary_supported_alternative_count,
+                        == self.primary_supported_alternative_count
+                    && self.primary_unsupported_checked
+                    && self.pending_primary_unsupported.is_none()
+                    && !self.primary_unsupported_recovery,
                 "native RenderFlow must verify two G5 history batches, shared-state secondary deferral and independent secondary admission: first={:?}, terminal={}, first_pixel={}, committed={}, second={:?}, second_terminal={}, second_pixel={}, second_committed={}, queued={}, two_host_frames={}, terminal_hold={}, overflow={}, refusal={}, secondary_requested={}, secondary_surface={:?}, shared_deferral={}, independent_switch={}, secondary_submitted={}",
                 self.first_submission,
                 self.saw_terminal,
@@ -2534,6 +2700,12 @@ fn native_historical_gpu_smoke() -> anyhow::Result<()> {
             primary_alternative_inventory_queried: false,
             primary_supported_alternative_count: 0,
             primary_mode_change_started: false,
+            pending_secondary_unsupported: None,
+            secondary_unsupported_recovery: false,
+            secondary_unsupported_checked: false,
+            pending_primary_unsupported: None,
+            primary_unsupported_recovery: false,
+            primary_unsupported_checked: false,
         });
     app.run()?;
     if let Some(error) = fatal_error
