@@ -183,9 +183,20 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
         });
         let publication = match publication_attempt {
             Ok(publication) => publication,
+            Err(error)
+                if error.is::<super::native_transaction::NativeUiMutationNeedsSettlement>() =>
+            {
+                // Surface publishing can itself admit new M13 work. The
+                // canonical transaction already revoked old gameplay access.
+                // Withhold old paint and displayed-input authority, and retry
+                // only after the existing native Host's bounded M13 settlement.
+                // Never stage a publication whose final ownership is unsettled.
+                withdraw_paint_and_mapping(&mut world, &binding);
+                continue;
+            }
             Err(error) => {
-                // No old RunenUI paint may cross a failed fresh publication.
-                // Redraw remains runtime-owned and pending until a later success.
+                // Genuine binding loss, terminal runtime or other publication
+                // failure remains fatal; no old paint can cross this boundary.
                 withdraw_paint_and_mapping(&mut world, &binding);
                 return Err(anyhow!("RunenUI bound publication rejected: {error:?}"));
             }

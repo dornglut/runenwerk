@@ -230,6 +230,15 @@ pub fn unmount_retired_native_ui_slot(
     Ok(retirement)
 }
 
+/// A successfully executed mutation may enqueue new framework work before the
+/// final M13 observation (notably while publishing a UI surface). This typed
+/// retry requirement is **not** success, a new queue, or evidence of a retained
+/// gameplay permission: the original source is revoked and any output must be
+/// withheld until the existing native runtime settles and is reobserved.
+#[derive(Debug, thiserror::Error)]
+#[error("native RunenUI mutation left pending M13 work; withhold publication and retry after native settlement")]
+pub(crate) struct NativeUiMutationNeedsSettlement;
+
 /// Execute a selected-native RunenUI app mutation and withdraw incompatible
 /// game input *before the next ECS system can read its cached ActionState*.
 ///
@@ -467,6 +476,21 @@ fn transact_ui_slot_inner<T>(
     }
     match outcome {
         Ok(Ok(value)) if valid_after => Ok(value),
+        // The original native binding is still identical, but the operation
+        // itself has admitted further framework work (e.g. a zero-budget
+        // post-publication readiness checkpoint). That is a *pending* M13
+        // outcome, not a lost scope. Never return the unqualified publication:
+        // revoke the physical game's prior permission above; its source owner
+        // and the next native settlement own all subsequent observations.
+        Ok(Ok(_))
+            if same_binding
+                && matches!(
+                    after,
+                    Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+                ) =>
+        {
+            Err(NativeUiMutationNeedsSettlement.into())
+        }
         Ok(Ok(_)) => Err(anyhow!(
             "native RunenUI app mutation lost its binding or final M13 ownership observation"
         )),
@@ -715,6 +739,71 @@ mod tests {
             )
             .unwrap();
         runtime.run_schedule::<Update>(&mut world).unwrap();
+    }
+
+    #[test]
+    fn selected_native_post_mutation_pending_is_retryable_without_gameplay_permission() {
+        let mut world = setup();
+        let (slot, source) = {
+            let probe = world.resource::<Probe>().unwrap();
+            (probe.slot, probe.ui)
+        };
+        // A real selected native slot and source are required. This models
+        // only the post-publication readiness condition, not an invented
+        // keyboard/pointer settlement or an alternate M13 snapshot.
+        let failure = transact_ui_slot(&mut world, slot, |slots| {
+            slots.test_mark_native_pending(slot)?;
+            Ok(())
+        })
+        .expect_err("unobserved final M13 work cannot publish");
+        assert!(
+            failure.is::<NativeUiMutationNeedsSettlement>(),
+            "unchanged live binding with pending M13 is distinct from scope loss: {failure:#}"
+        );
+        assert!(matches!(
+            world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .unwrap()
+                .input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        ));
+        assert!(
+            world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(source, &PhysicalKeyIdentity::code("KeyW"))
+                .is_some(),
+            "the source owner must preserve the original physical Down"
+        );
+        // The existing native transaction settles the original framework,
+        // without fabricating a new native recipient or synthetic key Up.
+        settle_native_ui_slot(&mut world, slot).unwrap();
+        assert_eq!(
+            world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .unwrap()
+                .input_ownership(slot)
+                .unwrap()
+                .status(),
+            RuntimeStatus::Running
+        );
+        transact_ui_slot(&mut world, slot, |_slots| Ok(()))
+            .expect("a subsequent quiescent observation is allowed");
+    }
+
+    #[test]
+    fn selected_native_terminal_scope_loss_is_not_retryable_pending() {
+        let mut world = setup();
+        let slot = world.resource::<Probe>().unwrap().slot;
+        let failure = transact_ui_slot(&mut world, slot, |slots| {
+            slots.test_inject_external_scope_loss(slot)?;
+            Ok(())
+        })
+        .expect_err("destroyed selected native slot cannot publish");
+        assert!(
+            !failure.is::<NativeUiMutationNeedsSettlement>(),
+            "a terminal or lost M13 scope must never masquerade as retryable work"
+        );
     }
 
     #[test]
