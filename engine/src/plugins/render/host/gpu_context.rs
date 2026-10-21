@@ -16,7 +16,9 @@ use super::RenderSurfaceId;
 #[derive(Debug)]
 struct AttachedSurfaceState {
     surface: GpuSurfaceHandle,
-    config: GpuSurfaceConfiguration,
+    /// None while RunenGPU physically owns a registered but not configured surface.
+    /// Its handle must remain reachable for typed rollback and device-loss detach.
+    config: Option<GpuSurfaceConfiguration>,
 }
 
 #[derive(Debug)]
@@ -161,7 +163,7 @@ impl RenderGpuContext {
                 RenderSurfaceId::primary(),
                 AttachedSurfaceState {
                     surface,
-                    config: surface_config,
+                    config: Some(surface_config),
                 },
             )]),
         })
@@ -177,14 +179,34 @@ impl RenderGpuContext {
         window: Arc<Window>,
         target_size_px: (u32, u32),
     ) -> Result<()> {
+        if self.surfaces.contains_key(&render_surface_id) {
+            return Err(anyhow::anyhow!(
+                "render surface {} already retains physical GPU ownership",
+                render_surface_id.raw()
+            ));
+        }
         let surface = self.context.attach_surface(window)?;
+        // RunenGPU physically owns this window as soon as registration succeeds.
+        // Publish the handle *before* fallible capabilities/configuration so a
+        // failed setup cannot make the Host rollback mistake it for a no-op.
+        self.surfaces.insert(
+            render_surface_id,
+            AttachedSurfaceState {
+                surface,
+                config: None,
+            },
+        );
         let caps = self.context.surface_capabilities(surface)?;
         let format = preferred_surface_format(&caps)
             .ok_or_else(|| anyhow::anyhow!("render surface reports no supported format"))?;
         let config = build_surface_config(target_size_px.0, target_size_px.1, format, &caps)?;
-        let surface = self.context.configure_surface(surface, config.clone())?;
-        self.surfaces
-            .insert(render_surface_id, AttachedSurfaceState { surface, config });
+        let configured = self.context.configure_surface(surface, config.clone())?;
+        let state = self
+            .surfaces
+            .get_mut(&render_surface_id)
+            .expect("registered GPU surface remains tracked across synchronous setup");
+        state.surface = configured;
+        state.config = Some(config);
         Ok(())
     }
 
@@ -209,23 +231,28 @@ impl RenderGpuContext {
     ) -> Option<&GpuSurfaceConfiguration> {
         self.surfaces
             .get(&render_surface_id)
-            .map(|state| &state.config)
+            .and_then(|state| state.config.as_ref())
     }
 
     pub fn resize(&mut self, render_surface_id: RenderSurfaceId, width: u32, height: u32) -> bool {
         let Some(state) = self.surfaces.get_mut(&render_surface_id) else {
             return false;
         };
+        let Some(current) = state.config.as_ref() else {
+            // A failed attach still retains a physical surface for rollback,
+            // but no successfully admitted configuration exists to resize.
+            return false;
+        };
         let Ok(config) = GpuSurfaceConfiguration::new(
             width.max(1),
             height.max(1),
-            state.config.format(),
-            state.config.color_space(),
-            state.config.usages().iter().copied(),
-            state.config.present_mode(),
-            state.config.alpha_mode(),
-            state.config.desired_maximum_frame_latency(),
-            state.config.view_formats().iter().copied(),
+            current.format(),
+            current.color_space(),
+            current.usages().iter().copied(),
+            current.present_mode(),
+            current.alpha_mode(),
+            current.desired_maximum_frame_latency(),
+            current.view_formats().iter().copied(),
         ) else {
             return false;
         };
@@ -236,7 +263,7 @@ impl RenderGpuContext {
             return false;
         };
         state.surface = surface;
-        state.config = config;
+        state.config = Some(config);
         true
     }
 

@@ -612,14 +612,13 @@ impl WinitRunner {
         self.apply_event_for_native_window(native_window_id, PlatformEvent::Focused { focused })
     }
 
-    fn retire_window_input_source(&mut self, native_window_id: NativeWindowId) -> Result<bool> {
-        // A required original source-loss journal entry MUST have its full
-        // bounded admission (and normalized reducer) proven before any M13
-        // Cancel mutates the separately owned framework pressed streams.
-        // Otherwise journal exhaustion could leave the original source live
-        // after RunenUI has irreversibly retired the same hardware lifetime.
-        let original_source = self.native_input().window_source_context(native_window_id);
-        if let Some(context) = original_source {
+    /// Validate original source-loss journal admission before any irreversible
+    /// RunenUI cancellation or physical Render detach for a secondary close.
+    fn preflight_native_source_retirement(
+        &mut self,
+        native_window_id: NativeWindowId,
+    ) -> Result<()> {
+        if let Some(context) = self.native_input().window_source_context(native_window_id) {
             self.state
                 .world
                 .resource_mut::<PlatformWindowEventQueueResource>()
@@ -633,6 +632,14 @@ impl WinitRunner {
                 .resource::<InputState>()
                 .context("native physical state missing before source retirement")?;
         }
+        Ok(())
+    }
+
+    fn retire_window_input_source(&mut self, native_window_id: NativeWindowId) -> Result<bool> {
+        // A required original source-loss observation MUST be admitted before
+        // Cancels mutate M13 state, including standalone source retirement.
+        self.preflight_native_source_retirement(native_window_id)?;
+        let original_source = self.native_input().window_source_context(native_window_id);
         // Source retirement is a mandatory native pointer-stream boundary,
         // even when an original window callback is no longer forthcoming.
         let mouse_cancel = self.cancel_native_ui_mouse(native_window_id);
@@ -2862,7 +2869,7 @@ impl WinitRunner {
         let window = match self.window_realizer.realize_secondary(event_loop, &request) {
             Ok(window) => window,
             Err(err) => {
-                self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"));
+                self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"))?;
                 return Ok(());
             }
         };
@@ -2876,7 +2883,7 @@ impl WinitRunner {
             request.size_px,
             realized_size_px,
         ) {
-            self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"));
+            self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"))?;
             return Ok(());
         }
 
@@ -2893,7 +2900,11 @@ impl WinitRunner {
                 );
             });
         if let Err(err) = logical_commit {
-            render_native_host::rollback_secondary(&mut self.state.world, request.native_window_id);
+            render_native_host::try_rollback_secondary(
+                &mut self.state.world,
+                request.native_window_id,
+            )
+            .context("secondary correlation rollback was refused")?;
             return Err(err);
         }
 
@@ -2908,16 +2919,25 @@ impl WinitRunner {
         &mut self,
         native_window_id: NativeWindowId,
         reason: impl Into<String>,
-    ) {
-        render_native_host::rollback_secondary(&mut self.state.world, native_window_id);
-        if let Ok(registry) = self
+    ) -> Result<()> {
+        render_native_host::try_rollback_secondary(&mut self.state.world, native_window_id)
+            .context("secondary creation rollback was refused")?;
+        let registry = self
             .state
             .world
             .resource_mut::<WindowStateRegistryResource>()
-        {
-            self.window_realizer
-                .mark_creation_failed(registry, native_window_id, reason);
-        }
+            .context("native Host window registry is unavailable")?;
+        self.window_realizer
+            .mark_creation_failed(registry, native_window_id, reason);
+        Ok(())
+    }
+
+    /// A refused physical Render detach must leave Input, RunenUI and native
+    /// window identity unchanged. Source retirement follows only on success.
+    fn authorize_secondary_close(&mut self, native_window_id: NativeWindowId) -> Result<()> {
+        render_native_host::try_retire_secondary(&mut self.state.world, native_window_id)
+            .context("secondary physical Render surface retirement was refused")?;
+        Ok(())
     }
 
     fn dispatch_native_window_event(&mut self, window: &Window, event: &WindowEvent) {
@@ -2950,6 +2970,13 @@ impl WinitRunner {
             WinitWindowRealizer::apply_physical_record(&window, &record);
 
             if record.close_requested {
+                if native_window_id != NativeWindowId::primary() {
+                    // Reserve the original source loss before a physical detach.
+                    // Once Render accepts retirement, a failed M13 Cancel still
+                    // cannot prevent mandatory neutral continuity and revocation.
+                    self.preflight_native_source_retirement(native_window_id)?;
+                    self.authorize_secondary_close(native_window_id)?;
+                }
                 // A failed framework Cancel may stop this host, but must not
                 // prevent the original neutral source and gameplay contributors
                 // from retiring. Invoke both existing owners before propagating
@@ -2966,7 +2993,6 @@ impl WinitRunner {
                 }
                 recipient_retirement?;
                 source_retirement?;
-                render_native_host::retire_secondary(&mut self.state.world, native_window_id);
                 if let Ok(window_registry) = self
                     .state
                     .world
@@ -3744,6 +3770,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
 }
 
 #[cfg(test)]
+#[path = "winit_runner_retirement_tests.rs"]
+mod retirement_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::{App, AppNativeHostExt};
@@ -3982,7 +4012,7 @@ mod tests {
         );
     }
 
-    fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {
+    pub(super) fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {
         let mut app = App::new();
         app.with_frame_pacing(policy);
         install_native_window_provider_resources(app.world_mut());
@@ -7269,7 +7299,9 @@ mod tests {
             .expect("window registry should exist")
             .request_window("Secondary", (900, 600));
 
-        runner.mark_window_creation_failed(request.native_window_id, "test realization failure");
+        runner
+            .mark_window_creation_failed(request.native_window_id, "test realization failure")
+            .unwrap();
 
         let windows = runner
             .state
