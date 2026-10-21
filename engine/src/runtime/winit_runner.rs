@@ -416,7 +416,7 @@ impl WinitRunner {
         let window = match self.window_realizer.realize_secondary(event_loop, &request) {
             Ok(window) => window,
             Err(err) => {
-                self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"));
+                self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"))?;
                 return Ok(());
             }
         };
@@ -430,7 +430,7 @@ impl WinitRunner {
             request.size_px,
             realized_size_px,
         ) {
-            self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"));
+            self.mark_window_creation_failed(request.native_window_id, format!("{err:#}"))?;
             return Ok(());
         }
 
@@ -447,7 +447,11 @@ impl WinitRunner {
                 );
             });
         if let Err(err) = logical_commit {
-            render_native_host::rollback_secondary(&mut self.state.world, request.native_window_id);
+            render_native_host::try_rollback_secondary(
+                &mut self.state.world,
+                request.native_window_id,
+            )
+            .context("secondary correlation rollback was refused")?;
             return Err(err);
         }
 
@@ -462,16 +466,25 @@ impl WinitRunner {
         &mut self,
         native_window_id: NativeWindowId,
         reason: impl Into<String>,
-    ) {
-        render_native_host::rollback_secondary(&mut self.state.world, native_window_id);
-        if let Ok(registry) = self
+    ) -> Result<()> {
+        render_native_host::try_rollback_secondary(&mut self.state.world, native_window_id)
+            .context("secondary creation rollback was refused")?;
+        let registry = self
             .state
             .world
             .resource_mut::<WindowStateRegistryResource>()
-        {
-            self.window_realizer
-                .mark_creation_failed(registry, native_window_id, reason);
-        }
+            .context("native Host window registry is unavailable")?;
+        self.window_realizer
+            .mark_creation_failed(registry, native_window_id, reason);
+        Ok(())
+    }
+
+    /// Explicit Render handoff must succeed before Input or native-window retirement.
+    fn authorize_secondary_close(&mut self, native_window_id: NativeWindowId) -> Result<()> {
+        render_native_host::try_retire_secondary(&mut self.state.world, native_window_id)
+            .context("secondary physical Render surface retirement was refused")?;
+        self.retire_window_input_source(native_window_id)?;
+        Ok(())
     }
 
     fn dispatch_native_window_event(&mut self, window: &Window, event: &WindowEvent) {
@@ -510,8 +523,7 @@ impl WinitRunner {
                     event_loop.exit();
                     return Ok(());
                 }
-                self.retire_window_input_source(native_window_id)?;
-                render_native_host::retire_secondary(&mut self.state.world, native_window_id);
+                self.authorize_secondary_close(native_window_id)?;
                 if let Ok(window_registry) = self
                     .state
                     .world
@@ -1009,6 +1021,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
 }
 
 #[cfg(test)]
+#[path = "winit_runner_retirement_tests.rs"]
+mod retirement_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::app::{App, AppNativeHostExt};
@@ -1035,7 +1051,7 @@ mod tests {
         app.add_systems(FixedUpdate, log_tick);
     }
 
-    fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {
+    pub(super) fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {
         let mut app = App::new();
         app.with_frame_pacing(policy);
         install_native_window_provider_resources(app.world_mut());
@@ -1392,7 +1408,9 @@ mod tests {
             .expect("window registry should exist")
             .request_window("Secondary", (900, 600));
 
-        runner.mark_window_creation_failed(request.native_window_id, "test realization failure");
+        runner
+            .mark_window_creation_failed(request.native_window_id, "test realization failure")
+            .unwrap();
 
         let windows = runner
             .state
