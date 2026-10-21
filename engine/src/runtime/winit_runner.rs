@@ -857,6 +857,50 @@ impl WinitRunner {
         window: NativeWindowId,
         allow_approved_close: bool,
     ) -> Result<(NativeInputRecipient, Option<u64>)> {
+        let observed = self.native_input_recipient_once(window, allow_approved_close);
+        if !observed.as_ref().is_err_and(native_m13_waiting_for_settlement) {
+            return observed;
+        }
+        // Original Winit events can arrive between publication's bounded M13
+        // readiness checkpoint and the next frame. Before admitting input,
+        // give the EXISTING selected-slot World transaction one opportunity
+        // to settle on the same invoker thread. Its prestate contract revokes
+        // gameplay before pumping; no independent queue/owner is introduced.
+        //
+        // Only the already registered window + slot association may be used
+        // to request settlement, NEVER as an input routing permission.
+        let selected_slot = (|| {
+            let world = &self.state.world;
+            let slots = world.resource::<UiRuntimeSlotsResource>().ok()?;
+            let recipients = world.resource::<UiNativeInputRecipientsResource>().ok()?;
+            slots.slot_ids().find(|slot| {
+                recipients
+                    .selected_slot_binding(*slot)
+                    .is_some_and(|(bound_window, _, _)| bound_window == window)
+            })
+        })();
+        let Some(slot) = selected_slot else {
+            return observed;
+        };
+        let settlement = crate::plugins::ui::settle_native_ui_slot(&mut self.state.world, slot);
+        // A legitimately capacity-paused runtime may remain pending after its
+        // single bounded pump. Only then is the event neutral-only; source game
+        // permission has already been synchronously revoked by the World
+        // transaction. Never silently classify terminal/missing scope as
+        // pending, or re-submit an original event after a failed attempt.
+        let current = self.native_input_recipient_once(window, allow_approved_close);
+        match settlement {
+            Ok(()) => current,
+            Err(_) if current.as_ref().is_err_and(native_m13_waiting_for_settlement) => current,
+            Err(error) => Err(error),
+        }
+    }
+
+    fn native_input_recipient_once(
+        &mut self,
+        window: NativeWindowId,
+        allow_approved_close: bool,
+    ) -> Result<(NativeInputRecipient, Option<u64>)> {
         let world = &mut self.state.world;
         let Some(mut slots) = world.remove_resource::<UiRuntimeSlotsResource>() else {
             if world.has_resource::<UiNativeInputRecipientsResource>() {
