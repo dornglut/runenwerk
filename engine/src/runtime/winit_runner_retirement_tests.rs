@@ -231,7 +231,10 @@ fn saturated_source_journal_cannot_retire_render_or_a_selected_ui_recipient() {
         "journal pressure must not release an original secondary Render reservation"
     );
     assert_eq!(
-        runner.native_input().window_source_context(secondary).map(|ctx| ctx.source),
+        runner
+            .native_input()
+            .window_source_context(secondary)
+            .map(|ctx| ctx.source),
         Some(source.source),
         "no fabricated source retirement on journal refusal"
     );
