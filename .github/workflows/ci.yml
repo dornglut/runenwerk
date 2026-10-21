@@ -180,6 +180,57 @@ jobs:
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
             cargo +stable run -p engine --example boids_render_flow --locked -- --species
 
+      - name: Prove actual Boids native launch pacing (capped and uncapped)
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          for mode in capped:120 uncapped; do
+            args=(--host-pacing "$mode")
+            if [ "$mode" = uncapped ]; then args+=(--species); fi
+            log="$(mktemp)"
+            if ! xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+                 cargo +stable run -p engine --example boids_render_flow --locked -- "${args[@]}" >"$log" 2>&1; then
+              cat "$log"
+              rm -f "$log"
+              exit 1
+            fi
+            if ! grep -F "native_boids_gpu_smoke=pass" "$log"; then
+              cat "$log"
+              echo "Boids Host CLI mode $mode did not complete actual GPU continuity smoke" >&2
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+          done
+
+      - name: Reject invalid Boids and Arena native launch arguments before startup
+        run: |
+          set -euo pipefail
+          for package in boids arena; do
+            log="$(mktemp)"
+            if [ "$package" = boids ]; then
+              command=(cargo +stable run -p engine --example boids_render_flow --locked -- --host-pacing=capped:0)
+            else
+              command=(cargo +stable run -p runenwerk_arena --locked -- --host-pacing=capped:0)
+            fi
+            if timeout 180s "${command[@]}" >"$log" 2>&1; then
+              cat "$log"
+              echo "$package accepted invalid capped FPS" >&2
+              rm -f "$log"
+              exit 1
+            fi
+            if ! grep -F "outside 1..=240" "$log"; then
+              cat "$log"
+              echo "$package did not reject the request for the expected Host pacing reason" >&2
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+          done
+
       - name: Prove original and species Boids native without GPU image readback
         env:
           RUST_BACKTRACE: '1'
