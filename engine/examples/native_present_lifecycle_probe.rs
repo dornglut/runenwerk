@@ -13,8 +13,8 @@ use engine::plugins::render::{Gfx, RenderFlow};
 use engine::plugins::{RenderPlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt};
 use engine::runtime::{
-    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId,
-    NativeWindowLifecycleState, WindowStateRegistryResource,
+    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, NativeWindowLifecycleState,
+    WindowStateRegistryResource,
 };
 use runen_gpu::GpuSurfacePresentMode;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -74,7 +74,10 @@ impl PhysicalProbe {
         }
     }
 
-    fn presentation(world: &runen_ecs::World, id: RenderSurfaceId) -> Result<RenderSurfacePresentationSnapshot> {
+    fn presentation(
+        world: &runen_ecs::World,
+        id: RenderSurfaceId,
+    ) -> Result<RenderSurfacePresentationSnapshot> {
         let record = world
             .resource::<RenderSurfaceRegistryResource>()?
             .record(id)
@@ -96,15 +99,20 @@ impl PhysicalProbe {
             return Ok(false);
         }
         let observation = world.resource::<Gfx>()?.surface_presentation(record);
-        Ok(observation.disposition == RenderSurfacePresentationDisposition::Applied
-            && observation.applied.is_some_and(|a| {
-                a.revision == record.presentation_revision
-                    && a.request.present_mode == mode
-                    && a.request.desired_maximum_frame_latency.get() == latency
-            }))
+        Ok(
+            observation.disposition == RenderSurfacePresentationDisposition::Applied
+                && observation.applied.is_some_and(|a| {
+                    a.revision == record.presentation_revision
+                        && a.request.present_mode == mode
+                        && a.request.desired_maximum_frame_latency.get() == latency
+                }),
+        )
     }
 
-    fn request_secondary(world: &mut runen_ecs::World, label: &str) -> Result<(NativeWindowId, RenderSurfaceId)> {
+    fn request_secondary(
+        world: &mut runen_ecs::World,
+        label: &str,
+    ) -> Result<(NativeWindowId, RenderSurfaceId)> {
         let request = world
             .resource_mut::<WindowStateRegistryResource>()?
             .request_window(label, (480, 320));
