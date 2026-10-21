@@ -2932,9 +2932,10 @@ impl WinitRunner {
         Ok(())
     }
 
-    /// A refused physical Render detach must leave Input, RunenUI and native
-    /// window identity unchanged. Source retirement follows only on success.
+    /// The original source loss must remain journal-admissible before physical
+    /// Render retirement. Neither rejection may mutate input or window identity.
     fn authorize_secondary_close(&mut self, native_window_id: NativeWindowId) -> Result<()> {
+        self.preflight_native_source_retirement(native_window_id)?;
         render_native_host::try_retire_secondary(&mut self.state.world, native_window_id)
             .context("secondary physical Render surface retirement was refused")?;
         Ok(())
@@ -2971,10 +2972,8 @@ impl WinitRunner {
 
             if record.close_requested {
                 if native_window_id != NativeWindowId::primary() {
-                    // Reserve the original source loss before a physical detach.
                     // Once Render accepts retirement, a failed M13 Cancel still
                     // cannot prevent mandatory neutral continuity and revocation.
-                    self.preflight_native_source_retirement(native_window_id)?;
                     self.authorize_secondary_close(native_window_id)?;
                 }
                 // A failed framework Cancel may stop this host, but must not

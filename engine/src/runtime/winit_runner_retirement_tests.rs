@@ -126,3 +126,129 @@ fn creation_failure_cannot_discard_unresolved_render_attachment() {
         Some(surface)
     );
 }
+
+#[test]
+fn saturated_source_journal_cannot_retire_render_or_a_selected_ui_recipient() {
+    use crate::plugins::ui::{
+        NativeInputRecipient, UiRuntimeFontConfiguration, UiRuntimeSlotsResource, UiTypedScreenId,
+    };
+
+    struct Probe;
+    impl runenui_core::UiApp for Probe {
+        type State = ();
+        type Action = ();
+        type HostProtocol = runenui_core::NoHostProtocol;
+
+        fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+            runenui_core::text("native secondary close admission")
+        }
+
+        fn update(
+            _: &mut Self::State,
+            _: Self::Action,
+        ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+        }
+    }
+
+    let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+    runner.state.world.insert_resource(InputState::new());
+    runner
+        .state
+        .world
+        .insert_resource(RenderSurfaceRegistryResource::default());
+    let secondary = NativeWindowId::try_from_raw(2).expect("secondary window");
+    runner
+        .state
+        .world
+        .resource_mut::<WindowStateRegistryResource>()
+        .unwrap()
+        .register_created_window(secondary, "secondary", (640, 480), 1.0, false);
+    let surface = runner
+        .state
+        .world
+        .resource_mut::<RenderSurfaceRegistryResource>()
+        .unwrap()
+        .reserve_surface_for_native_window(secondary, (640, 480));
+    let source = runner
+        .native_input_mut()
+        .window_context(secondary, winit::event::DeviceId::dummy())
+        .expect("one source-qualified physical input");
+
+    let mut slots = UiRuntimeSlotsResource::default();
+    let slot = slots
+        .mount_app::<Probe>(
+            UiTypedScreenId::new("native.secondary.close.preflight"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .expect("original typed RunenUI runtime");
+    let mut recipients = UiNativeInputRecipientsResource::default();
+    recipients
+        .bind(
+            secondary,
+            NativeInputRecipient::RunenUiSlot(slot),
+            runner
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .unwrap(),
+            &mut slots,
+        )
+        .expect("selected native UI recipient");
+    runner.state.world.insert_resource(slots);
+    runner.state.world.insert_resource(recipients);
+    runner
+        .state
+        .world
+        .insert_resource(UiRuntimePresentationAssociationsResource::default());
+
+    let journal = runner
+        .state
+        .world
+        .resource_mut::<PlatformWindowEventQueueResource>()
+        .expect("single bounded native input journal");
+    for _ in 0..4096 {
+        journal
+            .publish(PlatformWindowEvent::new(
+                secondary,
+                PlatformEvent::RedrawRequested,
+            ))
+            .expect("fill exactly the finite original-event capacity");
+    }
+    assert!(
+        runner.authorize_secondary_close(secondary).is_err(),
+        "the original source loss must refuse BEFORE Render is logically retired"
+    );
+    assert_eq!(
+        runner
+            .state
+            .world
+            .resource::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .surface_for_native_window(secondary),
+        Some(surface),
+        "journal pressure must not release an original secondary Render reservation"
+    );
+    assert_eq!(
+        runner.native_input().window_source_context(secondary).map(|ctx| ctx.source),
+        Some(source.source),
+        "no fabricated source retirement on journal refusal"
+    );
+    assert_eq!(
+        runner.native_input_recipient(secondary).unwrap().0,
+        NativeInputRecipient::RunenUiSlot(slot),
+        "no RunenUI recipient or binding revocation before original admission"
+    );
+    assert_eq!(
+        runner
+            .state
+            .world
+            .resource::<PlatformWindowEventQueueResource>()
+            .unwrap()
+            .events()
+            .len(),
+        4096,
+        "the journal must retain its exact original events without partial mutation"
+    );
+}
