@@ -13,7 +13,7 @@ use engine::plugins::render::{Gfx, RenderFlow};
 use engine::plugins::{RenderPlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt};
 use engine::runtime::{
-    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, NativeWindowLifecycleState,
+    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId,
     WindowStateRegistryResource,
 };
 use runen_gpu::GpuSurfacePresentMode;
@@ -164,7 +164,7 @@ impl PhysicalProbe {
                 let (_, secondary) = self.first_secondary.context("first secondary missing")?;
                 if Self::applied(world, secondary, GpuSurfacePresentMode::Fifo, 1)? {
                     println!("rpres3=secondary_attached fifo_latency=1");
-                    window.request_inner_size(PhysicalSize::new(SIZE_A.0, SIZE_A.1));
+                    let _ = window.request_inner_size(PhysicalSize::new(SIZE_A.0, SIZE_A.1));
                     println!("rpres3=primary_resize_requested size={:?}", SIZE_A);
                     self.phase = Phase::WaitResizeA;
                 }
@@ -206,7 +206,7 @@ impl PhysicalProbe {
                             )?,
                         )?;
                     self.expected_revision = Some(revision);
-                    window.request_inner_size(PhysicalSize::new(SIZE_B.0, SIZE_B.1));
+                    let _ = window.request_inner_size(PhysicalSize::new(SIZE_B.0, SIZE_B.1));
                     println!(
                         "rpres3=mode_and_resize_requested mode=Immediate size={:?} revision={revision}",
                         SIZE_B
@@ -357,29 +357,29 @@ impl NativeWindowHook for PhysicalProbe {
         event: &WindowEvent,
         _world: &mut runen_ecs::World,
     ) -> Result<()> {
-        if self.primary_window == Some(window.id()) {
-            if let WindowEvent::Resized(size) = event {
-                self.resized_events += 1;
-                println!(
-                    "rpres3=primary_resized_event size=({}, {})",
-                    size.width, size.height
-                );
-            }
+        if self.primary_window == Some(window.id())
+            && let WindowEvent::Resized(size) = event
+        {
+            self.resized_events += 1;
+            println!(
+                "rpres3=primary_resized_event size=({}, {})",
+                size.width, size.height
+            );
         }
         Ok(())
     }
 
     fn frame(&mut self, window: &Window, world: &mut runen_ecs::World) -> Result<()> {
         if let Err(err) = self.advance(window, world) {
-            if let Ok(mut failure) = self.failure.lock() {
-                if failure.is_none() {
-                    *failure = Some(format!("{err:#}"));
-                }
+            if let Ok(mut failure) = self.failure.lock()
+                && failure.is_none()
+            {
+                *failure = Some(format!("{err:#}"));
             }
-            if let Ok(windows) = world.resource_mut::<WindowStateRegistryResource>() {
-                if let Some(primary) = windows.record_mut(NativeWindowId::primary()) {
-                    primary.approve_close();
-                }
+            if let Ok(windows) = world.resource_mut::<WindowStateRegistryResource>()
+                && let Some(primary) = windows.record_mut(NativeWindowId::primary())
+            {
+                primary.approve_close();
             }
         }
         Ok(())
