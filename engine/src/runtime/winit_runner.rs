@@ -4154,6 +4154,123 @@ mod tests {
     }
 
     #[test]
+    fn selected_native_pending_m13_is_settled_before_original_event_routing() {
+        use crate::plugins::input::domain::action;
+        use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+        use runen_input::{
+            DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+            ObservationOrigin, PhysicalKeyIdentity,
+        };
+
+        struct Probe;
+        impl runenui_core::UiApp for Probe {
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::button("selected pending probe").on_activate(|| ())
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        let window = NativeWindowId::primary();
+        let source = runner
+            .native_input_mut()
+            .window_context(window, winit::event::DeviceId::dummy())
+            .expect("real physical window source");
+        let mut input = InputState::new();
+        let key = PhysicalKeyIdentity::code("KeyW");
+        input.handle_normalized_keyboard(
+            source,
+            &KeyboardInput {
+                physical_key: key.clone(),
+                logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                location: KeyLocation::Standard,
+                state: DigitalState::Pressed,
+                repeat: false,
+                origin: ObservationOrigin::SourceReport,
+            },
+        );
+        let mut actions = ActionState::new();
+        actions.project(&input);
+        assert!(actions.action_down(action::WORLD_MOVE_UP));
+        runner.state.world.insert_resource(input);
+        runner.state.world.insert_resource(actions);
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<Probe>(
+                UiTypedScreenId::new("native.pending.original.callback"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("mounted real typed M13 slot");
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                window,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap(),
+                &mut slots,
+            )
+            .expect("selected original native slot");
+        slots
+            .test_mark_native_pending(slot)
+            .expect("simulate genuine incomplete M13 prestate");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+
+        let resolved = runner
+            .native_input_recipient(window)
+            .expect("existing native World settlement restores a truthful recipient");
+        assert_eq!(resolved.0, NativeInputRecipient::RunenUiSlot(slot));
+        assert!(resolved.1.is_some());
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(source, &key)
+                .is_some(),
+            "M13 settlement must not invent a physical Up"
+        );
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "pre-settlement source permission is revoked synchronously"
+        );
+
+        runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .test_inject_external_scope_loss(slot)
+            .expect("negative external disappearance fixture");
+        let stale = runner.native_input_recipient(window);
+        assert!(
+            stale.is_err(),
+            "a disappeared original slot cannot gain permission via settlement retry"
+        );
+    }
+
+    #[test]
     fn unattributed_raw_motion_preserves_physical_truth_without_ui_gameplay_fallback() {
         use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
         use runen_input::{InputDeviceId, InputObservation};
