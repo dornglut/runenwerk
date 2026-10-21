@@ -115,9 +115,12 @@ a requested backend hint, not an observed effective frame latency.
 
 Supported modes are attachment-time facts, not live monitor capabilities.
 Physical loss or failed configuration invalidates cached facts and requires
-safe reattachment/requalification before claiming application; an unsupported
-mode request alone does not require recreation. Non-drawable surfaces defer
-configuration. Retired logical surfaces reject further policy updates.
+safe reattachment/requalification before claiming application. A Suboptimal
+acquisition may submit its usable frame, then invalidates cached physical facts
+for safe reattachment at the next RenderSubmit boundary; it never reconfigures
+during an acquired-image lease. An unsupported mode request alone does not
+require recreation. Non-drawable surfaces defer configuration. Retired logical
+surfaces reject further policy updates.
 
 Host redraw pacing is independent of Render Present mode. Present submission,
 GPU completion, and physical display scanout are distinct; no selection

@@ -1310,6 +1310,12 @@ impl Gfx {
         // The one terminal Present is part of the accepted RunenGPU submission above.
         timings.submitted = true;
         timings.present_ms = 0.0;
+        // Suboptimal yields a usable image. Finish the existing G5 Present
+        // first, then require fresh physical qualification at the next safe
+        // pre-acquisition RenderSubmit boundary (never inside this lease).
+        if acquired.status() == runen_gpu::GpuSurfaceAcquisitionStatus::Suboptimal {
+            self.ctx.invalidate_surface(render_surface_id);
+        }
         Ok(timings)
     }
 }
