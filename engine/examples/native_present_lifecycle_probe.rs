@@ -128,17 +128,27 @@ impl PhysicalProbe {
         ensure!(
             self.frames <= 600 && self.started.elapsed() < Duration::from_secs(60),
             "physical qualification timed out: phase={:?}, frames={}, resized_events={}",
-            self.phase, self.frames, self.resized_events
+            self.phase,
+            self.frames,
+            self.resized_events
         );
 
         match self.phase {
             Phase::CreateSecondary => {
                 ensure!(
-                    Self::applied(world, RenderSurfaceId::primary(), GpuSurfacePresentMode::Fifo, 2)?,
+                    Self::applied(
+                        world,
+                        RenderSurfaceId::primary(),
+                        GpuSurfacePresentMode::Fifo,
+                        2
+                    )?,
                     "primary startup did not apply FIFO/2"
                 );
                 let secondary = Self::request_secondary(world, "RPRES Stage3 secondary A")?;
-                println!("rpres3=secondary_requested id={:?} surface={:?}", secondary.0, secondary.1);
+                println!(
+                    "rpres3=secondary_requested id={:?} surface={:?}",
+                    secondary.0, secondary.1
+                );
                 self.first_secondary = Some(secondary);
                 self.phase = Phase::WaitSecondary;
             }
@@ -154,12 +164,23 @@ impl PhysicalProbe {
             Phase::WaitResizeA => {
                 let size = window.inner_size();
                 if (size.width, size.height) == SIZE_A
-                    && world.resource::<Gfx>()?.surface_size(RenderSurfaceId::primary()) == Some(SIZE_A)
-                    && Self::applied(world, RenderSurfaceId::primary(), GpuSurfacePresentMode::Fifo, 2)?
+                    && world
+                        .resource::<Gfx>()?
+                        .surface_size(RenderSurfaceId::primary())
+                        == Some(SIZE_A)
+                    && Self::applied(
+                        world,
+                        RenderSurfaceId::primary(),
+                        GpuSurfacePresentMode::Fifo,
+                        2,
+                    )?
                     && self.resized_events > 0
                 {
                     let previous = Self::presentation(world, RenderSurfaceId::primary())?;
-                    println!("rpres3=resize_a_applied mode=Fifo latency=2 epoch={:?}", previous.attachment_epoch);
+                    println!(
+                        "rpres3=resize_a_applied mode=Fifo latency=2 epoch={:?}",
+                        previous.attachment_epoch
+                    );
                     ensure!(
                         previous
                             .supported_at_attachment
@@ -167,32 +188,52 @@ impl PhysicalProbe {
                             .is_some_and(|modes| modes.contains(&GpuSurfacePresentMode::Immediate)),
                         "Immediate was not supported on the primary attached epoch; no mode fallback"
                     );
-                    let revision = world.resource_mut::<RenderSurfaceRegistryResource>()?
+                    let revision = world
+                        .resource_mut::<RenderSurfaceRegistryResource>()?
                         .set_presentation_request(
                             RenderSurfaceId::primary(),
-                            RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Immediate, 2)?,
+                            RenderSurfacePresentationRequest::new(
+                                GpuSurfacePresentMode::Immediate,
+                                2,
+                            )?,
                         )?;
                     self.expected_revision = Some(revision);
                     window.request_inner_size(PhysicalSize::new(SIZE_B.0, SIZE_B.1));
-                    println!("rpres3=mode_and_resize_requested mode=Immediate size={:?} revision={revision}", SIZE_B);
+                    println!(
+                        "rpres3=mode_and_resize_requested mode=Immediate size={:?} revision={revision}",
+                        SIZE_B
+                    );
                     self.phase = Phase::WaitResizeB;
                 }
             }
             Phase::WaitResizeB => {
                 let size = window.inner_size();
                 if (size.width, size.height) == SIZE_B
-                    && world.resource::<Gfx>()?.surface_size(RenderSurfaceId::primary()) == Some(SIZE_B)
-                    && Self::applied(world, RenderSurfaceId::primary(), GpuSurfacePresentMode::Immediate, 2)?
+                    && world
+                        .resource::<Gfx>()?
+                        .surface_size(RenderSurfaceId::primary())
+                        == Some(SIZE_B)
+                    && Self::applied(
+                        world,
+                        RenderSurfaceId::primary(),
+                        GpuSurfacePresentMode::Immediate,
+                        2,
+                    )?
                 {
                     let observation = Self::presentation(world, RenderSurfaceId::primary())?;
                     ensure!(
-                        observation.applied.is_some_and(|a| Some(a.revision) == self.expected_revision),
+                        observation
+                            .applied
+                            .is_some_and(|a| Some(a.revision) == self.expected_revision),
                         "resize and requested mode were not applied at the exact revision"
                     );
-                    println!("rpres3=resize_b_applied mode=Immediate latency=2 revision={:?} epoch={:?}",
-                        self.expected_revision, observation.attachment_epoch);
+                    println!(
+                        "rpres3=resize_b_applied mode=Immediate latency=2 revision={:?} epoch={:?}",
+                        self.expected_revision, observation.attachment_epoch
+                    );
                     let (native, _) = self.first_secondary.context("first secondary missing")?;
-                    world.resource_mut::<WindowStateRegistryResource>()?
+                    world
+                        .resource_mut::<WindowStateRegistryResource>()?
                         .record_mut(native)
                         .context("first secondary native record absent")?
                         .approve_close();
@@ -202,9 +243,12 @@ impl PhysicalProbe {
             }
             Phase::WaitSecondaryRetirement => {
                 let (native, surface) = self.first_secondary.context("first secondary missing")?;
-                let windows_gone = world.resource::<WindowStateRegistryResource>()?
-                    .record(native).is_none();
-                let retired = world.resource::<RenderSurfaceRegistryResource>()?
+                let windows_gone = world
+                    .resource::<WindowStateRegistryResource>()?
+                    .record(native)
+                    .is_none();
+                let retired = world
+                    .resource::<RenderSurfaceRegistryResource>()?
                     .record(surface)
                     .is_some_and(|r| r.lifecycle_state == RenderSurfaceLifecycleState::Retired);
                 let detached = !world.resource::<Gfx>()?.has_surface(surface);
