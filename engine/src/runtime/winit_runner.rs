@@ -858,7 +858,10 @@ impl WinitRunner {
         allow_approved_close: bool,
     ) -> Result<(NativeInputRecipient, Option<u64>)> {
         let observed = self.native_input_recipient_once(window, allow_approved_close);
-        if !observed.as_ref().is_err_and(native_m13_waiting_for_settlement) {
+        if !observed
+            .as_ref()
+            .is_err_and(native_m13_waiting_for_settlement)
+        {
             return observed;
         }
         // Original Winit events can arrive between publication's bounded M13
@@ -891,7 +894,13 @@ impl WinitRunner {
         let current = self.native_input_recipient_once(window, allow_approved_close);
         match settlement {
             Ok(()) => current,
-            Err(_) if current.as_ref().is_err_and(native_m13_waiting_for_settlement) => current,
+            Err(_)
+                if current
+                    .as_ref()
+                    .is_err_and(native_m13_waiting_for_settlement) =>
+            {
+                current
+            }
             Err(error) => Err(error),
         }
     }
