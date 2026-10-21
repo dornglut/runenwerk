@@ -1945,8 +1945,7 @@ impl NativeHistoricalGpuHook {
                             primary_id,
                             RenderSurfacePresentationRequest::new(mode, 2)?,
                         )?;
-                    self.pending_primary_unsupported =
-                        Some((mode, revision, primary_submissions));
+                    self.pending_primary_unsupported = Some((mode, revision, primary_submissions));
                 } else {
                     self.primary_unsupported_checked = true;
                 }
