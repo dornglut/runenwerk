@@ -164,3 +164,7 @@ harness = false
 [[bench]]
 name = "render_flow_planning"
 harness = false
+
+[[example]]
+name = "native_present_lifecycle_probe"
+path = "examples/native_present_lifecycle_probe.rs"
