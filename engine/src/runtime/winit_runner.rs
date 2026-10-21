@@ -3915,7 +3915,9 @@ mod tests {
             None,
         );
         assert!(
-            physical.keyboard_down_generation_in(context, &key).is_some(),
+            physical
+                .keyboard_down_generation_in(context, &key)
+                .is_some(),
             "neutral-only routing must never erase the original physical key"
         );
         let mut actions = ActionState::new();
