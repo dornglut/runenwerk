@@ -446,14 +446,24 @@ fn transact_ui_slot_inner<T>(
             .transact_native_app(&NativeAppMutationPermit { _sealed: () }, slot, operation)
             .map_err(|err| anyhow!("native RunenUI app mutation failed: {err:?}"))
     }));
-    let after = world
-        .resource_mut::<UiRuntimeSlotsResource>()
-        .map_err(|err| anyhow!("native RunenUI slots unavailable: {err}"))
-        .and_then(|slots| {
-            slots
-                .input_ownership(slot)
-                .map_err(|err| anyhow!("native RunenUI ownership observation failed: {err:?}"))
-        });
+    // Preserve the owning slot's *typed* pending/unsettled observation.
+    // Stringifying every failure here would make a truly pending M13 scope
+    // indistinguishable from a stopped or destroyed runtime at the transaction
+    // boundary, and would turn an ordinary deferred publication into a fatal
+    // native Host failure.
+    let (after, pending_after) = match world.resource_mut::<UiRuntimeSlotsResource>() {
+        Ok(slots) => match slots.input_ownership(slot) {
+            Ok(snapshot) => (Ok(snapshot), false),
+            Err(error) => {
+                let pending = matches!(error, UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
+                (
+                    Err(anyhow!("native RunenUI ownership observation failed: {error:?}")),
+                    pending,
+                )
+            }
+        },
+        Err(error) => (Err(anyhow!("native RunenUI slots unavailable: {error}")), false),
+    };
     let same_binding = world
         .resource::<UiNativeInputRecipientsResource>()
         .ok()
@@ -482,13 +492,7 @@ fn transact_ui_slot_inner<T>(
         // outcome, not a lost scope. Never return the unqualified publication:
         // revoke the physical game's prior permission above; its source owner
         // and the next native settlement own all subsequent observations.
-        Ok(Ok(_))
-            if same_binding
-                && matches!(
-                    after,
-                    Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
-                ) =>
-        {
+        Ok(Ok(_)) if same_binding && pending_after => {
             Err(NativeUiMutationNeedsSettlement.into())
         }
         Ok(Ok(_)) => Err(anyhow!(
