@@ -1715,7 +1715,10 @@ impl NativeHistoricalGpuHook {
             let submissions = world
                 .resource::<RenderFrameHistoryState>()?
                 .observations()
-                .filter(|entry| entry.key.render_surface_id == secondary.raw())
+                .filter(|entry| {
+                    entry.key.render_surface_id == secondary.raw()
+                        && entry.presentation.present_operation_submitted
+                })
                 .count();
             if let Some((mode, before)) = self.pending_alternative
                 && secondary_state.disposition == RenderSurfacePresentationDisposition::Applied
