@@ -211,30 +211,51 @@ impl PhysicalProbe {
                 if windows_gone && retired && detached {
                     println!("rpres3=secondary_retired id={native:?} surface={surface:?}");
                     let next = Self::request_secondary(world, "RPRES Stage3 secondary B")?;
-                    ensure!(next.0 != native && next.1 != surface, "retired secondary identity was reused");
+                    ensure!(
+                        next.0 != native && next.1 != surface,
+                        "retired secondary identity was reused"
+                    );
                     self.second_secondary = Some(next);
                     self.phase = Phase::WaitSecondaryRecreation;
                 }
             }
             Phase::WaitSecondaryRecreation => {
-                let (_, next) = self.second_secondary.context("recreated secondary missing")?;
+                let (_, next) = self
+                    .second_secondary
+                    .context("recreated secondary missing")?;
                 if Self::applied(world, next, GpuSurfacePresentMode::Fifo, 1)? {
                     let observation = Self::presentation(world, next)?;
-                    println!("rpres3=secondary_recreated surface={next:?} epoch={:?}", observation.attachment_epoch);
-                    self.steady_epoch = Some(format!("{:?}", Self::presentation(world, RenderSurfaceId::primary())?.attachment_epoch));
+                    println!(
+                        "rpres3=secondary_recreated surface={next:?} epoch={:?}",
+                        observation.attachment_epoch
+                    );
+                    self.steady_epoch = Some(format!(
+                        "{:?}",
+                        Self::presentation(world, RenderSurfaceId::primary())?.attachment_epoch
+                    ));
                     self.phase = Phase::Steady;
                 }
             }
             Phase::Steady => {
                 ensure!(
-                    Self::applied(world, RenderSurfaceId::primary(), GpuSurfacePresentMode::Immediate, 2)?,
+                    Self::applied(
+                        world,
+                        RenderSurfaceId::primary(),
+                        GpuSurfacePresentMode::Immediate,
+                        2
+                    )?,
                     "primary lost its applied Immediate/2 policy during steady-state"
                 );
-                let current = format!("{:?}", Self::presentation(world, RenderSurfaceId::primary())?.attachment_epoch);
+                let current = format!(
+                    "{:?}",
+                    Self::presentation(world, RenderSurfaceId::primary())?.attachment_epoch
+                );
                 if self.steady_epoch.as_ref() != Some(&current) {
                     self.steady_epoch_changes += 1;
-                    println!("rpres3=steady_attachment_epoch_changed before={:?} after={} count={}",
-                        self.steady_epoch, current, self.steady_epoch_changes);
+                    println!(
+                        "rpres3=steady_attachment_epoch_changed before={:?} after={} count={}",
+                        self.steady_epoch, current, self.steady_epoch_changes
+                    );
                     self.steady_epoch = Some(current);
                 }
                 self.steady_frames += 1;
@@ -243,11 +264,17 @@ impl PhysicalProbe {
                         self.steady_epoch_changes == 0,
                         "unexpected repeated native primary physical attachment changes in unchanged steady-state"
                     );
-                    println!("rpres3=pass resize_events={} steady_frames={} steady_epoch_changes={} frames={}",
-                        self.resized_events, self.steady_frames, self.steady_epoch_changes, self.frames);
+                    println!(
+                        "rpres3=pass resize_events={} steady_frames={} steady_epoch_changes={} frames={}",
+                        self.resized_events,
+                        self.steady_frames,
+                        self.steady_epoch_changes,
+                        self.frames
+                    );
                     self.completed.store(true, Ordering::SeqCst);
                     self.phase = Phase::Finished;
-                    world.resource_mut::<WindowStateRegistryResource>()?
+                    world
+                        .resource_mut::<WindowStateRegistryResource>()?
                         .record_mut(NativeWindowId::primary())
                         .context("primary native record missing")?
                         .approve_close();
@@ -260,7 +287,9 @@ impl PhysicalProbe {
 }
 
 impl NativeWindowHook for PhysicalProbe {
-    fn name(&self) -> &'static str { "rpres_owner_physical_lifecycle_probe" }
+    fn name(&self) -> &'static str {
+        "rpres_owner_physical_lifecycle_probe"
+    }
 
     fn attach(&mut self, window: &Window, _world: &mut runen_ecs::World) -> Result<()> {
         if self.primary_window.is_none() {
@@ -270,11 +299,19 @@ impl NativeWindowHook for PhysicalProbe {
         Ok(())
     }
 
-    fn window_event(&mut self, window: &Window, event: &WindowEvent, _world: &mut runen_ecs::World) -> Result<()> {
+    fn window_event(
+        &mut self,
+        window: &Window,
+        event: &WindowEvent,
+        _world: &mut runen_ecs::World,
+    ) -> Result<()> {
         if self.primary_window == Some(window.id()) {
             if let WindowEvent::Resized(size) = event {
                 self.resized_events += 1;
-                println!("rpres3=primary_resized_event size=({}, {})", size.width, size.height);
+                println!(
+                    "rpres3=primary_resized_event size=({}, {})",
+                    size.width, size.height
+                );
             }
         }
         Ok(())
@@ -318,12 +355,23 @@ fn main() -> Result<()> {
     let completed = Arc::new(AtomicBool::new(false));
     let failure = Arc::new(Mutex::new(None));
     app.init_resource::<NativeWindowHookRegistryResource>();
-    app.world_mut().resource_mut::<NativeWindowHookRegistryResource>()?
-        .register_hook(PhysicalProbe::new(Arc::clone(&completed), Arc::clone(&failure)));
+    app.world_mut()
+        .resource_mut::<NativeWindowHookRegistryResource>()?
+        .register_hook(PhysicalProbe::new(
+            Arc::clone(&completed),
+            Arc::clone(&failure),
+        ));
     app.run()?;
-    if let Some(err) = failure.lock().map_err(|_| anyhow::anyhow!("failure lock poisoned"))?.take() {
+    if let Some(err) = failure
+        .lock()
+        .map_err(|_| anyhow::anyhow!("failure lock poisoned"))?
+        .take()
+    {
         anyhow::bail!("RPRES physical lifecycle qualification failed: {err}");
     }
-    ensure!(completed.load(Ordering::SeqCst), "RPRES physical probe closed without completion");
+    ensure!(
+        completed.load(Ordering::SeqCst),
+        "RPRES physical probe closed without completion"
+    );
     Ok(())
 }
