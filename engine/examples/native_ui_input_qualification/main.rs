@@ -12,8 +12,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use anyhow::{Context, Result};
 use engine::app::AppNativeHostExt;
 use engine::plugins::input::domain::action;
-use engine::plugins::render::{RenderFlow, RenderFrameProducerId, SurfaceFrameSubmissionOrder};
 use engine::plugins::render::host::RenderSurfaceId;
+use engine::plugins::render::{RenderFlow, RenderFrameProducerId, SurfaceFrameSubmissionOrder};
 use engine::plugins::ui::{
     AppUiExt, UiNativeInputRecipientsResource, UiRuntimeFontConfiguration,
     UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
@@ -103,7 +103,11 @@ impl NativeWindowHook for QualificationHook {
             WindowEvent::Focused(focused) => {
                 println!("U9C_OS window={:?} focus={focused}", window.id());
             }
-            WindowEvent::KeyboardInput { device_id, event, is_synthetic } => {
+            WindowEvent::KeyboardInput {
+                device_id,
+                event,
+                is_synthetic,
+            } => {
                 self.keyboard_events += 1;
                 println!(
                     "U9C_OS window={:?} kind=keyboard device={device_id:?} key={:?} phase={:?} repeat={} synthetic={} text_chars={}",
@@ -115,23 +119,38 @@ impl NativeWindowHook for QualificationHook {
                     event.text.as_ref().map_or(0, |text| text.chars().count()),
                 );
             }
-            WindowEvent::MouseInput { device_id, state, button } => {
+            WindowEvent::MouseInput {
+                device_id,
+                state,
+                button,
+            } => {
                 self.pointer_buttons += 1;
                 println!(
                     "U9C_OS window={:?} kind=mouse_button device={device_id:?} button={button:?} state={state:?}",
                     window.id(),
                 );
             }
-            WindowEvent::CursorMoved { device_id, position } => {
+            WindowEvent::CursorMoved {
+                device_id,
+                position,
+            } => {
                 self.cursor_moves += 1;
                 if self.cursor_moves == 1 || self.cursor_moves.is_multiple_of(32) {
                     println!(
                         "U9C_OS window={:?} kind=cursor device={device_id:?} position=({:.1},{:.1}) observed_moves={}",
-                        window.id(), position.x, position.y, self.cursor_moves,
+                        window.id(),
+                        position.x,
+                        position.y,
+                        self.cursor_moves,
                     );
                 }
             }
-            WindowEvent::MouseWheel { device_id, delta, phase, .. } => {
+            WindowEvent::MouseWheel {
+                device_id,
+                delta,
+                phase,
+                ..
+            } => {
                 println!(
                     "U9C_OS window={:?} kind=wheel device={device_id:?} delta={delta:?} phase={phase:?}",
                     window.id(),
@@ -141,25 +160,33 @@ impl NativeWindowHook for QualificationHook {
                 self.touch_events += 1;
                 println!(
                     "U9C_OS window={:?} kind=touch device={:?} id={} phase={:?}",
-                    window.id(), touch.device_id, touch.id, touch.phase,
+                    window.id(),
+                    touch.device_id,
+                    touch.id,
+                    touch.phase,
                 );
             }
             WindowEvent::Ime(Ime::Preedit(text, range)) => {
                 self.ime_events += 1;
                 println!(
                     "U9C_OS window={:?} kind=ime_preedit chars={} range={range:?}",
-                    window.id(), text.chars().count(),
+                    window.id(),
+                    text.chars().count(),
                 );
             }
             WindowEvent::Ime(Ime::Commit(text)) => {
                 self.ime_events += 1;
                 println!(
                     "U9C_OS window={:?} kind=ime_commit chars={}",
-                    window.id(), text.chars().count(),
+                    window.id(),
+                    text.chars().count(),
                 );
             }
             WindowEvent::Ime(Ime::Enabled | Ime::Disabled) => {
-                println!("U9C_OS window={:?} kind=ime_lifecycle event={event:?}", window.id());
+                println!(
+                    "U9C_OS window={:?} kind=ime_lifecycle event={event:?}",
+                    window.id()
+                );
             }
             WindowEvent::CloseRequested => {
                 println!("U9C_OS window={:?} close_intent=true", window.id());
@@ -212,7 +239,11 @@ impl NativeWindowHook for QualificationHook {
                 ownership.keyboard().focused_node(),
                 ownership.keyboard().composition_generation().is_some(),
                 ownership.pointers().len(),
-                ownership.pointers().iter().filter(|pointer| pointer.capture_owner().is_some()).count(),
+                ownership
+                    .pointers()
+                    .iter()
+                    .filter(|pointer| pointer.capture_owner().is_some())
+                    .count(),
                 ownership.keyboard().space_activation_owner().is_some(),
             ),
             Err(error) => format!("unavailable={error:?}"),
@@ -258,8 +289,13 @@ impl NativeWindowHook for QualificationHook {
     fn detach(&mut self, _: &mut World) -> Result<()> {
         println!(
             "U9C_DETACH frames={} keyboard={} mouse_buttons={} cursor={} touch={} ime={} raw_motion={}",
-            self.frames, self.keyboard_events, self.pointer_buttons, self.cursor_moves,
-            self.touch_events, self.ime_events, self.raw_motion,
+            self.frames,
+            self.keyboard_events,
+            self.pointer_buttons,
+            self.cursor_moves,
+            self.touch_events,
+            self.ime_events,
+            self.raw_motion,
         );
         Ok(())
     }
@@ -288,7 +324,9 @@ fn main() -> Result<()> {
         .ui()
         .mount_app::<QualificationUi>(
             UiTypedScreenId::new("u9c.native.input.qualification"),
-            UiState { activations: Arc::clone(&clicks) },
+            UiState {
+                activations: Arc::clone(&clicks),
+            },
             &fonts,
         )
         .slot_id()
