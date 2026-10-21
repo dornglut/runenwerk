@@ -13,8 +13,7 @@ use engine::plugins::render::{Gfx, RenderFlow};
 use engine::plugins::{RenderPlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt};
 use engine::runtime::{
-    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId,
-    WindowStateRegistryResource,
+    NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId, WindowStateRegistryResource,
 };
 use runen_gpu::GpuSurfacePresentMode;
 use std::sync::atomic::{AtomicBool, Ordering};
