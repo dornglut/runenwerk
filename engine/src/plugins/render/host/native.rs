@@ -2,7 +2,8 @@ use super::super::render_integration_is_active;
 use super::super::renderer::Gfx;
 use super::{
     RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfacePresentationAttempt,
-    RenderSurfacePresentationError, RenderSurfacePresentationRequest, RenderSurfaceRegistryResource,
+    RenderSurfacePresentationError, RenderSurfacePresentationRequest,
+    RenderSurfaceRegistryResource,
 };
 use crate::runtime::NativeWindowId;
 use anyhow::{Context, Result, anyhow};
