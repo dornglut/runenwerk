@@ -382,7 +382,9 @@ fn main() -> Result<()> {
             last_observation: None,
         });
 
-    println!("U9C_START mode=interactive pacing=on_demand input=real_os mounted_ui=true render=true resource_stress=unqualified-see-1314");
+    println!(
+        "U9C_START mode=interactive pacing=on_demand input=real_os mounted_ui=true render=true resource_stress=unqualified-see-1314"
+    );
     println!("U9C_GUIDANCE click UI button, try W/Space/Tab, Alt+Tab and refocus; close via X");
     app.run()?;
     println!("U9C_EXIT result=ok");
