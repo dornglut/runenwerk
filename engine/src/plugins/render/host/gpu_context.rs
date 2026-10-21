@@ -194,7 +194,9 @@ impl RenderGpuContext {
         let (context, surface) =
             GpuContext::request_for_surface(descriptor, Arc::clone(&window)).await?;
         let size = window.inner_size();
-        let capabilities = context.surface_capabilities(surface)?;
+        let capabilities = context
+            .surface_capabilities(surface)
+            .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?;
         let format = preferred_surface_format(&capabilities)
             .ok_or(RenderSurfacePresentationError::NoCompatibleFormat)?;
         // A zero-size attachment must still reject a physically unsupported mode.
@@ -204,7 +206,9 @@ impl RenderGpuContext {
         let (surface, config) = if size.width > 0 && size.height > 0 {
             let config =
                 build_surface_config(size.width, size.height, format, &capabilities, request)?;
-            let configured = context.configure_surface(surface, config.clone())?;
+            let configured = context
+                .configure_surface(surface, config.clone())
+                .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?;
             (configured, Some(config))
         } else {
             (surface, None)

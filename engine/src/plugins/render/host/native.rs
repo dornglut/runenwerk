@@ -30,8 +30,18 @@ pub(crate) fn initialize_primary(
         .and_then(|registry| registry.record(RenderSurfaceId::primary()))
         .map(|record| (record.presentation_request, record.presentation_revision))
         .unwrap_or((RenderSurfacePresentationRequest::default(), 0));
-    let gfx = Gfx::new_with_presentation(window, request, revision)
-        .context("failed to initialize runtime gfx")?;
+    let gfx = match Gfx::new_with_presentation(window, request, revision) {
+        Ok(gfx) => gfx,
+        Err(error) => {
+            record_attachment_presentation_failure(
+                world,
+                RenderSurfaceId::primary(),
+                revision,
+                &error,
+            );
+            return Err(error).context("failed to initialize runtime gfx");
+        }
+    };
     world.insert_resource(gfx);
     confirm_primary_attachment(world, target_size_px)
         .context("failed to confirm primary render surface attachment")?;
@@ -95,19 +105,9 @@ pub(crate) fn attach_secondary(
             )
         })
     {
-        // Preserve the exact-revision typed rejection, then perform the accepted
-        // fail-closed Host rollback before releasing native window ownership.
-        let reason = err
-            .downcast_ref::<RenderSurfacePresentationError>()
-            .copied();
-        if let Some(reason) = reason
-            && let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>()
-        {
-            registry.record_presentation_attempt(
-                render_surface_id,
-                RenderSurfacePresentationAttempt::Rejected { revision, reason },
-            );
-        }
+        // Publish a typed exact-revision failure before Host's fail-closed
+        // rollback decides whether native ownership may be released.
+        record_attachment_presentation_failure(world, render_surface_id, revision, &err);
         try_rollback_secondary(world, native_window_id)
             .context("failed to roll back rejected secondary GPU attachment")?;
         return Err(anyhow!("GPU surface attachment failed: {err:#}"));
@@ -142,6 +142,24 @@ pub(crate) fn attach_secondary(
             );
     }
     Ok(())
+}
+
+/// Preserve typed physical admission errors under their original logical request
+/// revision. Non-presentation startup failures do not fabricate mode rejection.
+fn record_attachment_presentation_failure(
+    world: &mut runen_ecs::World,
+    id: RenderSurfaceId,
+    revision: u64,
+    error: &anyhow::Error,
+) {
+    if let Some(reason) = error.downcast_ref::<RenderSurfacePresentationError>().copied()
+        && let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>()
+    {
+        registry.record_presentation_attempt(
+            id,
+            RenderSurfacePresentationAttempt::Rejected { revision, reason },
+        );
+    }
 }
 
 pub(crate) fn project_primary_extent(
@@ -284,6 +302,95 @@ mod tests {
 
     fn secondary_window(raw: u64) -> NativeWindowId {
         NativeWindowId::try_from_raw(raw).expect("secondary native window id should be valid")
+    }
+
+    #[test]
+    fn initial_primary_mode_rejection_is_revisioned_and_not_optimistic() {
+        use runen_gpu::GpuSurfacePresentMode;
+
+        let mut app = App::new();
+        app.init_resource::<RenderSurfaceRegistryResource>();
+        let id = app
+            .world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .reserve_surface_for_native_window(NativeWindowId::primary(), (0, 0));
+        let mailbox =
+            RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Mailbox, 1).unwrap();
+        let revision = app
+            .world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .set_presentation_request(id, mailbox)
+            .unwrap();
+
+        record_attachment_presentation_failure(
+            app.world_mut(),
+            id,
+            revision,
+            &anyhow::Error::new(RenderSurfacePresentationError::UnsupportedPresentMode(
+                GpuSurfacePresentMode::Mailbox,
+            )),
+        );
+        let record = app
+            .world()
+            .resource::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .record(id)
+            .unwrap()
+            .clone();
+        assert_eq!(record.lifecycle_state, RenderSurfaceLifecycleState::Requested);
+        assert_eq!(
+            record.presentation_attempt,
+            Some(RenderSurfacePresentationAttempt::Rejected {
+                revision,
+                reason: RenderSurfacePresentationError::UnsupportedPresentMode(
+                    GpuSurfacePresentMode::Mailbox,
+                ),
+            })
+        );
+
+        // An unrelated startup failure cannot overwrite typed admission evidence.
+        record_attachment_presentation_failure(
+            app.world_mut(),
+            id,
+            revision,
+            &anyhow::anyhow!("unrelated renderer startup failure"),
+        );
+        assert_eq!(
+            app.world()
+                .resource::<RenderSurfaceRegistryResource>()
+                .unwrap()
+                .record(id)
+                .unwrap()
+                .presentation_attempt,
+            record.presentation_attempt
+        );
+
+        // New owner intent invalidates the previous rejection. A late old-revision
+        // failure cannot corrupt the newer pending request.
+        app.world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .set_presentation_request(id, RenderSurfacePresentationRequest::default())
+            .unwrap();
+        record_attachment_presentation_failure(
+            app.world_mut(),
+            id,
+            revision,
+            &anyhow::Error::new(RenderSurfacePresentationError::UnsupportedPresentMode(
+                GpuSurfacePresentMode::Mailbox,
+            )),
+        );
+        assert_eq!(
+            app.world()
+                .resource::<RenderSurfaceRegistryResource>()
+                .unwrap()
+                .record(id)
+                .unwrap()
+                .presentation_attempt,
+            None
+        );
     }
 
     #[test]
