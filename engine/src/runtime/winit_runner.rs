@@ -150,7 +150,7 @@ fn native_ui_blocks_preframe_keyboard_gameplay(
 /// The real recipient resolver reports this before any secondary ownership
 /// lookup can run. Deny OS IME temporarily; ordinary input admission still
 /// fails closed on an unsettled runtime.
-fn native_ime_waiting_for_m13_settlement(error: &anyhow::Error) -> bool {
+fn native_m13_waiting_for_settlement(error: &anyhow::Error) -> bool {
     matches!(
         error.downcast_ref::<NativeInputRecipientError>(),
         Some(NativeInputRecipientError::OwnershipUnavailable(
@@ -2460,7 +2460,23 @@ impl WinitRunner {
             }
             Err(error) => {
                 self.apply_event_group_for_recipient(window, [event], None)?;
-                if error.downcast_ref::<NativeInputRecipientError>()
+                if native_m13_waiting_for_settlement(&error) {
+                    // A real original event arrived while the framework had
+                    // unsettled input/paint work. Preserve its physical-only
+                    // journal observation, withhold both UI and game/editor
+                    // delivery, and revoke all previously projected keyboard
+                    // permission for this window's source *now*. The existing
+                    // invoker-thread native frame owns bounded M13 settlement.
+                    if let Some(context) = self.native_input().window_source_context(window) {
+                        self.revoke_native_game_keyboard_source(context.source)?;
+                    }
+                    tracing::trace!(
+                        target: "engine.runtime.input",
+                        ?window,
+                        "native original input stayed neutral pending M13 settlement"
+                    );
+                    Ok(())
+                } else if error.downcast_ref::<NativeInputRecipientError>()
                     == Some(&NativeInputRecipientError::MissingRecipient)
                 {
                     Ok(())
@@ -3197,7 +3213,7 @@ impl WinitRunner {
                     {
                         false
                     }
-                    Err(error) if native_ime_waiting_for_m13_settlement(&error) => false,
+                    Err(error) if native_m13_waiting_for_settlement(&error) => false,
                     Err(error) => return Err(error),
                     Ok((NativeInputRecipient::RunenUiSlot(_), None)) => {
                         return Err(anyhow!("native IME slot selected without binding epoch"));
@@ -3443,7 +3459,17 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                         if matches!(event.state, winit::event::ElementState::Pressed) {
                             self.deny_native_keyboard_lifetime(context, &physical_key)?;
                         }
-                        if error.downcast_ref::<NativeInputRecipientError>()
+                        if native_m13_waiting_for_settlement(&error) {
+                            // Original physical Down/Up is already journalled;
+                            // no M13 claim is fabricated and the individual
+                            // Down was denied above. Revoke any other held
+                            // keys from the same source as well, since a
+                            // pending M13 snapshot cannot certify their game
+                            // permission. The next normal native frame pumps
+                            // the actual UI runtime before new M13 admission.
+                            self.revoke_native_game_keyboard_source(context.source)?;
+                            Ok(())
+                        } else if error.downcast_ref::<NativeInputRecipientError>()
                             == Some(&NativeInputRecipientError::MissingRecipient)
                         {
                             // A passive UI runtime may coexist with rendering
@@ -3857,10 +3883,55 @@ mod tests {
     }
 
     #[test]
+    fn original_native_keyboard_stays_physical_and_game_revoked_while_m13_is_pending() {
+        use crate::plugins::input::domain::action;
+        use crate::plugins::ui::UiRuntimeSlotOperationFailure;
+        use crate::runtime::platform::apply_native_recipient_input_event;
+        use runen_input::{
+            DigitalState, InputContext, InputSourceId, KeyLocation, KeyboardInput, LogicalKey,
+            NativeLogicalKey, ObservationOrigin, PhysicalKeyIdentity,
+        };
+
+        let pending = anyhow!(NativeInputRecipientError::OwnershipUnavailable(
+            UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
+        ));
+        assert!(native_m13_waiting_for_settlement(&pending));
+        let context = InputContext::new(InputSourceId::new(90), None);
+        let key = PhysicalKeyIdentity::code("KeyW");
+        let mut physical = InputState::new();
+        apply_native_recipient_input_event(
+            &mut physical,
+            &PlatformEvent::KeyboardInput {
+                context,
+                input: KeyboardInput {
+                    physical_key: key.clone(),
+                    logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                    location: KeyLocation::Standard,
+                    state: DigitalState::Pressed,
+                    repeat: false,
+                    origin: ObservationOrigin::SourceReport,
+                },
+            },
+            None,
+        );
+        assert!(
+            physical.keyboard_down_generation_in(context, &key).is_some(),
+            "neutral-only routing must never erase the original physical key"
+        );
+        let mut actions = ActionState::new();
+        actions.project(&physical);
+        actions.revoke_source_keyboard_for_ui_ownership(&physical, context.source);
+        assert!(
+            !actions.action_down(action::WORLD_MOVE_UP),
+            "a pending selected UI scope must not restore game permissions"
+        );
+    }
+
+    #[test]
     fn native_ime_projection_denies_only_transient_m13_work() {
         use crate::plugins::ui::UiRuntimeSlotOperationFailure;
 
-        assert!(native_ime_waiting_for_m13_settlement(&anyhow!(
+        assert!(native_m13_waiting_for_settlement(&anyhow!(
             NativeInputRecipientError::OwnershipUnavailable(
                 UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
             )
@@ -3871,7 +3942,7 @@ mod tests {
             NativeInputRecipientError::MissingRecipient,
         ] {
             assert!(
-                !native_ime_waiting_for_m13_settlement(&anyhow!(error)),
+                !native_m13_waiting_for_settlement(&anyhow!(error)),
                 "terminal, stale or absent recipients must not be mistaken for normal pending work"
             );
         }
