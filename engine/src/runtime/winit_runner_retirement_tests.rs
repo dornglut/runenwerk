@@ -31,10 +31,10 @@ fn refused_secondary_close_preserves_host_identity_and_redraw() {
         .unwrap();
     runner.owned_redraws.insert(secondary);
     let input = runner
-        .input_adapter
+        .native_input_mut()
         .window_context(secondary, winit::event::DeviceId::dummy())
         .unwrap();
-    let source = runner.input_adapter.window_source_context(secondary);
+    let source = runner.native_input().window_source_context(secondary);
     assert_eq!(source.map(|context| context.source), Some(input.source));
 
     let error = runner
@@ -43,7 +43,7 @@ fn refused_secondary_close_preserves_host_identity_and_redraw() {
     assert!(format!("{error:#}").contains("no GPU attachment"));
     assert!(runner.owned_redraws.contains(&secondary));
     assert_eq!(
-        runner.input_adapter.window_source_context(secondary),
+        runner.native_input().window_source_context(secondary),
         source
     );
     assert!(
