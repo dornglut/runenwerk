@@ -266,6 +266,18 @@ impl RenderGpuContext {
             .context
             .attach_surface(Arc::clone(&window))
             .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?;
+        // RunenGPU acquires physical ownership at registration, before capability
+        // admission or configuration can fail. Track that ownership immediately.
+        self.surfaces.insert(
+            id,
+            AttachedSurfaceState {
+                surface: Some(physical),
+                window: Arc::clone(&window),
+                capabilities: None,
+                config: None,
+                applied_revision: 0,
+            },
+        );
         let outcome = (|| -> Result<_, RenderSurfacePresentationError> {
             let capabilities = self
                 .context
@@ -299,18 +311,10 @@ impl RenderGpuContext {
             Err(error) => {
                 // Do not lose track of an attachment if rollback itself fails.
                 if let Err(detach_error) = self.context.detach_surface(physical) {
-                    self.surfaces.insert(
-                        id,
-                        AttachedSurfaceState {
-                            surface: Some(physical),
-                            window,
-                            capabilities: None,
-                            config: None,
-                            applied_revision: 0,
-                        },
-                    );
+                    // Preserve the already tracked physical handle and native Window.
                     return Err(RenderSurfacePresentationError::Gpu(detach_error.category()).into());
                 }
+                self.surfaces.remove(&id);
                 return Err(error.into());
             }
         };
