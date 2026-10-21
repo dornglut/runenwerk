@@ -5,6 +5,9 @@ use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceReg
 #[test]
 fn refused_secondary_close_preserves_host_identity_and_redraw() {
     let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+    // This is a real source-retirement fixture: its required neutral reducer
+    // must exist so the typed Render refusal, not missing InputState, is tested.
+    runner.state.world.insert_resource(InputState::new());
     runner
         .state
         .world
