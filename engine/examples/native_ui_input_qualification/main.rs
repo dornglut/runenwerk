@@ -315,7 +315,11 @@ fn main() -> Result<()> {
 
     let mut app = App::new();
     app.set_title("U9-C Native UI qualification");
-    app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(30));
+    // Physical qualification is driven by actual native input, UI deadlines and
+    // redraw requests; unchanged text must not force 30 replacement F2 GPU
+    // allocations per second. Continuous native resource-lifetime stress is
+    // tracked separately in Runenwerk #1314, not silently claimed as passing.
+    app.with_frame_pacing(FramePacingPolicyResource::on_demand());
     app.add_plugins(default_plugins());
     app.add_plugin(UiPlugin);
     app.add_plugin(RenderPlugin);
@@ -378,7 +382,7 @@ fn main() -> Result<()> {
             last_observation: None,
         });
 
-    println!("U9C_START mode=interactive input=real_os mounted_ui=true render=true");
+    println!("U9C_START mode=interactive pacing=on_demand input=real_os mounted_ui=true render=true resource_stress=unqualified-see-1314");
     println!("U9C_GUIDANCE click UI button, try W/Space/Tab, Alt+Tab and refocus; close via X");
     app.run()?;
     println!("U9C_EXIT result=ok");
