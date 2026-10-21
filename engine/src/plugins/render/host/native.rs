@@ -152,7 +152,9 @@ fn record_attachment_presentation_failure(
     revision: u64,
     error: &anyhow::Error,
 ) {
-    if let Some(reason) = error.downcast_ref::<RenderSurfacePresentationError>().copied()
+    if let Some(reason) = error
+        .downcast_ref::<RenderSurfacePresentationError>()
+        .copied()
         && let Ok(registry) = world.resource_mut::<RenderSurfaceRegistryResource>()
     {
         registry.record_presentation_attempt(
@@ -339,7 +341,10 @@ mod tests {
             .record(id)
             .unwrap()
             .clone();
-        assert_eq!(record.lifecycle_state, RenderSurfaceLifecycleState::Requested);
+        assert_eq!(
+            record.lifecycle_state,
+            RenderSurfaceLifecycleState::Requested
+        );
         assert_eq!(
             record.presentation_attempt,
             Some(RenderSurfacePresentationAttempt::Rejected {
