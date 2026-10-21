@@ -386,6 +386,9 @@ impl NativeWindowHook for PhysicalProbe {
 }
 
 fn main() -> Result<()> {
+    // The optional real-driver acquisition/reattach trace is scoped to this
+    // owner-hardware probe; production apps retain their existing logging.
+    let _trace_guard = engine::utils::setup_tracing();
     let mut app = App::new();
     app.set_title("RPRES-03 Native Physical Lifecycle Qualification");
     app.add_plugins(default_plugins());

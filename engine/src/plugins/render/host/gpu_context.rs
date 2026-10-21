@@ -193,6 +193,17 @@ impl RenderGpuContext {
         let descriptor = apply_runenwerk_gpu_context_policy(descriptor);
         let (context, surface) =
             GpuContext::request_for_surface(descriptor, Arc::clone(&window)).await?;
+        let adapter = context.adapter_facts();
+        tracing::info!(
+            target: "runenwerk.rpres",
+            backend = ?adapter.backend(),
+            name = ?adapter.diagnostic_name(),
+            driver = ?adapter.driver(),
+            driver_info = ?adapter.driver_info(),
+            vendor = ?adapter.vendor(),
+            device = ?adapter.device(),
+            "renderer native GPU context admitted adapter"
+        );
         let size = window.inner_size();
         let capabilities = context
             .surface_capabilities(surface)
@@ -451,6 +462,14 @@ impl RenderGpuContext {
         }
         if state.capabilities.is_none() || state.surface.is_none() {
             // Missing/stale attachment facts require a new physical registration.
+            tracing::debug!(
+                target: "runenwerk.rpres",
+                surface = id.raw(),
+                old_handle = ?state.surface,
+                revision,
+                ?extent,
+                "pre-acquisition reattach required because cached attachment facts are unavailable"
+            );
             self.reattach_surface(id, request, revision, extent)?;
             return Ok(());
         }
@@ -601,6 +620,14 @@ impl RenderGpuContext {
         state.capabilities = Some(capabilities);
         state.config = Some(config);
         state.applied_revision = revision;
+        tracing::debug!(
+            target: "runenwerk.rpres",
+            surface = id.raw(),
+            new_handle = ?configured,
+            revision,
+            ?extent,
+            "new physical surface attachment was configured"
+        );
         Ok(())
     }
 
@@ -649,6 +676,12 @@ impl RenderGpuContext {
                     | GpuSurfaceAcquireErrorCategory::ContextOrDeviceUnavailableOrLost
             )
         {
+            tracing::debug!(
+                target: "runenwerk.rpres",
+                surface = id.raw(),
+                category = ?error.category(),
+                "native acquisition invalidated cached physical presentation facts"
+            );
             self.invalidate_surface(id);
         }
         result.map_err(|error| match error.category() {

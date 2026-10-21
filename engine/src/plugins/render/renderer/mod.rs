@@ -1314,6 +1314,12 @@ impl Gfx {
         // first, then require fresh physical qualification at the next safe
         // pre-acquisition RenderSubmit boundary (never inside this lease).
         if acquired.status() == runen_gpu::GpuSurfaceAcquisitionStatus::Suboptimal {
+            tracing::debug!(
+                target: "runenwerk.rpres",
+                surface = render_surface_id.raw(),
+                frame = prepared_frame.context.frame_index,
+                "usable native acquisition was Suboptimal; cached facts invalidated after submission"
+            );
             self.ctx.invalidate_surface(render_surface_id);
         }
         Ok(timings)
