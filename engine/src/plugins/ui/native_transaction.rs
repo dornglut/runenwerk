@@ -236,7 +236,9 @@ pub fn unmount_retired_native_ui_slot(
 /// gameplay permission: the original source is revoked and any output must be
 /// withheld until the existing native runtime settles and is reobserved.
 #[derive(Debug, thiserror::Error)]
-#[error("native RunenUI mutation left pending M13 work; withhold publication and retry after native settlement")]
+#[error(
+    "native RunenUI mutation left pending M13 work; withhold publication and retry after native settlement"
+)]
 pub(crate) struct NativeUiMutationNeedsSettlement;
 
 /// Execute a selected-native RunenUI app mutation and withdraw incompatible
@@ -457,12 +459,17 @@ fn transact_ui_slot_inner<T>(
             Err(error) => {
                 let pending = matches!(error, UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
                 (
-                    Err(anyhow!("native RunenUI ownership observation failed: {error:?}")),
+                    Err(anyhow!(
+                        "native RunenUI ownership observation failed: {error:?}"
+                    )),
                     pending,
                 )
             }
         },
-        Err(error) => (Err(anyhow!("native RunenUI slots unavailable: {error}")), false),
+        Err(error) => (
+            Err(anyhow!("native RunenUI slots unavailable: {error}")),
+            false,
+        ),
     };
     let same_binding = world
         .resource::<UiNativeInputRecipientsResource>()
@@ -492,9 +499,7 @@ fn transact_ui_slot_inner<T>(
         // outcome, not a lost scope. Never return the unqualified publication:
         // revoke the physical game's prior permission above; its source owner
         // and the next native settlement own all subsequent observations.
-        Ok(Ok(_)) if same_binding && pending_after => {
-            Err(NativeUiMutationNeedsSettlement.into())
-        }
+        Ok(Ok(_)) if same_binding && pending_after => Err(NativeUiMutationNeedsSettlement.into()),
         Ok(Ok(_)) => Err(anyhow!(
             "native RunenUI app mutation lost its binding or final M13 ownership observation"
         )),
