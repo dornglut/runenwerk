@@ -4219,8 +4219,7 @@ mod tests {
     fn pending_native_publication_preserves_only_compatible_visual_not_input_authority() {
         use crate::plugins::render::host::RenderSurfaceId;
         use crate::plugins::render::{
-            RenderFrameProducerId, RunenUiPaintSubmission,
-            RunenUiPaintSubmissionRegistryResource,
+            RenderFrameProducerId, RunenUiPaintSubmission, RunenUiPaintSubmissionRegistryResource,
         };
         use crate::plugins::ui::{
             UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
@@ -4320,11 +4319,7 @@ mod tests {
             .stage(binding.clone(), mapping, 2, publication.clone())
             .unwrap();
         assert_ne!(recovered_id, first_id);
-        assert!(
-            associations
-                .displayed_for_mapping(slot, mapping)
-                .is_none()
-        );
+        assert!(associations.displayed_for_mapping(slot, mapping).is_none());
         assert!(associations.associate_accepted_submission(recovered_id));
         assert!(
             associations
@@ -4338,9 +4333,7 @@ mod tests {
         assert!(associations.associate_accepted_submission(later));
         assert!(associations.defer_unsettled_publication(&binding, mapping));
         assert!(
-            associations
-                .promote_completed_publication(later)
-                .is_none(),
+            associations.promote_completed_publication(later).is_none(),
             "even accepted but not completed old work may not restore input"
         );
 
@@ -4357,11 +4350,7 @@ mod tests {
         associations.invalidate_mapping(slot);
         assert_eq!(paints.submission_count(), 0);
         assert!(associations.update_mapping(slot, resized));
-        assert!(
-            associations
-                .displayed_for_mapping(slot, resized)
-                .is_none()
-        );
+        assert!(associations.displayed_for_mapping(slot, resized).is_none());
         assert!(associations.needs_publication(slot, resized, 3));
 
         // Rebind/retire may never reinstate the old target, even if later

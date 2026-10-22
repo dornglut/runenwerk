@@ -341,9 +341,7 @@ fn defer_unsettled_paint(
     let previous = world
         .resource::<RunenUiPaintSubmissionRegistryResource>()
         .ok()
-        .and_then(|paints| {
-            paints.get_for_surface(&binding.producer_id, binding.render_surface_id)
-        })
+        .and_then(|paints| paints.get_for_surface(&binding.producer_id, binding.render_surface_id))
         .map(|paint| paint.publication_id);
     if compatible && previous.is_some() {
         tracing::trace!(
