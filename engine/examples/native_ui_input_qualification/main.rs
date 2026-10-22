@@ -13,7 +13,10 @@ use anyhow::{Context, Result};
 use engine::app::AppNativeHostExt;
 use engine::plugins::input::domain::action;
 use engine::plugins::render::host::RenderSurfaceId;
-use engine::plugins::render::{RenderFlow, RenderFrameProducerId, SurfaceFrameSubmissionOrder};
+use engine::plugins::render::{
+    RenderFlow, RenderFrameProducerId, RunenUiPaintSubmissionRegistryResource,
+    SurfaceFrameSubmissionOrder,
+};
 use engine::plugins::ui::{
     AppUiExt, UiNativeInputRecipientsResource, UiRuntimeFontConfiguration,
     UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
@@ -228,6 +231,19 @@ impl NativeWindowHook for QualificationHook {
             .resource::<UiRuntimePresentationAssociationsResource>()?
             .displayed_for_native_recipient(self.slot, NativeWindowId::primary())
             .is_some();
+        // Renderer intake is an immutable paint candidate, not proof of a
+        // submitted/completed frame or an input permission. Observe it separately
+        // from the one terminal completed-Present association above.
+        let paint_intake = world
+            .resource::<UiRuntimePresentationAssociationsResource>()?
+            .binding(self.slot)
+            .and_then(|binding| {
+                world
+                    .resource::<RunenUiPaintSubmissionRegistryResource>()
+                    .ok()?
+                    .get_for_surface(&binding.producer_id, binding.render_surface_id)
+                    .map(|paint| paint.publication_id.raw())
+            });
         let owner = match world
             .resource_mut::<UiRuntimeSlotsResource>()?
             .input_ownership(self.slot)
@@ -255,13 +271,13 @@ impl NativeWindowHook for QualificationHook {
         let d = actions.action_down(action::WORLD_MOVE_RIGHT);
         let activations = self.activations.load(Ordering::Relaxed);
         let observation = format!(
-            "frame={} native_focused={} selected_epoch={selected:?} completed_present={} M13=[{owner}] game_down=[W:{w},A:{a},S:{s},D:{d}] ui_activations={activations}",
+            "frame={} native_focused={} selected_epoch={selected:?} paint_intake={paint_intake:?} completed_present={} M13=[{owner}] game_down=[W:{w},A:{a},S:{s},D:{d}] ui_activations={activations}",
             self.frames, window_focused, displayed
         );
         // Only semantic changes are logged; frame counter stays in the output
         // but must not cause one trace line for every continuously paced frame.
         let stable = format!(
-            "focused={window_focused} selected={selected:?} present={displayed} {owner} game={w}{a}{s}{d} activations={activations}"
+            "focused={window_focused} selected={selected:?} paint={paint_intake:?} present={displayed} {owner} game={w}{a}{s}{d} activations={activations}"
         );
         if self.last_observation.as_deref() != Some(stable.as_str()) {
             println!("U9C_FRAME {observation}");
