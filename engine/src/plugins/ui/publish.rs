@@ -352,7 +352,7 @@ fn defer_unsettled_paint(
             slot = ?binding.slot_id,
             render_surface = ?binding.render_surface_id,
             native_window = ?mapping.native_window_id(),
-            visual_publication = previous.map(|id| id.raw()),
+            visual_publication = ?previous.map(|id| id.raw()),
             "RunenUI M13 pending; old visual retained without displayed-input permission"
         );
     } else {
