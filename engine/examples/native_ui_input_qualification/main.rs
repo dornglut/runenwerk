@@ -6,15 +6,17 @@
 //!
 //! Run with: cargo run -p engine --example native_ui_input_qualification --locked -- --interactive
 //! Close with the operating system's window close button.
-use std::sync::Arc;
+mod lifetime;
+
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 
 use anyhow::{Context, Result};
 use engine::app::AppNativeHostExt;
 use engine::plugins::input::domain::action;
 use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::{
-    RenderFlow, RenderFrameProducerId, RunenUiPaintSubmissionRegistryResource,
+    RenderFlow, RenderFlowId, RenderFrameProducerId, RunenUiPaintSubmissionRegistryResource,
     SurfaceFrameSubmissionOrder,
 };
 use engine::plugins::ui::{
@@ -45,21 +47,32 @@ struct QualificationUi;
 
 struct UiState {
     activations: Arc<AtomicUsize>,
+    text_generation: u64,
+}
+
+enum QualificationAction {
+    Activate,
+    ChangeText(u64),
 }
 
 impl UiApp for QualificationUi {
     type State = UiState;
-    type Action = ();
+    type Action = QualificationAction;
     type HostProtocol = NoHostProtocol;
 
-    fn root(_: &UiState) -> impl View<()> {
+    fn root(state: &UiState) -> impl View<QualificationAction> {
         column(vec![
-            text("RunenUI native input qualification").into_element(),
+            text(if state.text_generation == 0 {
+                "RunenUI native input qualification".to_owned()
+            } else {
+                format!("RunenUI changing text {:08}", state.text_generation)
+            })
+            .into_element(),
             text("Click the button to focus it, then try W, Space and Tab.").into_element(),
             button("Focus / activate this button")
                 .id("u9c.qualify.button")
                 .key("u9c.qualify.button")
-                .on_activate(|| ())
+                .on_activate(|| QualificationAction::Activate)
                 .into_element(),
         ])
         .id("u9c.qualify.root")
@@ -67,9 +80,14 @@ impl UiApp for QualificationUi {
 
     fn update(
         state: &mut Self::State,
-        _: Self::Action,
+        action: Self::Action,
     ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
-        state.activations.fetch_add(1, Ordering::Relaxed);
+        match action {
+            QualificationAction::Activate => {
+                state.activations.fetch_add(1, Ordering::Relaxed);
+            }
+            QualificationAction::ChangeText(generation) => state.text_generation = generation,
+        }
         Effects::none()
     }
 }
@@ -85,6 +103,8 @@ struct QualificationHook {
     ime_events: u64,
     raw_motion: u64,
     last_observation: Option<String>,
+    lifetime: Option<lifetime::Probe>,
+    flow: RenderFlowId,
 }
 
 impl NativeWindowHook for QualificationHook {
@@ -217,6 +237,43 @@ impl NativeWindowHook for QualificationHook {
 
     fn frame(&mut self, _: &Window, world: &mut World) -> Result<()> {
         self.frames += 1;
+        if let Some(probe) = self.lifetime.as_mut() {
+            let result: Result<bool> = (|| {
+                let stop = probe.observe(world, &mut self.flow, self.frames)?;
+                if !stop && probe.changing() {
+                    // Explicit application evolution; never a fabricated native input event.
+                    world
+                        .resource_mut::<UiRuntimeSlotsResource>()?
+                        .submit_app_action::<QualificationUi>(
+                            self.slot,
+                            QualificationAction::ChangeText(self.frames),
+                        )
+                        .map_err(|error| {
+                            anyhow::anyhow!("changing-text action rejected: {error:?}")
+                        })?;
+                }
+                Ok(stop)
+            })();
+            let stop = match result {
+                Ok(stop) => stop,
+                Err(error) => {
+                    probe
+                        .report
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("lifetime report poisoned"))?
+                        .failure = Some(format!("{error:#}"));
+                    true
+                }
+            };
+            if stop {
+                let record = world
+                    .resource_mut::<WindowStateRegistryResource>()?
+                    .record_mut(NativeWindowId::primary())
+                    .context("primary missing at lifetime stop")?;
+                record.request_close();
+                record.approve_close();
+            }
+        }
         let (window_focused, close_intent) = {
             let record = world
                 .resource::<WindowStateRegistryResource>()?
@@ -318,10 +375,8 @@ impl NativeWindowHook for QualificationHook {
 }
 
 fn main() -> Result<()> {
-    anyhow::ensure!(
-        std::env::args().skip(1).collect::<Vec<_>>() == ["--interactive"],
-        "this owner-operated physical qualification requires --interactive; no events are injected"
-    );
+    let options = lifetime::parse(&std::env::args().skip(1).collect::<Vec<_>>())?;
+    let report = Arc::new(Mutex::new(lifetime::Report::default()));
 
     let clicks = Arc::new(AtomicUsize::new(0));
     let fonts = UiRuntimeFontConfiguration::new(vec![FONT.to_vec()]).with_generic_mapping(
@@ -331,11 +386,11 @@ fn main() -> Result<()> {
 
     let mut app = App::new();
     app.set_title("U9-C Native UI qualification");
-    // Physical qualification is driven by actual native input, UI deadlines and
-    // redraw requests; unchanged text must not force 30 replacement F2 GPU
-    // allocations per second. Continuous native resource-lifetime stress is
-    // tracked separately in Runenwerk #1314, not silently claimed as passing.
-    app.with_frame_pacing(FramePacingPolicyResource::on_demand());
+    app.with_frame_pacing(if options.is_some() {
+        FramePacingPolicyResource::continuous_capped(30)
+    } else {
+        FramePacingPolicyResource::on_demand()
+    });
     app.add_plugins(default_plugins());
     app.add_plugin(UiPlugin);
     app.add_plugin(RenderPlugin);
@@ -346,6 +401,7 @@ fn main() -> Result<()> {
             UiTypedScreenId::new("u9c.native.input.qualification"),
             UiState {
                 activations: Arc::clone(&clicks),
+                text_generation: 0,
             },
             &fonts,
         )
@@ -365,21 +421,10 @@ fn main() -> Result<()> {
             .with_order(SurfaceFrameSubmissionOrder::new(20, 0)),
         )?;
 
-    let flow = RenderFlow::new("native.u9c.qualifier")
-        .with_surface_color()?
-        .fullscreen_pass("native.u9c.qualifier.clear")
-        .main_surface_only()
-        .clear_color([0.07, 0.08, 0.10, 1.0])
-        .write_surface_color()?
-        .finish()
-        .builtin_ui_composite_pass("native.u9c.qualifier.ui")?
-        .main_surface_only()
-        .finish()
-        .present_pass("native.u9c.qualifier.present")?
-        .main_surface_only()
-        .surface_color()?
-        .finish()
-        .validate()?;
+    let flow = qualification_flow(
+        options.is_none_or(|options| options.content != lifetime::Content::Control),
+    )?;
+    let flow_id = flow.id();
     app.add_render_flow(flow);
 
     app.init_resource::<NativeWindowHookRegistryResource>();
@@ -396,13 +441,61 @@ fn main() -> Result<()> {
             ime_events: 0,
             raw_motion: 0,
             last_observation: None,
+            lifetime: options.map(|options| lifetime::Probe::new(options, Arc::clone(&report))),
+            flow: flow_id,
         });
 
     println!(
-        "U9C_START mode=interactive pacing=on_demand input=real_os mounted_ui=true render=true resource_stress=unqualified-see-1314"
+        "U9C_START options={options:?} pacing={} input=real_os mounted_ui=true render=true pid={} source_claim={:?}",
+        if options.is_some() {
+            "continuous_30"
+        } else {
+            "on_demand"
+        },
+        std::process::id(),
+        std::env::var("RUNENWERK_SOURCE_REVISION").ok()
     );
     println!("U9C_GUIDANCE click UI button, try W/Space/Tab, Alt+Tab and refocus; close via X");
     app.run()?;
+    if options.is_some() {
+        let report = report
+            .lock()
+            .map_err(|_| anyhow::anyhow!("lifetime report poisoned"))?;
+        anyhow::ensure!(
+            report.failure.is_none(),
+            "lifetime observation failed: {:?}",
+            report.failure
+        );
+        anyhow::ensure!(
+            report.complete,
+            "lifetime stopped before the workload, idle/recovery and final drain completed"
+        );
+    }
     println!("U9C_EXIT result=ok");
     Ok(())
+}
+
+fn qualification_flow(with_ui: bool) -> Result<RenderFlow> {
+    let flow = RenderFlow::new("native.u9c.qualifier")
+        .with_surface_color()?
+        .fullscreen_pass("native.u9c.qualifier.clear")
+        .main_surface_only()
+        .clear_color([0.07, 0.08, 0.10, 1.0])
+        .write_surface_color()?
+        .finish();
+    let flow = if with_ui {
+        flow.builtin_ui_composite_pass("native.u9c.qualifier.ui")?
+            .main_surface_only()
+            .finish()
+    } else {
+        flow
+    };
+    let flow = flow
+        .present_pass("native.u9c.qualifier.present")?
+        .main_surface_only()
+        .surface_color()?
+        .finish()
+        .validate()?;
+
+    Ok(flow)
 }

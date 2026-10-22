@@ -970,6 +970,32 @@ impl Gfx {
         self.ctx.context().affinity()
     }
 
+    /// Point-in-time G4C1 resource realization counts for the renderer's GPU context.
+    ///
+    /// This diagnostic snapshot does not expose mutable context access and is not
+    /// atomic with the other realization or execution observations.
+    pub fn resource_realization_stats(&self) -> runen_gpu::GpuResourceRealizationStats {
+        self.ctx.context().resource_realization_stats()
+    }
+
+    /// Point-in-time G4C2 program and binding realization counts for the renderer's GPU context.
+    ///
+    /// This diagnostic snapshot does not expose mutable context access and is not
+    /// atomic with the other realization or execution observations.
+    pub fn program_binding_realization_stats(
+        &self,
+    ) -> runen_gpu::GpuProgramBindingRealizationStats {
+        self.ctx.context().program_binding_realization_stats()
+    }
+
+    /// Point-in-time execution queue counts for the renderer's GPU context.
+    ///
+    /// In-flight counts are not GPU completion evidence. This diagnostic snapshot
+    /// is not atomic with the other realization or execution observations.
+    pub fn execution_stats(&self) -> runen_gpu::GpuExecutionStats {
+        self.ctx.context().execution_stats()
+    }
+
     pub fn temporal_execution_evidence(
         &self,
         frame_index: u64,
