@@ -4216,6 +4216,162 @@ mod tests {
     }
 
     #[test]
+    fn pending_native_publication_preserves_only_compatible_visual_not_input_authority() {
+        use crate::plugins::render::host::RenderSurfaceId;
+        use crate::plugins::render::{
+            RenderFrameProducerId, RunenUiPaintSubmission,
+            RunenUiPaintSubmissionRegistryResource,
+        };
+        use crate::plugins::ui::{
+            UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
+            UiRuntimePresentationBinding,
+        };
+        use crate::runtime::NativeWindowId;
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let (source, _, _, registry) = counter_projection_fixture();
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").expect("valid font")],
+            );
+        let slot = slots
+            .mount_with_fonts(source, &registry, &fonts)
+            .slot_id()
+            .expect("real RunenUI slot");
+        let surface = RenderSurfaceId::primary();
+        let producer = RenderFrameProducerId::try_from_raw(57).unwrap();
+        let style = StyleEnvironment::default();
+        let binding = UiRuntimePresentationBinding::new(slot, producer, surface, style.clone());
+        let mapping =
+            UiRuntimeNativeMapping::new(NativeWindowId::primary(), surface, (320, 160), 1.0)
+                .unwrap();
+        let context = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(
+                LogicalLength::from(RUNTIME_SURFACE_WIDTH),
+                LogicalLength::from(RUNTIME_SURFACE_HEIGHT),
+            ),
+        );
+        let publication = slots.publish_surface_for_slot(slot, &context).unwrap();
+
+        let mut associations = UiRuntimePresentationAssociationsResource::default();
+        associations.bind(binding.clone()).unwrap();
+        assert!(associations.update_mapping(slot, mapping));
+        let first_id = associations
+            .stage(binding.clone(), mapping, 1, publication.clone())
+            .unwrap();
+        assert!(associations.associate_accepted_submission(first_id));
+        assert!(
+            associations
+                .promote_completed_publication(first_id)
+                .is_some()
+        );
+        let mut paints = RunenUiPaintSubmissionRegistryResource::default();
+        assert!(
+            paints
+                .replace(
+                    RunenUiPaintSubmission::new(
+                        producer,
+                        first_id,
+                        publication.paint_publication().clone(),
+                    )
+                    .with_render_surface(surface),
+                )
+                .is_none()
+        );
+        assert_eq!(paints.submission_count(), 1);
+        assert!(
+            associations.defer_unsettled_publication(&binding, mapping),
+            "the exact old renderer target is compatible"
+        );
+        assert_eq!(
+            paints
+                .get_for_surface(&producer, surface)
+                .map(|paint| paint.publication_id),
+            Some(first_id),
+            "the existing immutable paint stays a visual-only contribution"
+        );
+        assert!(
+            associations
+                .displayed_for_native_recipient(slot, NativeWindowId::primary())
+                .is_none(),
+            "pending M13 cannot reuse any old completed-Present hit mapping"
+        );
+        assert!(!associations.associate_accepted_submission(first_id));
+        assert!(
+            associations
+                .promote_completed_publication(first_id)
+                .is_none(),
+            "a late old GPU receipt cannot reactivate stale input"
+        );
+        assert!(associations.needs_publication(slot, mapping, 1));
+
+        // Several consecutive bounded-pump deferrals keep only one unchanged
+        // visual contribution and cannot allocate duplicate renderer entries.
+        for _ in 0..16 {
+            assert!(associations.defer_unsettled_publication(&binding, mapping));
+            assert_eq!(paints.submission_count(), 1);
+        }
+
+        // A fresh aligned generation may recover input only after its own
+        // accepted GPU submission and terminal completed Present.
+        let recovered_id = associations
+            .stage(binding.clone(), mapping, 2, publication.clone())
+            .unwrap();
+        assert_ne!(recovered_id, first_id);
+        assert!(
+            associations
+                .displayed_for_mapping(slot, mapping)
+                .is_none()
+        );
+        assert!(associations.associate_accepted_submission(recovered_id));
+        assert!(
+            associations
+                .promote_completed_publication(recovered_id)
+                .is_some()
+        );
+
+        let later = associations
+            .stage(binding.clone(), mapping, 3, publication.clone())
+            .unwrap();
+        assert!(associations.associate_accepted_submission(later));
+        assert!(associations.defer_unsettled_publication(&binding, mapping));
+        assert!(
+            associations
+                .promote_completed_publication(later)
+                .is_none(),
+            "even accepted but not completed old work may not restore input"
+        );
+
+        // A physical resize or raster-scale change must invalidate old paint;
+        // the caller obeys update_mapping's mandatory renderer retirement.
+        let resized =
+            UiRuntimeNativeMapping::new(NativeWindowId::primary(), surface, (640, 320), 2.0)
+                .unwrap();
+        assert!(
+            !associations.defer_unsettled_publication(&binding, resized),
+            "not-yet-applied physical mapping must not license visual reuse"
+        );
+        paints.remove_for_surface(&producer, surface);
+        associations.invalidate_mapping(slot);
+        assert_eq!(paints.submission_count(), 0);
+        assert!(associations.update_mapping(slot, resized));
+        assert!(
+            associations
+                .displayed_for_mapping(slot, resized)
+                .is_none()
+        );
+        assert!(associations.needs_publication(slot, resized, 3));
+
+        // Rebind/retire may never reinstate the old target, even if later
+        // native geometry happens to equal its old width and height.
+        associations.unbind(slot);
+        assert!(!associations.defer_unsettled_publication(&binding, mapping));
+        assert!(associations.binding(slot).is_none());
+    }
+
+    #[test]
     fn host_presentation_mapping_rejects_invalid_scale_and_extent() {
         use crate::plugins::render::host::RenderSurfaceId;
         use crate::plugins::ui::{UiRuntimeMappingError, UiRuntimeNativeMapping};

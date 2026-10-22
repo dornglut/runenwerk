@@ -314,6 +314,34 @@ impl UiRuntimePresentationAssociationsResource {
         self.last_publication.remove(&slot);
     }
 
+    /// Deny every older staged, accepted or displayed input generation when a
+    /// selected native RunenUI slot has unfinished M13 work. A previously
+    /// published immutable *visual* contribution may continue to render only
+    /// while its existing binding and exact physical mapping remain unchanged.
+    ///
+    /// This deliberately retains no hit, focus, capture or successful-Present
+    /// permission. In particular, a late terminal receipt for an earlier GPU
+    /// submission cannot re-promote its stale input. The next settled RunenUI
+    /// frame must publish an independent aligned generation before input can
+    /// become eligible again.
+    ///
+    /// Returns only compatibility with the currently recorded visual target;
+    /// the caller must independently verify the old renderer-owned paint still
+    /// exists, and withdraw it if the target is incompatible or the paint absent.
+    pub(crate) fn defer_unsettled_publication(
+        &mut self,
+        binding: &UiRuntimePresentationBinding,
+        mapping: UiRuntimeNativeMapping,
+    ) -> bool {
+        let compatible = self.bindings.get(&binding.slot_id) == Some(binding)
+            && self.current_mappings.get(&binding.slot_id) == Some(&mapping);
+        self.pending.remove(&binding.slot_id);
+        self.retire_in_flight_for_slot(binding.slot_id);
+        self.displayed.remove(&binding.slot_id);
+        self.last_publication.remove(&binding.slot_id);
+        compatible
+    }
+
     /// Returns whether a new host ingress generation or native mapping needs publication.
     /// The runtime remains authority for internal paint/redraw facts.
     #[must_use]

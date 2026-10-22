@@ -116,10 +116,12 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
         match settlement {
             Ok(()) => {}
             Err(super::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {
-                // No partially settled snapshot may be published. Retire this
-                // slot's old paint/visible binding while preserving its runtime,
-                // accepted ingress epoch, and queued work for the next frame.
-                withdraw_paint_and_mapping(&mut world, &binding);
+                // No partially settled snapshot may be published. Preserve
+                // only already-published compatible visual paint while
+                // synchronously denying every old displayed-input generation.
+                // A blank compositor frame must not replace intact UI merely
+                // because M13 work has not yet finished its bounded pump.
+                defer_unsettled_paint(&mut world, &binding, mapping, "pre-publication");
                 continue;
             }
             Err(error) => {
@@ -186,12 +188,11 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
             Err(error)
                 if error.is::<super::native_transaction::NativeUiMutationNeedsSettlement>() =>
             {
-                // Surface publishing can itself admit new M13 work. The
-                // canonical transaction already revoked old gameplay access.
-                // Withhold old paint and displayed-input authority, and retry
-                // only after the existing native Host's bounded M13 settlement.
-                // Never stage a publication whose final ownership is unsettled.
-                withdraw_paint_and_mapping(&mut world, &binding);
+                // Publishing can itself admit new M13 work. The canonical
+                // transaction already revoked old gameplay access. Never
+                // publish its unqualified result or promote stale input, but
+                // keep previously staged visual paint on an unchanged target.
+                defer_unsettled_paint(&mut world, &binding, mapping, "post-publication");
                 continue;
             }
             Err(error) => {
@@ -322,6 +323,50 @@ fn exact_logical_axis_for_pixels(physical: u32, raster: f32) -> Result<f32> {
     Err(anyhow!(
         "RunenUI logical target axis cannot preserve the exact native extent at this raster scale"
     ))
+}
+
+/// A pending M13 observation revokes input, not necessarily the valid
+/// previously authored visual contribution. No new snapshot or Present receipt
+/// is synthesized; RunenUI and Render retain their existing semantic owners.
+fn defer_unsettled_paint(
+    world: &mut WorldMut,
+    binding: &UiRuntimePresentationBinding,
+    mapping: UiRuntimeNativeMapping,
+    phase: &'static str,
+) {
+    let compatible = world
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .ok()
+        .is_some_and(|associations| associations.defer_unsettled_publication(binding, mapping));
+    let previous = world
+        .resource::<RunenUiPaintSubmissionRegistryResource>()
+        .ok()
+        .and_then(|paints| {
+            paints.get_for_surface(&binding.producer_id, binding.render_surface_id)
+        })
+        .map(|paint| paint.publication_id);
+    if compatible && previous.is_some() {
+        tracing::trace!(
+            target: "engine.ui.publication",
+            ?phase,
+            slot = ?binding.slot_id,
+            render_surface = ?binding.render_surface_id,
+            native_window = ?mapping.native_window_id(),
+            visual_publication = previous.map(|id| id.raw()),
+            "RunenUI M13 pending; old visual retained without displayed-input permission"
+        );
+    } else {
+        tracing::trace!(
+            target: "engine.ui.publication",
+            ?phase,
+            slot = ?binding.slot_id,
+            render_surface = ?binding.render_surface_id,
+            compatible,
+            has_prior_paint = previous.is_some(),
+            "RunenUI M13 pending; incompatible/absent old paint retired"
+        );
+        withdraw_paint_and_mapping(world, binding);
+    }
 }
 
 fn withdraw_paint_and_mapping(world: &mut WorldMut, binding: &UiRuntimePresentationBinding) {
