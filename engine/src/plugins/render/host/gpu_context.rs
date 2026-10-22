@@ -194,7 +194,7 @@ impl RenderGpuContext {
         let (context, surface) =
             GpuContext::request_for_surface(descriptor, Arc::clone(&window)).await?;
         let adapter = context.adapter_facts();
-        tracing::info!(
+        tracing::debug!(
             target: "runenwerk.rpres",
             backend = ?adapter.backend(),
             name = ?adapter.diagnostic_name(),
