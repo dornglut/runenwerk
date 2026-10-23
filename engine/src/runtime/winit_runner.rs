@@ -1922,6 +1922,16 @@ impl WinitRunner {
         let Some(mut lifetime) = self.native_ui_mice.remove(&window) else {
             return Ok(());
         };
+        self.cancel_native_ui_mouse_lifetime(window, &mut lifetime)
+    }
+
+    /// Cancel point authority while preserving the translator's physical
+    /// button bookkeeping for the original later Up callback.
+    fn cancel_native_ui_mouse_lifetime(
+        &mut self,
+        window: NativeWindowId,
+        lifetime: &mut NativeUiMouseTranslator,
+    ) -> Result<()> {
         // A remount/rebind cannot receive a Cancel from the previous native
         // window binding, even when the same runtime scope remains mounted.
         if !matches!(
@@ -2226,6 +2236,7 @@ impl WinitRunner {
         // Before framework ingress a rejected observation is neutral-only;
         // after an actual M13 attempt, missing finality is a host error.
         let mut m13_submission_attempted = false;
+        let mut stale_down_rejected = false;
         let operation = (|| -> Result<()> {
             let before = slots
                 .input_ownership(slot)
@@ -2277,13 +2288,33 @@ impl WinitRunner {
                 &batch,
                 &status,
             );
-            anyhow::ensure!(
-                matches!(finality, Ok(UiInputFinality::Committed(_))),
-                "native button lacks exact M13 pointer settlement: {finality:?}"
-            );
+            match finality {
+                Ok(UiInputFinality::Committed(_)) => {}
+                Ok(UiInputFinality::ProcessingRejected(
+                    runenui_runtime::UiInputProcessingRejection::MissingDisplayedSnapshot,
+                )) if state == ElementState::Pressed => stale_down_rejected = true,
+                other => {
+                    anyhow::bail!("native button lacks exact M13 pointer settlement: {other:?}")
+                }
+            }
             Ok(())
         })();
         world.insert_resource(slots);
+        if stale_down_rejected {
+            let cleanup = self.cancel_native_ui_mouse_lifetime(window, &mut lifetime);
+            self.native_ui_mice.insert(window, lifetime);
+            if let Err(cleanup) = cleanup {
+                return Err(anyhow!(
+                    "native UI mouse Down was rejected because its displayed snapshot is missing; exact point cleanup failed: {cleanup:#}"
+                ));
+            }
+            tracing::trace!(
+                target: "engine.runtime.input",
+                ?window,
+                "native UI mouse Down withheld after its completed-Present context expired"
+            );
+            return Ok(());
+        }
         self.native_ui_mice.insert(window, lifetime);
         if let Err(error) = operation {
             self.cancel_native_ui_mouse(window)?;
@@ -2351,6 +2382,7 @@ impl WinitRunner {
         // Before framework ingress a rejected observation is neutral-only;
         // after an actual M13 attempt, missing finality is a host error.
         let mut m13_submission_attempted = false;
+        let mut stale_display_rejected = false;
         let operation = (|| -> Result<()> {
             let before = slots
                 .input_ownership(slot)
@@ -2400,14 +2432,27 @@ impl WinitRunner {
                 &batch,
                 &status,
             );
-            anyhow::ensure!(
-                matches!(finality, Ok(UiInputFinality::Committed(_))),
-                "native UI wheel had no exact M13 pointer settlement: {finality:?}"
-            );
+            match finality {
+                Ok(UiInputFinality::Committed(_)) => {}
+                Ok(UiInputFinality::ProcessingRejected(
+                    runenui_runtime::UiInputProcessingRejection::MissingDisplayedSnapshot,
+                )) => stale_display_rejected = true,
+                other => {
+                    anyhow::bail!("native UI wheel had no exact M13 pointer settlement: {other:?}")
+                }
+            }
             Ok(())
         })();
         world.insert_resource(slots);
         self.native_ui_mice.insert(window, lifetime);
+        if stale_display_rejected {
+            tracing::trace!(
+                target: "engine.runtime.input",
+                ?window,
+                "native UI wheel withheld because its completed-Present context expired"
+            );
+            return Ok(());
+        }
         if let Err(error) = operation {
             self.cancel_native_ui_mouse(window)?;
             tracing::trace!(

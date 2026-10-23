@@ -8,6 +8,7 @@ struct NativeCursorFixture {
     source: InputContext,
     backend_device: winit::event::DeviceId,
     displayed_context: runenui_core::SurfaceInputContext,
+    button_position: PhysicalPosition<f64>,
     binding: crate::plugins::ui::UiRuntimePresentationBinding,
     mapping: crate::plugins::ui::UiRuntimeNativeMapping,
 }
@@ -15,18 +16,19 @@ struct NativeCursorFixture {
 struct NativeCursorProbe;
 
 impl runenui_core::UiApp for NativeCursorProbe {
-    type State = ();
+    type State = usize;
     type Action = ();
     type HostProtocol = runenui_core::NoHostProtocol;
 
     fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
-        runenui_core::text("stale cursor snapshot probe")
+        runenui_core::button("activation probe").on_activate(|| ())
     }
 
     fn update(
-        _: &mut Self::State,
+        state: &mut Self::State,
         _: Self::Action,
     ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+        *state += 1;
     }
 }
 
@@ -52,7 +54,7 @@ fn native_cursor_fixture() -> NativeCursorFixture {
     let slot = slots
         .mount_app::<NativeCursorProbe>(
             UiTypedScreenId::new("native.cursor.stale-display"),
-            (),
+            0,
             &UiRuntimeFontConfiguration::default(),
         )
         .slot_id()
@@ -98,6 +100,16 @@ fn native_cursor_fixture() -> NativeCursorFixture {
     )
     .expect("real RunenUI surface publication");
     let displayed_context = publication.input_context().clone();
+    let button_bounds = publication
+        .frame()
+        .nodes()
+        .first()
+        .expect("activation probe paint bounds")
+        .bounds();
+    let button_position = PhysicalPosition::new(
+        f64::from(button_bounds.x() + 1.0),
+        f64::from(button_bounds.y() + 1.0),
+    );
     let publication_id = presentations
         .stage(
             binding.clone(),
@@ -124,6 +136,7 @@ fn native_cursor_fixture() -> NativeCursorFixture {
         source,
         backend_device,
         displayed_context,
+        button_position,
         binding,
         mapping,
     }
@@ -220,6 +233,72 @@ fn observe_neutral_cursor(fixture: &mut NativeCursorFixture, x: f64, y: f64) {
             },
         )
         .expect("original physical cursor observation remains neutral truth");
+}
+
+fn native_binding_epoch(fixture: &mut NativeCursorFixture) -> u64 {
+    fixture
+        .runner
+        .native_input_recipient(fixture.window)
+        .expect("same selected native recipient")
+        .1
+        .expect("selected binding epoch")
+}
+
+fn route_cursor(fixture: &mut NativeCursorFixture, position: PhysicalPosition<f64>) {
+    observe_neutral_cursor(fixture, position.x, position.y);
+    let binding_epoch = native_binding_epoch(fixture);
+    fixture
+        .runner
+        .route_ui_cursor_moved(
+            fixture.window,
+            fixture.slot,
+            binding_epoch,
+            fixture.backend_device,
+            fixture.source,
+            position,
+        )
+        .expect("original cursor observation is routed or exactly withheld");
+}
+
+fn route_button(
+    fixture: &mut NativeCursorFixture,
+    state: winit::event::ElementState,
+    button: winit::event::MouseButton,
+) {
+    let binding_epoch = native_binding_epoch(fixture);
+    fixture
+        .runner
+        .route_ui_mouse_button(
+            fixture.window,
+            fixture.slot,
+            binding_epoch,
+            fixture.source,
+            state,
+            button,
+        )
+        .expect("original button observation is routed or exactly withheld");
+}
+
+fn pointer_ownership(fixture: &mut NativeCursorFixture) -> runenui_runtime::InputOwnershipSnapshot {
+    fixture
+        .runner
+        .state
+        .world
+        .resource_mut::<UiRuntimeSlotsResource>()
+        .expect("same M13 owner")
+        .input_ownership(fixture.slot)
+        .expect("exact M13 ownership snapshot")
+}
+
+fn activation_count(fixture: &NativeCursorFixture) -> usize {
+    fixture
+        .runner
+        .state
+        .world
+        .resource::<UiRuntimeSlotsResource>()
+        .expect("same M13 owner")
+        .observe_app::<NativeCursorProbe, _>(fixture.slot, |app| *app.state())
+        .expect("observe actual activation probe state")
 }
 
 #[test]
@@ -566,4 +645,129 @@ fn retired_displayed_move_preserves_existing_pointer_until_exact_cancel() {
             .iter()
             .any(|active| active.pointer_id() == pointer_id && active.device_id() == Some(device))
     );
+}
+
+#[test]
+fn stale_mouse_down_cancels_only_canonical_pointer_and_suppresses_its_up() {
+    use winit::event::{ElementState, MouseButton};
+
+    let mut fixture = native_cursor_fixture();
+    let button_position = fixture.button_position;
+    route_cursor(&mut fixture, button_position);
+    assert_eq!(pointer_ownership(&mut fixture).pointers().len(), 1);
+    retire_native_cursor_context(&mut fixture);
+
+    let ownership_before_down = pointer_ownership(&mut fixture).revision();
+    route_button(&mut fixture, ElementState::Pressed, MouseButton::Left);
+    assert_eq!(activation_count(&fixture), 0);
+    let after_rejected_down = pointer_ownership(&mut fixture);
+    assert!(after_rejected_down.pointers().is_empty());
+    assert_ne!(after_rejected_down.revision(), ownership_before_down);
+    let translator = fixture
+        .runner
+        .native_ui_mice
+        .get(&fixture.window)
+        .expect("physical translator survives point-authority invalidation");
+    assert_eq!(translator.mouse.last_native_position(), None);
+
+    promote_fresh_native_cursor_display(&mut fixture);
+    route_cursor(&mut fixture, button_position);
+    assert_eq!(pointer_ownership(&mut fixture).pointers().len(), 1);
+    let fresh_hover_revision = pointer_ownership(&mut fixture).revision();
+    assert_eq!(activation_count(&fixture), 0);
+    route_button(&mut fixture, ElementState::Released, MouseButton::Left);
+    assert_eq!(activation_count(&fixture), 0);
+    assert_eq!(
+        pointer_ownership(&mut fixture).revision(),
+        fresh_hover_revision,
+        "the authentic Up consumes the suppressed Down without a UI Up"
+    );
+
+    route_button(&mut fixture, ElementState::Pressed, MouseButton::Left);
+    assert_eq!(pointer_ownership(&mut fixture).pointers().len(), 1);
+    route_button(&mut fixture, ElementState::Released, MouseButton::Left);
+    assert!(pointer_ownership(&mut fixture).pointers().is_empty());
+    assert_eq!(activation_count(&fixture), 1);
+}
+
+#[test]
+fn stale_mouse_down_without_framework_pointer_does_not_fabricate_cancel() {
+    use winit::event::{ElementState, MouseButton};
+
+    let mut fixture = native_cursor_fixture();
+    let button_position = fixture.button_position;
+    observe_neutral_cursor(&mut fixture, button_position.x, button_position.y);
+    retire_native_cursor_context(&mut fixture);
+    route_cursor(&mut fixture, button_position);
+    assert!(pointer_ownership(&mut fixture).pointers().is_empty());
+    let before_down = pointer_ownership(&mut fixture).revision();
+
+    route_button(&mut fixture, ElementState::Pressed, MouseButton::Left);
+    assert_eq!(activation_count(&fixture), 0);
+    assert_eq!(pointer_ownership(&mut fixture).revision(), before_down);
+    assert!(pointer_ownership(&mut fixture).pointers().is_empty());
+    route_button(&mut fixture, ElementState::Released, MouseButton::Left);
+    assert_eq!(activation_count(&fixture), 0);
+    assert_eq!(pointer_ownership(&mut fixture).revision(), before_down);
+    assert!(pointer_ownership(&mut fixture).pointers().is_empty());
+}
+
+#[test]
+fn stale_wheel_withholds_without_changing_existing_pointer_ownership() {
+    use winit::event::{ElementState, MouseButton, MouseScrollDelta};
+
+    let mut fixture = native_cursor_fixture();
+    route_cursor(&mut fixture, PhysicalPosition::new(240.0, 120.0));
+    route_button(&mut fixture, ElementState::Pressed, MouseButton::Left);
+    retire_native_cursor_context(&mut fixture);
+    let before = pointer_ownership(&mut fixture);
+    assert_eq!(before.pointers().len(), 1);
+
+    let binding_epoch = native_binding_epoch(&mut fixture);
+    fixture
+        .runner
+        .route_ui_mouse_wheel(
+            fixture.window,
+            fixture.slot,
+            binding_epoch,
+            fixture.backend_device,
+            fixture.source,
+            &MouseScrollDelta::LineDelta(0.0, 1.0),
+        )
+        .expect("one exact stale displayed-snapshot wheel rejection is withheld");
+    let after = pointer_ownership(&mut fixture);
+    assert_eq!(after.status(), before.status());
+    assert_eq!(after.keyboard(), before.keyboard());
+    assert_eq!(after.surfaces(), before.surfaces());
+    assert_eq!(after.pointers(), before.pointers());
+    let translator = fixture
+        .runner
+        .native_ui_mice
+        .get(&fixture.window)
+        .expect("wheel rejection preserves native mouse owner");
+    assert_eq!(
+        translator.mouse.active_device_id(),
+        Some(WinitRunner::native_ui_device(fixture.source).unwrap())
+    );
+    assert_eq!(
+        translator.mouse.last_native_position(),
+        Some(PhysicalPosition::new(240.0, 120.0))
+    );
+}
+
+#[test]
+fn stale_terminal_context_still_commits_partial_and_final_mouse_ups() {
+    use winit::event::{ElementState, MouseButton};
+
+    let mut fixture = native_cursor_fixture();
+    route_cursor(&mut fixture, PhysicalPosition::new(240.0, 120.0));
+    route_button(&mut fixture, ElementState::Pressed, MouseButton::Left);
+    route_button(&mut fixture, ElementState::Pressed, MouseButton::Right);
+    assert_eq!(pointer_ownership(&mut fixture).pointers().len(), 1);
+    retire_native_cursor_context(&mut fixture);
+
+    route_button(&mut fixture, ElementState::Released, MouseButton::Right);
+    assert_eq!(pointer_ownership(&mut fixture).pointers().len(), 1);
+    route_button(&mut fixture, ElementState::Released, MouseButton::Left);
+    assert!(pointer_ownership(&mut fixture).pointers().is_empty());
 }

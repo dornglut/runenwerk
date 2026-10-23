@@ -236,6 +236,9 @@ World-owned native UI transaction and typed action ingress. It does not inject k
 During the UI runs, physically click the button, use W/Space/Tab, change focus,
 and move/resize the window. Preserve the original `U9C_OS`, `U9C_FRAME` and
 activation observations. Absence of actual input cannot qualify input behavior.
+Set `RUST_LOG=engine.runtime.input=trace` to retain the native input owner's
+withholding and failure diagnostics on stderr. The example enables tracing only
+when this variable is set; diagnostics do not grant input permission.
 
 After the requested completion count, the example removes its flow, requires
 all observed accepted frame submissions to drain within 15 seconds, observes
@@ -276,6 +279,7 @@ when using `CARGO_TARGET_DIR`):
 $env:RUNENWERK_SOURCE_REVISION = (git rev-parse HEAD).Trim()
 if (git status --porcelain) { throw 'Qualification requires a clean source' }
 $env:GROTTO_RENDER_REALIZATION_LOG = '1'
+$env:RUST_LOG = 'engine.runtime.input=trace'
 $exe = (Resolve-Path 'target/debug/examples/native_ui_input_qualification.exe').Path
 $case = 'static-1'
 $evidence = Join-Path $env:TEMP ('runenwerk-u9c-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
