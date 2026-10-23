@@ -5,12 +5,22 @@ use crate::plugins::render::pipelines::FlowPassPipelineKey;
 use runen_gpu::{
     GpuAdmittedProgramSource, GpuContext, GpuProgramSourceError, GpuProgramSourceKey,
     GpuProgramSourceProvenance, GpuRealizedSampler, GpuSamplerDescriptor, GpuSamplerHandle,
-    GpuWorkResourceIdAllocator,
+    GpuWorkResourceIdAllocator, GpuBindingLayoutRefinement, GpuEntryPointName,
+    GpuProgramDescriptor, GpuProgramContractError, GpuProgramSourceIdentity,
 };
 use std::collections::HashMap;
 
 const RENDERER_PROGRAM_SOURCE_MAX_RECORDS: usize = 1024;
 const RENDERER_PROGRAM_SOURCE_MAX_RETAINED_BYTES: usize = 64 * 1024 * 1024;
+// Reuse expensive program analysis only inside one render realization batch.
+const MAX_BATCH_VALIDATED_PROGRAMS: usize = 64;
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct ValidatedProgramKey {
+    source: GpuProgramSourceIdentity,
+    entry_points: Vec<GpuEntryPointName>,
+    refinements: Vec<GpuBindingLayoutRefinement>,
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RendererPipelineCacheStats {
@@ -27,6 +37,7 @@ pub struct RendererPipelineCacheStats {
 #[derive(Debug)]
 pub struct FlowPipelineArtifactCache {
     samplers: HashMap<FlowPassPipelineKey, RendererRealizedSampler>,
+    validated_programs: HashMap<ValidatedProgramKey, GpuProgramDescriptor>,
     pub stats: RendererPipelineCacheStats,
     program_sources: RendererProgramSourceAuthority,
     resource_ids: GpuWorkResourceIdAllocator,
@@ -53,6 +64,7 @@ impl Default for FlowPipelineArtifactCache {
         .expect("renderer program-source authority policy is nonzero and process-local");
         let mut cache = Self {
             samplers: HashMap::new(),
+            validated_programs: HashMap::new(),
             stats: RendererPipelineCacheStats::default(),
             program_sources,
             resource_ids: GpuWorkResourceIdAllocator::new(),
@@ -88,6 +100,35 @@ impl FlowPipelineArtifactCache {
             .admit_wgsl(key, renderer_revision, canonical_wgsl, provenance)
     }
 
+    /// Reuses only successful, compiler-derived program contracts within the current batch.
+    /// The caller must first admit the exact canonical source through the one source registry.
+    /// A fresh batch discards these references before source reclamation.
+    pub(crate) fn get_or_validate_program(
+        &mut self,
+        source: &GpuAdmittedProgramSource,
+        entry_points: &[GpuEntryPointName],
+        refinements: &[GpuBindingLayoutRefinement],
+        validate: impl FnOnce() -> Result<GpuProgramDescriptor, GpuProgramContractError>,
+    ) -> Result<GpuProgramDescriptor, GpuProgramContractError> {
+        let key = ValidatedProgramKey {
+            source: source.identity().clone(),
+            entry_points: entry_points.to_vec(),
+            refinements: refinements.to_vec(),
+        };
+        if let Some(existing) = self.validated_programs.get(&key) {
+            if existing.source().is_same_record(source) {
+                return Ok(existing.clone());
+            }
+        }
+        let program = validate()?;
+        if self.validated_programs.len() < MAX_BATCH_VALIDATED_PROGRAMS
+            || self.validated_programs.contains_key(&key)
+        {
+            self.validated_programs.insert(key, program.clone());
+        }
+        Ok(program)
+    }
+
     pub fn get_or_realize_sampler(
         &mut self,
         context: &GpuContext,
@@ -121,6 +162,8 @@ impl FlowPipelineArtifactCache {
     }
 
     pub fn retain_flows(&mut self, active_flow_ids: &[RenderFlowId]) {
+        // End the preceding batch before collecting source records kept alive by descriptors.
+        self.validated_programs.clear();
         self.samplers
             .retain(|key, _| active_flow_ids.contains(&key.flow_id));
         self.program_sources.collect_unretained();
@@ -231,6 +274,115 @@ mod tests {
         let first = FlowPipelineArtifactCache::default().stats();
         let second = FlowPipelineArtifactCache::default().stats();
         assert_ne!(first.program_source_owner, second.program_source_owner);
+    }
+
+    #[test]
+    fn validated_program_is_reused_only_within_one_batch() {
+        let mut cache = FlowPipelineArtifactCache::default();
+        let source = cache
+            .admit_program_source(
+                GpuProgramSourceKey::new("test:batch-reuse").unwrap(),
+                2,
+                "@compute @workgroup_size(1) fn cs_main() {}",
+                GpuProgramSourceProvenance::new("batch-reuse", None).unwrap(),
+            )
+            .unwrap();
+        let entry = GpuEntryPointName::new("cs_main").unwrap();
+        let mut validations = 0;
+        let first = cache
+            .get_or_validate_program(&source, &[entry.clone()], &[], || {
+                validations += 1;
+                Ok(compute_program(source.clone()))
+            })
+            .unwrap();
+        let repeated = cache
+            .get_or_validate_program(&source, &[entry.clone()], &[], || {
+                validations += 1;
+                Ok(compute_program(source.clone()))
+            })
+            .unwrap();
+        assert!(first.is_same_record(&repeated));
+        assert_eq!(validations, 1);
+
+        cache.retain_flows(&[]);
+        let next_batch = cache
+            .get_or_validate_program(&source, &[entry], &[], || {
+                validations += 1;
+                Ok(compute_program(source.clone()))
+            })
+            .unwrap();
+        assert!(!next_batch.is_same_record(&first));
+        assert_eq!(validations, 2);
+    }
+
+    #[test]
+    fn program_reuse_does_not_mask_bad_entry_points_or_source_conflicts() {
+        let mut cache = FlowPipelineArtifactCache::default();
+        let key = || GpuProgramSourceKey::new("test:batch-errors").unwrap();
+        let provenance = || GpuProgramSourceProvenance::new("batch-errors", None).unwrap();
+        let wgsl = "@compute @workgroup_size(1) fn cs_main() {}";
+        let source = cache
+            .admit_program_source(key(), 5, wgsl, provenance())
+            .unwrap();
+        let entry = GpuEntryPointName::new("cs_main").unwrap();
+        let valid = cache
+            .get_or_validate_program(&source, &[entry.clone()], &[], || {
+                Ok(compute_program(source.clone()))
+            })
+            .unwrap();
+        let missing = GpuEntryPointName::new("missing").unwrap();
+        assert!(
+            cache
+                .get_or_validate_program(&source, &[missing.clone()], &[], || {
+                    GpuProgramDescriptor::new(source.clone(), [missing], [])
+                })
+                .is_err()
+        );
+        assert!(
+            cache
+                .admit_program_source(
+                    key(),
+                    5,
+                    "@compute @workgroup_size(4) fn cs_main() {}",
+                    provenance(),
+                )
+                .is_err()
+        );
+        let other = cache
+            .admit_program_source(key(), 6, wgsl, provenance())
+            .unwrap();
+        let revised = cache
+            .get_or_validate_program(&other, &[entry], &[], || {
+                Ok(compute_program(other.clone()))
+            })
+            .unwrap();
+        assert!(!revised.is_same_record(&valid));
+        assert_eq!(cache.validated_programs.len(), 2);
+    }
+
+    #[test]
+    fn batch_program_cache_is_bounded_and_does_not_pin_retired_sources() {
+        let mut cache = FlowPipelineArtifactCache::default();
+        let entry = GpuEntryPointName::new("cs_main").unwrap();
+        for index in 0..(MAX_BATCH_VALIDATED_PROGRAMS + 8) {
+            let source = cache
+                .admit_program_source(
+                    GpuProgramSourceKey::new(format!("test:batch-capacity:{index}")).unwrap(),
+                    0,
+                    "@compute @workgroup_size(1) fn cs_main() {}",
+                    GpuProgramSourceProvenance::new("batch-capacity", None).unwrap(),
+                )
+                .unwrap();
+            cache
+                .get_or_validate_program(&source, &[entry.clone()], &[], || {
+                    Ok(compute_program(source.clone()))
+                })
+                .unwrap();
+        }
+        assert_eq!(cache.validated_programs.len(), MAX_BATCH_VALIDATED_PROGRAMS);
+        cache.retain_flows(&[]);
+        assert!(cache.validated_programs.is_empty());
+        assert_eq!(cache.stats().program_source_records, 0);
     }
 
     #[test]
