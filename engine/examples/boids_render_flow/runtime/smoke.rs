@@ -7,7 +7,7 @@ use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::inspect::{
     RenderFrameHistoryState, RenderFrameObservationPolicyResource,
 };
-use engine::plugins::render::renderer::RenderGpuFrameTerminalDisposition;
+use engine::plugins::render::renderer::{RenderGpuFrameTerminalDisposition, RenderGpuGraphStats};
 use engine::plugins::render::{Gfx, RenderFlowId, RenderGpuFlowStepStreams};
 use engine::prelude::{App, FixedTimeState};
 use engine::runtime::{
@@ -43,10 +43,32 @@ pub(crate) struct NativeBoidsSmokeStatus {
     last_present: Option<Instant>,
     present_intervals: Vec<Duration>,
     terminal_host_ages: Vec<Duration>,
-    cpu_renderer_samples_ms: Vec<[f32; 6]>,
+    cpu_renderer_samples: Vec<NativeBoidsFrameSample>,
     required_present_submissions: usize,
     succeeded: bool,
     error: Option<String>,
+}
+
+/// Observation from the existing bounded submitted-frame history, not a new collector.
+#[derive(Debug, Clone, Copy)]
+struct NativeBoidsFrameSample {
+    frame_index: u64,
+    render_surface_id: u64,
+    prepare_epoch: u64,
+    stages_ms: [f32; 6],
+    graph_stats: Option<RenderGpuGraphStats>,
+}
+
+fn graph_count_range(
+    samples: &[RenderGpuGraphStats],
+    count: fn(RenderGpuGraphStats) -> usize,
+) -> Option<(usize, usize, usize)> {
+    let mut counts = samples.iter().copied().map(count).collect::<Vec<_>>();
+    if counts.is_empty() {
+        return None;
+    }
+    counts.sort_unstable();
+    Some((counts[0], counts[(counts.len() - 1) / 2], *counts.last().unwrap()))
 }
 
 type SharedStatus = Arc<Mutex<NativeBoidsSmokeStatus>>;
@@ -146,15 +168,26 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         intervals[index].as_secs_f64() * 1000.0
     };
     let mean_cpu_ms = |index: usize| -> f64 {
-        if status.cpu_renderer_samples_ms.is_empty() {
+        if status.cpu_renderer_samples.is_empty() {
             return 0.0;
         }
         status
-            .cpu_renderer_samples_ms
+            .cpu_renderer_samples
             .iter()
-            .map(|sample| f64::from(sample[index]))
+            .map(|sample| f64::from(sample.stages_ms[index]))
             .sum::<f64>()
-            / status.cpu_renderer_samples_ms.len() as f64
+            / status.cpu_renderer_samples.len() as f64
+    };
+    let graph_stats = status
+        .cpu_renderer_samples
+        .iter()
+        .filter_map(|sample| sample.graph_stats)
+        .collect::<Vec<_>>();
+    let cardinalities = |field: fn(RenderGpuGraphStats) -> usize| {
+        graph_count_range(&graph_stats, field)
+            .map_or_else(|| "unavailable".to_string(), |(min, median, max)| {
+                format!("{min}:{median}:{max}")
+            })
     };
     let gates = status.frame_gate_observation.unwrap_or_default();
     let (terminal_age_avg_ms, terminal_age_p95_ms) =
@@ -177,7 +210,7 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         mean_cpu_ms(3),
         mean_cpu_ms(4),
         mean_cpu_ms(5),
-        status.cpu_renderer_samples_ms.len(),
+        status.cpu_renderer_samples.len(),
         status.peak_outstanding_steps,
         status.peak_uncaptured_cpu_ticks,
         status.source_time_dilated_host_ticks,
@@ -190,6 +223,36 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         terminal_age_p95_ms,
         status.terminal_host_ages.len(),
     );
+    // A real Boids consumer sample, not a representative all-application workload.
+    // Counts, stages and identities belong to exactly the same submitted frame.
+    println!(
+        "native_boids_graph_shape=observed counted={} retained={} fragments_min_median_max={} nodes_min_median_max={} accesses_min_median_max={} dependencies_min_median_max={}",
+        graph_stats.len(),
+        status.cpu_renderer_samples.len(),
+        cardinalities(|stats| stats.fragment_count),
+        cardinalities(|stats| stats.node_count),
+        cardinalities(|stats| stats.resource_access_count),
+        cardinalities(|stats| stats.dependency_count),
+    );
+    if std::env::var("RUNENWERK_BOIDS_GRAPH_EVIDENCE").ok().as_deref() == Some("1") {
+        for sample in &status.cpu_renderer_samples {
+            if let Some(stats) = sample.graph_stats {
+                println!(
+                    "native_boids_graph_frame frame={} surface={} epoch={} fragments={} nodes={} accesses={} dependencies={} gpu_graph_build_ms={:.6} gpu_prepare_submission_ms={:.6} gpu_submit_prepared_ms={:.6}",
+                    sample.frame_index,
+                    sample.render_surface_id,
+                    sample.prepare_epoch,
+                    stats.fragment_count,
+                    stats.node_count,
+                    stats.resource_access_count,
+                    stats.dependency_count,
+                    sample.stages_ms[3],
+                    sample.stages_ms[4],
+                    sample.stages_ms[5],
+                );
+            }
+        }
+    }
     Ok(())
 }
 
@@ -237,15 +300,19 @@ impl NativeBoidsSmoke {
                 observation.key.render_surface_id == RenderSurfaceId::primary().raw()
                     && observation.presentation.present_operation_submitted
             })
-            .map(|observation| {
-                [
+            .map(|observation| NativeBoidsFrameSample {
+                frame_index: observation.key.frame_index,
+                render_surface_id: observation.key.render_surface_id,
+                prepare_epoch: observation.prepare_epoch,
+                stages_ms: [
                     observation.cpu.observed_stage_sum_with_acquire_ms(),
                     observation.cpu.renderer.flow_encode_ms,
                     observation.cpu.renderer.encode_submit_ms,
                     observation.cpu.renderer.gpu_graph_build_ms,
                     observation.cpu.renderer.gpu_prepare_submission_ms,
                     observation.cpu.renderer.gpu_submit_prepared_ms,
-                ]
+                ],
+                graph_stats: observation.cpu.renderer.graph_stats,
             })
             .collect::<Vec<_>>();
         let presented = cpu_samples.len();
@@ -314,7 +381,7 @@ impl NativeBoidsSmoke {
         if presented > state.presented_opportunities {
             let previous_count = state.presented_opportunities;
             state
-                .cpu_renderer_samples_ms
+                .cpu_renderer_samples
                 .extend(cpu_samples.iter().skip(previous_count).copied());
             let now = Instant::now();
             if let Some(previous) = state.last_present {
@@ -369,6 +436,36 @@ mod present_target_tests {
         let (avg, p95) = summarize_terminal_host_ages(&samples);
         assert_eq!(avg, 10.0);
         assert_eq!(p95, 18.0);
+    }
+
+    #[test]
+    fn graph_count_summary_preserves_absence_and_actual_zero() {
+        assert_eq!(graph_count_range(&[], |stats| stats.node_count), None);
+        let counts = [
+            RenderGpuGraphStats {
+                fragment_count: 2,
+                node_count: 7,
+                resource_access_count: 9,
+                dependency_count: 6,
+            },
+            RenderGpuGraphStats {
+                fragment_count: 0,
+                node_count: 0,
+                resource_access_count: 0,
+                dependency_count: 0,
+            },
+            RenderGpuGraphStats {
+                fragment_count: 3,
+                node_count: 5,
+                resource_access_count: 8,
+                dependency_count: 4,
+            },
+        ];
+        assert_eq!(graph_count_range(&counts, |stats| stats.node_count), Some((0, 5, 7)));
+        assert_eq!(
+            graph_count_range(&counts, |stats| stats.fragment_count),
+            Some((0, 2, 3))
+        );
     }
 
     #[test]
