@@ -1478,6 +1478,59 @@ mod tests {
         .expect("test region should be valid")
     }
 
+    #[test]
+    fn selected_final_graph_counts_empty_producer_and_explicit_order_rebuild() {
+        // Empty authored fragments must count even though node ordinals cannot reveal them.
+        let empty_producer = GpuWorkFragment::build("empty producer", |_| Ok(()))
+            .expect("empty producer fragment is valid");
+        let mut resources = GpuWorkResourceIdAllocator::new();
+        let first = buffer(&mut resources, "first upload", 16);
+        let second = buffer(&mut resources, "second upload", 16);
+        let first_occurrence = RenderGpuWorkOccurrenceId::new(1);
+        let second_occurrence = RenderGpuWorkOccurrenceId::new(2);
+        let prepared = prepare_resolved_render_gpu_work(
+            label("final graph count with control order"),
+            [
+                ResolvedRenderGpuWorkNode::upload(
+                    first_occurrence,
+                    label("first upload node"),
+                    GpuUploadOperation::new(
+                        whole_region(&first, 16).into(),
+                        transfer_payload("first payload", 16),
+                    )
+                    .expect("first transfer is valid"),
+                    [],
+                ),
+                ResolvedRenderGpuWorkNode::upload(
+                    second_occurrence,
+                    label("second upload node"),
+                    GpuUploadOperation::new(
+                        whole_region(&second, 16).into(),
+                        transfer_payload("second payload", 16),
+                    )
+                    .expect("second transfer is valid"),
+                    [first_occurrence],
+                ),
+            ],
+            RenderGpuExternalWork {
+                producer_fragments: &[empty_producer],
+                imports: &[],
+            },
+            None,
+            None,
+            None,
+            |label, fragments, orders| {
+                GpuPreparedWorkGraph::prepare_with_orders(label, fragments, orders)
+                    .map_err(RenderGpuWorkAdapterError::from)
+            },
+        )
+        .expect("final graph must prepare after explicit control ordering");
+        assert_eq!(prepared.fragment_count, 2);
+        assert_eq!(prepared.graph.nodes().len(), 2);
+        assert_eq!(prepared.graph.topological_order().len(), 2);
+        assert_eq!(prepared.graph.dependencies().len(), 1);
+    }
+
     fn color_target_view(allocator: &mut GpuWorkResourceIdAllocator) -> GpuTextureViewHandle {
         let texture_label = label("frame surface color");
         let texture = allocator
