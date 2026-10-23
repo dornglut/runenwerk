@@ -767,6 +767,44 @@ impl WinitRunner {
                 cancellation_failure = Some(error);
             }
         }
+        // Composition can be active without any native key translator. Retire
+        // its actual M13 generation while the old window/slot/scope is still
+        // selected; an epoch change cannot safely cancel a prior generation.
+        let selected_slot = (|| {
+            let slots = self.state.world.resource::<UiRuntimeSlotsResource>().ok()?;
+            let recipients = self
+                .state
+                .world
+                .resource::<UiNativeInputRecipientsResource>()
+                .ok()?;
+            slots.slot_ids().find(|slot| {
+                recipients
+                    .selected_slot_binding(*slot)
+                    .is_some_and(|(bound_window, _, _)| bound_window == window)
+            })
+        })();
+        if let Some(slot) = selected_slot {
+            let composition_cancel = self
+                .native_input_recipient_for_cancellation(window)
+                .and_then(|(recipient, _)| {
+                    anyhow::ensure!(
+                        recipient == NativeInputRecipient::RunenUiSlot(slot),
+                        "native composition retirement lost its selected original recipient"
+                    );
+                    self.route_ui_ime_finish(slot, true)
+                });
+            if let Err(error) = composition_cancel {
+                tracing::warn!(
+                    target: "engine.runtime.input",
+                    ?window,
+                    ?error,
+                    "native IME cancellation failed during recipient retirement"
+                );
+                if cancellation_failure.is_none() {
+                    cancellation_failure = Some(error);
+                }
+            }
+        }
         let world = &mut self.state.world;
         if !world.has_resource::<UiNativeInputRecipientsResource>() {
             return match cancellation_failure {
@@ -4721,6 +4759,36 @@ mod tests {
             "pending OS text cannot mutate the selected UI after close cancellation"
         );
 
+        // A veto restores the original window for a new real composition.
+        // Bare host recipient retirement must cancel that *new* generation as
+        // well, even though no winit keyboard translator was ever created.
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("window state owner")
+            .record_mut(window)
+            .expect("same native window")
+            .veto_close();
+        runner
+            .route_ui_ime_preedit(slot, "renewed".to_owned(), Some((0, 7)))
+            .expect("veto permits a new original M13 composition");
+        assert!(
+            runner
+                .state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .expect("same M13 owner")
+                .input_ownership(slot)
+                .expect("new M13 ownership")
+                .keyboard()
+                .composition_generation()
+                .is_some()
+        );
+        assert!(
+            !runner.native_ui_keyboards.contains_key(&window),
+            "composition must not depend on a prior physical key translator"
+        );
         runner
             .state
             .world
@@ -4730,6 +4798,19 @@ mod tests {
             .expect("same native window")
             .approve_close();
         assert!(runner.retire_native_input_recipient(window).unwrap());
+        assert!(
+            runner
+                .state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .expect("retired recipient still has its mounted runtime")
+                .input_ownership(slot)
+                .expect("composition retirement must have settled")
+                .keyboard()
+                .composition_generation()
+                .is_none(),
+            "retiring the native host recipient must settle its active M13 IME generation"
+        );
         assert!(runner.retire_window_input_source(window).unwrap());
     }
 
