@@ -335,7 +335,13 @@ fn gpu_pipeline_descriptor_for_pass(
                 source,
                 std::slice::from_ref(&entry_point),
                 &refinements,
-                || GpuProgramDescriptor::new(source.clone(), [entry_point.clone()], refinements.clone()),
+                || {
+                    GpuProgramDescriptor::new(
+                        source.clone(),
+                        [entry_point.clone()],
+                        refinements.clone(),
+                    )
+                },
             )?;
             Ok(FlowPassPipelineDescriptor::Compute(
                 GpuComputePipelineDescriptor::new(
