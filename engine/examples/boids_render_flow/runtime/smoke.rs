@@ -68,7 +68,11 @@ fn graph_count_range(
         return None;
     }
     counts.sort_unstable();
-    Some((counts[0], counts[(counts.len() - 1) / 2], *counts.last().unwrap()))
+    Some((
+        counts[0],
+        counts[(counts.len() - 1) / 2],
+        *counts.last().unwrap(),
+    ))
 }
 
 type SharedStatus = Arc<Mutex<NativeBoidsSmokeStatus>>;
@@ -184,10 +188,10 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         .filter_map(|sample| sample.graph_stats)
         .collect::<Vec<_>>();
     let cardinalities = |field: fn(RenderGpuGraphStats) -> usize| {
-        graph_count_range(&graph_stats, field)
-            .map_or_else(|| "unavailable".to_string(), |(min, median, max)| {
-                format!("{min}:{median}:{max}")
-            })
+        graph_count_range(&graph_stats, field).map_or_else(
+            || "unavailable".to_string(),
+            |(min, median, max)| format!("{min}:{median}:{max}"),
+        )
     };
     let gates = status.frame_gate_observation.unwrap_or_default();
     let (terminal_age_avg_ms, terminal_age_p95_ms) =
@@ -234,7 +238,11 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         cardinalities(|stats| stats.resource_access_count),
         cardinalities(|stats| stats.dependency_count),
     );
-    if std::env::var("RUNENWERK_BOIDS_GRAPH_EVIDENCE").ok().as_deref() == Some("1") {
+    if std::env::var("RUNENWERK_BOIDS_GRAPH_EVIDENCE")
+        .ok()
+        .as_deref()
+        == Some("1")
+    {
         for sample in &status.cpu_renderer_samples {
             if let Some(stats) = sample.graph_stats {
                 println!(
@@ -461,7 +469,10 @@ mod present_target_tests {
                 dependency_count: 4,
             },
         ];
-        assert_eq!(graph_count_range(&counts, |stats| stats.node_count), Some((0, 5, 7)));
+        assert_eq!(
+            graph_count_range(&counts, |stats| stats.node_count),
+            Some((0, 5, 7))
+        );
         assert_eq!(
             graph_count_range(&counts, |stats| stats.fragment_count),
             Some((0, 2, 3))
