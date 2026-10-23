@@ -946,6 +946,9 @@ mod tests {
         let (windows, primary, _) = windows();
         let mut slots = UiRuntimeSlotsResource::default();
         let slot = mount(&mut slots, 72);
+        // Both fixture slots mount before native enrollment becomes sealed.
+        // A later ordinary resource-level mount must be refused by U9-C.
+        let unrelated = mount(&mut slots, 74);
         let mut recipients = UiNativeInputRecipientsResource::default();
         let mut presentations = UiRuntimePresentationAssociationsResource::default();
         recipients
@@ -975,30 +978,6 @@ mod tests {
         assert_eq!(recipients.requested_primary, None);
         // A genuine terminal record from an unrelated mounted runtime is not
         // authority to release this still-live original input scope.
-        struct OtherScopeApp;
-        impl UiApp for OtherScopeApp {
-            type State = ();
-            type Action = ();
-            type HostProtocol = NoHostProtocol;
-
-            fn root(_: &Self::State) -> impl View<Self::Action> {
-                text("unrelated M13 scope")
-            }
-
-            fn update(
-                _: &mut Self::State,
-                _: Self::Action,
-            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
-            }
-        }
-        let unrelated = slots
-            .mount_app::<OtherScopeApp>(
-                UiTypedScreenId::new("native.unrelated.shutdown.certificate"),
-                (),
-                &UiRuntimeFontConfiguration::default(),
-            )
-            .slot_id()
-            .expect("unrelated typed app owns an independent M13 scope");
         let other_shutdown = slots
             .unmount_with_retirement(unrelated)
             .expect("ordinary unselected runtime can shut down")
