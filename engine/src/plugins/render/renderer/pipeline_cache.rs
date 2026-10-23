@@ -399,10 +399,9 @@ fn second() {
             .unwrap();
         assert!(!first_program.is_same_record(&second_program));
 
-        let dynamic = GpuBindingLayoutRefinement::new(
-            runen_gpu::GpuBindingKey::try_new(0, 0).unwrap(),
-        )
-        .with_dynamic_offset(true);
+        let dynamic =
+            GpuBindingLayoutRefinement::new(runen_gpu::GpuBindingKey::try_new(0, 0).unwrap())
+                .with_dynamic_offset(true);
         let refined = cache
             .get_or_validate_program(&source, &[first.clone()], &[dynamic.clone()], || {
                 GpuProgramDescriptor::new(source.clone(), [first.clone()], [dynamic.clone()])
