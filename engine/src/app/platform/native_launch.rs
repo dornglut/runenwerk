@@ -201,21 +201,32 @@ mod tests {
 
     #[test]
     fn product_value_is_not_preempted_by_host_flag() {
-        // A product grammar consumes its own option value before considering
-        // the next token as a possible Host option.
+        // Only a product parser can decide that a token is a value rather
+        // than an option. This fixture adds a value-taking product flag
+        // without adding speculative public flags to Boids or Arena.
         let mut args = [
+            OsString::from("--label"),
             OsString::from("--host-pacing"),
             OsString::from("--host-pacing=uncapped"),
         ]
         .into_iter();
-        let product_value = args.next().unwrap();
-        assert_eq!(product_value, OsStr::new("--host-pacing"));
-        let host_option = args.next().unwrap();
-        let host = NativeHostLaunchOverrides::parse_option(&host_option, &mut args)
-            .unwrap()
-            .unwrap();
+        let mut label = None;
+        let mut host = None;
+        while let Some(arg) = args.next() {
+            if arg == OsStr::new("--label") {
+                assert!(label.is_none());
+                label = args.next();
+            } else if let Some(request) =
+                NativeHostLaunchOverrides::parse_option(&arg, &mut args).unwrap()
+            {
+                assert!(host.replace(request).is_none());
+            } else {
+                panic!("unexpected fixture argument");
+            }
+        }
+        assert_eq!(label.as_deref(), Some(OsStr::new("--host-pacing")));
         assert_eq!(
-            host.frame_pacing(),
+            host.unwrap().frame_pacing(),
             Some(FramePacingPolicyResource::continuous_uncapped())
         );
     }

@@ -3,6 +3,17 @@ use engine::app::NativeHostLaunchOverrides;
 use runenwerk_arena::build_game_app;
 use std::ffi::OsString;
 
+#[cfg(debug_assertions)]
+use anyhow::Context;
+#[cfg(debug_assertions)]
+use engine::prelude::{ResMut, Update};
+#[cfg(debug_assertions)]
+use engine::runtime::{FramePacingPolicyResource, NativeWindowId, WindowStateRegistryResource};
+#[cfg(debug_assertions)]
+use std::sync::Arc;
+#[cfg(debug_assertions)]
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 const HELP: &str = "Usage: runenwerk_arena [--host-pacing MODE]
 
 Options:
@@ -44,6 +55,27 @@ where
     Ok(Launch::Run(host))
 }
 
+#[cfg(debug_assertions)]
+#[derive(runen_ecs::Resource)]
+struct ArenaNativeLaunchProbe {
+    frames: Arc<AtomicUsize>,
+}
+
+#[cfg(debug_assertions)]
+fn observe_native_launch(
+    probe: ResMut<ArenaNativeLaunchProbe>,
+    mut windows: ResMut<WindowStateRegistryResource>,
+) -> Result<()> {
+    let frame = probe.frames.fetch_add(1, Ordering::SeqCst) + 1;
+    if frame == 4 {
+        windows
+            .record_mut(NativeWindowId::primary())
+            .context("native Arena primary window missing during Host CLI smoke")?
+            .request_close();
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let Launch::Run(host) = parse_launch(std::env::args_os().skip(1))? else {
         println!("{HELP}");
@@ -51,7 +83,36 @@ fn main() -> Result<()> {
     };
     let mut app = build_game_app(false);
     host.apply_to(&mut app)?;
-    app.run()
+    #[cfg(debug_assertions)]
+    let smoke = std::env::var_os("RUNENWERK_ARENA_NATIVE_LAUNCH_SMOKE").is_some();
+    #[cfg(debug_assertions)]
+    let observed = Arc::new(AtomicUsize::new(0));
+    #[cfg(debug_assertions)]
+    if smoke {
+        let requested = host.frame_pacing().context("native launch smoke requires Host override")?;
+        ensure!(
+            app.world().resource::<FramePacingPolicyResource>()?.mode == requested.mode,
+            "native Arena launch policy was not applied before startup"
+        );
+        app.init_resource::<WindowStateRegistryResource>();
+        app.insert_resource(ArenaNativeLaunchProbe {
+            frames: Arc::clone(&observed),
+        });
+        app.add_systems(Update, observe_native_launch);
+    }
+    let result = app.run();
+    #[cfg(debug_assertions)]
+    if smoke {
+        result?;
+        let frames = observed.load(Ordering::SeqCst);
+        ensure!(frames >= 4, "native Arena launch completed only {frames} frames");
+        println!(
+            "native_arena_host_cli=pass frames={frames} mode={}",
+            host.frame_pacing().unwrap().mode.as_str()
+        );
+        return Ok(());
+    }
+    result
 }
 
 #[cfg(test)]

@@ -211,6 +211,32 @@ jobs:
             rm -f "$log"
           done
 
+      - name: Prove actual Arena native capped and uncapped launch modes
+        env:
+          RUNENWERK_ARENA_NATIVE_LAUNCH_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable build -p runenwerk_arena --locked
+          for mode in capped:120 uncapped; do
+            expected=continuous_capped
+            if [ "$mode" = uncapped ]; then expected=continuous_uncapped; fi
+            log="$(mktemp)"
+            if ! timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+                 target/debug/runenwerk_arena --host-pacing "$mode" >"$log" 2>&1; then
+              cat "$log"
+              rm -f "$log"
+              exit 1
+            fi
+            if ! grep -F "native_arena_host_cli=pass frames=" "$log" ||
+               ! grep -F "mode=$expected" "$log"; then
+              cat "$log"
+              echo "Arena did not complete native frame/Host mode proof for $mode" >&2
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+          done
+
       - name: Reject invalid Boids and Arena native launch arguments before startup
         run: |
           set -euo pipefail
