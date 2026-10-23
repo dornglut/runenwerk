@@ -389,10 +389,11 @@ impl Renderer {
                 .collect::<Vec<_>>();
             (authored.graph, witnesses, authored.fragment_count)
         };
+        // Keep canonical graph preparation timing free of optional diagnostic traversal.
+        timings.gpu_graph_build_ms = gpu_graph_build_start.elapsed().as_secs_f32() * 1000.0;
         if capture_graph_stats {
             timings.graph_stats = Some(RenderGpuGraphStats::from_prepared(fragment_count, &graph));
         }
-        timings.gpu_graph_build_ms = gpu_graph_build_start.elapsed().as_secs_f32() * 1000.0;
         // Diagnostic-only, opt-in observation. RunenGPU remains the only retained
         // continuity and actual submission-admission authority. No gating here.
         let retained_trace = self.retained_submission_trace.before_submission(
