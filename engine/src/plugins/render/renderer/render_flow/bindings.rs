@@ -200,6 +200,7 @@ impl Renderer {
         let render_pipeline_state =
             gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?;
         let pipeline_descriptor = gpu_pipeline_descriptor_for_pass(
+            &mut self.flow_pipeline_cache,
             program_source,
             pass_kind,
             render_pipeline_state,
@@ -317,6 +318,7 @@ fn runtime_binding_value(
 }
 
 fn gpu_pipeline_descriptor_for_pass(
+    cache: &mut FlowPipelineArtifactCache,
     source: &GpuAdmittedProgramSource,
     pass_kind: FlowPassKind,
     render_state: Option<GpuRenderPipelineStateDescriptor>,
@@ -329,8 +331,12 @@ fn gpu_pipeline_descriptor_for_pass(
                 bail!("compute pipeline descriptor cannot carry render state");
             }
             let entry_point = GpuEntryPointName::new("cs_main")?;
-            let program =
-                GpuProgramDescriptor::new(source.clone(), [entry_point.clone()], refinements)?;
+            let program = cache.get_or_validate_program(
+                source,
+                std::slice::from_ref(&entry_point),
+                &refinements,
+                || GpuProgramDescriptor::new(source.clone(), [entry_point.clone()], refinements.clone()),
+            )?;
             Ok(FlowPassPipelineDescriptor::Compute(
                 GpuComputePipelineDescriptor::new(
                     program,
@@ -345,10 +351,17 @@ fn gpu_pipeline_descriptor_for_pass(
             })?;
             let vertex = GpuEntryPointName::new("vs_main")?;
             let fragment = GpuEntryPointName::new("fs_main")?;
-            let program = GpuProgramDescriptor::new(
-                source.clone(),
-                [vertex.clone(), fragment.clone()],
-                refinements,
+            let program = cache.get_or_validate_program(
+                source,
+                &[vertex.clone(), fragment.clone()],
+                &refinements,
+                || {
+                    GpuProgramDescriptor::new(
+                        source.clone(),
+                        [vertex.clone(), fragment.clone()],
+                        refinements.clone(),
+                    )
+                },
             )?;
             Ok(FlowPassPipelineDescriptor::Render(
                 GpuRenderPipelineDescriptor::new(
