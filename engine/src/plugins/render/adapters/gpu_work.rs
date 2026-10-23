@@ -2537,14 +2537,26 @@ mod tests {
             end.unwrap(),
             readback_node.unwrap(),
         );
-        let graph = prepare_render_gpu_frame_work_with_timing_for_test(
+        let prepared = prepare_resolved_render_gpu_work(
             label("timed composed frame"),
             nodes,
-            &[producer],
-            &[],
-            &bracket,
+            RenderGpuExternalWork {
+                producer_fragments: &[producer],
+                imports: &[],
+            },
+            Some(&bracket),
+            None,
+            None,
+            |label, fragments, orders| {
+                GpuPreparedWorkGraph::prepare_with_orders(label, fragments, orders)
+                    .map_err(RenderGpuWorkAdapterError::from)
+            },
         )
         .unwrap();
+        // The final graph includes the producer, renderer and timing-bracket
+        // fragments even when its topology contains extra control edges.
+        assert_eq!(prepared.fragment_count, 3);
+        let graph = prepared.graph;
 
         let node = |name: &str| {
             graph
@@ -2838,6 +2850,9 @@ mod native_mixed_ui_tests {
             tail_occurrence,
         )
         .expect("RunenGPU admits F2 and readback in one canonical fragment");
+        // Multiple executable F2 work nodes still belong to the sole authored
+        // renderer fragment, not to distinct inferred node-ordinal fragments.
+        assert_eq!(authored.fragment_count, 1);
         let (observed_id, token) = authored
             .f2_tokens
             .into_iter()
