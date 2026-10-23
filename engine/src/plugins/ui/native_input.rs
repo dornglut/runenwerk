@@ -975,7 +975,30 @@ mod tests {
         assert_eq!(recipients.requested_primary, None);
         // A genuine terminal record from an unrelated mounted runtime is not
         // authority to release this still-live original input scope.
-        let unrelated = mount(&mut slots, 74);
+        struct OtherScopeApp;
+        impl UiApp for OtherScopeApp {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                text("unrelated M13 scope")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+        let unrelated = slots
+            .mount_app::<OtherScopeApp>(
+                UiTypedScreenId::new("native.unrelated.shutdown.certificate"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("unrelated typed app owns an independent M13 scope");
         let other_shutdown = slots
             .unmount_with_retirement(unrelated)
             .expect("ordinary unselected runtime can shut down")
