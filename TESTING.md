@@ -232,7 +232,7 @@ omitting its GPU UI composite pass; it is a non-UI GPU baseline, not a different
 UI framework or a direct standalone text-rendering proof.
 
 Changing mode submits explicit application state changes through the existing
-typed action ingress. It does not inject keyboard, pointer or IME events.
+World-owned native UI transaction and typed action ingress. It does not inject keyboard, pointer or IME events.
 During the UI runs, physically click the button, use W/Space/Tab, change focus,
 and move/resize the window. Preserve the original `U9C_OS`, `U9C_FRAME` and
 activation observations. Absence of actual input cannot qualify input behavior.
@@ -249,7 +249,12 @@ recreation is not device-loss reconstruction or process restart.
 
 Each `U9C_RESOURCE` record contains G4C1 resource kinds/count/limit, G4C2
 binding counts/limit/reservations, instantaneous G5 in-flight count and separate
-renderer-accepted/terminal observations. These are point-in-time diagnostic
+renderer-accepted/terminal observations. UI frame credit additionally requires
+the existing terminal outcome to carry the matching publication: the renderer
+verified its exact contribution token and Present against that submission and
+context affinity. This optional metadata uses the existing bounded delivery
+queue; missing metadata grants no credit. It does not replace native input
+permission. These are point-in-time diagnostic
 snapshots, not atomic cross-owner statistics. Registry-only entries can remain
 until pressure; idle does not promise zero registry counts. Inspect the full
 post-warm-up series for repeated pressure recovery, bounded working-set shape,

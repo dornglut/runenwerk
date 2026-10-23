@@ -22,7 +22,7 @@ use engine::plugins::render::{
 use engine::plugins::ui::{
     AppUiExt, UiNativeInputRecipientsResource, UiRuntimeFontConfiguration,
     UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
-    UiRuntimeSlotsResource, UiTypedScreenId,
+    UiRuntimeSlotsResource, UiTypedScreenId, transact_ui_slot,
 };
 use engine::plugins::{ActionState, RenderPlugin, UiPlugin, default_plugins};
 use engine::prelude::{App, AppRenderExt};
@@ -307,17 +307,19 @@ fn main() -> Result<()> {
         .context("qualifier RunenUI application did not mount")?;
     app.ui().bind_native_primary_input(slot)?;
 
-    app.world_mut()
-        .resource_mut::<UiRuntimePresentationAssociationsResource>()?
-        .bind(
-            UiRuntimePresentationBinding::new(
-                slot,
-                RenderFrameProducerId::try_from_raw(931).expect("nonzero producer"),
-                RenderSurfaceId::primary(),
-                StyleEnvironment::default(),
-            )
-            .with_order(SurfaceFrameSubmissionOrder::new(20, 0)),
-        )?;
+    if options.is_none_or(|options| options.content != lifetime::Content::Control) {
+        app.world_mut()
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()?
+            .bind(
+                UiRuntimePresentationBinding::new(
+                    slot,
+                    RenderFrameProducerId::try_from_raw(931).expect("nonzero producer"),
+                    RenderSurfaceId::primary(),
+                    StyleEnvironment::default(),
+                )
+                .with_order(SurfaceFrameSubmissionOrder::new(20, 0)),
+            )?;
+    }
 
     let flow = qualification_flow(
         options.is_none_or(|options| options.content != lifetime::Content::Control),
@@ -396,13 +398,12 @@ impl QualificationHook {
         if let Some(probe) = self.lifetime.as_mut() {
             let stop = probe.observe(world, &mut self.flow, self.frames, self.slot)?;
             if !stop && let Some(generation) = probe.next_text_change() {
-                world
-                    .resource_mut::<UiRuntimeSlotsResource>()?
-                    .submit_app_action::<QualificationUi>(
+                transact_ui_slot(world, self.slot, |slots| {
+                    slots.submit_app_action::<QualificationUi>(
                         self.slot,
                         QualificationAction::ChangeText(generation),
                     )
-                    .map_err(|error| anyhow::anyhow!("changing-text action rejected: {error:?}"))?;
+                })?;
             }
             if stop {
                 let record = world

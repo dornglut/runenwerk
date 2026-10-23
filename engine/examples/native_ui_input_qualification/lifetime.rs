@@ -170,8 +170,25 @@ impl UiProgress {
         Some(self.requested)
     }
 
+    fn credits(
+        &self,
+        content: Content,
+        publications: &[engine::plugins::render::RunenUiPublicationId],
+    ) -> bool {
+        if content == Content::Control {
+            return publications.is_empty();
+        }
+        self.latest.ready()
+            && self.latest.intake.is_some_and(|(id, _)| {
+                publications
+                    .iter()
+                    .any(|publication| publication.raw() == id)
+            })
+    }
+
     fn qualifies(&self, content: Content, frames: u64, completed: u64, change_origin: u64) -> bool {
         completed >= frames
+            && self.pending.is_none()
             && (content == Content::Control || self.latest.ready())
             && (content != Content::Changing || self.acknowledged - change_origin >= frames)
     }
@@ -239,9 +256,6 @@ impl Probe {
     ) -> Result<bool> {
         if self.options.content != Content::Control {
             self.ui.observe(UiObservation::read(world, slot)?);
-            if self.ui.latest.ready() {
-                self.last_ui_ready = Instant::now();
-            }
             if matches!(self.phase, Phase::Running | Phase::Recovery) {
                 anyhow::ensure!(
                     self.last_ui_ready.elapsed() < Duration::from_secs(15),
@@ -305,8 +319,20 @@ impl Probe {
                     outcome.disposition()
                 );
                 self.completed += 1;
-                if self.options.content == Content::Control || self.ui.latest.ready() {
+                if self
+                    .ui
+                    .credits(self.options.content, outcome.completed_ui_publications())
+                {
                     self.qualified_completed += 1;
+                    self.last_ui_ready = Instant::now();
+                    if self.options.content != Content::Control {
+                        println!(
+                            "U9C_UI_FRAME submission={} gpu_frame={} publications={:?}",
+                            outcome.submission_id(),
+                            outcome.frame(),
+                            outcome.completed_ui_publications()
+                        );
+                    }
                 }
             }
             (
@@ -372,6 +398,10 @@ impl Probe {
                 );
                 if drained {
                     if matches!(self.phase, Phase::FinalDrain) {
+                        anyhow::ensure!(
+                            self.ui.pending.is_none(),
+                            "text change still pending at final drain"
+                        );
                         self.report
                             .lock()
                             .map_err(|_| anyhow::anyhow!("report poisoned"))?
@@ -490,6 +520,12 @@ mod tests {
             applied_generation: 0,
         });
         assert!(ui.qualifies(Content::Static, 1, 1, 0));
+        // Historical displayed state cannot credit clear-only later submissions.
+        let publication = engine::plugins::render::RunenUiPublicationId::try_from_raw(1).unwrap();
+        assert!(!ui.credits(Content::Static, &[]));
+        assert!(ui.credits(Content::Static, &[publication]));
+        let other = engine::plugins::render::RunenUiPublicationId::try_from_raw(2).unwrap();
+        assert!(!ui.credits(Content::Static, &[other]));
         assert_eq!(ui.request(), Some(1));
         // Applied state alone, fresh paint alone, and a nonmatching completed
         // publication all fail to acknowledge the requested text generation.
@@ -520,6 +556,11 @@ mod tests {
         });
         assert!(ui.qualifies(Content::Changing, 1, 1, 0));
         assert_eq!(ui.acknowledged, 1);
+        assert_eq!(ui.request(), Some(2));
+        assert!(
+            !ui.qualifies(Content::Changing, 1, 10_000, 0),
+            "pending next change must prevent drain despite prior completed target"
+        );
     }
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|s| (*s).to_owned()).collect()

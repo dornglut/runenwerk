@@ -129,9 +129,17 @@ pub struct RenderGpuFrameTerminalOutcome {
     disposition: RenderGpuFrameTerminalDisposition,
     invocations: Vec<RenderGpuFrameInvocationReceipt>,
     host_observed_terminal_age: Duration,
+    completed_ui_publications: Vec<crate::plugins::render::RunenUiPublicationId>,
 }
 
 impl RenderGpuFrameTerminalOutcome {
+    /// UI contributions whose exact work token and same-submission Present were
+    /// verified by the renderer. Optional bounded diagnostic delivery is not
+    /// native input permission or physical monitor scanout evidence.
+    pub fn completed_ui_publications(&self) -> &[crate::plugins::render::RunenUiPublicationId] {
+        &self.completed_ui_publications
+    }
+
     pub const fn frame(&self) -> u64 {
         self.frame
     }
@@ -352,6 +360,25 @@ impl RendererSubmissionLifecycle {
             .collect()
     }
 
+    pub(in crate::plugins::render::renderer) fn annotate_completed_ui(
+        &mut self,
+        submission: GpuSubmissionId,
+        affinity: GpuContextAffinity,
+        publication: crate::plugins::render::RunenUiPublicationId,
+    ) {
+        if let Some(outcome) = self.terminal.iter_mut().find(|outcome| {
+            outcome.submission == submission
+                && outcome.affinity == affinity
+                && matches!(
+                    outcome.disposition,
+                    RenderGpuFrameTerminalDisposition::Completed
+                )
+        }) && !outcome.completed_ui_publications.contains(&publication)
+        {
+            outcome.completed_ui_publications.push(publication);
+        }
+    }
+
     /// Drain terminal facts once, even if the next frame's rendering later
     /// fails. This method never advances the GPU or infers domain publication.
     pub(in crate::plugins::render::renderer) fn take_terminal(
@@ -432,6 +459,7 @@ impl RendererSubmissionLifecycle {
                         disposition: outcome,
                         invocations: accepted.invocations.clone(),
                         host_observed_terminal_age: accepted.accepted_observed_at.elapsed(),
+                        completed_ui_publications: Vec::new(),
                     },
                 );
             }
