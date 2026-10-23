@@ -187,6 +187,14 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
         .iter()
         .filter_map(|sample| sample.graph_stats)
         .collect::<Vec<_>>();
+    // This native proof explicitly enables and retains frame-history samples.
+    // Missing selected-final graph counts are an observation regression.
+    anyhow::ensure!(
+        !graph_stats.is_empty() && graph_stats.len() == status.cpu_renderer_samples.len(),
+        "native Boids submitted frame(s) missing selected-final GPU graph counts: observed {} of {}",
+        graph_stats.len(),
+        status.cpu_renderer_samples.len(),
+    );
     let cardinalities = |field: fn(RenderGpuGraphStats) -> usize| {
         graph_count_range(&graph_stats, field).map_or_else(
             || "unavailable".to_string(),
@@ -230,7 +238,7 @@ pub(crate) fn assert_finished(status: &SharedStatus) -> Result<()> {
     // A real Boids consumer sample, not a representative all-application workload.
     // Counts, stages and identities belong to exactly the same submitted frame.
     println!(
-        "native_boids_graph_shape=observed counted={} retained={} fragments_min_median_max={} nodes_min_median_max={} accesses_min_median_max={} dependencies_min_median_max={}",
+        "native_boids_graph_shape=observed counted={} retained={} fragments_min_p50_lower_max={} nodes_min_p50_lower_max={} accesses_min_p50_lower_max={} dependencies_min_p50_lower_max={}",
         graph_stats.len(),
         status.cpu_renderer_samples.len(),
         cardinalities(|stats| stats.fragment_count),
