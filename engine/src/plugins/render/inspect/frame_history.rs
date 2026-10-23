@@ -399,6 +399,85 @@ mod tests {
     }
 
     #[test]
+    fn sampled_graph_cardinalities_follow_the_exact_submitted_surface_and_epoch() {
+        let policy = RenderFrameObservationPolicyResource::enabled(4).with_sampling(2);
+        let mut history = RenderFrameHistoryState::default();
+        let a = crate::plugins::render::renderer::RenderGpuGraphStats {
+            fragment_count: 3,
+            node_count: 11,
+            resource_access_count: 17,
+            dependency_count: 5,
+        };
+        let b = crate::plugins::render::renderer::RenderGpuGraphStats {
+            fragment_count: 1,
+            node_count: 2,
+            resource_access_count: 3,
+            dependency_count: 0,
+        };
+        for (frame, surface, epoch, stats) in [
+            (2, 1, 21, Some(a)),
+            (2, 2, 22, Some(b)),
+            (3, 1, 31, Some(a)),
+            (4, 1, 41, None),
+        ] {
+            history.observe_submitted_frame(
+                policy,
+                frame,
+                surface,
+                epoch,
+                (1280, 720),
+                0.0,
+                RendererFrameTimings {
+                    graph_stats: stats,
+                    ..RendererFrameTimings::default()
+                },
+                &[],
+                RenderGpuTimingCapability::UnavailableThisFrame,
+            );
+        }
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(2, 1))
+                .expect("first surface")
+                .cpu
+                .renderer
+                .graph_stats,
+            Some(a)
+        );
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(2, 2))
+                .expect("second surface")
+                .cpu
+                .renderer
+                .graph_stats,
+            Some(b)
+        );
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(4, 1))
+                .expect("no invented count")
+                .cpu
+                .renderer
+                .graph_stats,
+            None
+        );
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(2, 2))
+                .expect("second surface")
+                .prepare_epoch,
+            22
+        );
+        assert!(
+            history
+                .observation(RenderFrameObservationKey::new(3, 1))
+                .is_none()
+        );
+        assert_eq!(history.drop_stats().sampled_out_observations, 1);
+    }
+
+    #[test]
     fn submitted_extent_remains_attached_to_exact_frame_during_delayed_composed_evidence() {
         let policy = policy(8);
         let mut history = RenderFrameHistoryState::default();

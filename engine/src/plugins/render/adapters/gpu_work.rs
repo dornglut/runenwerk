@@ -256,10 +256,12 @@ pub(crate) struct RunenUiMixedPreparedGraph {
     pub graph: GpuPreparedWorkGraph,
     pub f2_tokens: Vec<(RunenUiPublicationId, Option<Render2dContributionToken>)>,
     pub present_node: GpuWorkNodeId,
+    pub fragment_count: usize,
 }
 
-struct PreparedRenderGpuWorkFrame {
-    graph: GpuPreparedWorkGraph,
+pub(crate) struct PreparedRenderGpuWorkFrame {
+    pub(crate) graph: GpuPreparedWorkGraph,
+    pub(crate) fragment_count: usize,
     mixed_tokens: Vec<(RunenUiPublicationId, Option<Render2dContributionToken>)>,
     present_node: Option<GpuWorkNodeId>,
 }
@@ -397,6 +399,7 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
                     occurrence: present_occurrence,
                 })?;
         return Ok(RunenUiMixedPreparedGraph {
+            fragment_count: prepared.fragment_count,
             graph: prepared.graph,
             f2_tokens: ids,
             present_node,
@@ -426,6 +429,7 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
                 occurrence: present_occurrence,
             })?;
     Ok(RunenUiMixedPreparedGraph {
+        fragment_count: prepared.fragment_count,
         graph: prepared.graph,
         f2_tokens: prepared.mixed_tokens,
         present_node,
@@ -435,14 +439,14 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
 /// Prepares the canonical frame together with renderer-owned composable work. Imports are added
 /// only to the canonical consumer fragment; G3 therefore derives producer-to-visualizer ordering
 /// from the typed export relationship rather than from fragment order or a product-authored edge.
-pub(crate) fn prepare_render_gpu_frame_work(
+pub(crate) fn prepare_render_gpu_frame_work_with_stats(
     context: &GpuContext,
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
     producer_fragments: &[GpuWorkFragment],
     imports: &[GpuWorkImport],
     timing_bracket: Option<&RenderGpuFrameTimingBracket>,
-) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
+) -> Result<PreparedRenderGpuWorkFrame, RenderGpuWorkAdapterError> {
     prepare_resolved_render_gpu_work(
         graph_label,
         nodes,
@@ -458,6 +462,25 @@ pub(crate) fn prepare_render_gpu_frame_work(
                 .prepare_work_graph_with_orders(label, fragments, graph_orders)
                 .map_err(RenderGpuWorkAdapterError::from)
         },
+    )
+}
+
+/// Ordinary consumer that only needs the prepared graph.
+pub(crate) fn prepare_render_gpu_frame_work(
+    context: &GpuContext,
+    graph_label: GpuResourceLabel,
+    nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
+    producer_fragments: &[GpuWorkFragment],
+    imports: &[GpuWorkImport],
+    timing_bracket: Option<&RenderGpuFrameTimingBracket>,
+) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
+    prepare_render_gpu_frame_work_with_stats(
+        context,
+        graph_label,
+        nodes,
+        producer_fragments,
+        imports,
+        timing_bracket,
     )
     .map(|prepared| prepared.graph)
 }
@@ -561,6 +584,13 @@ fn prepare_resolved_render_gpu_work(
         Vec<GpuGraphExplicitOrder>,
     ) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError>,
 ) -> Result<PreparedRenderGpuWorkFrame, RenderGpuWorkAdapterError> {
+    // The last graph-preparation call produces the selected submission graph.
+    // Count its actual fragment vector rather than inferring from node ordinals.
+    let selected_fragment_count = std::cell::Cell::new(0);
+    let mut prepare_counted_graph = |label, fragments: Vec<GpuWorkFragment>, orders| {
+        selected_fragment_count.set(fragments.len());
+        prepare_graph(label, fragments, orders)
+    };
     let RenderGpuExternalWork {
         producer_fragments,
         imports,
@@ -608,7 +638,7 @@ fn prepare_resolved_render_gpu_work(
         )?;
         let fragments =
             compose_frame_fragments(producer_fragments, &authored.fragment, timing_bracket);
-        let provisional_graph = prepare_graph(graph_label.clone(), fragments, Vec::new())?;
+        let provisional_graph = prepare_counted_graph(graph_label.clone(), fragments, Vec::new())?;
         // One logical UiComposite may lower to multiple GPU nodes. Incoming
         // pass/capture controls MUST precede its first work node; outgoing
         // controls MUST follow its last work node. Using one occurrence as both
@@ -675,7 +705,7 @@ fn prepare_resolved_render_gpu_work(
         let graph = if graph_orders.is_empty() {
             provisional_graph
         } else {
-            prepare_graph(
+            prepare_counted_graph(
                 graph_label,
                 compose_frame_fragments(producer_fragments, &authored.fragment, timing_bracket),
                 graph_orders,
@@ -684,6 +714,7 @@ fn prepare_resolved_render_gpu_work(
         let present_node = present_occurrence
             .and_then(|occurrence| authored.occurrence_nodes.get(&occurrence).cloned());
         return Ok(PreparedRenderGpuWorkFrame {
+            fragment_count: selected_fragment_count.get(),
             graph,
             mixed_tokens: authored.mixed_tokens,
             present_node,
@@ -701,7 +732,8 @@ fn prepare_resolved_render_gpu_work(
     )?;
     let provisional_fragments =
         compose_frame_fragments(producer_fragments, &provisional.fragment, timing_bracket);
-    let provisional_graph = prepare_graph(graph_label.clone(), provisional_fragments, Vec::new())?;
+    let provisional_graph =
+        prepare_counted_graph(graph_label.clone(), provisional_fragments, Vec::new())?;
     let provisional_occurrences =
         map_prepared_occurrences(&provisional_graph, &provisional.occurrence_nodes)?;
     let required_explicit_orders = normalize_control_orders(
@@ -713,6 +745,7 @@ fn prepare_resolved_render_gpu_work(
     if required_explicit_orders.is_empty() {
         let Some(bracket) = timing_bracket else {
             return Ok(PreparedRenderGpuWorkFrame {
+                fragment_count: selected_fragment_count.get(),
                 graph: provisional_graph,
                 mixed_tokens: Vec::new(),
                 present_node: present_occurrence
@@ -725,12 +758,13 @@ fn prepare_resolved_render_gpu_work(
             &provisional.fragment,
             bracket,
         )?;
-        let graph = prepare_graph(
+        let graph = prepare_counted_graph(
             graph_label,
             compose_frame_fragments(producer_fragments, &provisional.fragment, Some(bracket)),
             timing_orders,
         )?;
         return Ok(PreparedRenderGpuWorkFrame {
+            fragment_count: selected_fragment_count.get(),
             graph,
             mixed_tokens: Vec::new(),
             present_node: present_occurrence
@@ -749,13 +783,14 @@ fn prepare_resolved_render_gpu_work(
     )?;
     let present_node =
         present_occurrence.and_then(|id| final_fragment.occurrence_nodes.get(&id).cloned());
-    let boundary_graph = prepare_graph(
+    let boundary_graph = prepare_counted_graph(
         graph_label.clone(),
         compose_frame_fragments(producer_fragments, &final_fragment.fragment, timing_bracket),
         Vec::new(),
     )?;
     let Some(bracket) = timing_bracket else {
         return Ok(PreparedRenderGpuWorkFrame {
+            fragment_count: selected_fragment_count.get(),
             graph: boundary_graph,
             mixed_tokens: final_fragment.mixed_tokens,
             present_node,
@@ -767,12 +802,13 @@ fn prepare_resolved_render_gpu_work(
         &final_fragment.fragment,
         bracket,
     )?;
-    let graph = prepare_graph(
+    let graph = prepare_counted_graph(
         graph_label,
         compose_frame_fragments(producer_fragments, &final_fragment.fragment, Some(bracket)),
         timing_orders,
     )?;
     Ok(PreparedRenderGpuWorkFrame {
+        fragment_count: selected_fragment_count.get(),
         graph,
         mixed_tokens: final_fragment.mixed_tokens,
         present_node,
@@ -1440,6 +1476,59 @@ mod tests {
             GpuBufferRange::new(buffer, 0, byte_len).expect("test range should be valid"),
         )
         .expect("test region should be valid")
+    }
+
+    #[test]
+    fn selected_final_graph_counts_empty_producer_and_explicit_order_rebuild() {
+        // Empty authored fragments must count even though node ordinals cannot reveal them.
+        let empty_producer = GpuWorkFragment::build("empty producer", |_| Ok(()))
+            .expect("empty producer fragment is valid");
+        let mut resources = GpuWorkResourceIdAllocator::new();
+        let first = buffer(&mut resources, "first upload", 16);
+        let second = buffer(&mut resources, "second upload", 16);
+        let first_occurrence = RenderGpuWorkOccurrenceId::new(1);
+        let second_occurrence = RenderGpuWorkOccurrenceId::new(2);
+        let prepared = prepare_resolved_render_gpu_work(
+            label("final graph count with control order"),
+            [
+                ResolvedRenderGpuWorkNode::upload(
+                    first_occurrence,
+                    label("first upload node"),
+                    GpuUploadOperation::new(
+                        whole_region(&first, 16).into(),
+                        transfer_payload("first payload", 16),
+                    )
+                    .expect("first transfer is valid"),
+                    [],
+                ),
+                ResolvedRenderGpuWorkNode::upload(
+                    second_occurrence,
+                    label("second upload node"),
+                    GpuUploadOperation::new(
+                        whole_region(&second, 16).into(),
+                        transfer_payload("second payload", 16),
+                    )
+                    .expect("second transfer is valid"),
+                    [first_occurrence],
+                ),
+            ],
+            RenderGpuExternalWork {
+                producer_fragments: &[empty_producer],
+                imports: &[],
+            },
+            None,
+            None,
+            None,
+            |label, fragments, orders| {
+                GpuPreparedWorkGraph::prepare_with_orders(label, fragments, orders)
+                    .map_err(RenderGpuWorkAdapterError::from)
+            },
+        )
+        .expect("final graph must prepare after explicit control ordering");
+        assert_eq!(prepared.fragment_count, 2);
+        assert_eq!(prepared.graph.nodes().len(), 2);
+        assert_eq!(prepared.graph.topological_order().len(), 2);
+        assert_eq!(prepared.graph.dependencies().len(), 1);
     }
 
     fn color_target_view(allocator: &mut GpuWorkResourceIdAllocator) -> GpuTextureViewHandle {
