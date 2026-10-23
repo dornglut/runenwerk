@@ -3,10 +3,10 @@ use super::{DEFAULT_COMPUTE_SHADER, DEFAULT_FULLSCREEN_SHADER, DEFAULT_GRAPHICS_
 use crate::plugins::render::RenderFlowId;
 use crate::plugins::render::pipelines::FlowPassPipelineKey;
 use runen_gpu::{
-    GpuAdmittedProgramSource, GpuContext, GpuProgramSourceError, GpuProgramSourceKey,
-    GpuProgramSourceProvenance, GpuRealizedSampler, GpuSamplerDescriptor, GpuSamplerHandle,
-    GpuWorkResourceIdAllocator, GpuBindingLayoutRefinement, GpuEntryPointName,
-    GpuProgramDescriptor, GpuProgramContractError, GpuProgramSourceIdentity,
+    GpuAdmittedProgramSource, GpuBindingLayoutRefinement, GpuContext, GpuEntryPointName,
+    GpuProgramContractError, GpuProgramDescriptor, GpuProgramSourceError, GpuProgramSourceIdentity,
+    GpuProgramSourceKey, GpuProgramSourceProvenance, GpuRealizedSampler, GpuSamplerDescriptor,
+    GpuSamplerHandle, GpuWorkResourceIdAllocator,
 };
 use std::collections::HashMap;
 
@@ -352,9 +352,7 @@ mod tests {
             .admit_program_source(key(), 6, wgsl, provenance())
             .unwrap();
         let revised = cache
-            .get_or_validate_program(&other, &[entry], &[], || {
-                Ok(compute_program(other.clone()))
-            })
+            .get_or_validate_program(&other, &[entry], &[], || Ok(compute_program(other.clone())))
             .unwrap();
         assert!(!revised.is_same_record(&valid));
         assert_eq!(cache.validated_programs.len(), 2);
