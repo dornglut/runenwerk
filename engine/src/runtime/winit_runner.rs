@@ -4828,12 +4828,14 @@ mod tests {
             .record_mut(window)
             .expect("original OS identity remains")
             .veto_close();
-        assert!(crate::plugins::ui::bind_native_input_recipient(
-            &mut runner.state.world,
-            window,
-            NativeInputRecipient::RunenUiSlot(slot),
-        )
-        .expect("Host-certified retirement permits a fresh explicit selection"));
+        assert!(
+            crate::plugins::ui::bind_native_input_recipient(
+                &mut runner.state.world,
+                window,
+                NativeInputRecipient::RunenUiSlot(slot),
+            )
+            .expect("Host-certified retirement permits a fresh explicit selection")
+        );
         runner
             .route_ui_ime_preedit(slot, "third".to_owned(), Some((0, 5)))
             .expect("new original M13 composition on the same mounted slot");
@@ -4846,11 +4848,10 @@ mod tests {
             .expect("settled native M13 composition")
             .scope()
             .clone();
-        assert!(crate::plugins::ui::retire_native_input_recipient(
-            &mut runner.state.world,
-            window,
-        )
-        .expect("public World API quarantines the old native stream"));
+        assert!(
+            crate::plugins::ui::retire_native_input_recipient(&mut runner.state.world, window,)
+                .expect("public World API quarantines the old native stream")
+        );
         let unretired = runner
             .state
             .world
@@ -4875,12 +4876,10 @@ mod tests {
                 .contains("previous native UI input requires"),
             "expected the exact unsettled-stream contract: {forbidden:#}"
         );
-        let shutdown = crate::plugins::ui::unmount_retired_native_ui_slot(
-            &mut runner.state.world,
-            slot,
-        )
-        .expect("framework scope can be terminally retired")
-        .expect("same real scope emits the shutdown batch");
+        let shutdown =
+            crate::plugins::ui::unmount_retired_native_ui_slot(&mut runner.state.world, slot)
+                .expect("framework scope can be terminally retired")
+                .expect("same real scope emits the shutdown batch");
         assert_eq!(shutdown.final_ownership().scope(), &retained_scope);
         assert_eq!(
             shutdown.final_ownership().status(),
@@ -4894,12 +4893,14 @@ mod tests {
             )),
             "only actual closed original framework scope can lift the quarantine"
         );
-        assert!(crate::plugins::ui::bind_native_input_recipient(
-            &mut runner.state.world,
-            window,
-            NativeInputRecipient::LegacyNativeConsumer,
-        )
-        .expect("actual old M13 shutdown permits a fresh legacy selection"));
+        assert!(
+            crate::plugins::ui::bind_native_input_recipient(
+                &mut runner.state.world,
+                window,
+                NativeInputRecipient::LegacyNativeConsumer,
+            )
+            .expect("actual old M13 shutdown permits a fresh legacy selection")
+        );
         assert!(runner.retire_window_input_source(window).unwrap());
     }
 

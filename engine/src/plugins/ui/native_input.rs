@@ -608,11 +608,12 @@ impl UiNativeInputRecipientsResource {
         }
         for binding in self.bindings.values() {
             if let WindowRecipientBinding::Retired {
-                previous: Binding {
-                    recipient: NativeInputRecipient::RunenUiSlot(retired),
-                    scope: Some(scope),
-                    ..
-                },
+                previous:
+                    Binding {
+                        recipient: NativeInputRecipient::RunenUiSlot(retired),
+                        scope: Some(scope),
+                        ..
+                    },
                 input_settled: false,
             } = binding
                 && *retired == slot
@@ -623,11 +624,12 @@ impl UiNativeInputRecipientsResource {
         }
         for binding in self.bindings.values_mut() {
             if let WindowRecipientBinding::Retired {
-                previous: Binding {
-                    recipient: NativeInputRecipient::RunenUiSlot(retired),
-                    scope: Some(scope),
-                    ..
-                },
+                previous:
+                    Binding {
+                        recipient: NativeInputRecipient::RunenUiSlot(retired),
+                        scope: Some(scope),
+                        ..
+                    },
                 input_settled,
             } = binding
                 && *retired == slot
@@ -973,7 +975,9 @@ mod tests {
             crate::plugins::ui::native_transaction::test_retired_slot_teardown(&mut slots, slot)
                 .expect("retired scope can shut down")
                 .expect("real framework retirement certificate");
-        recipients.confirm_retired_slot_shutdown(slot, &shutdown).unwrap();
+        recipients
+            .confirm_retired_slot_shutdown(slot, &shutdown)
+            .unwrap();
         recipients
             .request_primary(NativeInputRecipient::LegacyNativeConsumer)
             .expect("new explicit native target after retirement");
@@ -1207,7 +1211,9 @@ mod tests {
             crate::plugins::ui::native_transaction::test_retired_slot_teardown(&mut slots, slot)
                 .expect("retire unbound native slot")
                 .expect("actual framework closed scope");
-        recipients.confirm_retired_slot_shutdown(slot, &shutdown).unwrap();
+        recipients
+            .confirm_retired_slot_shutdown(slot, &shutdown)
+            .unwrap();
         assert_eq!(
             recipients.resolve(first, &windows, &mut slots),
             Err(NativeInputRecipientError::MissingRecipient)
