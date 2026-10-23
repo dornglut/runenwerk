@@ -236,6 +236,53 @@ jobs:
             rm -f "$log"
           done
 
+      - name: Prove native product CLI help, exit and OS argument admission
+        run: |
+          set -euo pipefail
+          cargo +stable build -p engine --example boids_render_flow --locked
+          cargo +stable build -p runenwerk_arena --locked
+          for product in boids arena; do
+            if [ "$product" = boids ]; then
+              binary=target/debug/examples/boids_render_flow
+              usage="Usage: boids_render_flow"
+            else
+              binary=target/debug/runenwerk_arena
+              usage="Usage: runenwerk_arena"
+            fi
+            for help in --help -h; do
+              log="$(mktemp)"
+              timeout 30s "$binary" "$help" >"$log" 2>&1 || { cat "$log"; exit 1; }
+              grep -F "$usage" "$log" || { cat "$log"; exit 1; }
+              rm -f "$log"
+            done
+            check_bad() {
+              local expected="$1"
+              shift
+              local log status
+              log="$(mktemp)"
+              status=0
+              timeout 30s "$binary" "$@" >"$log" 2>&1 || status=$?
+              if [ "$status" -ne 1 ] || ! grep -F -- "$expected" "$log"; then
+                cat "$log"
+                echo "Invalid $product CLI: unexpected exit or diagnostic ($status)" >&2
+                rm -f "$log"
+                exit 1
+              fi
+              rm -f "$log"
+            }
+            check_bad "unexpected" --unknown
+            check_bad "unexpected" --
+            check_bad "requires MODE" --host-pacing
+            check_bad "outside 1..=240" --host-pacing=capped:0
+            check_bad "duplicate --host-pacing" --host-pacing=uncapped --host-pacing=capped
+            check_bad "MODE must be UTF-8" --host-pacing $'\xff'
+            check_bad "unexpected" $'\xff'
+            if [ "$product" = boids ]; then
+              check_bad "duplicate Boids" --species --species
+              check_bad "only valid for interactive Boids" --evidence --host-pacing=uncapped
+            fi
+          done
+
       - name: Prove native on-demand launch idle and worker wake
         env:
           RUNENWERK_NATIVE_HOST_LAUNCH_IDLE_WAKE_SMOKE: '1'

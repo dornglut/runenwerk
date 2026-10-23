@@ -138,29 +138,47 @@ surrogate.
 
 ## Native application launch configuration
 
-Native Host pacing is distinct from Render surface Present modes and fixed
-simulation cadence. Programmatic selection continues to use the existing
-`AppNativeHostExt::with_frame_pacing`. Applications can optionally admit
-strict launch requests through the ephemeral `NativeHostLaunchOverrides`:
+Native Host pacing is separate from Render surface presentation policy and fixed
+simulation cadence. An application can set it directly through
+`AppNativeHostExt::with_frame_pacing`, or accept an optional launch argument.
+The effective Host policy remains in the existing App resource, not in a
+persistent CLI configuration object.
+
+The application owns **one argument grammar**, including product-specific flags,
+`--help`, unknown-argument rejection, and any positional values. When that
+grammar encounters a Host option, it can reuse the single typed value parser:
 
 ```rust
-use anyhow::{Result, ensure};
+use anyhow::{Result, bail, ensure};
 use engine::app::NativeHostLaunchOverrides;
 use engine::prelude::App;
 
 fn main() -> Result<()> {
-    let (host, app_args) =
-        NativeHostLaunchOverrides::extract(std::env::args_os().skip(1))?;
-    ensure!(app_args.is_empty(), "unknown application argument");
+    let mut args = std::env::args_os().skip(1);
+    let mut host = NativeHostLaunchOverrides::default();
+    while let Some(arg) = args.next() {
+        if let Some(request) = NativeHostLaunchOverrides::parse_option(&arg, &mut args)? {
+            ensure!(host.frame_pacing().is_none(), "duplicate --host-pacing argument");
+            host = request;
+        } else {
+            bail!("unknown application argument '{}'", arg.to_string_lossy());
+        }
+    }
+
     let mut app = App::new();
     app.set_title("Configured Window");
-    // Product defaults and explicit owner configuration are applied first.
-    host.apply_to(&mut app)?; // only explicit launch intent overrides defaults
+    // Compose product defaults before lowering explicit launch intent.
+    host.apply_to(&mut app)?;
     app.run()
 }
 ```
 
-Both maintained Boids and Arena accept the following native Host controls:
+This minimal example admits only the Host option. Maintained Boids and Arena
+define their own complete product grammars in their executable entry points.
+They recognize `--help` and `-h` before starting the App; Boids additionally
+owns `--species` and `--evidence`.
+
+Both maintained executables accept:
 
 ```text
 --host-pacing capped          # continuous capped 60 FPS
@@ -169,23 +187,31 @@ Both maintained Boids and Arena accept the following native Host controls:
 --host-pacing on-demand       # redraw only on explicit event/invalidation
 ```
 
-For example:
+The equals form (`--host-pacing=capped:120`) is also supported.
+Examples:
 
 ```text
 cargo run -p engine --example boids_render_flow -- --species --host-pacing uncapped
 cargo run -p runenwerk_arena -- --host-pacing capped:120
+cargo run -p runenwerk_arena -- --help
 ```
 
-`--species` and `--evidence` remain Boids-owned. The shared ingress consumes
-only its namespaced Host option; all other argument bytes are preserved for
-each product's strict parser, and `--` stops further Host extraction.
-Unknown arguments, duplicate/malformed/unsupported native options, and a
-Host request on the Boids `--evidence` path fail before launching.
-An explicit native Host request on headless App is rejected without mutation.
-No supplied Host flag means existing programmatic settings and the default
-capped-60 Host policy are left unchanged. Uncapped native redraw does not
-disable Render FIFO/VSync, guarantee monitor scanout rates, affect fixed-step
-cadence, or change GPU execution.
+Host parsing occurs **only when the product grammar reaches that option**.
+A value-taking product argument consumes its own value before Host matching;
+there is no independent pre-scan that can steal a product value. The maintained
+executables have no positional options: their `--` terminator and any
+unexpected following positional tokens are rejected. Duplicate, missing,
+malformed, out-of-range, non-UTF8 Host values and unknown product options fail
+before application startup. Boids rejects a Host override combined with
+`--evidence`; `--help` exits successfully without starting a window.
+
+An explicit Host override on a headless or already-sealed App is rejected
+without applying partial Host state. Omitting the Host flag leaves all
+programmatic settings and the default capped-60 policy unchanged. Uncapped
+Host redraw does not disable Render FIFO/VSync, guarantee monitor scanout,
+change fixed-step cadence, or alter GPU execution. On-demand applications
+require explicit native input, window invalidation, or wake to advance;
+a continuously animated Boids smoke is not an on-demand idle/wake test.
 
 ## Schedules You Will Use Most
 

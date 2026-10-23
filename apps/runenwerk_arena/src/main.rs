@@ -1,24 +1,53 @@
-use anyhow::{Result, ensure};
+use anyhow::{Result, bail, ensure};
 use engine::app::NativeHostLaunchOverrides;
 use runenwerk_arena::build_game_app;
 use std::ffi::OsString;
 
-fn parse_launch<I, S>(args: I) -> Result<NativeHostLaunchOverrides>
+const HELP: &str = "Usage: runenwerk_arena [--host-pacing MODE]
+
+Options:
+  --host-pacing MODE   capped[:FPS] (1..=240), uncapped, or on-demand
+  -h, --help           Print this help text";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Launch {
+    Help,
+    Run(NativeHostLaunchOverrides),
+}
+
+fn parse_launch<I, S>(args: I) -> Result<Launch>
 where
     I: IntoIterator<Item = S>,
     S: Into<OsString>,
 {
-    let (host, product_args) = NativeHostLaunchOverrides::extract(args)?;
-    ensure!(
-        product_args.is_empty(),
-        "unexpected Arena launch argument '{}'",
-        product_args[0].to_string_lossy()
-    );
-    Ok(host)
+    let mut args = args.into_iter().map(Into::into);
+    let mut host = NativeHostLaunchOverrides::default();
+    while let Some(arg) = args.next() {
+        match arg.to_str() {
+            Some("-h" | "--help") => return Ok(Launch::Help),
+            _ => {
+                if let Some(request) =
+                    NativeHostLaunchOverrides::parse_option(&arg, &mut args)?
+                {
+                    ensure!(
+                        host.frame_pacing().is_none(),
+                        "duplicate --host-pacing argument"
+                    );
+                    host = request;
+                } else {
+                    bail!("unexpected Arena launch argument '{}'", arg.to_string_lossy());
+                }
+            }
+        }
+    }
+    Ok(Launch::Run(host))
 }
 
 fn main() -> Result<()> {
-    let host = parse_launch(std::env::args_os().skip(1))?;
+    let Launch::Run(host) = parse_launch(std::env::args_os().skip(1))? else {
+        println!("{HELP}");
+        return Ok(());
+    };
     let mut app = build_game_app(false);
     host.apply_to(&mut app)?;
     app.run()
@@ -29,40 +58,66 @@ mod tests {
     use super::*;
     use engine::runtime::FramePacingPolicyResource;
 
+    fn run(args: &[&str]) -> Result<NativeHostLaunchOverrides> {
+        match parse_launch(args.iter().copied())? {
+            Launch::Run(host) => Ok(host),
+            Launch::Help => bail!("expected executable launch, got help"),
+        }
+    }
+
     #[test]
     fn empty_args_preserve_default_game() {
-        assert_eq!(parse_launch([] as [&str; 0]).unwrap().frame_pacing(), None);
+        assert_eq!(run(&[]).unwrap().frame_pacing(), None);
     }
 
     #[test]
     fn capped_uncapped_and_on_demand_are_supported() {
         for (mode, policy) in [
-            (
-                "capped:144",
-                FramePacingPolicyResource::continuous_capped(144),
-            ),
+            ("capped:144", FramePacingPolicyResource::continuous_capped(144)),
             ("uncapped", FramePacingPolicyResource::continuous_uncapped()),
             ("on-demand", FramePacingPolicyResource::on_demand()),
         ] {
             assert_eq!(
-                parse_launch(["--host-pacing", mode])
-                    .unwrap()
-                    .frame_pacing(),
+                run(&["--host-pacing", mode]).unwrap().frame_pacing(),
                 Some(policy)
             );
         }
+        assert_eq!(
+            run(&["--host-pacing=capped"]).unwrap().frame_pacing(),
+            Some(FramePacingPolicyResource::continuous_capped(60))
+        );
     }
 
     #[test]
-    fn unknown_invalid_or_duplicate_flags_fail_before_startup() {
+    fn help_exits_without_starting_a_window() {
+        assert_eq!(parse_launch(["--help"]).unwrap(), Launch::Help);
+        assert_eq!(parse_launch(["-h"]).unwrap(), Launch::Help);
+    }
+
+    #[test]
+    fn unknown_invalid_and_duplicate_flags_fail() {
         for args in [
             vec!["--unknown"],
             vec!["--host-pacing=capped:0"],
+            vec!["--host-pacing=capped:241"],
             vec!["--host-pacing"],
-            vec!["--"],
+            vec!["--host-pacing", "--help"],
             vec!["--host-pacing=uncapped", "--host-pacing=on-demand"],
+            vec!["--"],
+            vec!["--", "--host-pacing=uncapped"],
         ] {
-            assert!(parse_launch(args).is_err());
+            assert!(run(&args).is_err(), "accepted invalid Arena args: {args:?}");
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_utf8_process_arguments_fail_before_startup() {
+        use std::os::unix::ffi::OsStringExt;
+        let invalid = OsString::from_vec(vec![0xff]);
+        assert!(parse_launch([invalid.clone()]).is_err());
+        assert!(
+            parse_launch([OsString::from("--host-pacing"), invalid]).is_err()
+        );
     }
 }

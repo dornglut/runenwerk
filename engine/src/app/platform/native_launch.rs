@@ -18,46 +18,27 @@ impl NativeHostLaunchOverrides {
         self.frame_pacing
     }
 
-    /// Extract --host-pacing MODE or --host-pacing=MODE. All unrelated arguments
-    /// remain unchanged for the application parser. "--" ends Host flag parsing.
-    pub fn extract<I, S>(args: I) -> Result<(Self, Vec<OsString>)>
+    /// Parse one Host option when the product's own grammar reaches it.
+    /// Product value-taking options must consume their values first.
+    /// No unrelated token is scanned or consumed.
+    pub fn parse_option<I>(arg: &OsStr, args: &mut I) -> Result<Option<Self>>
     where
-        I: IntoIterator<Item = S>,
-        S: Into<OsString>,
+        I: Iterator<Item = OsString>,
     {
-        let mut args = args.into_iter().map(|arg| -> OsString { arg.into() });
-        let mut request = Self::default();
-        let mut remaining = Vec::new();
-        let mut stop = false;
-        while let Some(arg) = args.next() {
-            if stop {
-                remaining.push(arg);
-                continue;
-            }
-            if arg == OsStr::new("--") {
-                stop = true;
-                remaining.push(arg);
-                continue;
-            }
-            let value = if arg == OsStr::new("--host-pacing") {
-                Some(args.next().context("--host-pacing requires MODE")?)
-            } else {
-                arg.to_str()
-                    .and_then(|value| value.strip_prefix("--host-pacing="))
-                    .map(OsString::from)
-            };
-            if let Some(value) = value {
-                ensure!(
-                    request.frame_pacing.is_none(),
-                    "duplicate --host-pacing argument"
-                );
-                let mode = value.to_str().context("--host-pacing MODE must be UTF-8")?;
-                request = mode.parse()?;
-            } else {
-                remaining.push(arg);
-            }
-        }
-        Ok((request, remaining))
+        let value = if arg == OsStr::new("--host-pacing") {
+            Some(args.next().context("--host-pacing requires MODE")?)
+        } else {
+            arg.to_str()
+                .and_then(|s| s.strip_prefix("--host-pacing="))
+                .map(OsString::from)
+        };
+        value
+            .map(|mode| -> Result<Self> {
+                mode.to_str()
+                    .context("--host-pacing MODE must be UTF-8")?
+                    .parse()
+            })
+            .transpose()
     }
 
     /// Use after programmatic defaults and before App startup. An omitted
@@ -115,30 +96,18 @@ mod tests {
     use super::*;
     use crate::runtime::frame_pacing::{FramePacingMode, FramePacingRuntimeStateResource};
 
-    fn parse(args: &[&str]) -> Result<(NativeHostLaunchOverrides, Vec<OsString>)> {
-        NativeHostLaunchOverrides::extract(args.iter().copied())
-    }
-
-    #[test]
-    fn typed_value_parser_validates_without_scanning_product_arguments() {
-        let request: NativeHostLaunchOverrides = "capped:144".parse().unwrap();
-        assert_eq!(
-            request.frame_pacing(),
-            Some(FramePacingPolicyResource::continuous_capped(144))
-        );
-        for mode in ["", "capped:0", "capped:241", "uncapped:120", "capped:bad"] {
-            assert!(mode.parse::<NativeHostLaunchOverrides>().is_err());
-        }
-    }
-
     #[test]
     fn absent_override_preserves_programmatic_configuration() {
-        let (request, remaining) = parse(&["--species", "--custom=x"]).unwrap();
-        assert_eq!(request.frame_pacing(), None);
-        assert_eq!(remaining, ["--species", "--custom=x"]);
+        let mut empty = std::iter::empty();
+        assert_eq!(
+            NativeHostLaunchOverrides::parse_option(OsStr::new("--species"), &mut empty).unwrap(),
+            None
+        );
         let mut app = App::new();
         app.with_frame_pacing(FramePacingPolicyResource::on_demand());
-        request.apply_to(&mut app).unwrap();
+        NativeHostLaunchOverrides::default()
+            .apply_to(&mut app)
+            .unwrap();
         assert_eq!(
             app.world()
                 .resource::<FramePacingPolicyResource>()
@@ -149,119 +118,108 @@ mod tests {
     }
 
     #[test]
-    fn all_native_host_modes_override_defaults_and_reach_runtime_observation() {
+    fn modes_override_programmatic_defaults_and_reach_runtime() {
         for (mode, expected) in [
-            (
-                "capped",
-                FramePacingMode::ContinuousCapped { target_fps: 60 },
-            ),
-            (
-                "capped:1",
-                FramePacingMode::ContinuousCapped { target_fps: 1 },
-            ),
-            (
-                "capped:120",
-                FramePacingMode::ContinuousCapped { target_fps: 120 },
-            ),
-            (
-                "capped:240",
-                FramePacingMode::ContinuousCapped { target_fps: 240 },
-            ),
+            ("capped", FramePacingMode::ContinuousCapped { target_fps: 60 }),
+            ("capped:1", FramePacingMode::ContinuousCapped { target_fps: 1 }),
+            ("capped:120", FramePacingMode::ContinuousCapped { target_fps: 120 }),
+            ("capped:240", FramePacingMode::ContinuousCapped { target_fps: 240 }),
             ("uncapped", FramePacingMode::ContinuousUncapped),
             ("on-demand", FramePacingMode::OnDemand),
         ] {
-            let (request, rest) = parse(&["--host-pacing", mode]).unwrap();
-            assert!(rest.is_empty());
+            let request: NativeHostLaunchOverrides = mode.parse().unwrap();
             let mut app = App::new();
             app.with_frame_pacing(FramePacingPolicyResource::on_demand());
             request.apply_to(&mut app).unwrap();
             app.prepare_windowed_frame_pacing();
-            assert_eq!(
-                app.world()
-                    .resource::<FramePacingPolicyResource>()
-                    .unwrap()
-                    .mode,
-                expected,
-                "{mode}"
-            );
+            assert_eq!(app.world().resource::<FramePacingPolicyResource>().unwrap().mode, expected);
             assert_eq!(
                 app.world()
                     .resource::<FramePacingRuntimeStateResource>()
                     .unwrap()
                     .mode,
-                expected,
-                "{mode}"
+                expected
             );
         }
     }
 
     #[test]
-    fn equals_form_and_foreign_product_arguments_remain_independent() {
-        let (request, rest) =
-            parse(&["--species", "--host-pacing=uncapped", "--evidence"]).unwrap();
+    fn option_parser_supports_both_forms_and_strict_values() {
+        let mut values = [OsString::from("uncapped")].into_iter();
         assert_eq!(
-            request.frame_pacing(),
+            NativeHostLaunchOverrides::parse_option(OsStr::new("--host-pacing"), &mut values)
+                .unwrap()
+                .unwrap()
+                .frame_pacing(),
             Some(FramePacingPolicyResource::continuous_uncapped())
         );
-        assert_eq!(rest, ["--species", "--evidence"]);
-    }
-
-    #[test]
-    fn missing_invalid_duplicate_and_out_of_range_requests_fail() {
-        for args in [
-            vec!["--host-pacing"],
-            vec!["--host-pacing="],
-            vec!["--host-pacing=bogus"],
-            vec!["--host-pacing=capped:"],
-            vec!["--host-pacing=capped:0"],
-            vec!["--host-pacing=capped:241"],
-            vec!["--host-pacing=capped:-1"],
-            vec!["--host-pacing=capped:abc"],
-            vec!["--host-pacing", "uncapped", "--host-pacing=on-demand"],
-        ] {
-            assert!(parse(&args).is_err(), "accepted invalid args: {args:?}");
+        let mut empty = std::iter::empty();
+        assert_eq!(
+            NativeHostLaunchOverrides::parse_option(
+                OsStr::new("--host-pacing=capped:144"),
+                &mut empty
+            ).unwrap().unwrap().frame_pacing(),
+            Some(FramePacingPolicyResource::continuous_capped(144))
+        );
+        for invalid in ["", "bogus", "capped:", "capped:0", "capped:241", "capped:-1", "capped:abc"] {
+            assert!(invalid.parse::<NativeHostLaunchOverrides>().is_err());
         }
+        assert!(
+            NativeHostLaunchOverrides::parse_option(OsStr::new("--host-pacing"), &mut empty)
+                .is_err()
+        );
     }
 
     #[test]
-    fn double_dash_prevents_host_flag_capture() {
-        let (request, remaining) =
-            parse(&["--host-pacing=uncapped", "--", "--host-pacing=on-demand"]).unwrap();
+    fn product_value_is_not_preempted_by_host_flag() {
+        // A product grammar consumes its own option value before considering
+        // the next token as a possible Host option.
+        let mut args = [
+            OsString::from("--host-pacing"),
+            OsString::from("--host-pacing=uncapped"),
+        ]
+        .into_iter();
+        let product_value = args.next().unwrap();
+        assert_eq!(product_value, OsStr::new("--host-pacing"));
+        let host_option = args.next().unwrap();
+        let host = NativeHostLaunchOverrides::parse_option(&host_option, &mut args)
+            .unwrap()
+            .unwrap();
         assert_eq!(
-            request.frame_pacing(),
+            host.frame_pacing(),
             Some(FramePacingPolicyResource::continuous_uncapped())
         );
-        assert_eq!(remaining, ["--", "--host-pacing=on-demand"]);
     }
 
     #[test]
-    fn headless_request_is_rejected_without_partial_mutation() {
-        let (request, _) = parse(&["--host-pacing=uncapped"]).unwrap();
-        let mut app = App::headless();
-        assert!(request.apply_to(&mut app).is_err());
-        assert!(app.world().resource::<FramePacingPolicyResource>().is_err());
-        let (absent, _) = parse(&[]).unwrap();
-        absent.apply_to(&mut app).unwrap();
-    }
+    fn headless_and_sealed_apps_reject_without_mutation() {
+        let request: NativeHostLaunchOverrides = "uncapped".parse().unwrap();
+        let mut headless = App::headless();
+        assert!(request.apply_to(&mut headless).is_err());
+        assert!(headless.world().resource::<FramePacingPolicyResource>().is_err());
+        NativeHostLaunchOverrides::default().apply_to(&mut headless).unwrap();
 
-    #[test]
-    fn post_configuration_override_cannot_mutate_host_policy() {
-        let (request, _) = parse(&["--host-pacing=uncapped"]).unwrap();
-        let mut app = App::new();
-        app.prepare_lifecycle_for_execution().unwrap();
-        assert!(request.apply_to(&mut app).is_err());
-        assert!(app.world().resource::<FramePacingPolicyResource>().is_err());
+        let mut sealed = App::new();
+        sealed.prepare_lifecycle_for_execution().unwrap();
+        assert!(request.apply_to(&mut sealed).is_err());
+        assert!(sealed.world().resource::<FramePacingPolicyResource>().is_err());
     }
 
     #[cfg(unix)]
     #[test]
-    fn preserve_non_utf8_product_args_but_reject_non_utf8_mode() {
+    fn non_utf8_mode_is_rejected_without_consuming_foreign_arguments() {
         use std::os::unix::ffi::OsStringExt;
         let raw = OsString::from_vec(vec![0xff]);
-        let (_, rest) = NativeHostLaunchOverrides::extract([raw.clone()]).unwrap();
-        assert_eq!(rest.as_slice(), std::slice::from_ref(&raw));
+        let mut empty = std::iter::empty();
+        assert_eq!(
+            NativeHostLaunchOverrides::parse_option(&raw, &mut empty).unwrap(),
+            None
+        );
         assert!(
-            NativeHostLaunchOverrides::extract([OsString::from("--host-pacing"), raw]).is_err()
+            NativeHostLaunchOverrides::parse_option(
+                OsStr::new("--host-pacing"),
+                &mut [raw].into_iter()
+            ).is_err()
         );
     }
 }
