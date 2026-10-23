@@ -115,10 +115,12 @@ impl FlowPipelineArtifactCache {
             entry_points: entry_points.to_vec(),
             refinements: refinements.to_vec(),
         };
-        if let Some(existing) = self.validated_programs.get(&key) {
-            if existing.source().is_same_record(source) {
-                return Ok(existing.clone());
-            }
+        if let Some(existing) = self
+            .validated_programs
+            .get(&key)
+            .filter(|program| program.source().is_same_record(source))
+        {
+            return Ok(existing.clone());
         }
         let program = validate()?;
         if self.validated_programs.len() < MAX_BATCH_VALIDATED_PROGRAMS
