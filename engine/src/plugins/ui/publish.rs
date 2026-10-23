@@ -180,9 +180,7 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
         }
 
         let context = publication_context(&binding, mapping)?;
-        let publication_attempt = super::transact_ui_slot(&mut world, slot, |slots| {
-            slots.publish_surface_for_slot(slot, &context)
-        });
+        let publication_attempt = publish_observed_surface(&mut world, slot, &context);
         let publication = match publication_attempt {
             Ok(publication) => publication,
             Err(error)
@@ -244,6 +242,32 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
             );
     }
     Ok(())
+}
+
+/// A selected native slot must settle publication-created pointer re-hit work
+/// before the World transaction can certify its final ownership observation.
+/// One ordinary bounded pump permits progress without retry-publication loops;
+/// an incomplete pump still reaches the existing typed deferral path.
+fn publish_observed_surface(
+    world: &mut runen_ecs::World,
+    slot: super::UiRuntimeSlotId,
+    context: &SurfaceBuildContext<'_>,
+) -> Result<runenui_runtime::SurfacePublication> {
+    let selected = world
+        .resource::<super::UiNativeInputRecipientsResource>()
+        .ok()
+        .and_then(|recipients| recipients.selected_slot_binding(slot))
+        .is_some();
+    super::transact_ui_slot(world, slot, |slots| {
+        let publication = slots.publish_surface_for_slot(slot, context)?;
+        if selected {
+            match slots.settle_slot(slot) {
+                Ok(()) | Err(super::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(publication)
+    })
 }
 
 fn current_attached_mapping(
@@ -422,5 +446,424 @@ mod exact_raster_extent_tests {
         assert!(exact_logical_axis_for_pixels(1, 0.0).is_err());
         assert!(exact_logical_axis_for_pixels(1, f32::INFINITY).is_err());
         assert!(exact_logical_axis_for_pixels(1, f32::NAN).is_err());
+    }
+}
+
+#[cfg(test)]
+mod native_publication_tests {
+    use crate::plugins::ui::{
+        NativeInputRecipient, UiNativeInputRecipientsResource, UiRuntimeFontConfiguration,
+        UiRuntimeSlotsResource, UiTypedScreenId, settle_native_ui_slot, transact_ui_slot,
+    };
+    use crate::runtime::WindowStateRegistryResource;
+    use crate::runtime::native_host_wake::NativeHostClock;
+    use runen_ecs::World;
+    use runenui_core::{
+        Element, InputDeviceId, LogicalPoint, NoHostProtocol, PointerDeviceKind, PointerEvent,
+        PointerId, PointerPhase, StyleEnvironment, UiApp, View,
+    };
+    use runenui_runtime::{LogicalSize, SurfaceBuildContext};
+
+    struct StationaryApp;
+    impl UiApp for StationaryApp {
+        type State = ();
+        type Action = ();
+        type HostProtocol = NoHostProtocol;
+        fn root(_: &()) -> impl View<()> {
+            runenui_core::column(Vec::<Element<()>>::new())
+        }
+        fn update(_: &mut (), _: ()) -> impl runenui_core::IntoUpdateOutput<(), NoHostProtocol> {}
+    }
+
+    #[test]
+    fn native_stationary_pointer_publication_reaches_observable_m13_ownership() {
+        for (native, selected, with_pointer) in [
+            (false, false, false),
+            (false, false, true),
+            (true, false, false),
+            (true, false, true),
+            (true, true, false),
+            (true, true, true),
+        ] {
+            let mut slots = UiRuntimeSlotsResource::default();
+            if native {
+                slots
+                    .configure_host_clock(Some(NativeHostClock::new()))
+                    .unwrap();
+            }
+            let slot = slots
+                .mount_app::<StationaryApp>(
+                    UiTypedScreenId::new("native.publication.stationary"),
+                    (),
+                    &UiRuntimeFontConfiguration::default(),
+                )
+                .slot_id()
+                .unwrap();
+            let mut windows = WindowStateRegistryResource::default();
+            let window = windows.register_primary_window("stationary", (200, 120), 1.0, true);
+            let mut recipients = UiNativeInputRecipientsResource::default();
+            if selected {
+                recipients
+                    .bind(
+                        window,
+                        NativeInputRecipient::RunenUiSlot(slot),
+                        &windows,
+                        &mut slots,
+                    )
+                    .unwrap();
+            }
+            let mut world = World::new();
+            world.insert_resource(slots);
+            world.insert_resource(windows);
+            world.insert_resource(recipients);
+            let style = StyleEnvironment::default();
+            let context =
+                SurfaceBuildContext::tight(&style, LogicalSize::try_new(200.0, 120.0).unwrap());
+            let first = super::publish_observed_surface(&mut world, slot, &context).unwrap();
+            if with_pointer {
+                let event = PointerEvent::new(
+                    PointerId::new(1).unwrap(),
+                    PointerDeviceKind::Mouse,
+                    PointerPhase::Move,
+                    LogicalPoint::new(10.0, 10.0).unwrap(),
+                    first.input_context().clone(),
+                )
+                .with_device_id(InputDeviceId::new(1).unwrap());
+                let scope = world
+                    .resource_mut::<UiRuntimeSlotsResource>()
+                    .unwrap()
+                    .input_ownership(slot)
+                    .unwrap()
+                    .scope()
+                    .clone();
+                let submission = world
+                    .resource_mut::<UiRuntimeSlotsResource>()
+                    .unwrap()
+                    .submit_native_pointer(slot, event)
+                    .unwrap();
+                assert!(
+                    super::publish_observed_surface(&mut world, slot, &context).is_err(),
+                    "publication must not consume an unsettled original native event"
+                );
+                let slots = world.resource_mut::<UiRuntimeSlotsResource>().unwrap();
+                let (batch, status) = slots.pump_native_input_records(slot).unwrap();
+                assert!(matches!(
+                    crate::plugins::ui::native_pointer_finality(
+                        &scope,
+                        InputDeviceId::new(1).unwrap(),
+                        PointerId::new(1).unwrap(),
+                        first.input_context().surface_id(),
+                        submission,
+                        &batch,
+                        &status
+                    ),
+                    Ok(runenui_runtime::UiInputFinality::Committed(_))
+                ));
+                assert_eq!(
+                    batch
+                        .ordered_records()
+                        .iter()
+                        .filter(|record| matches!(record,
+                    runenui_runtime::InputArbitrationRecord::InputSettled(settled)
+                        if settled.sequence() == submission.sequence()))
+                        .count(),
+                    1
+                );
+                assert_eq!(slots.input_ownership(slot).unwrap().pointers().len(), 1);
+            }
+            // A stationary stream must not make every new publication pending
+            // forever: the normal next-frame settlement must permit progress.
+            for cycle in 1..=3 {
+                settle_native_ui_slot(&mut world, slot).unwrap();
+                super::publish_observed_surface(&mut world, slot, &context).unwrap_or_else(
+                    |error| panic!("pointer={with_pointer} cycle={cycle}: {error:#}"),
+                );
+                if !selected && with_pointer {
+                    assert!(
+                        world
+                            .resource_mut::<UiRuntimeSlotsResource>()
+                            .unwrap()
+                            .input_ownership(slot)
+                            .is_err(),
+                        "ordinary publication retains its existing callback timing"
+                    );
+                    settle_native_ui_slot(&mut world, slot).unwrap();
+                }
+                let ownership = world
+                    .resource_mut::<UiRuntimeSlotsResource>()
+                    .unwrap()
+                    .input_ownership(slot)
+                    .unwrap();
+                assert_eq!(ownership.pointers().len(), usize::from(with_pointer));
+            }
+        }
+    }
+
+    struct CallbackState {
+        shown: bool,
+        burst: usize,
+    }
+    enum CallbackAction {
+        Reveal,
+        Tick,
+    }
+    struct CallbackApp;
+    impl UiApp for CallbackApp {
+        type State = CallbackState;
+        type Action = CallbackAction;
+        type HostProtocol = NoHostProtocol;
+        fn root(state: &CallbackState) -> impl View<CallbackAction> {
+            if state.shown {
+                Element::new(CallbackProbe(state.burst))
+                    .id("rehit.target")
+                    .key("rehit.target")
+                    .focusable(true)
+            } else {
+                runenui_core::column(Vec::<Element<CallbackAction>>::new()).into_element()
+            }
+        }
+        fn update(
+            state: &mut CallbackState,
+            action: CallbackAction,
+        ) -> impl runenui_core::IntoUpdateOutput<CallbackAction, NoHostProtocol> {
+            if matches!(action, CallbackAction::Reveal) {
+                state.shown = true;
+            }
+        }
+    }
+    #[derive(Debug)]
+    struct CallbackProbe(usize);
+    impl runenui_core::Widget<CallbackAction> for CallbackProbe {
+        type State = ();
+        fn create_state(&self) {}
+        fn measure(
+            &self,
+            _: &(),
+            _: runenui_core::WidgetMeasureInput,
+        ) -> runenui_core::WidgetMeasure {
+            runenui_core::WidgetMeasure::measured(32_u16.into(), 32_u16.into())
+        }
+        fn hit_test(
+            &self,
+            _: &(),
+            context: runenui_core::HitContributionContext,
+        ) -> runenui_core::HitContribution {
+            let size = context.local_size();
+            runenui_core::HitContribution::single_rect(
+                runenui_core::LogicalRect::try_new(0.0, 0.0, size.width(), size.height()).unwrap(),
+            )
+        }
+        fn event(
+            &mut self,
+            _: &mut (),
+            event: &runenui_core::UiEvent,
+            context: &mut runenui_core::EventContext<'_, CallbackAction>,
+        ) -> runenui_core::WidgetEventOutput {
+            if context.phase() == runenui_core::EventPhase::Target
+                && matches!(event, runenui_core::UiEvent::PointerBoundary(boundary)
+                    if boundary.kind() == runenui_core::PointerBoundaryKind::Enter)
+            {
+                for _ in 0..self.0 {
+                    context.emit(CallbackAction::Tick);
+                }
+                context.emit_command(runenui_core::SemanticCommand::RequestFocus);
+            }
+            runenui_core::WidgetEventOutput::none()
+        }
+    }
+
+    #[test]
+    fn native_publication_callback_revokes_game_and_defers_bounded_pending_work() {
+        use crate::plugins::input::{ActionState, InputState, domain::action};
+        use crate::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
+        use crate::plugins::render::{
+            RenderFrameProducerId, RunenUiPaintSubmission, RunenUiPaintSubmissionRegistryResource,
+        };
+        use crate::plugins::ui::{
+            UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
+            UiRuntimePresentationBinding,
+        };
+        use crate::runtime::winit_input::WinitInputAdapter;
+        use crate::runtime::{SystemMobilityExt, Update};
+        use runen_input::{
+            DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+            ObservationOrigin, PhysicalKeyIdentity,
+        };
+        for burst in [0, 130] {
+            let mut slots = UiRuntimeSlotsResource::default();
+            slots
+                .configure_host_clock(Some(NativeHostClock::new()))
+                .unwrap();
+            let slot = slots
+                .mount_app::<CallbackApp>(
+                    UiTypedScreenId::new("native.rehit.callback"),
+                    CallbackState {
+                        shown: false,
+                        burst,
+                    },
+                    &UiRuntimeFontConfiguration::default(),
+                )
+                .slot_id()
+                .unwrap();
+            let mut windows = WindowStateRegistryResource::default();
+            let window = windows.register_primary_window("callback", (200, 120), 1.0, true);
+            let mut recipients = UiNativeInputRecipientsResource::default();
+            recipients
+                .bind(
+                    window,
+                    NativeInputRecipient::RunenUiSlot(slot),
+                    &windows,
+                    &mut slots,
+                )
+                .unwrap();
+            let mut adapter = WinitInputAdapter::default();
+            let original = adapter
+                .window_context(window, winit::event::DeviceId::dummy())
+                .unwrap();
+            let mut input = InputState::new();
+            input.handle_normalized_keyboard(
+                original,
+                &KeyboardInput {
+                    physical_key: PhysicalKeyIdentity::code("KeyW"),
+                    logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                    location: KeyLocation::Standard,
+                    state: DigitalState::Pressed,
+                    repeat: false,
+                    origin: ObservationOrigin::SourceReport,
+                },
+            );
+            let mut world = World::new();
+            world.insert_resource(slots);
+            world.insert_resource(windows);
+            world.insert_resource(recipients);
+            world.insert_resource(adapter);
+            world.insert_resource(input);
+            let style = StyleEnvironment::default();
+            let context =
+                SurfaceBuildContext::tight(&style, LogicalSize::try_new(200.0, 120.0).unwrap());
+            let first = super::publish_observed_surface(&mut world, slot, &context).unwrap();
+            let surface = RenderSurfaceId::primary();
+            let producer = RenderFrameProducerId::try_from_raw(57).unwrap();
+            let binding = UiRuntimePresentationBinding::new(slot, producer, surface, style.clone());
+            let mapping = UiRuntimeNativeMapping::new(window, surface, (200, 120), 1.0).unwrap();
+            let mut associations = UiRuntimePresentationAssociationsResource::default();
+            associations.bind(binding.clone()).unwrap();
+            associations.update_mapping(slot, mapping);
+            let first_id = associations
+                .stage(binding, mapping, 1, first.clone())
+                .unwrap();
+            assert!(associations.associate_accepted_submission(first_id));
+            assert!(
+                associations
+                    .promote_completed_publication(first_id)
+                    .is_some()
+            );
+            let mut paints = RunenUiPaintSubmissionRegistryResource::default();
+            paints.replace(
+                RunenUiPaintSubmission::new(producer, first_id, first.paint_publication().clone())
+                    .with_render_surface(surface),
+            );
+            let mut surfaces = RenderSurfaceRegistryResource::default();
+            surfaces
+                .confirm_surface_attachment(surface, window, (200, 120))
+                .unwrap();
+            world.insert_resource(associations);
+            world.insert_resource(paints);
+            world.insert_resource(surfaces);
+            let event = PointerEvent::new(
+                PointerId::new(1).unwrap(),
+                PointerDeviceKind::Mouse,
+                PointerPhase::Move,
+                LogicalPoint::new(10.0, 10.0).unwrap(),
+                first.input_context().clone(),
+            )
+            .with_device_id(InputDeviceId::new(1).unwrap());
+            let slots = world.resource_mut::<UiRuntimeSlotsResource>().unwrap();
+            slots.submit_native_pointer(slot, event).unwrap();
+            slots.pump_native_input_records(slot).unwrap().1.unwrap();
+            transact_ui_slot(&mut world, slot, |slots| {
+                slots.submit_app_action::<CallbackApp>(slot, CallbackAction::Reveal)
+            })
+            .unwrap();
+            // Establish the pre-publication projected held permission. The
+            // callback must revoke it in this same World transaction.
+            let mut actions = ActionState::new();
+            actions.project(world.resource::<InputState>().unwrap());
+            assert!(actions.action_down(action::WORLD_MOVE_UP));
+            world.insert_resource(actions);
+            let mut runtime = runen_ecs::Runtime::new();
+            runtime
+                .add_systems(
+                    Update,
+                    super::publish_runenui_bound_surfaces_system.on_invoker_thread(),
+                )
+                .unwrap();
+            runtime.run_schedule::<Update>(&mut world).unwrap();
+            assert!(
+                !world
+                    .resource::<ActionState>()
+                    .unwrap()
+                    .action_down(action::WORLD_MOVE_UP)
+            );
+            assert!(
+                world
+                    .resource::<InputState>()
+                    .unwrap()
+                    .keyboard_down_generation_in(original, &PhysicalKeyIdentity::code("KeyW"))
+                    .is_some(),
+                "no physical Up is fabricated"
+            );
+            let associations = world
+                .resource::<UiRuntimePresentationAssociationsResource>()
+                .unwrap();
+            if burst != 0 {
+                assert!(
+                    associations
+                        .displayed_for_native_recipient(slot, window)
+                        .is_none(),
+                    "an unsettled callback revokes old completed input"
+                );
+                assert!(
+                    associations.pending(slot).is_none(),
+                    "over-budget callback cannot publish"
+                );
+                assert_eq!(
+                    world
+                        .resource::<RunenUiPaintSubmissionRegistryResource>()
+                        .unwrap()
+                        .get_for_surface(&producer, surface)
+                        .unwrap()
+                        .publication_id,
+                    first_id,
+                    "compatible old visual survives bounded deferral"
+                );
+                assert!(matches!(
+                    world
+                        .resource_mut::<UiRuntimeSlotsResource>()
+                        .unwrap()
+                        .input_ownership(slot),
+                    Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+                ));
+                settle_native_ui_slot(&mut world, slot).unwrap();
+                runtime.run_schedule::<Update>(&mut world).unwrap();
+            }
+            let slots = world.resource_mut::<UiRuntimeSlotsResource>().unwrap();
+            assert!(
+                slots
+                    .input_ownership(slot)
+                    .unwrap()
+                    .keyboard()
+                    .focused_node()
+                    .is_some()
+            );
+            assert!(
+                world
+                    .resource::<UiRuntimePresentationAssociationsResource>()
+                    .unwrap()
+                    .pending(slot)
+                    .is_some(),
+                "a fresh publication becomes available after bounded settlement"
+            );
+        }
     }
 }
