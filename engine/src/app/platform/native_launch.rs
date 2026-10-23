@@ -7,7 +7,7 @@ use crate::runtime::frame_pacing::{DEFAULT_ANIMATION_FPS, FramePacingPolicyResou
 use anyhow::{Context, Result, bail, ensure};
 use std::ffi::{OsStr, OsString};
 
-/// Extracted launch requests are not persistent application configuration state.
+/// An optional launch request is not persistent application configuration state.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct NativeHostLaunchOverrides {
     frame_pacing: Option<FramePacingPolicyResource>,
@@ -120,10 +120,22 @@ mod tests {
     #[test]
     fn modes_override_programmatic_defaults_and_reach_runtime() {
         for (mode, expected) in [
-            ("capped", FramePacingMode::ContinuousCapped { target_fps: 60 }),
-            ("capped:1", FramePacingMode::ContinuousCapped { target_fps: 1 }),
-            ("capped:120", FramePacingMode::ContinuousCapped { target_fps: 120 }),
-            ("capped:240", FramePacingMode::ContinuousCapped { target_fps: 240 }),
+            (
+                "capped",
+                FramePacingMode::ContinuousCapped { target_fps: 60 },
+            ),
+            (
+                "capped:1",
+                FramePacingMode::ContinuousCapped { target_fps: 1 },
+            ),
+            (
+                "capped:120",
+                FramePacingMode::ContinuousCapped { target_fps: 120 },
+            ),
+            (
+                "capped:240",
+                FramePacingMode::ContinuousCapped { target_fps: 240 },
+            ),
             ("uncapped", FramePacingMode::ContinuousUncapped),
             ("on-demand", FramePacingMode::OnDemand),
         ] {
@@ -132,7 +144,13 @@ mod tests {
             app.with_frame_pacing(FramePacingPolicyResource::on_demand());
             request.apply_to(&mut app).unwrap();
             app.prepare_windowed_frame_pacing();
-            assert_eq!(app.world().resource::<FramePacingPolicyResource>().unwrap().mode, expected);
+            assert_eq!(
+                app.world()
+                    .resource::<FramePacingPolicyResource>()
+                    .unwrap()
+                    .mode,
+                expected
+            );
             assert_eq!(
                 app.world()
                     .resource::<FramePacingRuntimeStateResource>()
@@ -158,10 +176,21 @@ mod tests {
             NativeHostLaunchOverrides::parse_option(
                 OsStr::new("--host-pacing=capped:144"),
                 &mut empty
-            ).unwrap().unwrap().frame_pacing(),
+            )
+            .unwrap()
+            .unwrap()
+            .frame_pacing(),
             Some(FramePacingPolicyResource::continuous_capped(144))
         );
-        for invalid in ["", "bogus", "capped:", "capped:0", "capped:241", "capped:-1", "capped:abc"] {
+        for invalid in [
+            "",
+            "bogus",
+            "capped:",
+            "capped:0",
+            "capped:241",
+            "capped:-1",
+            "capped:abc",
+        ] {
             assert!(invalid.parse::<NativeHostLaunchOverrides>().is_err());
         }
         assert!(
@@ -196,13 +225,25 @@ mod tests {
         let request: NativeHostLaunchOverrides = "uncapped".parse().unwrap();
         let mut headless = App::headless();
         assert!(request.apply_to(&mut headless).is_err());
-        assert!(headless.world().resource::<FramePacingPolicyResource>().is_err());
-        NativeHostLaunchOverrides::default().apply_to(&mut headless).unwrap();
+        assert!(
+            headless
+                .world()
+                .resource::<FramePacingPolicyResource>()
+                .is_err()
+        );
+        NativeHostLaunchOverrides::default()
+            .apply_to(&mut headless)
+            .unwrap();
 
         let mut sealed = App::new();
         sealed.prepare_lifecycle_for_execution().unwrap();
         assert!(request.apply_to(&mut sealed).is_err());
-        assert!(sealed.world().resource::<FramePacingPolicyResource>().is_err());
+        assert!(
+            sealed
+                .world()
+                .resource::<FramePacingPolicyResource>()
+                .is_err()
+        );
     }
 
     #[cfg(unix)]
@@ -219,7 +260,8 @@ mod tests {
             NativeHostLaunchOverrides::parse_option(
                 OsStr::new("--host-pacing"),
                 &mut [raw].into_iter()
-            ).is_err()
+            )
+            .is_err()
         );
     }
 }

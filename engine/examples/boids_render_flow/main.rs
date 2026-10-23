@@ -42,19 +42,23 @@ where
             Some("--species") if !species => species = true,
             Some("--evidence") if !evidence => evidence = true,
             Some("--species" | "--evidence") => {
-                bail!("duplicate Boids launch argument '{}'", arg.to_string_lossy())
+                bail!(
+                    "duplicate Boids launch argument '{}'",
+                    arg.to_string_lossy()
+                )
             }
             _ => {
-                if let Some(request) =
-                    NativeHostLaunchOverrides::parse_option(&arg, &mut args)?
-                {
+                if let Some(request) = NativeHostLaunchOverrides::parse_option(&arg, &mut args)? {
                     ensure!(
                         host.frame_pacing().is_none(),
                         "duplicate --host-pacing argument"
                     );
                     host = request;
                 } else {
-                    bail!("unexpected Boids launch argument '{}'", arg.to_string_lossy());
+                    bail!(
+                        "unexpected Boids launch argument '{}'",
+                        arg.to_string_lossy()
+                    );
                 }
             }
         }
@@ -165,8 +169,6 @@ mod tests {
         use std::os::unix::ffi::OsStringExt;
         let invalid = OsString::from_vec(vec![0xff]);
         assert!(parse_launch([invalid.clone()]).is_err());
-        assert!(
-            parse_launch([OsString::from("--host-pacing"), invalid]).is_err()
-        );
+        assert!(parse_launch([OsString::from("--host-pacing"), invalid]).is_err());
     }
 }
