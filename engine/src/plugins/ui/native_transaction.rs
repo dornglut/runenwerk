@@ -141,9 +141,13 @@ pub fn realize_requested_native_primary(world: &mut World) -> Result<bool> {
     )
 }
 
-/// Retire an original native window's selected recipient and its completed
-/// display mapping, then synchronously deny old gameplay held-key generations.
-/// This does not synthesize any RunenInput physical release.
+/// Retire a native recipient in the exclusive World and synchronously revoke
+/// old game-held keys without synthesizing a physical release.
+///
+/// Unlike the original Winit Host, this caller cannot cancel pinned native
+/// pointer/keyboard/IME translators. The old M13 scope stays quarantined:
+/// binding it or the retired window again requires actual framework shutdown
+/// via `unmount_retired_native_ui_slot`, not a replacement binding epoch.
 pub fn retire_native_input_recipient(world: &mut World, window: NativeWindowId) -> Result<bool> {
     let source = world
         .resource::<WinitInputAdapter>()
@@ -189,9 +193,11 @@ fn revoke_game_source(world: &mut World, source: runen_input::InputSourceId) -> 
     Ok(())
 }
 
-/// Shut down one previously native-enrolled slot only after retiring its
-/// original recipient. OS-owned streams must first be cancelled against the
-/// existing M13 scope; unmount cannot perform those native cancellations.
+/// Shut down one previously native-enrolled slot only after its original
+/// recipient has retired. A World-only retirement does not cancel Winit-owned
+/// streams: the old recipient remains quarantined until this *actual* M13
+/// shutdown returns the original closed scope and terminal retirement record.
+/// Live same-scope rebind instead requires verified native Host cancellation.
 pub fn unmount_retired_native_ui_slot(
     world: &mut World,
     slot: UiRuntimeSlotId,
@@ -222,17 +228,16 @@ pub fn unmount_retired_native_ui_slot(
         .unmount_retired_native(&NativeAppMutationPermit { _sealed: () }, slot)
         .map_err(|error| anyhow!("retired native slot {slot:?} shutdown failed: {error:?}"))?;
     if let Some(shutdown) = retirement.as_ref() {
-        // A World-only retirement cannot cancel original Winit translators.
-        // Keep its old slot/window quarantined until this real framework
-        // ScopeRetired terminal batch closes the previous M13 lifetime.
+        // Once the framework has truly shut down, its old visual paint must
+        // withdraw even if the separate old-recipient certificate is invalid.
+        // An error still leaves the recipient quarantined and fails closed.
+        world
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()?
+            .unbind(slot);
         world
             .resource_mut::<UiNativeInputRecipientsResource>()?
             .confirm_retired_slot_shutdown(slot, shutdown)
             .map_err(|error| anyhow!("native M13 shutdown certificate rejected: {error:?}"))?;
-        // Unbind also schedules exactly the existing renderer paint withdrawal.
-        world
-            .resource_mut::<UiRuntimePresentationAssociationsResource>()?
-            .unbind(slot);
     }
     Ok(retirement)
 }
