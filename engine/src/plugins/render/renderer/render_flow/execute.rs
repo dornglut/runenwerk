@@ -13,7 +13,7 @@ use super::{
 };
 use crate::plugins::render::{
     RenderGpuWorkOccurrenceId, RenderPassId, ResolvedRenderGpuWorkNode, RunenUiMixedWork,
-    prepare_render_gpu_frame_work, prepare_render_gpu_frame_work_with_mixed_ui,
+    prepare_render_gpu_frame_work_with_stats, prepare_render_gpu_frame_work_with_mixed_ui,
 };
 use anyhow::Context;
 use runen_gpu::{
@@ -124,6 +124,7 @@ impl Renderer {
         debug_config: &RenderDebugConfigResource,
         gpu_timing_capability: RenderGpuTimingCapability,
         composed_gpu_timing_capability: Option<RenderGpuTimingCapability>,
+        capture_graph_stats: bool,
     ) -> Result<RendererFrameTimings> {
         let mut timings = packet.prepare_timings;
         self.last_pass_timings.clear();
@@ -324,18 +325,16 @@ impl Renderer {
             .as_ref()
             .map(PreparedComposedGpuTiming::bracket);
         let gpu_graph_build_start = Instant::now();
-        let (graph, runenui_witnesses) = if batch.prepared_runenui.is_empty() {
-            (
-                prepare_render_gpu_frame_work(
-                    context,
-                    graph_label,
-                    nodes,
-                    &deterministic.fragments,
-                    &deterministic.imports,
-                    timing_bracket,
-                )?,
-                Vec::new(),
-            )
+        let (graph, runenui_witnesses, fragment_count) = if batch.prepared_runenui.is_empty() {
+            let prepared = prepare_render_gpu_frame_work_with_stats(
+                context,
+                graph_label,
+                nodes,
+                &deterministic.fragments,
+                &deterministic.imports,
+                timing_bracket,
+            )?;
+            (prepared.graph, Vec::new(), prepared.fragment_count)
         } else {
             let mut ui_occurrences = nodes
                 .iter()
@@ -372,8 +371,11 @@ impl Renderer {
                     present_node: authored.present_node.clone(),
                 })
                 .collect::<Vec<_>>();
-            (authored.graph, witnesses)
+            (authored.graph, witnesses, authored.fragment_count)
         };
+        if capture_graph_stats {
+            timings.graph_stats = Some(RenderGpuGraphStats::from_prepared(fragment_count, &graph));
+        }
         timings.gpu_graph_build_ms = gpu_graph_build_start.elapsed().as_secs_f32() * 1000.0;
         // Diagnostic-only, opt-in observation. RunenGPU remains the only retained
         // continuity and actual submission-admission authority. No gating here.
@@ -1293,6 +1295,7 @@ impl Renderer {
         debug_config: &RenderDebugConfigResource,
         gpu_timing_capability: RenderGpuTimingCapability,
         composed_gpu_timing_capability: Option<RenderGpuTimingCapability>,
+        capture_graph_stats: bool,
     ) -> Result<RendererFrameTimings> {
         let packet = self.prepare_packet(
             context,
@@ -1320,6 +1323,7 @@ impl Renderer {
             debug_config,
             gpu_timing_capability,
             composed_gpu_timing_capability,
+            capture_graph_stats,
         )
     }
 

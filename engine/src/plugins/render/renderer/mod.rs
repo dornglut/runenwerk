@@ -437,6 +437,30 @@ pub const DEFAULT_COMPUTE_SHADER: &str = r#"
 fn cs_main() {}
 "#;
 
+/// Counts for the exact prepared graph selected for one sampled submission.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RenderGpuGraphStats {
+    pub fragment_count: usize,
+    pub node_count: usize,
+    pub resource_access_count: usize,
+    pub dependency_count: usize,
+}
+
+impl RenderGpuGraphStats {
+    fn from_prepared(fragment_count: usize, graph: &runen_gpu::GpuPreparedWorkGraph) -> Self {
+        Self {
+            fragment_count,
+            node_count: graph.nodes().len(),
+            resource_access_count: graph
+                .nodes()
+                .iter()
+                .map(|node| node.node().accesses().len())
+                .sum(),
+            dependency_count: graph.dependencies().len(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub struct RendererFrameTimings {
     pub prepare_ui_ms: f32,
@@ -454,6 +478,8 @@ pub struct RendererFrameTimings {
     pub gpu_prepare_submission_ms: f32,
     /// Synchronous public G5 admission call only, not GPU completion.
     pub gpu_submit_prepared_ms: f32,
+    /// Counts are present only for frames selected by Render history sampling.
+    pub graph_stats: Option<RenderGpuGraphStats>,
     pub mesh_hot_path: MeshPrepareHotPath,
 }
 
@@ -1222,6 +1248,7 @@ impl Gfx {
             debug_config,
             gpu_timing_capability,
             composed_gpu_timing_capability,
+            composed_gpu_timing_requested,
         );
         // G5 rejection or later renderer error must not strand terminal
         // observations from unrelated, previously accepted GPU work.
