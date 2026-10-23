@@ -52,7 +52,7 @@ impl NativeHostLaunchOverrides {
                     "duplicate --host-pacing argument"
                 );
                 let mode = value.to_str().context("--host-pacing MODE must be UTF-8")?;
-                request.frame_pacing = Some(parse_pacing(mode)?);
+                request = mode.parse()?;
             } else {
                 remaining.push(arg);
             }
@@ -75,6 +75,16 @@ impl NativeHostLaunchOverrides {
             app.with_frame_pacing(policy);
         }
         Ok(())
+    }
+}
+
+impl std::str::FromStr for NativeHostLaunchOverrides {
+    type Err = anyhow::Error;
+
+    fn from_str(mode: &str) -> Result<Self> {
+        Ok(Self {
+            frame_pacing: Some(parse_pacing(mode)?),
+        })
     }
 }
 
@@ -107,6 +117,18 @@ mod tests {
 
     fn parse(args: &[&str]) -> Result<(NativeHostLaunchOverrides, Vec<OsString>)> {
         NativeHostLaunchOverrides::extract(args.iter().copied())
+    }
+
+    #[test]
+    fn typed_value_parser_validates_without_scanning_product_arguments() {
+        let request: NativeHostLaunchOverrides = "capped:144".parse().unwrap();
+        assert_eq!(
+            request.frame_pacing(),
+            Some(FramePacingPolicyResource::continuous_capped(144))
+        );
+        for mode in ["", "capped:0", "capped:241", "uncapped:120", "capped:bad"] {
+            assert!(mode.parse::<NativeHostLaunchOverrides>().is_err());
+        }
     }
 
     #[test]

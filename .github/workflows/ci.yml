@@ -74,18 +74,23 @@ jobs:
         with:
           cache-targets: false
 
+      # The remote GHA compiler cache has an account-level egress quota; required
+      # merge-group validation must remain executable without that service.
       - name: Set up Rust compiler cache
+        if: github.event_name != 'merge_group'
         uses: "Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba" # v0.0.11
         with:
           version: "v0.18.0"
 
-      - name: Enable Rust compiler cache
+      - name: Configure Rust compiler cache
         run: |
-          {
-            echo "CARGO_INCREMENTAL=0"
-            echo "SCCACHE_GHA_ENABLED=on"
-            echo "RUSTC_WRAPPER=sccache"
-          } >> "$GITHUB_ENV"
+          echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+          if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
+            {
+              echo "SCCACHE_GHA_ENABLED=on"
+              echo "RUSTC_WRAPPER=sccache"
+            } >> "$GITHUB_ENV"
+          fi
 
       - name: Install Mesa Vulkan fallback
         run: |
@@ -383,18 +388,23 @@ jobs:
         with:
           cache-targets: false
 
+      # The remote GHA compiler cache has an account-level egress quota; required
+      # merge-group validation must remain executable without that service.
       - name: Set up Rust compiler cache
+        if: github.event_name != 'merge_group'
         uses: "Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba" # v0.0.11
         with:
           version: "v0.18.0"
 
-      - name: Enable Rust compiler cache
+      - name: Configure Rust compiler cache
         run: |
-          {
-            echo "CARGO_INCREMENTAL=0"
-            echo "SCCACHE_GHA_ENABLED=on"
-            echo "RUSTC_WRAPPER=sccache"
-          } >> "$GITHUB_ENV"
+          echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+          if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
+            {
+              echo "SCCACHE_GHA_ENABLED=on"
+              echo "RUSTC_WRAPPER=sccache"
+            } >> "$GITHUB_ENV"
+          fi
 
       - name: Install Mesa Vulkan fallback
         run: |
