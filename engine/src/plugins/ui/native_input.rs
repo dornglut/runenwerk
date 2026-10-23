@@ -203,11 +203,17 @@ impl UiNativeInputRecipientsResource {
                 Err(NativeInputRecipientError::ConflictingRecipient)
             };
         }
-        if let Some(WindowRecipientBinding::Bound(existing)) =
-            self.bindings.get(&NativeWindowId::primary())
-            && existing.recipient != recipient
-        {
-            return Err(NativeInputRecipientError::ConflictingRecipient);
+        if let Some(binding) = self.bindings.get(&NativeWindowId::primary()) {
+            match binding {
+                WindowRecipientBinding::Bound(existing) if existing.recipient != recipient => {
+                    return Err(NativeInputRecipientError::ConflictingRecipient);
+                }
+                WindowRecipientBinding::Retired {
+                    input_settled: false,
+                    ..
+                } => return Err(NativeInputRecipientError::UnsettledNativeInput),
+                _ => {}
+            }
         }
         self.requested_primary = Some(recipient);
         Ok(())
@@ -960,6 +966,24 @@ mod tests {
             recipients.resolve(primary, &windows, &mut slots),
             Err(NativeInputRecipientError::MissingRecipient)
         );
+        // A new primary declaration must not strand the old runtime by
+        // acquiring a pending intent which blocks its required shutdown.
+        assert_eq!(
+            recipients.request_primary(NativeInputRecipient::LegacyNativeConsumer),
+            Err(NativeInputRecipientError::UnsettledNativeInput)
+        );
+        assert_eq!(recipients.requested_primary, None);
+        // A genuine terminal record from an unrelated mounted runtime is not
+        // authority to release this still-live original input scope.
+        let unrelated = mount(&mut slots, 74);
+        let other_shutdown = slots
+            .unmount_with_retirement(unrelated)
+            .expect("ordinary unselected runtime can shut down")
+            .expect("actual other M13 scope is retired");
+        assert_eq!(
+            recipients.confirm_retired_slot_shutdown(slot, &other_shutdown),
+            Err(NativeInputRecipientError::StaleSlot)
+        );
         // World-only retirement is not old-M13 settlement; a real framework
         // shutdown must happen before the old window admits another target.
         assert_eq!(
@@ -1201,6 +1225,16 @@ mod tests {
         assert_eq!(
             recipients.resolve(first, &windows, &mut slots),
             Err(NativeInputRecipientError::MissingRecipient)
+        );
+        assert_eq!(
+            recipients.bind(
+                second,
+                NativeInputRecipient::RunenUiSlot(slot),
+                &windows,
+                &mut slots,
+            ),
+            Err(NativeInputRecipientError::UnsettledNativeInput),
+            "a second native window may not transplant an unclosed original M13 scope"
         );
         // Even with zero UI mounts, retirement cannot auto-promote game input.
         assert!(
@@ -1646,7 +1680,26 @@ mod tests {
                 &windows,
                 &mut slots,
             ),
-            Ok(true)
+            Err(NativeInputRecipientError::UnsettledNativeInput),
+            "a detached physical target must not reuse the same unclosed M13 scope"
+        );
+        let shutdown =
+            crate::plugins::ui::native_transaction::test_retired_slot_teardown(&mut slots, slot)
+                .expect("retired UI scope can shut down")
+                .expect("real terminal M13 scope");
+        recipients
+            .confirm_retired_slot_shutdown(slot, &shutdown)
+            .expect("exact original scope retirement is terminal");
+        let replacement = mount(&mut slots, 302);
+        assert_eq!(
+            recipients.bind(
+                first,
+                NativeInputRecipient::RunenUiSlot(replacement),
+                &windows,
+                &mut slots,
+            ),
+            Ok(true),
+            "new mounted scope can bind after exact old scope shutdown"
         );
         assert!(matches!(
             recipients.displayed_pointer_input(
