@@ -516,7 +516,10 @@ fn retired_displayed_move_preserves_existing_pointer_until_exact_cancel() {
         .expect("same M13 owner")
         .input_ownership(fixture.slot)
         .expect("existing pointer remains canonical");
-    assert_eq!(still_active.pointers(), [pointer_before.clone()]);
+    assert_eq!(
+        still_active.pointers(),
+        std::slice::from_ref(&pointer_before)
+    );
     fixture
         .runner
         .cancel_native_ui_mouse(fixture.window)
