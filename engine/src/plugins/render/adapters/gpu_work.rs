@@ -475,7 +475,12 @@ pub(crate) fn prepare_render_gpu_frame_work(
     timing_bracket: Option<&RenderGpuFrameTimingBracket>,
 ) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
     prepare_render_gpu_frame_work_with_stats(
-        context, graph_label, nodes, producer_fragments, imports, timing_bracket,
+        context,
+        graph_label,
+        nodes,
+        producer_fragments,
+        imports,
+        timing_bracket,
     )
     .map(|prepared| prepared.graph)
 }
@@ -727,7 +732,8 @@ fn prepare_resolved_render_gpu_work(
     )?;
     let provisional_fragments =
         compose_frame_fragments(producer_fragments, &provisional.fragment, timing_bracket);
-    let provisional_graph = prepare_counted_graph(graph_label.clone(), provisional_fragments, Vec::new())?;
+    let provisional_graph =
+        prepare_counted_graph(graph_label.clone(), provisional_fragments, Vec::new())?;
     let provisional_occurrences =
         map_prepared_occurrences(&provisional_graph, &provisional.occurrence_nodes)?;
     let required_explicit_orders = normalize_control_orders(

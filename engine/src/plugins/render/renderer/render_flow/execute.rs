@@ -13,8 +13,8 @@ use super::{
 };
 use crate::plugins::render::{
     RenderGpuWorkOccurrenceId, RenderPassId, ResolvedRenderGpuWorkNode, RunenUiMixedWork,
-    prepare_render_gpu_frame_work, prepare_render_gpu_frame_work_with_stats,
-    prepare_render_gpu_frame_work_with_mixed_ui,
+    prepare_render_gpu_frame_work, prepare_render_gpu_frame_work_with_mixed_ui,
+    prepare_render_gpu_frame_work_with_stats,
 };
 use anyhow::Context;
 use runen_gpu::{

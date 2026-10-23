@@ -435,15 +435,45 @@ mod tests {
                 RenderGpuTimingCapability::UnavailableThisFrame,
             );
         }
-        assert_eq!(history.observation(RenderFrameObservationKey::new(2, 1))
-            .expect("first surface").cpu.renderer.graph_stats, Some(a));
-        assert_eq!(history.observation(RenderFrameObservationKey::new(2, 2))
-            .expect("second surface").cpu.renderer.graph_stats, Some(b));
-        assert_eq!(history.observation(RenderFrameObservationKey::new(4, 1))
-            .expect("no invented count").cpu.renderer.graph_stats, None);
-        assert_eq!(history.observation(RenderFrameObservationKey::new(2, 2))
-            .expect("second surface").prepare_epoch, 22);
-        assert!(history.observation(RenderFrameObservationKey::new(3, 1)).is_none());
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(2, 1))
+                .expect("first surface")
+                .cpu
+                .renderer
+                .graph_stats,
+            Some(a)
+        );
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(2, 2))
+                .expect("second surface")
+                .cpu
+                .renderer
+                .graph_stats,
+            Some(b)
+        );
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(4, 1))
+                .expect("no invented count")
+                .cpu
+                .renderer
+                .graph_stats,
+            None
+        );
+        assert_eq!(
+            history
+                .observation(RenderFrameObservationKey::new(2, 2))
+                .expect("second surface")
+                .prepare_epoch,
+            22
+        );
+        assert!(
+            history
+                .observation(RenderFrameObservationKey::new(3, 1))
+                .is_none()
+        );
         assert_eq!(history.drop_stats().sampled_out_observations, 1);
     }
 
