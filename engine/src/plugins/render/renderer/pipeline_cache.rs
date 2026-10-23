@@ -359,6 +359,76 @@ mod tests {
     }
 
     #[test]
+    fn cache_separates_selected_entry_points_and_valid_binding_refinements() {
+        let mut cache = FlowPipelineArtifactCache::default();
+        let source = cache
+            .admit_program_source(
+                GpuProgramSourceKey::new("test:entry-and-refinement").unwrap(),
+                0,
+                r#"
+@group(0) @binding(0)
+var<storage, read> input_values: array<u32>;
+
+@group(0) @binding(1)
+var<storage, read_write> output_values: array<u32>;
+
+@compute @workgroup_size(1)
+fn first() {
+    output_values[0] = input_values[0];
+}
+
+@compute @workgroup_size(1)
+fn second() {
+    output_values[0] = input_values[0] + 1u;
+}
+"#,
+                GpuProgramSourceProvenance::new("entry-and-refinement", None).unwrap(),
+            )
+            .unwrap();
+        let first = GpuEntryPointName::new("first").unwrap();
+        let second = GpuEntryPointName::new("second").unwrap();
+        let first_program = cache
+            .get_or_validate_program(&source, &[first.clone()], &[], || {
+                GpuProgramDescriptor::new(source.clone(), [first.clone()], [])
+            })
+            .unwrap();
+        let second_program = cache
+            .get_or_validate_program(&source, &[second.clone()], &[], || {
+                GpuProgramDescriptor::new(source.clone(), [second.clone()], [])
+            })
+            .unwrap();
+        assert!(!first_program.is_same_record(&second_program));
+
+        let dynamic = GpuBindingLayoutRefinement::new(
+            runen_gpu::GpuBindingKey::try_new(0, 0).unwrap(),
+        )
+        .with_dynamic_offset(true);
+        let refined = cache
+            .get_or_validate_program(&source, &[first.clone()], &[dynamic.clone()], || {
+                GpuProgramDescriptor::new(source.clone(), [first.clone()], [dynamic.clone()])
+            })
+            .unwrap();
+        assert!(!refined.is_same_record(&first_program));
+        assert!(
+            refined
+                .interface()
+                .binding(runen_gpu::GpuBindingKey::try_new(0, 0).unwrap())
+                .unwrap()
+                .kind()
+                .uses_dynamic_offset()
+        );
+        let invalid = vec![dynamic.clone(), dynamic];
+        assert!(
+            cache
+                .get_or_validate_program(&source, &[first.clone()], &invalid, || {
+                    GpuProgramDescriptor::new(source.clone(), [first], invalid.clone())
+                })
+                .is_err()
+        );
+        assert_eq!(cache.validated_programs.len(), 3);
+    }
+
+    #[test]
     fn batch_program_cache_is_bounded_and_does_not_pin_retired_sources() {
         let mut cache = FlowPipelineArtifactCache::default();
         let entry = GpuEntryPointName::new("cs_main").unwrap();
