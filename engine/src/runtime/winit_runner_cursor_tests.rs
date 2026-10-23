@@ -279,6 +279,24 @@ fn route_button(
         .expect("original button observation is routed or exactly withheld");
 }
 
+fn admit_and_route_button(
+    fixture: &mut NativeCursorFixture,
+    state: winit::event::ElementState,
+    button: winit::event::MouseButton,
+) {
+    let (context, disposition) = fixture
+        .runner
+        .admit_native_mouse_button(fixture.window, fixture.backend_device, state, button)
+        .expect("original native mouse callback admission");
+    if disposition == NativeMouseButtonDisposition::Original {
+        let epoch = native_binding_epoch(fixture);
+        fixture
+            .runner
+            .route_ui_mouse_button(fixture.window, fixture.slot, epoch, context, state, button)
+            .expect("admitted native mouse button reaches the pinned translator");
+    }
+}
+
 fn pointer_ownership(fixture: &mut NativeCursorFixture) -> runenui_runtime::InputOwnershipSnapshot {
     fixture
         .runner
@@ -299,6 +317,747 @@ fn activation_count(fixture: &NativeCursorFixture) -> usize {
         .expect("same M13 owner")
         .observe_app::<NativeCursorProbe, _>(fixture.slot, |app| *app.state())
         .expect("observe actual activation probe state")
+}
+
+#[test]
+fn close_intent_cancels_pinned_mouse_lifetime_before_vetoable_close() {
+    let mut fixture = native_cursor_fixture();
+    let position = fixture.button_position;
+    route_cursor(&mut fixture, position);
+    admit_and_route_button(
+        &mut fixture,
+        winit::event::ElementState::Pressed,
+        winit::event::MouseButton::Left,
+    );
+    assert_eq!(activation_count(&fixture), 0);
+    assert!(!pointer_ownership(&mut fixture).pointers().is_empty());
+
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("OS close intent remains vetoable");
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("a repeated OS close remains an original pending occurrence");
+
+    assert!(pointer_ownership(&mut fixture).pointers().is_empty());
+    assert!(
+        fixture.runner.native_ui_mice.contains_key(&fixture.window),
+        "the same translator must survive cancellation to suppress the later physical Up"
+    );
+    fixture
+        .runner
+        .apply_pending_close_window_event(
+            fixture.window,
+            WindowEvent::MouseInput {
+                device_id: fixture.backend_device,
+                state: winit::event::ElementState::Released,
+                button: winit::event::MouseButton::Left,
+            },
+        )
+        .expect("pending physical Up is neutral-only and nonfatal");
+    assert!(pointer_ownership(&mut fixture).pointers().is_empty());
+
+    fixture
+        .runner
+        .state
+        .world
+        .resource_mut::<WindowStateRegistryResource>()
+        .expect("window state owner")
+        .record_mut(fixture.window)
+        .expect("same native window")
+        .veto_close();
+    route_cursor(&mut fixture, position);
+    admit_and_route_button(
+        &mut fixture,
+        winit::event::ElementState::Pressed,
+        winit::event::MouseButton::Left,
+    );
+    admit_and_route_button(
+        &mut fixture,
+        winit::event::ElementState::Released,
+        winit::event::MouseButton::Left,
+    );
+    assert_eq!(
+        activation_count(&fixture),
+        1,
+        "a fresh post-veto click activates"
+    );
+}
+
+#[test]
+fn rejected_close_preflight_does_not_cancel_pinned_pointer_or_mutate_window() {
+    let mut fixture = native_cursor_fixture();
+    let position = fixture.button_position;
+    route_cursor(&mut fixture, position);
+    admit_and_route_button(
+        &mut fixture,
+        winit::event::ElementState::Pressed,
+        winit::event::MouseButton::Left,
+    );
+    let journal = fixture
+        .runner
+        .state
+        .world
+        .resource_mut::<PlatformWindowEventQueueResource>()
+        .expect("native event journal");
+    while journal.events().len() < 4096 {
+        journal
+            .publish(PlatformWindowEvent::new(
+                fixture.window,
+                PlatformEvent::RedrawRequested,
+            ))
+            .expect("fill the bounded native event journal");
+    }
+    let before_lifecycle = fixture
+        .runner
+        .state
+        .world
+        .resource::<WindowStateRegistryResource>()
+        .expect("window state owner")
+        .record(fixture.window)
+        .expect("created window")
+        .lifecycle_state;
+
+    assert!(
+        fixture
+            .runner
+            .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+            .is_err()
+    );
+
+    assert!(!pointer_ownership(&mut fixture).pointers().is_empty());
+    assert_eq!(
+        fixture
+            .runner
+            .state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .expect("window state owner")
+            .record(fixture.window)
+            .expect("same window")
+            .lifecycle_state,
+        before_lifecycle
+    );
+}
+
+#[test]
+fn pending_mouse_down_stays_suppressed_through_veto_and_duplicate_press() {
+    let mut fixture = native_cursor_fixture();
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("close intent begins");
+    fixture
+        .runner
+        .apply_pending_close_window_event(
+            fixture.window,
+            WindowEvent::MouseInput {
+                device_id: fixture.backend_device,
+                state: winit::event::ElementState::Pressed,
+                button: winit::event::MouseButton::Left,
+            },
+        )
+        .expect("pending Down remains neutral and tracked by the pinned adapter");
+    fixture
+        .runner
+        .state
+        .world
+        .resource_mut::<WindowStateRegistryResource>()
+        .expect("window state owner")
+        .record_mut(fixture.window)
+        .expect("same native window")
+        .veto_close();
+
+    let position = fixture.button_position;
+    route_cursor(&mut fixture, position);
+    let (_, duplicate) = fixture
+        .runner
+        .admit_native_mouse_button(
+            fixture.window,
+            fixture.backend_device,
+            winit::event::ElementState::Pressed,
+            winit::event::MouseButton::Left,
+        )
+        .expect("duplicate Down remains admitted to neutral state");
+    assert_eq!(duplicate, NativeMouseButtonDisposition::DuplicateDown);
+    admit_and_route_button(
+        &mut fixture,
+        winit::event::ElementState::Released,
+        winit::event::MouseButton::Left,
+    );
+    assert_eq!(activation_count(&fixture), 0);
+    admit_and_route_button(
+        &mut fixture,
+        winit::event::ElementState::Pressed,
+        winit::event::MouseButton::Left,
+    );
+    admit_and_route_button(
+        &mut fixture,
+        winit::event::ElementState::Released,
+        winit::event::MouseButton::Left,
+    );
+    assert_eq!(activation_count(&fixture), 1);
+}
+
+#[test]
+fn pending_button_from_new_input_context_cannot_be_recreated_as_a_fresh_ui_down() {
+    use runen_input::{InputContext, InputDeviceId, InputSourceId};
+
+    let mut fixture = native_cursor_fixture();
+    let position = fixture.button_position;
+    route_cursor(&mut fixture, position);
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("close cancels the original cursor lifetime");
+    // Exercise the normalized source/device seam because winit::DeviceId has no
+    // public constructor for a second backend identity in a headless test.
+    let context_b = InputContext::new(InputSourceId::new(9001), Some(InputDeviceId::new(9002)));
+    fixture
+        .runner
+        .apply_pending_close_mouse_button(
+            fixture.window,
+            context_b,
+            fixture.backend_device,
+            winit::event::ElementState::Pressed,
+            winit::event::MouseButton::Left,
+        )
+        .expect("pending B Down remains neutral physical evidence");
+    fixture
+        .runner
+        .state
+        .world
+        .resource_mut::<WindowStateRegistryResource>()
+        .expect("window state owner")
+        .record_mut(fixture.window)
+        .expect("same native window")
+        .veto_close();
+
+    let neutral_position = runen_input::Point2::new(
+        position.x as f32,
+        position.y as f32,
+        runen_input::CoordinateSpace::WindowPhysicalPixels,
+    );
+    fixture
+        .runner
+        .apply_event_group_for_recipient(
+            fixture.window,
+            [PlatformEvent::CursorMoved {
+                context: context_b,
+                position: neutral_position,
+            }],
+            None,
+        )
+        .expect("B cursor is admitted to neutral state");
+    let epoch = native_binding_epoch(&mut fixture);
+    fixture
+        .runner
+        .route_ui_cursor_moved(
+            fixture.window,
+            fixture.slot,
+            epoch,
+            fixture.backend_device,
+            context_b,
+            position,
+        )
+        .expect("B cursor creates its current pinned translator lifetime");
+    let (_, duplicate) = fixture
+        .runner
+        .admit_native_mouse_button_observation(
+            fixture.window,
+            context_b,
+            winit::event::ElementState::Pressed,
+            winit::event::MouseButton::Left,
+        )
+        .expect("neutral held state classifies repeated B Down");
+    assert_eq!(duplicate, NativeMouseButtonDisposition::DuplicateDown);
+
+    let (context, up) = fixture
+        .runner
+        .admit_native_mouse_button_observation(
+            fixture.window,
+            context_b,
+            winit::event::ElementState::Released,
+            winit::event::MouseButton::Left,
+        )
+        .expect("authentic B Up remains admitted");
+    assert_eq!(up, NativeMouseButtonDisposition::Original);
+    let epoch = native_binding_epoch(&mut fixture);
+    fixture
+        .runner
+        .route_ui_mouse_button(
+            fixture.window,
+            fixture.slot,
+            epoch,
+            context,
+            winit::event::ElementState::Released,
+            winit::event::MouseButton::Left,
+        )
+        .expect("unmatched fresh-translator Up is suppressed by the pinned adapter");
+    assert_eq!(activation_count(&fixture), 0);
+
+    for state in [
+        winit::event::ElementState::Pressed,
+        winit::event::ElementState::Released,
+    ] {
+        let (context, disposition) = fixture
+            .runner
+            .admit_native_mouse_button_observation(
+                fixture.window,
+                context_b,
+                state,
+                winit::event::MouseButton::Left,
+            )
+            .expect("fresh B click remains original neutral evidence");
+        assert_eq!(disposition, NativeMouseButtonDisposition::Original);
+        let epoch = native_binding_epoch(&mut fixture);
+        fixture
+            .runner
+            .route_ui_mouse_button(
+                fixture.window,
+                fixture.slot,
+                epoch,
+                context,
+                state,
+                winit::event::MouseButton::Left,
+            )
+            .expect("fresh B click reaches the same pinned UI adapter");
+    }
+    assert_eq!(activation_count(&fixture), 1);
+}
+
+#[test]
+fn pending_geometry_keeps_cancelled_mouse_bookkeeping_for_veto() {
+    let mut fixture = native_cursor_fixture();
+    let position = fixture.button_position;
+    route_cursor(&mut fixture, position);
+    route_button(
+        &mut fixture,
+        winit::event::ElementState::Pressed,
+        winit::event::MouseButton::Left,
+    );
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("close intent begins");
+    fixture
+        .runner
+        .apply_native_geometry_change(
+            fixture.window,
+            PlatformEvent::Resized {
+                width: 1024,
+                height: 768,
+            },
+        )
+        .expect("pending resize remains on the native geometry path");
+    fixture
+        .runner
+        .apply_native_geometry_change(
+            fixture.window,
+            PlatformEvent::ScaleFactorChanged {
+                scale_factor: 1.25,
+                width: 1280,
+                height: 960,
+            },
+        )
+        .expect("pending DPI change remains on the native geometry path");
+    fixture
+        .runner
+        .state
+        .world
+        .resource_mut::<WindowStateRegistryResource>()
+        .expect("window state owner")
+        .record_mut(fixture.window)
+        .expect("same native window")
+        .veto_close();
+
+    route_cursor(&mut fixture, position);
+    route_button(
+        &mut fixture,
+        winit::event::ElementState::Pressed,
+        winit::event::MouseButton::Left,
+    );
+    route_button(
+        &mut fixture,
+        winit::event::ElementState::Released,
+        winit::event::MouseButton::Left,
+    );
+    assert_eq!(activation_count(&fixture), 0);
+}
+
+#[test]
+fn pending_focus_loss_updates_neutral_lifecycle_without_routing_ui() {
+    use runenui_core::KeyModifiers;
+
+    let mut fixture = native_cursor_fixture();
+    fixture
+        .runner
+        .native_ui_modifiers
+        .insert(fixture.window, KeyModifiers::NONE.with_shift());
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("close intent begins");
+    fixture
+        .runner
+        .apply_pending_close_window_event(fixture.window, WindowEvent::Focused(false))
+        .expect("focus loss remains neutral and nonfatal while close is pending");
+    assert!(
+        !fixture
+            .runner
+            .state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .expect("window state owner")
+            .record(fixture.window)
+            .expect("same native window")
+            .focused
+    );
+    assert!(
+        !fixture
+            .runner
+            .native_ui_modifiers
+            .contains_key(&fixture.window)
+    );
+}
+
+#[test]
+fn rejected_pending_focus_preflight_preserves_modifier_observation() {
+    use runenui_core::KeyModifiers;
+
+    let mut fixture = native_cursor_fixture();
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("close intent begins");
+    let modifiers = KeyModifiers::NONE.with_shift();
+    fixture
+        .runner
+        .native_ui_modifiers
+        .insert(fixture.window, modifiers);
+    let journal = fixture
+        .runner
+        .state
+        .world
+        .resource_mut::<PlatformWindowEventQueueResource>()
+        .expect("native event journal");
+    while journal.events().len() < 4096 {
+        journal
+            .publish(PlatformWindowEvent::new(
+                fixture.window,
+                PlatformEvent::RedrawRequested,
+            ))
+            .expect("fill the bounded native event journal");
+    }
+
+    assert!(
+        fixture
+            .runner
+            .apply_pending_close_window_event(fixture.window, WindowEvent::Focused(false))
+            .is_err()
+    );
+    assert_eq!(
+        fixture.runner.native_ui_modifiers.get(&fixture.window),
+        Some(&modifiers),
+        "failed original focus-loss admission cannot erase modifier truth"
+    );
+}
+
+#[test]
+fn close_intent_revokes_held_game_keyboard_permission_immediately() {
+    use crate::plugins::{ActionState, action};
+    use runen_input::{
+        DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
+        PhysicalKeyIdentity,
+    };
+
+    let mut fixture = native_cursor_fixture();
+    fixture
+        .runner
+        .state
+        .world
+        .insert_resource(ActionState::new());
+    fixture
+        .runner
+        .apply_event_for_native_window(
+            fixture.window,
+            PlatformEvent::KeyboardInput {
+                context: fixture.source,
+                input: KeyboardInput {
+                    physical_key: PhysicalKeyIdentity::code("KeyW"),
+                    logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                    location: KeyLocation::Standard,
+                    state: DigitalState::Pressed,
+                    repeat: false,
+                    origin: ObservationOrigin::SourceReport,
+                },
+            },
+        )
+        .expect("original gameplay key Down is admitted");
+    let mut actions = fixture
+        .runner
+        .state
+        .world
+        .remove_resource::<ActionState>()
+        .expect("ActionState owner");
+    actions.project(
+        fixture
+            .runner
+            .state
+            .world
+            .resource::<InputState>()
+            .expect("physical input owner"),
+    );
+    fixture.runner.state.world.insert_resource(actions);
+    assert!(
+        fixture
+            .runner
+            .state
+            .world
+            .resource::<ActionState>()
+            .expect("game permission owner")
+            .action_down(action::WORLD_MOVE_UP)
+    );
+
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("close intent revokes held gameplay permission");
+    assert!(
+        !fixture
+            .runner
+            .state
+            .world
+            .resource::<ActionState>()
+            .expect("same game permission owner")
+            .action_down(action::WORLD_MOVE_UP)
+    );
+    assert!(
+        fixture
+            .runner
+            .state
+            .world
+            .resource::<InputState>()
+            .expect("neutral input remains authoritative")
+            .keyboard_down_generation_in(fixture.source, &PhysicalKeyIdentity::code("KeyW"))
+            .is_some()
+    );
+}
+
+#[test]
+fn pending_keyboard_down_and_up_preserve_neutral_truth_without_game_grant() {
+    use crate::plugins::{ActionState, action};
+    use runen_input::{
+        DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
+        PhysicalKeyIdentity,
+    };
+
+    let mut fixture = native_cursor_fixture();
+    fixture
+        .runner
+        .state
+        .world
+        .insert_resource(ActionState::new());
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("close intent begins");
+    let key = PhysicalKeyIdentity::code("KeyW");
+    let make_input = |state| KeyboardInput {
+        physical_key: key.clone(),
+        logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+        location: KeyLocation::Standard,
+        state,
+        repeat: false,
+        origin: ObservationOrigin::SourceReport,
+    };
+    fixture
+        .runner
+        .apply_pending_close_keyboard_observation(
+            fixture.window,
+            fixture.source,
+            make_input(DigitalState::Pressed),
+        )
+        .expect("pending Down is neutral-only and denied for gameplay");
+    let mut actions = fixture
+        .runner
+        .state
+        .world
+        .remove_resource::<ActionState>()
+        .expect("same game permission owner");
+    actions.project(
+        fixture
+            .runner
+            .state
+            .world
+            .resource::<InputState>()
+            .expect("original physical input owner"),
+    );
+    fixture.runner.state.world.insert_resource(actions);
+    assert!(
+        fixture
+            .runner
+            .state
+            .world
+            .resource::<InputState>()
+            .expect("neutral input owner")
+            .keyboard_down_generation_in(fixture.source, &key)
+            .is_some()
+    );
+    assert!(
+        !fixture
+            .runner
+            .state
+            .world
+            .resource::<ActionState>()
+            .expect("game permission owner")
+            .action_down(action::WORLD_MOVE_UP)
+    );
+    fixture
+        .runner
+        .state
+        .world
+        .resource_mut::<WindowStateRegistryResource>()
+        .expect("window state owner")
+        .record_mut(fixture.window)
+        .expect("same native window")
+        .veto_close();
+    let mut actions = fixture
+        .runner
+        .state
+        .world
+        .remove_resource::<ActionState>()
+        .expect("same game permission owner after veto");
+    actions.project(
+        fixture
+            .runner
+            .state
+            .world
+            .resource::<InputState>()
+            .expect("original physical input remains held"),
+    );
+    fixture.runner.state.world.insert_resource(actions);
+    assert!(
+        !fixture
+            .runner
+            .state
+            .world
+            .resource::<ActionState>()
+            .expect("veto does not restore old game permission")
+            .action_down(action::WORLD_MOVE_UP)
+    );
+    fixture
+        .runner
+        .apply_pending_close_keyboard_observation(
+            fixture.window,
+            fixture.source,
+            make_input(DigitalState::Released),
+        )
+        .expect("pending Up remains original neutral evidence");
+    assert!(
+        fixture
+            .runner
+            .state
+            .world
+            .resource::<InputState>()
+            .expect("same neutral input owner")
+            .keyboard_down_generation_in(fixture.source, &key)
+            .is_none()
+    );
+}
+
+#[test]
+fn approved_close_retires_recipient_then_original_source() {
+    let mut fixture = native_cursor_fixture();
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("close intent begins");
+    fixture
+        .runner
+        .state
+        .world
+        .resource_mut::<WindowStateRegistryResource>()
+        .expect("window state owner")
+        .record_mut(fixture.window)
+        .expect("same native window")
+        .approve_close();
+    assert!(
+        fixture
+            .runner
+            .retire_native_input_recipient(fixture.window)
+            .expect("approved close retires the pinned recipient")
+    );
+    assert!(
+        fixture
+            .runner
+            .retire_window_input_source(fixture.window)
+            .expect("approved close retires the original neutral source")
+    );
+    assert_eq!(
+        fixture
+            .runner
+            .native_input()
+            .window_source_context(fixture.window),
+        None
+    );
+}
+
+#[test]
+fn approved_close_does_not_match_pending_lane_and_inactive_recipient_stays_strict() {
+    let mut fixture = native_cursor_fixture();
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("close intent begins");
+    fixture
+        .runner
+        .state
+        .world
+        .resource_mut::<WindowStateRegistryResource>()
+        .expect("window state owner")
+        .record_mut(fixture.window)
+        .expect("same native window")
+        .approve_close();
+    assert!(!fixture.runner.has_exact_pending_close(fixture.window));
+    let error = fixture
+        .runner
+        .native_input_recipient(fixture.window)
+        .expect_err("approved close recipient lookup remains inactive");
+    assert_eq!(
+        error.downcast_ref::<NativeInputRecipientError>(),
+        Some(&NativeInputRecipientError::InactiveWindow)
+    );
+}
+
+#[test]
+fn vetoable_close_preserves_current_modifiers_until_pending_release_observed() {
+    use runenui_core::KeyModifiers;
+
+    let mut fixture = native_cursor_fixture();
+    fixture
+        .runner
+        .native_ui_modifiers
+        .insert(fixture.window, KeyModifiers::NONE.with_shift());
+    fixture
+        .runner
+        .apply_event_for_native_window(fixture.window, PlatformEvent::CloseRequested)
+        .expect("close intent is vetoable and preserves modifier authority");
+    assert_eq!(
+        fixture.runner.native_ui_modifiers.get(&fixture.window),
+        Some(&KeyModifiers::NONE.with_shift())
+    );
+
+    fixture
+        .runner
+        .apply_pending_close_modifiers(fixture.window, KeyModifiers::NONE);
+    assert_eq!(
+        fixture.runner.native_ui_modifiers.get(&fixture.window),
+        Some(&KeyModifiers::NONE),
+        "an observed release updates the existing modifier owner during close policy"
+    );
 }
 
 #[test]

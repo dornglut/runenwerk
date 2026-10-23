@@ -373,6 +373,14 @@ impl InputState {
         self.neutral.pointer_button_down_anywhere(button)
     }
 
+    pub(crate) fn pointer_button_down_in(
+        &self,
+        context: InputContext,
+        button: PointerButton,
+    ) -> bool {
+        self.neutral.pointer_button_down_in(context, button)
+    }
+
     pub(crate) fn absolute_pointer_position_for_source(
         &self,
         source: InputSourceId,

@@ -240,6 +240,14 @@ Set `RUST_LOG=engine.runtime.input=trace` to retain the native input owner's
 withholding and failure diagnostics on stderr. The example enables tracing only
 when this variable is set; diagnostics do not grant input permission.
 
+A native close intent cancels the current UI gesture before product close policy
+approves or vetoes it. Input received while that decision is pending remains
+neutral physical evidence without UI, Editor or game permission. A veto does
+not restore a cancelled gesture or held gameplay grant; recovery requires a
+genuine release and new press. Focus, modifiers, resize/DPI and repeated close
+callbacks must preserve this boundary. Focused Engine tests cover these pending
+and veto cases; they do not replace original OS interaction evidence.
+
 After the requested completion count, the example removes its flow, requires
 all observed accepted frame submissions to drain within 15 seconds, observes
 three seconds of idle without new GPU submissions, recreates the flow, requires

@@ -210,6 +210,12 @@ struct NativeUiTouchTranslator {
     touch: TouchInputState,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum NativeMouseButtonDisposition {
+    Original,
+    DuplicateDown,
+}
+
 impl NativeUiTouchTranslator {
     /// A rejected native transition does not mutate the canonical contact
     /// table or the backend membership index. One device's duplicate/orphan
@@ -488,7 +494,11 @@ impl WinitRunner {
             .reserve_native_group(std::slice::from_ref(&event))?;
         // This synchronous callback cannot admit another original event
         // between this reservation and the actual canonical journal commit.
-        let mouse = self.cancel_native_ui_mouse(window);
+        let mouse = if self.has_exact_pending_close(window) {
+            Ok(())
+        } else {
+            self.cancel_native_ui_mouse(window)
+        };
         let touch = self.cancel_native_ui_touch(window);
         self.apply_event_for_native_window(window, event)?;
         mouse.and(touch)
@@ -2630,7 +2640,289 @@ impl WinitRunner {
         native_window_id: NativeWindowId,
         event: PlatformEvent,
     ) -> Result<()> {
+        if matches!(event, PlatformEvent::CloseRequested) {
+            return self.apply_native_close_intent(native_window_id);
+        }
         self.apply_event_group(native_window_id, [event])
+    }
+
+    /// A vetoable close ends the current UI gesture immediately. Reserve the
+    /// original close observation before deriving any framework cancellation,
+    /// then retain the mouse adapter so a later physical Up stays suppressed.
+    fn apply_native_close_intent(&mut self, window: NativeWindowId) -> Result<()> {
+        self.state
+            .world
+            .resource::<WindowStateRegistryResource>()?
+            .record(window)
+            .context("native close intent targets an unknown window")?;
+        if self.has_exact_pending_close(window) {
+            return self.apply_event_group(window, [PlatformEvent::CloseRequested]);
+        }
+        self.state
+            .world
+            .resource_mut::<PlatformWindowEventQueueResource>()?
+            .reserve_native_group(&[PlatformEvent::CloseRequested])?;
+
+        let mouse = if let Some(mut lifetime) = self.native_ui_mice.remove(&window) {
+            let result = self.cancel_native_ui_mouse_lifetime(window, &mut lifetime);
+            self.native_ui_mice.insert(window, lifetime);
+            result
+        } else {
+            Ok(())
+        };
+        let touch = self.cancel_native_ui_touch(window);
+        let mut cancellation = mouse.and(touch);
+        let retained_modifiers = self.native_ui_modifiers.get(&window).copied();
+        let recipient_cancellation = match self.native_input_recipient(window) {
+            Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
+                let keys = self.cancel_native_ui_keyboard(window, slot);
+                let composition = self.route_ui_ime_finish(slot, true);
+                keys.and(composition)
+            }
+            Ok((NativeInputRecipient::LegacyNativeConsumer, _)) => Ok(()),
+            Err(error)
+                if error.downcast_ref::<NativeInputRecipientError>()
+                    == Some(&NativeInputRecipientError::MissingRecipient) =>
+            {
+                Ok(())
+            }
+            Err(error) => Err(error),
+        };
+        if cancellation.is_ok() {
+            cancellation = recipient_cancellation;
+        }
+        if let Some(modifiers) = retained_modifiers {
+            self.native_ui_modifiers.insert(window, modifiers);
+        }
+        let revoke = self
+            .native_input()
+            .window_source_context(window)
+            .map(|context| self.revoke_native_game_keyboard_source(context.source))
+            .unwrap_or(Ok(()));
+        self.apply_event_group(window, [PlatformEvent::CloseRequested])?;
+        cancellation.and(revoke)
+    }
+
+    fn has_exact_pending_close(&self, window: NativeWindowId) -> bool {
+        self.state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .ok()
+            .and_then(|windows| windows.record(window))
+            .is_some_and(|record| {
+                record.close_intent_pending
+                    && !record.close_requested
+                    && record.lifecycle_state == NativeWindowLifecycleState::CloseIntentPending
+            })
+    }
+
+    /// Keep original physical evidence flowing while product policy considers
+    /// a close veto. Pending callbacks have no UI or legacy gameplay recipient.
+    fn apply_pending_close_window_event(
+        &mut self,
+        window: NativeWindowId,
+        event: WindowEvent,
+    ) -> Result<()> {
+        match event {
+            WindowEvent::KeyboardInput {
+                device_id,
+                event,
+                is_synthetic,
+            } => {
+                let context = self.native_input_mut().window_context(window, device_id)?;
+                let input = keyboard_input(&event, is_synthetic);
+                self.apply_pending_close_keyboard_observation(window, context, input)
+            }
+            WindowEvent::CursorMoved {
+                device_id,
+                position,
+            } => {
+                let context = self.native_input_mut().window_context(window, device_id)?;
+                self.apply_event_group_for_recipient(
+                    window,
+                    [PlatformEvent::CursorMoved {
+                        context,
+                        position: cursor_position(position),
+                    }],
+                    None,
+                )
+            }
+            WindowEvent::MouseWheel {
+                device_id,
+                delta,
+                phase,
+            } => {
+                let context = self.native_input_mut().window_context(window, device_id)?;
+                self.apply_event_group_for_recipient(
+                    window,
+                    [PlatformEvent::MouseWheel {
+                        context,
+                        input: scroll_input(delta, phase),
+                    }],
+                    None,
+                )
+            }
+            WindowEvent::MouseInput {
+                device_id,
+                state,
+                button,
+            } => {
+                let context = self.native_input_mut().window_context(window, device_id)?;
+                self.apply_pending_close_mouse_button(window, context, device_id, state, button)
+            }
+            WindowEvent::Touch(touch) => {
+                let context = self
+                    .native_input_mut()
+                    .window_context(window, touch.device_id)?;
+                self.apply_event_group_for_recipient(
+                    window,
+                    [PlatformEvent::Touch {
+                        context,
+                        input: contact_input(touch),
+                    }],
+                    None,
+                )
+            }
+            WindowEvent::Ime(Ime::Commit(text)) if !text.is_empty() => self
+                .apply_event_group_for_recipient(window, [PlatformEvent::TextInput { text }], None),
+            WindowEvent::Focused(false) => {
+                self.preflight_native_focus_loss(window)?;
+                self.native_ui_modifiers.remove(&window);
+                let Some(context) = self.native_input().window_source_context(window) else {
+                    return self.apply_event_group_for_recipient(
+                        window,
+                        [PlatformEvent::Focused { focused: false }],
+                        None,
+                    );
+                };
+                self.apply_event_group_for_recipient(
+                    window,
+                    [
+                        PlatformEvent::Focused { focused: false },
+                        PlatformEvent::InputContinuityLost {
+                            context,
+                            loss: ContinuityLoss::Source,
+                        },
+                    ],
+                    None,
+                )
+            }
+            WindowEvent::Focused(true) => self.apply_event_group_for_recipient(
+                window,
+                [PlatformEvent::Focused { focused: true }],
+                None,
+            ),
+            WindowEvent::ModifiersChanged(modifiers) => {
+                self.apply_pending_close_modifiers(
+                    window,
+                    translate_native_ui_modifiers(modifiers.state()),
+                );
+                Ok(())
+            }
+            WindowEvent::Ime(_) | WindowEvent::CursorLeft { .. } => Ok(()),
+            _ => Ok(()),
+        }
+    }
+
+    fn apply_pending_close_modifiers(&mut self, window: NativeWindowId, modifiers: KeyModifiers) {
+        self.native_ui_modifiers.insert(window, modifiers);
+    }
+
+    /// Admit the normalized physical button observation and classify repeated
+    /// Down against neutral held state before UI translation can be recreated.
+    fn admit_native_mouse_button(
+        &mut self,
+        window: NativeWindowId,
+        device_id: winit::event::DeviceId,
+        state: ElementState,
+        button: MouseButton,
+    ) -> Result<(InputContext, NativeMouseButtonDisposition)> {
+        let context = self.native_input_mut().window_context(window, device_id)?;
+        self.admit_native_mouse_button_observation(window, context, state, button)
+    }
+
+    fn admit_native_mouse_button_observation(
+        &mut self,
+        window: NativeWindowId,
+        context: InputContext,
+        state: ElementState,
+        button: MouseButton,
+    ) -> Result<(InputContext, NativeMouseButtonDisposition)> {
+        let input = pointer_button_input(state, button);
+        let duplicate_down = state == ElementState::Pressed
+            && self
+                .state
+                .world
+                .resource::<InputState>()
+                .context("native mouse callback lacks original physical input owner")?
+                .pointer_button_down_in(context, input.button);
+        self.apply_semantic_native_input(window, PlatformEvent::MouseInput { context, input })?;
+        Ok((
+            context,
+            if duplicate_down {
+                NativeMouseButtonDisposition::DuplicateDown
+            } else {
+                NativeMouseButtonDisposition::Original
+            },
+        ))
+    }
+
+    fn apply_pending_close_mouse_button(
+        &mut self,
+        window: NativeWindowId,
+        context: InputContext,
+        backend_device: winit::event::DeviceId,
+        state: ElementState,
+        button: MouseButton,
+    ) -> Result<()> {
+        self.apply_event_group_for_recipient(
+            window,
+            [PlatformEvent::MouseInput {
+                context,
+                input: pointer_button_input(state, button),
+            }],
+            None,
+        )?;
+        if let Some(mut lifetime) = self.native_ui_mice.remove(&window) {
+            let transition = if lifetime.source == context.source
+                && lifetime.backend_device == backend_device
+            {
+                lifetime
+                    .mouse
+                    .button_input(lifetime.device, state, button, None)
+                    .map(|_| ())
+                    .map_err(|error| {
+                        anyhow!("pending-close mouse transition was rejected by its pinned adapter: {error:?}")
+                    })
+            } else {
+                Ok(())
+            };
+            self.native_ui_mice.insert(window, lifetime);
+            transition?;
+        }
+        Ok(())
+    }
+
+    /// Admit normalized keyboard truth without selecting UI/game routing after
+    /// close intent. The native callback uses this after Winit normalization;
+    /// Down permission is denied against the actual admitted lifetime.
+    fn apply_pending_close_keyboard_observation(
+        &mut self,
+        window: NativeWindowId,
+        context: InputContext,
+        input: runen_input::KeyboardInput,
+    ) -> Result<()> {
+        let physical_key = input.physical_key.clone();
+        let pressed = input.state == runen_input::DigitalState::Pressed;
+        self.apply_event_group_for_recipient(
+            window,
+            [PlatformEvent::KeyboardInput { context, input }],
+            None,
+        )?;
+        if pressed {
+            self.deny_native_keyboard_lifetime(context, &physical_key)?;
+        }
+        Ok(())
     }
 
     fn apply_event_group<const N: usize>(
@@ -3500,6 +3792,33 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             self.frame_requested = true;
         }
 
+        let pending_neutral_lane = matches!(
+            event,
+            WindowEvent::KeyboardInput { .. }
+                | WindowEvent::CursorMoved { .. }
+                | WindowEvent::MouseWheel { .. }
+                | WindowEvent::MouseInput { .. }
+                | WindowEvent::Touch(..)
+                | WindowEvent::Focused(..)
+                | WindowEvent::Ime(..)
+                | WindowEvent::ModifiersChanged(..)
+                | WindowEvent::CursorLeft { .. }
+        );
+        if pending_neutral_lane && self.has_exact_pending_close(native_window_id) {
+            let result = self
+                .apply_pending_close_window_event(native_window_id, event)
+                .and_then(|_| self.apply_window_effects(event_loop));
+            if let Err(error) = result {
+                self.exit_with_error(
+                    event_loop,
+                    anyhow!("pending-close native event failed: {error:#}"),
+                );
+                return;
+            }
+            self.pace_or_exit(event_loop);
+            return;
+        }
+
         let result: Result<()> = (|| match event {
             WindowEvent::CloseRequested => {
                 self.apply_event_for_native_window(native_window_id, PlatformEvent::CloseRequested)
@@ -3796,16 +4115,11 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 state,
                 button,
             } => {
-                let context = self
-                    .native_input_mut()
-                    .window_context(native_window_id, device_id)?;
-                let input = pointer_button_input(state, button);
-                self.apply_semantic_native_input(
-                    native_window_id,
-                    PlatformEvent::MouseInput { context, input },
-                )?;
-                if let Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch))) =
-                    self.native_input_recipient(native_window_id)
+                let (context, disposition) =
+                    self.admit_native_mouse_button(native_window_id, device_id, state, button)?;
+                if disposition == NativeMouseButtonDisposition::Original
+                    && let Ok((NativeInputRecipient::RunenUiSlot(slot), Some(epoch))) =
+                        self.native_input_recipient(native_window_id)
                 {
                     self.route_ui_mouse_button(
                         native_window_id,
@@ -4224,6 +4538,199 @@ mod tests {
             KeyboardCompositionState::Inactive,
             "only the framework's retired generation ends composition"
         );
+    }
+
+    #[test]
+    fn close_intent_finishes_selected_native_composition_before_pending_ime_commit() {
+        use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+        use runenui_core::{
+            EditIntent, EditResolution, IntoUpdateOutput, NoHostProtocol, SemanticEditableMode,
+            TextAffinity, TextDocumentId, TextDocumentRevision, TextDocumentSnapshot, TextPosition,
+            TextSelection, UiApp, UpdateOutput, View,
+        };
+
+        #[derive(Clone)]
+        struct TextState {
+            text: String,
+            revision: u64,
+        }
+        enum TextAction {
+            Edit(Box<EditIntent>),
+        }
+        struct CloseCompositionProbe;
+        impl UiApp for CloseCompositionProbe {
+            type State = TextState;
+            type Action = TextAction;
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                let document = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(state.revision),
+                );
+                let position = TextPosition::new(
+                    document,
+                    &state.text,
+                    state.text.len(),
+                    TextAffinity::Downstream,
+                )
+                .expect("controlled text ends at a valid UTF-8 boundary");
+                runenui_core::text_field(
+                    document,
+                    state.text.clone(),
+                    TextSelection::collapsed(position),
+                    SemanticEditableMode::SingleLine,
+                    |intent| TextAction::Edit(Box::new(intent)),
+                )
+                .expect("valid composition-capable text field")
+                .id("native.close.composition.probe")
+            }
+
+            fn update(
+                state: &mut Self::State,
+                action: Self::Action,
+            ) -> impl IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                let TextAction::Edit(intent) = action;
+                state.text.replace_range(
+                    intent.replacement().start()..intent.replacement().end(),
+                    intent.replacement_text(),
+                );
+                state.revision += 1;
+                let document = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(state.revision),
+                );
+                UpdateOutput::edit(EditResolution::accepted(intent.request().clone(), document))
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        let window = NativeWindowId::primary();
+        runner
+            .native_input_mut()
+            .window_context(window, winit::event::DeviceId::dummy())
+            .expect("original physical source for approved retirement");
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<CloseCompositionProbe>(
+                UiTypedScreenId::new("native.close.composition"),
+                TextState {
+                    text: String::new(),
+                    revision: 0,
+                },
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("real selected typed text slot");
+        slots
+            .test_request_first_typed_focus::<CloseCompositionProbe>(slot)
+            .expect("real text field accepts semantic focus");
+
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                window,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .expect("real native window owner"),
+                &mut slots,
+            )
+            .expect("selected recipient is bound to the native window");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+        runner
+            .state
+            .world
+            .insert_resource(UiRuntimePresentationAssociationsResource::default());
+        assert_eq!(
+            runner
+                .native_input_recipient(window)
+                .expect("settled selected text recipient")
+                .0,
+            NativeInputRecipient::RunenUiSlot(slot)
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .expect("same mounted M13 authority")
+                .input_ownership(slot)
+                .expect("settled text ownership")
+                .keyboard()
+                .focused_node()
+                .is_some()
+        );
+
+        runner
+            .route_ui_ime_preedit(slot, "aßz".to_owned(), Some((0, 3)))
+            .expect("preedit creates an actual selected-slot M13 composition");
+        let active = runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("same M13 owner")
+            .input_ownership(slot)
+            .expect("active composition ownership")
+            .keyboard()
+            .composition_generation()
+            .cloned()
+            .expect("the selected text field owns the active generation");
+
+        runner
+            .apply_native_close_intent(window)
+            .expect("actual close-intent helper cancels composition");
+        let after_close_generation = runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("same M13 owner")
+            .input_ownership(slot)
+            .expect("settled close cancellation")
+            .keyboard()
+            .composition_generation()
+            .cloned();
+        assert!(after_close_generation.is_none());
+        assert_ne!(
+            after_close_generation.as_ref(),
+            Some(&active),
+            "close retires the exact active composition generation"
+        );
+
+        runner
+            .apply_pending_close_window_event(
+                window,
+                WindowEvent::Ime(Ime::Commit("must remain neutral".to_owned())),
+            )
+            .expect("pending commit is journaled without routing to the inactive editor");
+        assert_eq!(
+            runner
+                .state
+                .world
+                .resource::<UiRuntimeSlotsResource>()
+                .expect("same selected M13 slot")
+                .observe_app::<CloseCompositionProbe, _>(slot, |runtime| {
+                    runtime.state().text.clone()
+                })
+                .expect("observe controlled text after pending IME commit"),
+            "",
+            "pending OS text cannot mutate the selected UI after close cancellation"
+        );
+
+        runner
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+            .expect("window state owner")
+            .record_mut(window)
+            .expect("same native window")
+            .approve_close();
+        assert!(runner.retire_native_input_recipient(window).unwrap());
+        assert!(runner.retire_window_input_source(window).unwrap());
     }
 
     pub(super) fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {

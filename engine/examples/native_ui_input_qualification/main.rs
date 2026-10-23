@@ -405,7 +405,15 @@ impl QualificationHook {
         self.frames += 1;
         if let Some(probe) = self.lifetime.as_mut() {
             let stop = probe.observe(world, &mut self.flow, self.frames, self.slot)?;
-            if !stop && let Some(generation) = probe.next_text_change() {
+            let os_close_pending = world
+                .resource::<WindowStateRegistryResource>()?
+                .record(NativeWindowId::primary())
+                .context("primary native window missing after lifetime observation")?
+                .close_intent_pending;
+            if !stop
+                && !os_close_pending
+                && let Some(generation) = probe.next_text_change()
+            {
                 transact_ui_slot(world, self.slot, |slots| {
                     slots.submit_app_action::<QualificationUi>(
                         self.slot,
