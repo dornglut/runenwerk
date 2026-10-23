@@ -463,7 +463,6 @@ pub(crate) fn prepare_render_gpu_frame_work_with_stats(
                 .map_err(RenderGpuWorkAdapterError::from)
         },
     )
-
 }
 
 /// Ordinary consumer that only needs the prepared graph.

@@ -13,7 +13,8 @@ use super::{
 };
 use crate::plugins::render::{
     RenderGpuWorkOccurrenceId, RenderPassId, ResolvedRenderGpuWorkNode, RunenUiMixedWork,
-    prepare_render_gpu_frame_work_with_stats, prepare_render_gpu_frame_work_with_mixed_ui,
+    prepare_render_gpu_frame_work, prepare_render_gpu_frame_work_with_stats,
+    prepare_render_gpu_frame_work_with_mixed_ui,
 };
 use anyhow::Context;
 use runen_gpu::{
@@ -326,15 +327,30 @@ impl Renderer {
             .map(PreparedComposedGpuTiming::bracket);
         let gpu_graph_build_start = Instant::now();
         let (graph, runenui_witnesses, fragment_count) = if batch.prepared_runenui.is_empty() {
-            let prepared = prepare_render_gpu_frame_work_with_stats(
-                context,
-                graph_label,
-                nodes,
-                &deterministic.fragments,
-                &deterministic.imports,
-                timing_bracket,
-            )?;
-            (prepared.graph, Vec::new(), prepared.fragment_count)
+            if capture_graph_stats {
+                let prepared = prepare_render_gpu_frame_work_with_stats(
+                    context,
+                    graph_label,
+                    nodes,
+                    &deterministic.fragments,
+                    &deterministic.imports,
+                    timing_bracket,
+                )?;
+                (prepared.graph, Vec::new(), prepared.fragment_count)
+            } else {
+                (
+                    prepare_render_gpu_frame_work(
+                        context,
+                        graph_label,
+                        nodes,
+                        &deterministic.fragments,
+                        &deterministic.imports,
+                        timing_bracket,
+                    )?,
+                    Vec::new(),
+                    0,
+                )
+            }
         } else {
             let mut ui_occurrences = nodes
                 .iter()
