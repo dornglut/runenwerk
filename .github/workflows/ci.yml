@@ -430,7 +430,7 @@ jobs:
                   .requested_size_px == [1920,1080]
                   and .evaluation_size_px == [$evaluation_width,$evaluation_height]
                   and .sequence_revision == 1
-                  and .reconstruction_revision == 2
+                  and .reconstruction_revision == 3
                 )
                 and .temporal_reconstruction[0].semantic_input_generation_classes == [1,1]
                 and .temporal_reconstruction[0].phase == 0
@@ -527,7 +527,7 @@ jobs:
                 '
                   .capture_submission_ordinal == $ordinal
                   and .capture.artifact_blake3 == $hash
-                  and .temporal_reconstruction[-1].reconstruction_revision == 2
+                  and .temporal_reconstruction[-1].reconstruction_revision == 3
                   and .temporal_reconstruction[-1].history_age == ($ordinal - 3)
                 ' "${settle_output}/quality-evidence.json"
             done
@@ -607,7 +607,7 @@ jobs:
                 .requested_size_px == [1920,1080]
                 and .evaluation_size_px == [1920,1080]
                 and .sequence_revision == 1
-                and .reconstruction_revision == 2
+                and .reconstruction_revision == 3
                 and .semantic_input_generation_classes == [1,1]
                 and .camera_reprojection_eligible == true
                 and .camera_reprojection_revision == 3
@@ -645,7 +645,7 @@ jobs:
                 and (.capture.artifact_blake3 | startswith("blake3:"))
                 and .frames[($ordinal - 1)].camera_same_pose_completed_frames ==
                     (if $ordinal <= 9 then 4 elif $ordinal <= 11 then 0 else ([4, ($ordinal - 11)] | min) end)
-                and .frames[($ordinal - 1)].reconstruction_revision == 2
+                and .frames[($ordinal - 1)].reconstruction_revision == 3
                 and (if $ordinal >= 15 then .capture.artifact_blake3 == $hash else true end)
               ' "${settle_output}/camera-motion-evidence.json"
           done
