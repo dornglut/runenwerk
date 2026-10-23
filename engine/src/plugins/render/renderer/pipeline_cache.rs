@@ -292,13 +292,13 @@ mod tests {
         let entry = GpuEntryPointName::new("cs_main").unwrap();
         let mut validations = 0;
         let first = cache
-            .get_or_validate_program(&source, &[entry.clone()], &[], || {
+            .get_or_validate_program(&source, std::slice::from_ref(&entry), &[], || {
                 validations += 1;
                 Ok(compute_program(source.clone()))
             })
             .unwrap();
         let repeated = cache
-            .get_or_validate_program(&source, &[entry.clone()], &[], || {
+            .get_or_validate_program(&source, std::slice::from_ref(&entry), &[], || {
                 validations += 1;
                 Ok(compute_program(source.clone()))
             })
@@ -328,18 +328,29 @@ mod tests {
             .unwrap();
         let entry = GpuEntryPointName::new("cs_main").unwrap();
         let valid = cache
-            .get_or_validate_program(&source, &[entry.clone()], &[], || {
+            .get_or_validate_program(&source, std::slice::from_ref(&entry), &[], || {
                 Ok(compute_program(source.clone()))
             })
             .unwrap();
         let missing = GpuEntryPointName::new("missing").unwrap();
-        assert!(
-            cache
-                .get_or_validate_program(&source, &[missing.clone()], &[], || {
-                    GpuProgramDescriptor::new(source.clone(), [missing], [])
-                })
-                .is_err()
-        );
+        let mut failed_validations = 0;
+        for _ in 0..2 {
+            assert!(
+                cache
+                    .get_or_validate_program(&source, std::slice::from_ref(&missing), &[], || {
+                        failed_validations += 1;
+                        GpuProgramDescriptor::new(source.clone(), [missing.clone()], [])
+                    })
+                    .is_err()
+            );
+        }
+        assert_eq!(failed_validations, 2);
+        let after_failure = cache
+            .get_or_validate_program(&source, std::slice::from_ref(&entry), &[], || {
+                panic!("failed validation must not replace a successful record")
+            })
+            .unwrap();
+        assert!(after_failure.is_same_record(&valid));
         assert!(
             cache
                 .admit_program_source(
@@ -390,12 +401,12 @@ fn second() {
         let first = GpuEntryPointName::new("first").unwrap();
         let second = GpuEntryPointName::new("second").unwrap();
         let first_program = cache
-            .get_or_validate_program(&source, &[first.clone()], &[], || {
+            .get_or_validate_program(&source, std::slice::from_ref(&first), &[], || {
                 GpuProgramDescriptor::new(source.clone(), [first.clone()], [])
             })
             .unwrap();
         let second_program = cache
-            .get_or_validate_program(&source, &[second.clone()], &[], || {
+            .get_or_validate_program(&source, std::slice::from_ref(&second), &[], || {
                 GpuProgramDescriptor::new(source.clone(), [second.clone()], [])
             })
             .unwrap();
@@ -405,9 +416,12 @@ fn second() {
             GpuBindingLayoutRefinement::new(runen_gpu::GpuBindingKey::try_new(0, 0).unwrap())
                 .with_dynamic_offset(true);
         let refined = cache
-            .get_or_validate_program(&source, &[first.clone()], &[dynamic.clone()], || {
-                GpuProgramDescriptor::new(source.clone(), [first.clone()], [dynamic.clone()])
-            })
+            .get_or_validate_program(
+                &source,
+                std::slice::from_ref(&first),
+                std::slice::from_ref(&dynamic),
+                || GpuProgramDescriptor::new(source.clone(), [first.clone()], [dynamic.clone()]),
+            )
             .unwrap();
         assert!(!refined.is_same_record(&first_program));
         assert!(
@@ -421,12 +435,50 @@ fn second() {
         let invalid = vec![dynamic.clone(), dynamic];
         assert!(
             cache
-                .get_or_validate_program(&source, &[first.clone()], &invalid, || {
-                    GpuProgramDescriptor::new(source.clone(), [first], invalid.clone())
+                .get_or_validate_program(&source, std::slice::from_ref(&first), &invalid, || {
+                    GpuProgramDescriptor::new(source.clone(), [first.clone()], invalid.clone())
                 })
                 .is_err()
         );
         assert_eq!(cache.validated_programs.len(), 3);
+    }
+
+    #[test]
+    fn matching_source_identity_cannot_reuse_a_different_admitted_record() {
+        let mut cache = FlowPipelineArtifactCache::default();
+        let wgsl = "@compute @workgroup_size(1) fn cs_main() {}";
+        let provenance = || GpuProgramSourceProvenance::new("record-identity", None).unwrap();
+        let source = cache
+            .admit_program_source(
+                GpuProgramSourceKey::new("test:record-identity").unwrap(),
+                0,
+                wgsl,
+                provenance(),
+            )
+            .unwrap();
+        let entry = GpuEntryPointName::new("cs_main").unwrap();
+        let first = cache
+            .get_or_validate_program(&source, std::slice::from_ref(&entry), &[], || {
+                Ok(compute_program(source.clone()))
+            })
+            .unwrap();
+        // Even an equal semantic identity from another registry is not this admitted record.
+        let mut registry = runen_gpu::GpuProgramSourceRegistry::new(1, 4096).unwrap();
+        let other = registry
+            .admit_wgsl(source.identity().clone(), wgsl, provenance())
+            .unwrap();
+        assert_eq!(source.identity(), other.identity());
+        assert!(!source.is_same_record(&other));
+        let mut validations = 0;
+        let replacement = cache
+            .get_or_validate_program(&other, std::slice::from_ref(&entry), &[], || {
+                validations += 1;
+                Ok(compute_program(other.clone()))
+            })
+            .unwrap();
+        assert_eq!(validations, 1);
+        assert!(!first.is_same_record(&replacement));
+        assert!(replacement.source().is_same_record(&other));
     }
 
     #[test]
@@ -443,12 +495,43 @@ fn second() {
                 )
                 .unwrap();
             cache
-                .get_or_validate_program(&source, &[entry.clone()], &[], || {
+                .get_or_validate_program(&source, std::slice::from_ref(&entry), &[], || {
                     Ok(compute_program(source.clone()))
                 })
                 .unwrap();
         }
         assert_eq!(cache.validated_programs.len(), MAX_BATCH_VALIDATED_PROGRAMS);
+        assert_eq!(
+            cache.stats().program_source_records,
+            MAX_BATCH_VALIDATED_PROGRAMS + 11
+        );
+        cache.program_sources.collect_unretained();
+        assert_eq!(
+            cache.stats().program_source_records,
+            MAX_BATCH_VALIDATED_PROGRAMS
+        );
+        let overflow = cache
+            .admit_program_source(
+                GpuProgramSourceKey::new("test:capacity-overflow").unwrap(),
+                0,
+                "@compute @workgroup_size(1) fn cs_main() {}",
+                GpuProgramSourceProvenance::new("capacity-overflow", None).unwrap(),
+            )
+            .unwrap();
+        let mut validations = 0;
+        for _ in 0..2 {
+            cache
+                .get_or_validate_program(&overflow, std::slice::from_ref(&entry), &[], || {
+                    validations += 1;
+                    Ok(compute_program(overflow.clone()))
+                })
+                .unwrap();
+        }
+        assert_eq!(
+            validations, 2,
+            "overflow must validate without growing the cache"
+        );
+        drop(overflow);
         cache.retain_flows(&[]);
         assert!(cache.validated_programs.is_empty());
         assert_eq!(cache.stats().program_source_records, 0);
