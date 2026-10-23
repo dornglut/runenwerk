@@ -221,7 +221,14 @@ pub fn unmount_retired_native_ui_slot(
         .resource_mut::<UiRuntimeSlotsResource>()?
         .unmount_retired_native(&NativeAppMutationPermit { _sealed: () }, slot)
         .map_err(|error| anyhow!("retired native slot {slot:?} shutdown failed: {error:?}"))?;
-    if retirement.is_some() {
+    if let Some(shutdown) = retirement.as_ref() {
+        // A World-only retirement cannot cancel original Winit translators.
+        // Keep its old slot/window quarantined until this real framework
+        // ScopeRetired terminal batch closes the previous M13 lifetime.
+        world
+            .resource_mut::<UiNativeInputRecipientsResource>()?
+            .confirm_retired_slot_shutdown(slot, shutdown)
+            .map_err(|error| anyhow!("native M13 shutdown certificate rejected: {error:?}"))?;
         // Unbind also schedules exactly the existing renderer paint withdrawal.
         world
             .resource_mut::<UiRuntimePresentationAssociationsResource>()?

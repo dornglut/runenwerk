@@ -61,7 +61,12 @@ struct Binding {
 #[derive(Clone, Debug)]
 enum WindowRecipientBinding {
     Bound(Binding),
-    Retired,
+    // Without original Host cancellation the old M13 scope remains isolated
+    // until the actual framework ScopeRetired shutdown is returned.
+    Retired {
+        previous: Binding,
+        input_settled: bool,
+    },
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, thiserror::Error)]
@@ -78,6 +83,8 @@ pub enum NativeInputRecipientError {
     BindingEpochExhausted,
     #[error("RunenUI runtime slot is already assigned to another native window")]
     SlotAlreadyBound,
+    #[error("previous native UI input requires original Host settlement or M13 shutdown")]
+    UnsettledNativeInput,
     #[error("RunenUI mount/scope changed since native input binding")]
     StaleSlot,
     #[error("RunenUI runtime is not running")]
@@ -236,12 +243,42 @@ impl UiNativeInputRecipientsResource {
                 Some(Self::running_ownership(slots, slot)?.scope().clone())
             }
         };
-        if let Some(WindowRecipientBinding::Bound(existing)) = self.bindings.get(&window) {
-            return if existing.recipient == recipient && existing.scope == scope {
-                Ok(false)
-            } else {
-                Err(NativeInputRecipientError::ConflictingRecipient)
-            };
+        if let Some(binding) = self.bindings.get(&window) {
+            match binding {
+                WindowRecipientBinding::Bound(existing) => {
+                    return if existing.recipient == recipient && existing.scope == scope {
+                        Ok(false)
+                    } else {
+                        Err(NativeInputRecipientError::ConflictingRecipient)
+                    };
+                }
+                WindowRecipientBinding::Retired {
+                    input_settled: false,
+                    ..
+                } => return Err(NativeInputRecipientError::UnsettledNativeInput),
+                WindowRecipientBinding::Retired {
+                    input_settled: true,
+                    ..
+                } => {}
+            }
+        }
+        // An unclosed World-retired runtime cannot be rebound through another
+        // window while the original RunenUI scope still owns input streams.
+        if let NativeInputRecipient::RunenUiSlot(slot) = recipient
+            && self.bindings.values().any(|binding| {
+                matches!(
+                    binding,
+                    WindowRecipientBinding::Retired {
+                        previous: Binding {
+                            recipient: NativeInputRecipient::RunenUiSlot(retired_slot),
+                            ..
+                        },
+                        input_settled: false,
+                    } if *retired_slot == slot
+                )
+            })
+        {
+            return Err(NativeInputRecipientError::UnsettledNativeInput);
         }
         if let NativeInputRecipient::RunenUiSlot(slot) = recipient
             && self.bindings.values().any(|binding| {
@@ -360,7 +397,7 @@ impl UiNativeInputRecipientsResource {
         }
         let binding = match self.bindings.get(&window) {
             Some(WindowRecipientBinding::Bound(binding)) => binding,
-            Some(WindowRecipientBinding::Retired) => {
+            Some(WindowRecipientBinding::Retired { .. }) => {
                 return Err(NativeInputRecipientError::MissingRecipient);
             }
             None if slots.is_empty() => return Ok(NativeInputRecipient::LegacyNativeConsumer),
@@ -511,6 +548,25 @@ impl UiNativeInputRecipientsResource {
         window: NativeWindowId,
         presentations: &mut UiRuntimePresentationAssociationsResource,
     ) -> bool {
+        self.retire_window_inner(window, presentations, false)
+    }
+
+    /// Only original Host cleanup that completed every pinned M13 stream may
+    /// permit live same-scope rebinding. World-only retirement cannot claim it.
+    pub(crate) fn retire_window_with_settled_input(
+        &mut self,
+        window: NativeWindowId,
+        presentations: &mut UiRuntimePresentationAssociationsResource,
+    ) -> bool {
+        self.retire_window_inner(window, presentations, true)
+    }
+
+    fn retire_window_inner(
+        &mut self,
+        window: NativeWindowId,
+        presentations: &mut UiRuntimePresentationAssociationsResource,
+        host_settled: bool,
+    ) -> bool {
         let Some(binding) = self.bindings.get_mut(&window) else {
             return false;
         };
@@ -520,11 +576,67 @@ impl UiNativeInputRecipientsResource {
         if let NativeInputRecipient::RunenUiSlot(slot) = previous.recipient {
             presentations.invalidate_mapping(slot);
         }
-        *binding = WindowRecipientBinding::Retired;
+        *binding = WindowRecipientBinding::Retired {
+            previous: previous.clone(),
+            input_settled: host_settled
+                || previous.recipient == NativeInputRecipient::LegacyNativeConsumer,
+        };
         if window == NativeWindowId::primary() {
             self.requested_primary = None;
         }
         true
+    }
+
+    /// Consume only a real original scope's terminal RunenUI retirement
+    /// certificate; the old slot remains quarantined if any check fails.
+    pub(crate) fn confirm_retired_slot_shutdown(
+        &mut self,
+        slot: UiRuntimeSlotId,
+        shutdown: &runenui_runtime::InputShutdownBatch,
+    ) -> Result<(), NativeInputRecipientError> {
+        let final_ownership = shutdown.final_ownership();
+        if final_ownership.status() != RuntimeStatus::Closed
+            || !shutdown.ordered_records().iter().any(|record| {
+                matches!(
+                    record,
+                    runenui_runtime::InputArbitrationRecord::ScopeRetired(retirement)
+                        if retirement.scope() == final_ownership.scope()
+                )
+            })
+        {
+            return Err(NativeInputRecipientError::UnsettledNativeInput);
+        }
+        for binding in self.bindings.values() {
+            if let WindowRecipientBinding::Retired {
+                previous: Binding {
+                    recipient: NativeInputRecipient::RunenUiSlot(retired),
+                    scope: Some(scope),
+                    ..
+                },
+                input_settled: false,
+            } = binding
+                && *retired == slot
+                && scope != final_ownership.scope()
+            {
+                return Err(NativeInputRecipientError::StaleSlot);
+            }
+        }
+        for binding in self.bindings.values_mut() {
+            if let WindowRecipientBinding::Retired {
+                previous: Binding {
+                    recipient: NativeInputRecipient::RunenUiSlot(retired),
+                    scope: Some(scope),
+                    ..
+                },
+                input_settled,
+            } = binding
+                && *retired == slot
+                && scope == final_ownership.scope()
+            {
+                *input_settled = true;
+            }
+        }
+        Ok(())
     }
 
     /// Retire a mounted runtime's recipient and its old displayed input.
@@ -545,7 +657,13 @@ impl UiNativeInputRecipientsResource {
                     ..
                 }) if *bound == slot
             ) {
-                *binding = WindowRecipientBinding::Retired;
+                let WindowRecipientBinding::Bound(previous) = binding else {
+                    unreachable!("verified original bound slot");
+                };
+                *binding = WindowRecipientBinding::Retired {
+                    previous: previous.clone(),
+                    input_settled: false,
+                };
                 retired += 1;
             }
         }
@@ -571,7 +689,14 @@ impl UiNativeInputRecipientsResource {
             Some(WindowRecipientBinding::Bound(_)) => {
                 Err(NativeInputRecipientError::ConflictingRecipient)
             }
-            Some(WindowRecipientBinding::Retired) => {
+            Some(WindowRecipientBinding::Retired {
+                input_settled: false,
+                ..
+            }) => Err(NativeInputRecipientError::UnsettledNativeInput),
+            Some(WindowRecipientBinding::Retired {
+                input_settled: true,
+                ..
+            }) => {
                 self.bindings.remove(&window);
                 if window == NativeWindowId::primary() {
                     self.requested_primary = None;
@@ -833,6 +958,22 @@ mod tests {
             recipients.resolve(primary, &windows, &mut slots),
             Err(NativeInputRecipientError::MissingRecipient)
         );
+        // World-only retirement is not old-M13 settlement; a real framework
+        // shutdown must happen before the old window admits another target.
+        assert_eq!(
+            recipients.bind(
+                primary,
+                NativeInputRecipient::LegacyNativeConsumer,
+                &windows,
+                &mut slots,
+            ),
+            Err(NativeInputRecipientError::UnsettledNativeInput)
+        );
+        let shutdown =
+            crate::plugins::ui::native_transaction::test_retired_slot_teardown(&mut slots, slot)
+                .expect("retired scope can shut down")
+                .expect("real framework retirement certificate");
+        recipients.confirm_retired_slot_shutdown(slot, &shutdown).unwrap();
         recipients
             .request_primary(NativeInputRecipient::LegacyNativeConsumer)
             .expect("new explicit native target after retirement");
@@ -1010,8 +1151,9 @@ mod tests {
             recipients.resolve(first, &windows, &mut slots),
             Err(NativeInputRecipientError::MissingRecipient)
         );
-        // A deliberate new semantic target can restore gameplay, but source
-        // retirement and mount removal alone must never do so.
+        // An externally lost M13 scope is not a Host cancellation
+        // certificate. It cannot authorize an old native source to become
+        // gameplay merely because the recipient was removed.
         assert_eq!(
             recipients.bind(
                 first,
@@ -1019,11 +1161,18 @@ mod tests {
                 &windows,
                 &mut slots,
             ),
-            Ok(true)
+            Err(NativeInputRecipientError::UnsettledNativeInput)
         );
         assert_eq!(
             recipients.resolve(first, &windows, &mut slots),
-            Ok(NativeInputRecipient::LegacyNativeConsumer)
+            Err(NativeInputRecipientError::MissingRecipient)
+        );
+        // Window destruction also cannot erase an unclosed old UI scope's
+        // quarantine and then allow its slot to be rebound elsewhere.
+        windows.remove_window(first);
+        assert_eq!(
+            recipients.forget_destroyed_window(first, &windows),
+            Err(NativeInputRecipientError::UnsettledNativeInput)
         );
     }
 
@@ -1054,8 +1203,11 @@ mod tests {
             !recipients.has_native_slot_intent(slot),
             "original recipient must be retired before framework teardown"
         );
-        crate::plugins::ui::native_transaction::test_retired_slot_teardown(&mut slots, slot)
-            .expect("retire unbound native slot");
+        let shutdown =
+            crate::plugins::ui::native_transaction::test_retired_slot_teardown(&mut slots, slot)
+                .expect("retire unbound native slot")
+                .expect("actual framework closed scope");
+        recipients.confirm_retired_slot_shutdown(slot, &shutdown).unwrap();
         assert_eq!(
             recipients.resolve(first, &windows, &mut slots),
             Err(NativeInputRecipientError::MissingRecipient)
