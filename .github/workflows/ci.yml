@@ -236,6 +236,28 @@ jobs:
             rm -f "$log"
           done
 
+      - name: Prove native on-demand launch idle and worker wake
+        env:
+          RUNENWERK_NATIVE_HOST_LAUNCH_IDLE_WAKE_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          if ! timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib \
+                 runtime::native_host_wake::tests::native_idle_wake_reaches_real_thread_affine_runtime \
+                 --locked -- --exact --nocapture --test-threads=1 >"$log" 2>&1; then
+            cat "$log"
+            rm -f "$log"
+            exit 1
+          fi
+          if ! grep -F "native_launch_idle_wake_smoke=pass" "$log"; then
+            cat "$log"
+            echo "OnDemand CLI policy did not complete native idle/wake proof" >&2
+            rm -f "$log"
+            exit 1
+          fi
+          rm -f "$log"
+
       - name: Prove original and species Boids native without GPU image readback
         env:
           RUST_BACKTRACE: '1'
