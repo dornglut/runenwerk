@@ -1,8 +1,10 @@
 use super::DirtyChunkMapResource;
 use crate::runtime::{ResMut, WorldMut};
+use product::ProductIdentity;
 use runen_spatial::ChunkId;
 use std::collections::BTreeMap;
 use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReasonSet};
+use world_sdf::{FieldProductDescriptor, WorldSdfVerifiedExactSource};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, runen_ecs::Component, runen_ecs::Resource)]
 pub enum ChunkLifecycleState {
@@ -12,6 +14,15 @@ pub enum ChunkLifecycleState {
     Dirty,
     Rebuilding,
     Resident,
+}
+
+/// Certificate is attached to the existing authoritative runtime record,
+/// never to enqueue-time catalog residency.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WorldSdfCommittedExactSource {
+    // Only World-owned intake/integration may change product eligibility.
+    pub(crate) evidence: WorldSdfVerifiedExactSource,
+    pub(crate) eligible_products: BTreeMap<ProductIdentity, FieldProductDescriptor>,
 }
 
 #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
@@ -24,9 +35,22 @@ pub struct WorldChunkRuntimeRecord {
     pub dirty_reasons: DirtyReasonSet,
     pub pending_build_generation: Option<BuildGeneration>,
     pub gameplay_locked: bool,
+    // Exact source authority is written only through World BuildIntegrate.
+    pub(crate) exact_source: Option<WorldSdfCommittedExactSource>,
+    /// A terminally rejected replacement keeps committed CPU truth but revokes
+    /// strict-current exact reads until a successful World integration.
+    pub(crate) exact_read_recovery_required: bool,
 }
 
 impl WorldChunkRuntimeRecord {
+    pub fn has_exact_source(&self) -> bool {
+        self.exact_source.is_some()
+    }
+
+    pub fn exact_read_recovery_required(&self) -> bool {
+        self.exact_read_recovery_required
+    }
+
     pub fn new(chunk_id: ChunkId) -> Self {
         Self {
             chunk_id,
@@ -37,6 +61,8 @@ impl WorldChunkRuntimeRecord {
             dirty_reasons: DirtyReasonSet::default(),
             pending_build_generation: None,
             gameplay_locked: false,
+            exact_source: None,
+            exact_read_recovery_required: false,
         }
     }
 }

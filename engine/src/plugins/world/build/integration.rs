@@ -1,7 +1,9 @@
 use super::super::adapters::resources::{
     PartitionConfigResource, RegionInvalidationJournalResource, SdfChunkStoreResource,
 };
-use super::super::chunks::lifecycle::{ChunkLifecycleState, WorldChunkRuntimeMapResource};
+use super::super::chunks::lifecycle::{
+    ChunkLifecycleState, WorldChunkRuntimeMapResource, WorldSdfCommittedExactSource,
+};
 use super::super::chunks::render_cache_bridge::WorldRenderCacheInvalidationQueueResource;
 use super::super::debug::metrics::WorldDebugMetricsResource;
 use super::super::plugin::{WorldAuthorityState, WorldRuntimeState};
@@ -10,13 +12,20 @@ use crate::runtime::{Res, ResMut};
 use product::ProductIdentity;
 use runen_spatial::ChunkId;
 use std::collections::{BTreeMap, VecDeque};
-use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision};
+use world_ops::{BuildGeneration, ChunkGeneration, ChunkRevision, DirtyReason};
 use world_sdf::{
     FieldProductCandidate, FieldProductDescriptor, FieldProductKind, RegionSdfSummary,
-    SdfChunkPayload, WorldSdfMetricError, WorldSdfMetricPayloadRef, WorldSdfMetricProductCandidate,
+    SdfChunkPayload, WorldSdfExactFormationError, WorldSdfMetricError, WorldSdfMetricPayloadRef,
+    WorldSdfMetricProductCandidate, WorldSdfOpenTopExactFormation, WorldSdfVerifiedExactSource,
     ratify_field_product_candidate, ratify_world_sdf_metric_product_candidate,
-    validate_world_sdf_metric_payload,
+    validate_world_sdf_metric_payload, verify_world_sdf_open_top_exact_formation,
 };
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorldCompletedBuildOrigin {
+    ExternalPackage,
+    OperationWindow,
+}
 
 #[derive(Debug, Clone, runen_ecs::Resource)]
 pub struct WorldCompletedBuildOutput {
@@ -26,6 +35,33 @@ pub struct WorldCompletedBuildOutput {
     pub staleness: WorldBuildStaleness,
     pub chunk_payload: SdfChunkPayload,
     pub region_summary: RegionSdfSummary,
+    pub(crate) exact_source: Option<WorldSdfCommittedExactSource>,
+    pub origin: WorldCompletedBuildOrigin,
+}
+
+impl WorldCompletedBuildOutput {
+    /// External authors may construct ordinary outputs, never mint or swap
+    /// an exact-source certificate directly in the mutable completion queue.
+    pub fn generic(
+        chunk_id: ChunkId,
+        target_chunk_revision: ChunkRevision,
+        target_build_generation: BuildGeneration,
+        staleness: WorldBuildStaleness,
+        chunk_payload: SdfChunkPayload,
+        region_summary: RegionSdfSummary,
+        origin: WorldCompletedBuildOrigin,
+    ) -> Self {
+        Self {
+            chunk_id,
+            target_chunk_revision,
+            target_build_generation,
+            staleness,
+            chunk_payload,
+            region_summary,
+            origin,
+            exact_source: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, runen_ecs::Component, runen_ecs::Resource)]
@@ -85,6 +121,8 @@ pub enum WorldSdfRuntimePayloadPackageError {
     MetricPayloadRejected {
         error: WorldSdfMetricError,
     },
+    ExactSourceRequiresMetric,
+    ExactSourceRejected(WorldSdfExactFormationError),
     PendingGenerationConflict {
         chunk_id: ChunkId,
         generation: BuildGeneration,
@@ -126,6 +164,12 @@ impl std::fmt::Display for WorldSdfRuntimePayloadPackageError {
             Self::MetricPayloadRejected { error } => {
                 write!(formatter, "runtime metric SDF payload is invalid: {error}")
             }
+            Self::ExactSourceRequiresMetric => {
+                formatter.write_str("exact source requires a metric product")
+            }
+            Self::ExactSourceRejected(error) => {
+                write!(formatter, "exact source formation rejected: {error}")
+            }
             Self::PendingGenerationConflict {
                 chunk_id,
                 generation,
@@ -153,6 +197,7 @@ pub struct WorldSdfRuntimePayloadPackage {
     pub payloads: Vec<SdfChunkPayload>,
     pub region_summary: RegionSdfSummary,
     pub metric_payload_ref: Option<WorldSdfMetricPayloadRef>,
+    exact_source: Option<WorldSdfOpenTopExactFormation>,
 }
 
 impl WorldSdfRuntimePayloadPackage {
@@ -166,6 +211,7 @@ impl WorldSdfRuntimePayloadPackage {
             payloads,
             region_summary,
             metric_payload_ref: None,
+            exact_source: None,
         }
     }
 
@@ -173,11 +219,24 @@ impl WorldSdfRuntimePayloadPackage {
         self.metric_payload_ref = Some(metric_payload_ref);
         self
     }
+
+    /// Only a domain-formed source+CPU artifact can claim exact provenance.
+    /// There is no overload that attaches an independent analytic source to
+    /// an already constructed payload with indistinguishable quantized bytes.
+    pub fn from_exact_formation(formation: WorldSdfOpenTopExactFormation) -> Self {
+        Self {
+            descriptor: formation.descriptor().clone(),
+            payloads: vec![formation.payload().clone()],
+            region_summary: formation.region_summary(),
+            metric_payload_ref: Some(formation.metric_ref()),
+            exact_source: Some(formation),
+        }
+    }
 }
 
 fn validate_runtime_sdf_payload_package(
     package: &WorldSdfRuntimePayloadPackage,
-) -> Result<(), WorldSdfRuntimePayloadPackageError> {
+) -> Result<Option<WorldSdfVerifiedExactSource>, WorldSdfRuntimePayloadPackageError> {
     if package.descriptor.kind != FieldProductKind::WorldSdfChunkPages {
         return Err(WorldSdfRuntimePayloadPackageError::UnsupportedProductKind {
             kind: package.descriptor.kind,
@@ -239,7 +298,34 @@ fn validate_runtime_sdf_payload_package(
             .map_err(|error| WorldSdfRuntimePayloadPackageError::MetricPayloadRejected { error })?;
     }
 
-    Ok(())
+    let qualified = match package.exact_source.as_ref() {
+        Some(formation) => {
+            // Do not permit public package fields to substitute a product,
+            // metric ref, region summary or bytes after the source was formed.
+            if package.descriptor != *formation.descriptor()
+                || payload != formation.payload()
+                || package.region_summary != formation.region_summary()
+                || package.metric_payload_ref != Some(formation.metric_ref())
+            {
+                return Err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected(
+                    WorldSdfExactFormationError::WrongPayloadIdentity,
+                ));
+            }
+            Some(
+                verify_world_sdf_open_top_exact_formation(
+                    formation.source(),
+                    formation.partition(),
+                    &package.descriptor,
+                    formation.metric_ref(),
+                    payload,
+                    package.region_summary,
+                )
+                .map_err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected)?,
+            )
+        }
+        None => None,
+    };
+    Ok(qualified)
 }
 
 pub fn enqueue_ratified_world_sdf_payload_package(
@@ -250,12 +336,29 @@ pub fn enqueue_ratified_world_sdf_payload_package(
     metric_capabilities: &mut WorldRuntimeSdfMetricCapabilityCatalogResource,
     package: WorldSdfRuntimePayloadPackage,
 ) -> Result<usize, WorldSdfRuntimePayloadPackageError> {
-    validate_runtime_sdf_payload_package(&package)?;
+    let qualified = validate_runtime_sdf_payload_package(&package)?;
 
     // The catalog is published at enqueue, but integration accepts only the first
     // matching pending generation. Reject a conflicting retry before changing either.
     let payload = &package.payloads[0];
     let generation = BuildGeneration(payload.chunk_generation.0);
+
+    // Source lineage cannot regress on a newer chunk generation. An unchanged
+    // f64 source may retain its source revision across ordinary rebuilds, but
+    // changed full-precision geometry must advance it strictly.
+    if let Some(candidate) = qualified.as_ref()
+        && let Some(previous) = chunks
+            .by_chunk_id
+            .get(&payload.chunk_id)
+            .and_then(|record| record.exact_source.as_ref())
+        && (candidate.source_revision() < previous.evidence.source_revision()
+            || (candidate.source_revision() == previous.evidence.source_revision()
+                && candidate.source() != previous.evidence.source()))
+    {
+        return Err(WorldSdfRuntimePayloadPackageError::ExactSourceRejected(
+            WorldSdfExactFormationError::InvalidProductOrRevision,
+        ));
+    }
 
     // A pending retry is distinct from replaying an already integrated chunk.
     // Check actual CPU geometry first: the catalog may still advertise a newer
@@ -300,11 +403,35 @@ pub fn enqueue_ratified_world_sdf_payload_package(
             .get(&payload.chunk_id)
             .and_then(|record| record.pending_build_generation)
             == Some(generation);
+        let same_exact = match (&existing.exact_source, &qualified) {
+            (None, None) => true,
+            (Some(committed), Some(evidence)) => committed.evidence == *evidence,
+            (Some(committed), None) => !committed.eligible_products.contains_key(&product_id),
+            (None, Some(_)) => false, // No late promotion of ordinary pending output.
+        };
         if same_pending
             && same_metadata
+            && same_exact
             && existing.chunk_payload == *payload
             && existing.region_summary == package.region_summary
         {
+            if qualified.is_some() {
+                let pending = completed
+                    .outputs
+                    .iter_mut()
+                    .find(|output| {
+                        output.chunk_id == payload.chunk_id
+                            && output.target_build_generation == generation
+                            && matches!(output.staleness, WorldBuildStaleness::Current)
+                    })
+                    .expect("matched pending exact output");
+                pending
+                    .exact_source
+                    .as_mut()
+                    .expect("qualified exact alias")
+                    .eligible_products
+                    .insert(product_id, package.descriptor.clone());
+            }
             // A different product identity may legitimately reference the exact same
             // pending bytes; publish its metadata without queueing another build.
             products.products.insert(product_id, package.descriptor);
@@ -329,6 +456,10 @@ pub fn enqueue_ratified_world_sdf_payload_package(
     let product_id = package.descriptor.product_core().identity;
     let descriptor = package.descriptor.clone();
     let metric_payload_ref = package.metric_payload_ref;
+    let exact_source = qualified.map(|evidence| WorldSdfCommittedExactSource {
+        evidence,
+        eligible_products: BTreeMap::from([(product_id, descriptor.clone())]),
+    });
     let mut enqueued = 0usize;
     for payload in package.payloads {
         let chunk_id = payload.chunk_id;
@@ -342,6 +473,8 @@ pub fn enqueue_ratified_world_sdf_payload_package(
             staleness: WorldBuildStaleness::Current,
             chunk_payload: payload,
             region_summary: package.region_summary,
+            exact_source: exact_source.clone(),
+            origin: WorldCompletedBuildOrigin::ExternalPackage,
         });
         enqueued = enqueued.saturating_add(1);
     }
@@ -374,25 +507,66 @@ pub fn integrate_completed_build_outputs_system(
     let mut dropped = 0_u64;
 
     while let Some(output) = completed.outputs.pop_front() {
-        if !matches!(output.staleness, WorldBuildStaleness::Current) {
+        let pending_matches = chunks
+            .by_chunk_id
+            .get(&output.chunk_id)
+            .is_some_and(|record| {
+                record.pending_build_generation == Some(output.target_build_generation)
+            });
+        let previous_is_older = sdf_store
+            .chunks
+            .get(&output.chunk_id)
+            .is_none_or(|previous| previous.chunk_generation.0 < output.target_build_generation.0);
+        let source_is_valid = output.exact_source.as_ref().is_none_or(|committed| {
+            committed.evidence.partition() == &**partition
+                && !committed.eligible_products.is_empty()
+                && committed.eligible_products.values().all(|descriptor| {
+                    committed
+                        .evidence
+                        .revalidate(
+                            descriptor,
+                            &output.chunk_payload,
+                            output.region_summary,
+                            &partition,
+                        )
+                        .is_ok()
+                })
+        });
+        if !matches!(output.staleness, WorldBuildStaleness::Current)
+            || !pending_matches
+            || !previous_is_older
+            || !payload_matches_target_contract(&output)
+            || !source_is_valid
+        {
             dropped = dropped.saturating_add(1);
+            if pending_matches {
+                // Terminally reject only this intent: preserve committed CPU/source
+                // truth and release the pending generation for a valid future retry.
+                if let Some(record) = chunks.by_chunk_id.get_mut(&output.chunk_id) {
+                    record.pending_build_generation = None;
+                    record.exact_read_recovery_required = true;
+                    if matches!(output.origin, WorldCompletedBuildOrigin::OperationWindow) {
+                        record.dirty_reasons.reasons.insert(DirtyReason::Geometry);
+                    }
+                    record.lifecycle = if !record.dirty_reasons.is_empty() {
+                        ChunkLifecycleState::Dirty
+                    } else if sdf_store.chunks.contains_key(&output.chunk_id) {
+                        ChunkLifecycleState::Ready
+                    } else {
+                        ChunkLifecycleState::Unloaded
+                    };
+                }
+            }
             continue;
         }
 
         let record = chunks.ensure_chunk(output.chunk_id);
-        if record.pending_build_generation != Some(output.target_build_generation) {
-            dropped = dropped.saturating_add(1);
-            continue;
-        }
-        if !payload_matches_target_contract(&output) {
-            dropped = dropped.saturating_add(1);
-            continue;
-        }
-
         record.chunk_revision = output.target_chunk_revision;
         record.chunk_generation = output.chunk_payload.chunk_generation;
         record.build_generation = output.target_build_generation;
         record.pending_build_generation = None;
+        record.exact_source = output.exact_source;
+        record.exact_read_recovery_required = false;
         if record.dirty_reasons.is_empty() {
             if !matches!(record.lifecycle, ChunkLifecycleState::Resident) {
                 record.lifecycle = ChunkLifecycleState::Ready;
