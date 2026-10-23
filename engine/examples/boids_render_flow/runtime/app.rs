@@ -2,6 +2,7 @@ use crate::rendering::{
     BoidsGpuStepSchema, BoidsRenderState, BoidsRuleFamily, DEFAULT_BOID_COUNT, build_render_flow,
 };
 use anyhow::{Context, Result};
+use engine::app::NativeHostLaunchOverrides;
 use engine::plugins::render::inspect::{CaptureStage, CaptureTextureClass, RenderCaptureSelector};
 use engine::plugins::render::{
     Gfx, RenderGpuFixedStepInput, RenderGpuFlowStepStreams, RenderGpuStepDemand,
@@ -112,7 +113,7 @@ impl BoidsSourcePacing {
     }
 }
 
-pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
+pub(crate) fn run(rule: BoidsRuleFamily, host: NativeHostLaunchOverrides) -> Result<()> {
     let mut app = App::new();
     app.set_title(rule.window_title());
     app.add_plugins(default_plugins());
@@ -183,6 +184,8 @@ pub(crate) fn run(rule: BoidsRuleFamily) -> Result<()> {
     } else {
         None
     };
+    // Launch intent must win over all explicit product/plugin defaults.
+    host.apply_to(&mut app)?;
     app.run()?;
     if let Some(proof) = smoke {
         super::smoke::assert_finished(&proof)?;

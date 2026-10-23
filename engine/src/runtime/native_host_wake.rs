@@ -179,15 +179,22 @@ mod tests {
         assert!(clone.deadline(MonotonicInstant::ZERO).is_err());
     }
 
-    /// Run in its own process with RUNENWERK_NATIVE_IDLE_WAKE_SMOKE=1.
-    /// No application timer or host polling can supply the tested completion turn.
+    /// Run in a quiet native process with RUNENWERK_NATIVE_IDLE_WAKE_SMOKE=1.
+    /// RUNENWERK_NATIVE_HOST_LAUNCH_IDLE_WAKE_SMOKE=1 proves launch-selected
+    /// OnDemand through the same real timer-free native wake and retirement.
     #[test]
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn native_idle_wake_reaches_real_thread_affine_runtime() -> anyhow::Result<()> {
-        if std::env::var_os("RUNENWERK_NATIVE_IDLE_WAKE_SMOKE").is_none() {
+        let programmatic = std::env::var_os("RUNENWERK_NATIVE_IDLE_WAKE_SMOKE").is_some();
+        let launch = std::env::var_os("RUNENWERK_NATIVE_HOST_LAUNCH_IDLE_WAKE_SMOKE").is_some();
+        if !programmatic && !launch {
             return Ok(());
         }
-        use crate::app::{App, AppNativeHostExt};
+        anyhow::ensure!(
+            !(programmatic && launch),
+            "native idle/wake proof modes are mutually exclusive"
+        );
+        use crate::app::{App, AppNativeHostExt, NativeHostLaunchOverrides};
         use crate::plugins::ui::{
             AppUiExt, UiRuntimeFontConfiguration, UiRuntimeSlotsResource, UiTypedScreenId,
         };
@@ -375,7 +382,20 @@ mod tests {
         });
         let mut app = App::new();
         app.add_plugin(crate::plugins::InputFinalizePlugin);
-        app.with_frame_pacing(FramePacingPolicyResource::on_demand());
+        if launch {
+            // An explicit launch request overrides the previously composed
+            // continuous policy before any native window/slot can start.
+            app.with_frame_pacing(FramePacingPolicyResource::continuous_uncapped());
+            let request: NativeHostLaunchOverrides = "on-demand".parse()?;
+            request.apply_to(&mut app)?;
+            anyhow::ensure!(
+                app.world().resource::<FramePacingPolicyResource>()?.mode
+                    == crate::runtime::FramePacingMode::OnDemand,
+                "launch-selected OnDemand failed to override the programmatic Host policy"
+            );
+        } else {
+            app.with_frame_pacing(FramePacingPolicyResource::on_demand());
+        }
         anyhow::ensure!(
             app.ui()
                 .mount_app::<AsyncApp>(
@@ -431,7 +451,11 @@ mod tests {
             done.get() && retired.load(Ordering::Acquire),
             "idle native completion/retirement missing"
         );
-        println!("native_idle_wake_smoke=pass transport_idle=true deadline_none=true");
+        if launch {
+            println!("native_launch_idle_wake_smoke=pass transport_idle=true deadline_none=true");
+        } else {
+            println!("native_idle_wake_smoke=pass transport_idle=true deadline_none=true");
+        }
         Ok(())
     }
 }
