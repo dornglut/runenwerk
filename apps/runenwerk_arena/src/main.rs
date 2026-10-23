@@ -89,7 +89,9 @@ fn main() -> Result<()> {
     let observed = Arc::new(AtomicUsize::new(0));
     #[cfg(debug_assertions)]
     if smoke {
-        let requested = host.frame_pacing().context("native launch smoke requires Host override")?;
+        let requested = host
+            .frame_pacing()
+            .context("native launch smoke requires Host override")?;
         ensure!(
             app.world().resource::<FramePacingPolicyResource>()?.mode == requested.mode,
             "native Arena launch policy was not applied before startup"
@@ -105,7 +107,10 @@ fn main() -> Result<()> {
     if smoke {
         result?;
         let frames = observed.load(Ordering::SeqCst);
-        ensure!(frames >= 4, "native Arena launch completed only {frames} frames");
+        ensure!(
+            frames >= 4,
+            "native Arena launch completed only {frames} frames"
+        );
         println!(
             "native_arena_host_cli=pass frames={frames} mode={}",
             host.frame_pacing().unwrap().mode.as_str()
