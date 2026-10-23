@@ -579,13 +579,14 @@ mod native_publication_tests {
                     |error| panic!("pointer={with_pointer} cycle={cycle}: {error:#}"),
                 );
                 if !selected && with_pointer {
-                    assert!(
+                    assert_eq!(
                         world
                             .resource_mut::<UiRuntimeSlotsResource>()
                             .unwrap()
                             .input_ownership(slot)
                             .is_err(),
-                        "ordinary publication retains its existing callback timing"
+                        native,
+                        "only the native readiness checkpoint marks ordinary publication pending"
                     );
                     settle_native_ui_slot(&mut world, slot).unwrap();
                 }
