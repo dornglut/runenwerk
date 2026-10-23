@@ -1788,13 +1788,37 @@ fn neutral_mouse_up_retracts_only_matching_legacy_device_and_button() {
         );
     };
     let mut input = InputState::new();
-    send(&mut input, a, PointerButton::Left, DigitalState::Pressed, legacy);
-    send(&mut input, b, PointerButton::Left, DigitalState::Pressed, legacy);
-    send(&mut input, a, PointerButton::Right, DigitalState::Pressed, legacy);
+    send(
+        &mut input,
+        a,
+        PointerButton::Left,
+        DigitalState::Pressed,
+        legacy,
+    );
+    send(
+        &mut input,
+        b,
+        PointerButton::Left,
+        DigitalState::Pressed,
+        legacy,
+    );
+    send(
+        &mut input,
+        a,
+        PointerButton::Right,
+        DigitalState::Pressed,
+        legacy,
+    );
     input.clear_frame();
 
     // Original A/Left Up routed to UI must not erase B/Left or A/Right.
-    send(&mut input, a, PointerButton::Left, DigitalState::Released, None);
+    send(
+        &mut input,
+        a,
+        PointerButton::Left,
+        DigitalState::Released,
+        None,
+    );
     assert!(!input.pointer_button_down_in(a, PointerButton::Left));
     assert!(input.pointer_button_down_in(b, PointerButton::Left));
     assert!(input.pointer_button_down_in(a, PointerButton::Right));
@@ -1805,14 +1829,26 @@ fn neutral_mouse_up_retracts_only_matching_legacy_device_and_button() {
 
     // When the last eligible Left source actually releases via legacy, the
     // single ordinary aggregate release edge still occurs exactly once.
-    send(&mut input, b, PointerButton::Left, DigitalState::Released, legacy);
+    send(
+        &mut input,
+        b,
+        PointerButton::Left,
+        DigitalState::Released,
+        legacy,
+    );
     assert!(!input.left_mouse_down());
     assert!(input.left_mouse_released());
     assert!(input.right_mouse_down());
     assert_eq!(input.mouse_button_transitions().len(), 1);
 
     input.clear_frame();
-    send(&mut input, a, PointerButton::Right, DigitalState::Released, None);
+    send(
+        &mut input,
+        a,
+        PointerButton::Right,
+        DigitalState::Released,
+        None,
+    );
     assert!(!input.right_mouse_down());
     assert!(!input.right_mouse_released());
     assert!(input.mouse_button_transitions().is_empty());
