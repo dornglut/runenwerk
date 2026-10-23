@@ -273,6 +273,14 @@ impl NativeWindowHook for QualificationHook {
 }
 
 fn main() -> Result<()> {
+    if std::env::var_os("RUST_LOG").is_some() {
+        tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::try_from_default_env()?)
+            .with_ansi(false)
+            .with_writer(std::io::stderr)
+            .try_init()
+            .map_err(|error| anyhow::anyhow!("native qualification tracing failed: {error}"))?;
+    }
     let options = lifetime::parse(&std::env::args().skip(1).collect::<Vec<_>>())?;
     let report = Arc::new(Mutex::new(lifetime::Report::default()));
 
