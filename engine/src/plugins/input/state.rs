@@ -455,7 +455,23 @@ impl InputState {
         context: InputContext,
         observation: InputObservation,
     ) {
-        let _ = self.admit_group(&InputObservationGroup::single(context, observation));
+        // A genuine original Up can arrive while close is pending or after a
+        // legacy-to-UI recipient handoff. Its neutral admission must also
+        // retire this exact source/device's earlier legacy held contribution;
+        // it does not authorize a legacy release edge or a new game action.
+        let released_button = match &observation {
+            InputObservation::PointerButton(input) if input.state == DigitalState::Released => {
+                Some(input.button)
+            }
+            _ => None,
+        };
+        if self
+            .admit_group(&InputObservationGroup::single(context, observation))
+            .is_ok()
+            && let Some(button) = released_button
+        {
+            self.legacy_mouse_buttons_down.remove(&(context, button));
+        }
     }
 
     pub(crate) fn handle_normalized_keyboard(

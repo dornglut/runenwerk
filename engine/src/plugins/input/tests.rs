@@ -1725,6 +1725,100 @@ fn native_ui_pointer_truth_does_not_leak_into_legacy_gameplay_projection() {
 }
 
 #[test]
+fn neutral_original_mouse_up_during_pending_close_retires_legacy_hold_without_game_edge() {
+    use crate::plugins::ui::NativeInputRecipient;
+    use crate::runtime::platform::{PlatformEvent, apply_native_recipient_input_event};
+
+    let context = InputContext::new(InputSourceId::new(851), Some(InputDeviceId::new(1)));
+    let legacy = Some(NativeInputRecipient::LegacyNativeConsumer);
+    let send = |input: &mut InputState, state: DigitalState, recipient| {
+        apply_native_recipient_input_event(
+            input,
+            &PlatformEvent::MouseInput {
+                context,
+                input: PointerButtonInput {
+                    button: PointerButton::Left,
+                    state,
+                },
+            },
+            recipient,
+        );
+    };
+    let mut input = InputState::new();
+    send(&mut input, DigitalState::Pressed, legacy);
+    assert!(input.left_mouse_pressed());
+    assert!(input.left_mouse_down());
+    input.clear_frame();
+
+    // An unresolved close retains the original physical Up, not legacy routing.
+    send(&mut input, DigitalState::Released, None);
+    assert!(!input.pointer_button_down_in(context, PointerButton::Left));
+    assert!(!input.left_mouse_down());
+    assert!(!input.left_mouse_released());
+    assert!(input.mouse_button_transitions().is_empty());
+
+    // A veto makes the old recipient eligible again but cannot resurrect its
+    // previous hold or create a delayed release/press. Only a new real Down may.
+    input.clear_frame();
+    assert!(!input.left_mouse_down());
+    assert!(!input.left_mouse_pressed());
+    send(&mut input, DigitalState::Pressed, legacy);
+    assert!(input.left_mouse_pressed());
+    assert!(input.left_mouse_down());
+    assert_eq!(input.mouse_button_transitions().len(), 1);
+}
+
+#[test]
+fn neutral_mouse_up_retracts_only_matching_legacy_device_and_button() {
+    use crate::plugins::ui::NativeInputRecipient;
+    use crate::runtime::platform::{PlatformEvent, apply_native_recipient_input_event};
+
+    let source = InputSourceId::new(852);
+    let a = InputContext::new(source, Some(InputDeviceId::new(1)));
+    let b = InputContext::new(source, Some(InputDeviceId::new(2)));
+    let legacy = Some(NativeInputRecipient::LegacyNativeConsumer);
+    let send = |input: &mut InputState, context, button, state, recipient| {
+        apply_native_recipient_input_event(
+            input,
+            &PlatformEvent::MouseInput {
+                context,
+                input: PointerButtonInput { button, state },
+            },
+            recipient,
+        );
+    };
+    let mut input = InputState::new();
+    send(&mut input, a, PointerButton::Left, DigitalState::Pressed, legacy);
+    send(&mut input, b, PointerButton::Left, DigitalState::Pressed, legacy);
+    send(&mut input, a, PointerButton::Right, DigitalState::Pressed, legacy);
+    input.clear_frame();
+
+    // Original A/Left Up routed to UI must not erase B/Left or A/Right.
+    send(&mut input, a, PointerButton::Left, DigitalState::Released, None);
+    assert!(!input.pointer_button_down_in(a, PointerButton::Left));
+    assert!(input.pointer_button_down_in(b, PointerButton::Left));
+    assert!(input.pointer_button_down_in(a, PointerButton::Right));
+    assert!(input.left_mouse_down());
+    assert!(input.right_mouse_down());
+    assert!(!input.left_mouse_released());
+    assert!(input.mouse_button_transitions().is_empty());
+
+    // When the last eligible Left source actually releases via legacy, the
+    // single ordinary aggregate release edge still occurs exactly once.
+    send(&mut input, b, PointerButton::Left, DigitalState::Released, legacy);
+    assert!(!input.left_mouse_down());
+    assert!(input.left_mouse_released());
+    assert!(input.right_mouse_down());
+    assert_eq!(input.mouse_button_transitions().len(), 1);
+
+    input.clear_frame();
+    send(&mut input, a, PointerButton::Right, DigitalState::Released, None);
+    assert!(!input.right_mouse_down());
+    assert!(!input.right_mouse_released());
+    assert!(input.mouse_button_transitions().is_empty());
+}
+
+#[test]
 fn native_duplicate_retains_only_eligible_same_source_down_generation() {
     let mut input = InputState::new();
     let mut actions = ActionState::new();
