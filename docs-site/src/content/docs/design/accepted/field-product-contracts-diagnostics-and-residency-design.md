@@ -5,7 +5,7 @@ status: accepted
 owner: workspace
 layer: cross-domain
 canonical: true
-last_reviewed: 2026-05-12
+last_reviewed: 2026-09-27
 publication: reference
 pagefind: false
 related_adrs:
@@ -27,8 +27,11 @@ supersedes:
 
 Accepted target contract design.
 
-Existing `domain/world_sdf` product types remain the current SDF-world
-specialization until code migration creates broader field/product contracts.
+`domain/product` now implements the shared engine-agnostic vocabulary for
+product descriptors, policies, diagnostics, jobs, query snapshots, render
+selections, publication outcomes, and ratification. Product-family truth and
+storage remain with owning domains; `domain/world_sdf` remains the SDF-world
+specialization rather than generic product authority.
 
 ## Purpose
 
@@ -166,8 +169,10 @@ Required diagnostic categories:
 
 ## Ownership Answers
 
-- Generic product contracts belong in a domain-level product boundary, not
-  foundation and not engine runtime.
+- Shared generic product contract vocabulary belongs in `domain/product`,
+  not foundation and not engine runtime.
+- Product-family truth remains in the owning domain; shared descriptors and
+  ratifiers do not create a global product authority.
 - Domain-specific diagnostic codes belong in the owning product domain.
 - Foundation diagnostics and ratification provide vocabulary, not field-product
   policy.
