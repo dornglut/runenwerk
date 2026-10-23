@@ -4,8 +4,14 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result};
+use engine::plugins::render::RunenUiPaintSubmissionRegistryResource;
+use engine::plugins::render::host::RenderSurfaceId;
 use engine::plugins::render::renderer::RenderGpuFrameTerminalDisposition;
 use engine::plugins::render::{Gfx, RenderFlowId, RenderFlowRegistryResource};
+use engine::plugins::ui::{
+    UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
+};
+use engine::runtime::NativeWindowId;
 use runen_ecs::World;
 use runen_gpu::GpuSubmissionId;
 
@@ -49,6 +55,128 @@ pub struct Report {
     pub failure: Option<String>,
 }
 
+impl Report {
+    pub fn record_failure(&mut self, error: String) {
+        self.complete = false;
+        self.failure.get_or_insert(error);
+    }
+
+    pub fn ensure_complete(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.failure.is_none(),
+            "qualification observation failed: {:?}",
+            self.failure
+        );
+        anyhow::ensure!(
+            self.complete,
+            "qualification stopped before workload, idle/recovery and final drain completed"
+        );
+        Ok(())
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+struct UiObservation {
+    intake: Option<(u64, u64)>,
+    displayed: Option<(u64, u64)>,
+    applied_generation: u64,
+}
+
+impl UiObservation {
+    fn read(world: &World, slot: UiRuntimeSlotId) -> Result<Self> {
+        let applied_generation = world
+            .resource::<UiRuntimeSlotsResource>()?
+            .observe_app::<super::QualificationUi, _>(slot, |app| app.state().text_generation)
+            .map_err(|error| anyhow::anyhow!("UI state unavailable: {error:?}"))?;
+        let associations = world.resource::<UiRuntimePresentationAssociationsResource>()?;
+        let binding = associations
+            .binding(slot)
+            .context("qualification UI binding missing")?;
+        anyhow::ensure!(
+            binding.render_surface_id == RenderSurfaceId::primary(),
+            "qualification UI surface changed"
+        );
+        let intake = world
+            .resource::<RunenUiPaintSubmissionRegistryResource>()?
+            .get_for_surface(&binding.producer_id, binding.render_surface_id)
+            .map(|paint| {
+                (
+                    paint.publication_id.raw(),
+                    paint.publication.revision().get(),
+                )
+            });
+        let displayed = associations
+            .displayed_for_native_recipient(slot, NativeWindowId::primary())
+            .filter(|shown| {
+                shown.producer_id == binding.producer_id
+                    && shown.render_surface_id == binding.render_surface_id
+            })
+            .map(|shown| (shown.publication_id.raw(), shown.paint_revision.get()));
+        Ok(Self {
+            intake,
+            displayed,
+            applied_generation,
+        })
+    }
+
+    fn ready(self) -> bool {
+        self.intake.is_some() && self.intake == self.displayed
+    }
+}
+
+struct ChangeRequest {
+    generation: u64,
+    before: (u64, u64),
+    started: Instant,
+}
+
+#[derive(Default)]
+struct UiProgress {
+    latest: UiObservation,
+    requested: u64,
+    acknowledged: u64,
+    pending: Option<ChangeRequest>,
+}
+
+impl UiProgress {
+    fn observe(&mut self, observation: UiObservation) {
+        self.latest = observation;
+        if let Some(request) = &self.pending
+            && observation.ready()
+            && observation.applied_generation == request.generation
+            && let Some(now) = observation.intake
+            && now.0 > request.before.0
+            && now.1 > request.before.1
+        {
+            self.acknowledged += 1;
+            println!(
+                "U9C_UI_CHANGE_ACK generation={} publication={} paint_revision={}",
+                request.generation, now.0, now.1
+            );
+            self.pending = None;
+        }
+    }
+
+    fn request(&mut self) -> Option<u64> {
+        if self.pending.is_some() || !self.latest.ready() {
+            return None;
+        }
+        self.requested += 1;
+        self.pending = Some(ChangeRequest {
+            generation: self.requested,
+            before: self.latest.intake?,
+            started: Instant::now(),
+        });
+        Some(self.requested)
+    }
+
+    fn qualifies(&self, content: Content, frames: u64, completed: u64, change_origin: u64) -> bool {
+        completed >= frames
+            && (content == Content::Control || self.latest.ready())
+            && (content != Content::Changing || self.acknowledged - change_origin >= frames)
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 enum Phase {
     Running,
@@ -71,6 +199,11 @@ pub struct Probe {
     enabled: bool,
     peak_resources: usize,
     peak_bindings: usize,
+    ui: UiProgress,
+    qualified_completed: u64,
+    recovery_qualified: u64,
+    recovery_changes: u64,
+    last_ui_ready: Instant,
 }
 
 impl Probe {
@@ -88,6 +221,11 @@ impl Probe {
             enabled: false,
             peak_resources: 0,
             peak_bindings: 0,
+            ui: UiProgress::default(),
+            qualified_completed: 0,
+            recovery_qualified: 0,
+            recovery_changes: 0,
+            last_ui_ready: Instant::now(),
         }
     }
 
@@ -97,7 +235,27 @@ impl Probe {
         world: &mut World,
         flow: &mut RenderFlowId,
         host_frame: u64,
+        slot: UiRuntimeSlotId,
     ) -> Result<bool> {
+        if self.options.content != Content::Control {
+            self.ui.observe(UiObservation::read(world, slot)?);
+            if self.ui.latest.ready() {
+                self.last_ui_ready = Instant::now();
+            }
+            if matches!(self.phase, Phase::Running | Phase::Recovery) {
+                anyhow::ensure!(
+                    self.last_ui_ready.elapsed() < Duration::from_secs(15),
+                    "UI contribution/completed-Present witness did not become available"
+                );
+                anyhow::ensure!(
+                    self.ui
+                        .pending
+                        .as_ref()
+                        .is_none_or(|request| request.started.elapsed() < Duration::from_secs(15)),
+                    "changing text did not reach applied and completed publication"
+                );
+            }
+        }
         let (resources, bindings, execution, pending) = {
             let gfx = world.resource_mut::<Gfx>()?;
             if !self.enabled {
@@ -109,6 +267,14 @@ impl Probe {
             // Observe both handles that remain pending and submissions that accepted and
             // terminalized between polls. Keep only outstanding IDs, never GPU handles.
             for receipt in gfx.pending_gpu_frame_submissions() {
+                anyhow::ensure!(
+                    receipt.surface() == RenderSurfaceId::primary().raw()
+                        && receipt
+                            .invocations()
+                            .iter()
+                            .any(|invocation| invocation.flow_id() == *flow),
+                    "unexpected flow/surface submission in qualification"
+                );
                 if self.observed.insert(receipt.submission().id()) {
                     self.accepted += 1;
                 }
@@ -119,6 +285,14 @@ impl Probe {
                 "terminal delivery disabled or incomplete"
             );
             for outcome in batch.outcomes() {
+                anyhow::ensure!(
+                    outcome.surface() == RenderSurfaceId::primary().raw()
+                        && outcome
+                            .invocations()
+                            .iter()
+                            .any(|invocation| invocation.flow_id() == *flow),
+                    "unexpected terminal flow/surface in qualification"
+                );
                 if !self.observed.remove(&outcome.submission_id()) {
                     self.accepted += 1;
                 }
@@ -131,6 +305,9 @@ impl Probe {
                     outcome.disposition()
                 );
                 self.completed += 1;
+                if self.options.content == Content::Control || self.ui.latest.ready() {
+                    self.qualified_completed += 1;
+                }
             }
             (
                 gfx.resource_realization_stats(),
@@ -141,6 +318,12 @@ impl Probe {
         };
         self.peak_resources = self.peak_resources.max(resources.retained_records());
         self.peak_bindings = self.peak_bindings.max(bindings.retained_records());
+        println!(
+            "U9C_WORKLOAD frame={host_frame} ui_ready={} qualified_completed={} published_changes={}",
+            self.ui.latest.ready(),
+            self.qualified_completed,
+            self.ui.acknowledged
+        );
         println!(
             "U9C_RESOURCE frame={host_frame} phase={:?} accepted={} completed={} observed_pending={} renderer_pending={pending} g4c1={} g4c1_limit={} buffers={} textures={} views={} samplers={} g4c2={} g4c2_limit={} groups={} g4c2_pending={} g5_in_flight={} peak_g4c1={} peak_g4c2={}",
             self.phase,
@@ -166,7 +349,14 @@ impl Probe {
             && self.observed.is_empty()
             && self.accepted == self.completed;
         match self.phase {
-            Phase::Running if self.completed >= self.options.frames => {
+            Phase::Running
+                if self.ui.qualifies(
+                    self.options.content,
+                    self.options.frames,
+                    self.qualified_completed,
+                    0,
+                ) =>
+            {
                 anyhow::ensure!(
                     world
                         .resource_mut::<RenderFlowRegistryResource>()?
@@ -215,10 +405,20 @@ impl Probe {
                         .resource_mut::<RenderFlowRegistryResource>()?
                         .upsert_flow(resumed);
                     self.recovery_start = self.completed;
+                    self.recovery_qualified = self.qualified_completed;
+                    self.recovery_changes = self.ui.acknowledged;
+                    self.last_ui_ready = Instant::now();
                     self.transition(Phase::Recovery);
                 }
             }
-            Phase::Recovery if self.completed - self.recovery_start >= 120 => {
+            Phase::Recovery
+                if self.ui.qualifies(
+                    self.options.content,
+                    120,
+                    self.qualified_completed - self.recovery_qualified,
+                    self.recovery_changes,
+                ) =>
+            {
                 anyhow::ensure!(
                     world
                         .resource_mut::<RenderFlowRegistryResource>()?
@@ -232,9 +432,14 @@ impl Probe {
         Ok(false)
     }
 
-    pub fn changing(&self) -> bool {
-        self.options.content == Content::Changing
+    pub fn next_text_change(&mut self) -> Option<u64> {
+        if self.options.content == Content::Changing
             && matches!(self.phase, Phase::Running | Phase::Recovery)
+        {
+            self.ui.request()
+        } else {
+            None
+        }
     }
 
     fn transition(&mut self, phase: Phase) {
@@ -250,6 +455,72 @@ impl Probe {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn late_observation_failure_invalidates_completed_report_and_preserves_first_error() {
+        let mut report = Report {
+            complete: true,
+            failure: None,
+        };
+        report.record_failure("missing presentation observation".to_owned());
+        report.record_failure("later close failure".to_owned());
+        assert!(!report.complete);
+        assert!(report.ensure_complete().is_err());
+        assert_eq!(
+            report.failure.as_deref(),
+            Some("missing presentation observation")
+        );
+    }
+
+    #[test]
+    fn gpu_completion_cannot_replace_ui_or_advancing_published_text() {
+        let mut ui = UiProgress::default();
+        assert!(!ui.qualifies(Content::Static, 1, 10_000, 0));
+        assert!(!ui.qualifies(Content::Changing, 1, 10_000, 0));
+        assert!(ui.qualifies(Content::Control, 1, 1, 0));
+        ui.observe(UiObservation {
+            intake: Some((1, 1)),
+            displayed: None,
+            applied_generation: 0,
+        });
+        assert!(!ui.qualifies(Content::Static, 1, 10_000, 0));
+        ui.observe(UiObservation {
+            intake: Some((1, 1)),
+            displayed: Some((1, 1)),
+            applied_generation: 0,
+        });
+        assert!(ui.qualifies(Content::Static, 1, 1, 0));
+        assert_eq!(ui.request(), Some(1));
+        // Applied state alone, fresh paint alone, and a nonmatching completed
+        // publication all fail to acknowledge the requested text generation.
+        for observation in [
+            UiObservation {
+                intake: Some((1, 1)),
+                displayed: Some((1, 1)),
+                applied_generation: 1,
+            },
+            UiObservation {
+                intake: Some((2, 2)),
+                displayed: Some((2, 2)),
+                applied_generation: 0,
+            },
+            UiObservation {
+                intake: Some((2, 2)),
+                displayed: Some((1, 1)),
+                applied_generation: 1,
+            },
+        ] {
+            ui.observe(observation);
+            assert!(!ui.qualifies(Content::Changing, 1, 10_000, 0));
+        }
+        ui.observe(UiObservation {
+            intake: Some((2, 2)),
+            displayed: Some((2, 2)),
+            applied_generation: 1,
+        });
+        assert!(ui.qualifies(Content::Changing, 1, 1, 0));
+        assert_eq!(ui.acknowledged, 1);
+    }
     fn args(values: &[&str]) -> Vec<String> {
         values.iter().map(|s| (*s).to_owned()).collect()
     }

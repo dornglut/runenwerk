@@ -219,7 +219,12 @@ cargo run -p engine --example native_ui_input_qualification --locked -- --lifeti
 cargo run -p engine --example native_ui_input_qualification --locked -- --lifetime-control --frames 4096
 ```
 
-`--frames` counts observed terminal GPU frame completions, not host callbacks.
+`--frames` requires at least that many terminal GPU frame completions with the
+selected UI publication confirmed by the existing completed-Present association,
+not host callbacks. Changing mode additionally requires that many applied text
+generations to reach newer matching paint and completed publications; it waits
+for each acknowledgement before requesting the next change. Missing UI or a
+stalled change fails after 15 seconds. The control does not require UI evidence.
 Short runs qualify fixture plumbing only. The 4,096-frame operator runs exceed
 the original 148/594-frame failures; they do not establish a universal duration
 or memory threshold. The control keeps the same mounted UI and Host while
@@ -268,6 +273,9 @@ if (git status --porcelain) { throw 'Qualification requires a clean source' }
 $env:GROTTO_RENDER_REALIZATION_LOG = '1'
 $exe = (Resolve-Path 'target/debug/examples/native_ui_input_qualification.exe').Path
 $case = 'static-1'
+$evidence = Join-Path $env:TEMP ('runenwerk-u9c-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+New-Item -ItemType Directory -Path $evidence -ErrorAction Stop | Out-Null
+$case = Join-Path $evidence $case
 $proc = Start-Process -FilePath $exe -ArgumentList '--lifetime-static','--frames','4096' -PassThru -RedirectStandardOutput "$case.stdout.log" -RedirectStandardError "$case.stderr.log"
 $deadline = (Get-Date).AddMinutes(15)
 while (-not $proc.HasExited) {

@@ -236,127 +236,25 @@ impl NativeWindowHook for QualificationHook {
     }
 
     fn frame(&mut self, _: &Window, world: &mut World) -> Result<()> {
-        self.frames += 1;
-        if let Some(probe) = self.lifetime.as_mut() {
-            let result: Result<bool> = (|| {
-                let stop = probe.observe(world, &mut self.flow, self.frames)?;
-                if !stop && probe.changing() {
-                    // Explicit application evolution; never a fabricated native input event.
-                    world
-                        .resource_mut::<UiRuntimeSlotsResource>()?
-                        .submit_app_action::<QualificationUi>(
-                            self.slot,
-                            QualificationAction::ChangeText(self.frames),
-                        )
-                        .map_err(|error| {
-                            anyhow::anyhow!("changing-text action rejected: {error:?}")
-                        })?;
-                }
-                Ok(stop)
-            })();
-            let stop = match result {
-                Ok(stop) => stop,
-                Err(error) => {
-                    probe
-                        .report
-                        .lock()
-                        .map_err(|_| anyhow::anyhow!("lifetime report poisoned"))?
-                        .failure = Some(format!("{error:#}"));
-                    true
-                }
-            };
-            if stop {
-                let record = world
-                    .resource_mut::<WindowStateRegistryResource>()?
-                    .record_mut(NativeWindowId::primary())
-                    .context("primary missing at lifetime stop")?;
+        let result = self.observe_frame(world);
+        if let Err(error) = &result
+            && let Some(probe) = &self.lifetime
+        {
+            // Host hooks retain errors as diagnostics. Make every failure, including
+            // the observation tail and final close, invalidate this example's result.
+            probe
+                .report
+                .lock()
+                .map_err(|_| anyhow::anyhow!("report poisoned"))?
+                .record_failure(format!("{error:#}"));
+            if let Ok(registry) = world.resource_mut::<WindowStateRegistryResource>()
+                && let Some(record) = registry.record_mut(NativeWindowId::primary())
+            {
                 record.request_close();
                 record.approve_close();
             }
         }
-        let (window_focused, close_intent) = {
-            let record = world
-                .resource::<WindowStateRegistryResource>()?
-                .record(NativeWindowId::primary())
-                .context("primary native window missing")?;
-            (record.focused, record.close_intent_pending)
-        };
-        let selected = world
-            .resource::<UiNativeInputRecipientsResource>()?
-            .binding_epoch_for_window(NativeWindowId::primary());
-        let displayed = world
-            .resource::<UiRuntimePresentationAssociationsResource>()?
-            .displayed_for_native_recipient(self.slot, NativeWindowId::primary())
-            .is_some();
-        // Renderer intake is an immutable paint candidate, not proof of a
-        // submitted/completed frame or an input permission. Observe it separately
-        // from the one terminal completed-Present association above.
-        let paint_intake = world
-            .resource::<UiRuntimePresentationAssociationsResource>()?
-            .binding(self.slot)
-            .and_then(|binding| {
-                world
-                    .resource::<RunenUiPaintSubmissionRegistryResource>()
-                    .ok()?
-                    .get_for_surface(&binding.producer_id, binding.render_surface_id)
-                    .map(|paint| paint.publication_id.raw())
-            });
-        let owner = match world
-            .resource_mut::<UiRuntimeSlotsResource>()?
-            .input_ownership(self.slot)
-        {
-            Ok(ownership) => format!(
-                "status={:?} revision={} focus={:?} composition={} pointers={} capture_count={} space_owner={}",
-                ownership.status(),
-                ownership.revision().get(),
-                ownership.keyboard().focused_node(),
-                ownership.keyboard().composition_generation().is_some(),
-                ownership.pointers().len(),
-                ownership
-                    .pointers()
-                    .iter()
-                    .filter(|pointer| pointer.capture_owner().is_some())
-                    .count(),
-                ownership.keyboard().space_activation_owner().is_some(),
-            ),
-            Err(error) => format!("unavailable={error:?}"),
-        };
-        let actions = world.resource::<ActionState>()?;
-        let w = actions.action_down(action::WORLD_MOVE_UP);
-        let a = actions.action_down(action::WORLD_MOVE_LEFT);
-        let s = actions.action_down(action::WORLD_MOVE_DOWN);
-        let d = actions.action_down(action::WORLD_MOVE_RIGHT);
-        let activations = self.activations.load(Ordering::Relaxed);
-        let observation = format!(
-            "frame={} native_focused={} selected_epoch={selected:?} paint_intake={paint_intake:?} completed_present={} M13=[{owner}] game_down=[W:{w},A:{a},S:{s},D:{d}] ui_activations={activations}",
-            self.frames, window_focused, displayed
-        );
-        // Only semantic changes are logged; frame counter stays in the output
-        // but must not cause one trace line for every continuously paced frame.
-        let stable = format!(
-            "focused={window_focused} selected={selected:?} paint={paint_intake:?} present={displayed} {owner} game={w}{a}{s}{d} activations={activations}"
-        );
-        if self.last_observation.as_deref() != Some(stable.as_str()) {
-            println!("U9C_FRAME {observation}");
-            self.last_observation = Some(stable);
-            world
-                .resource_mut::<WindowStateRegistryResource>()?
-                .record_mut(NativeWindowId::primary())
-                .context("primary native window disappeared")?
-                .set_title(format!(
-                    "U9-C Native UI | present={displayed} | focus={window_focused} | game W={w} | UI clicks={activations}"
-                ));
-        }
-        if close_intent {
-            // Physical close remains an original Host event. This is only
-            // the application's existing explicit approval policy.
-            world
-                .resource_mut::<WindowStateRegistryResource>()?
-                .record_mut(NativeWindowId::primary())
-                .context("primary native window disappeared at close")?
-                .approve_close();
-        }
-        Ok(())
+        result
     }
 
     fn detach(&mut self, _: &mut World) -> Result<()> {
@@ -461,15 +359,7 @@ fn main() -> Result<()> {
         let report = report
             .lock()
             .map_err(|_| anyhow::anyhow!("lifetime report poisoned"))?;
-        anyhow::ensure!(
-            report.failure.is_none(),
-            "lifetime observation failed: {:?}",
-            report.failure
-        );
-        anyhow::ensure!(
-            report.complete,
-            "lifetime stopped before the workload, idle/recovery and final drain completed"
-        );
+        report.ensure_complete()?;
     }
     println!("U9C_EXIT result=ok");
     Ok(())
@@ -498,4 +388,113 @@ fn qualification_flow(with_ui: bool) -> Result<RenderFlow> {
         .validate()?;
 
     Ok(flow)
+}
+
+impl QualificationHook {
+    fn observe_frame(&mut self, world: &mut World) -> Result<()> {
+        self.frames += 1;
+        if let Some(probe) = self.lifetime.as_mut() {
+            let stop = probe.observe(world, &mut self.flow, self.frames, self.slot)?;
+            if !stop && let Some(generation) = probe.next_text_change() {
+                world
+                    .resource_mut::<UiRuntimeSlotsResource>()?
+                    .submit_app_action::<QualificationUi>(
+                        self.slot,
+                        QualificationAction::ChangeText(generation),
+                    )
+                    .map_err(|error| anyhow::anyhow!("changing-text action rejected: {error:?}"))?;
+            }
+            if stop {
+                let record = world
+                    .resource_mut::<WindowStateRegistryResource>()?
+                    .record_mut(NativeWindowId::primary())
+                    .context("primary missing at lifetime stop")?;
+                record.request_close();
+                record.approve_close();
+            }
+        }
+        let (window_focused, close_intent) = {
+            let record = world
+                .resource::<WindowStateRegistryResource>()?
+                .record(NativeWindowId::primary())
+                .context("primary native window missing")?;
+            (record.focused, record.close_intent_pending)
+        };
+        let selected = world
+            .resource::<UiNativeInputRecipientsResource>()?
+            .binding_epoch_for_window(NativeWindowId::primary());
+        let displayed = world
+            .resource::<UiRuntimePresentationAssociationsResource>()?
+            .displayed_for_native_recipient(self.slot, NativeWindowId::primary())
+            .is_some();
+        // Renderer intake is an immutable paint candidate, not proof of a
+        // submitted/completed frame or an input permission. Observe it separately
+        // from the one terminal completed-Present association above.
+        let paint_intake = world
+            .resource::<UiRuntimePresentationAssociationsResource>()?
+            .binding(self.slot)
+            .and_then(|binding| {
+                world
+                    .resource::<RunenUiPaintSubmissionRegistryResource>()
+                    .ok()?
+                    .get_for_surface(&binding.producer_id, binding.render_surface_id)
+                    .map(|paint| paint.publication_id.raw())
+            });
+        let owner = match world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .input_ownership(self.slot)
+        {
+            Ok(ownership) => format!(
+                "status={:?} revision={} focus={:?} composition={} pointers={} capture_count={} space_owner={}",
+                ownership.status(),
+                ownership.revision().get(),
+                ownership.keyboard().focused_node(),
+                ownership.keyboard().composition_generation().is_some(),
+                ownership.pointers().len(),
+                ownership
+                    .pointers()
+                    .iter()
+                    .filter(|pointer| pointer.capture_owner().is_some())
+                    .count(),
+                ownership.keyboard().space_activation_owner().is_some(),
+            ),
+            Err(error) => format!("unavailable={error:?}"),
+        };
+        let actions = world.resource::<ActionState>()?;
+        let w = actions.action_down(action::WORLD_MOVE_UP);
+        let a = actions.action_down(action::WORLD_MOVE_LEFT);
+        let s = actions.action_down(action::WORLD_MOVE_DOWN);
+        let d = actions.action_down(action::WORLD_MOVE_RIGHT);
+        let activations = self.activations.load(Ordering::Relaxed);
+        let observation = format!(
+            "frame={} native_focused={} selected_epoch={selected:?} paint_intake={paint_intake:?} completed_present={} M13=[{owner}] game_down=[W:{w},A:{a},S:{s},D:{d}] ui_activations={activations}",
+            self.frames, window_focused, displayed
+        );
+        // Only semantic changes are logged; frame counter stays in the output
+        // but must not cause one trace line for every continuously paced frame.
+        let stable = format!(
+            "focused={window_focused} selected={selected:?} paint={paint_intake:?} present={displayed} {owner} game={w}{a}{s}{d} activations={activations}"
+        );
+        if self.last_observation.as_deref() != Some(stable.as_str()) {
+            println!("U9C_FRAME {observation}");
+            self.last_observation = Some(stable);
+            world
+                .resource_mut::<WindowStateRegistryResource>()?
+                .record_mut(NativeWindowId::primary())
+                .context("primary native window disappeared")?
+                .set_title(format!(
+                    "U9-C Native UI | present={displayed} | focus={window_focused} | game W={w} | UI clicks={activations}"
+                ));
+        }
+        if close_intent {
+            // Physical close remains an original Host event. This is only
+            // the application's existing explicit approval policy.
+            world
+                .resource_mut::<WindowStateRegistryResource>()?
+                .record_mut(NativeWindowId::primary())
+                .context("primary native window disappeared at close")?
+                .approve_close();
+        }
+        Ok(())
+    }
 }

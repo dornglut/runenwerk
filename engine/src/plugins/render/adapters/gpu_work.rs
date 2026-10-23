@@ -2553,6 +2553,12 @@ mod native_mixed_ui_tests {
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::Filterable)
         .require_format_role(GpuTextureFormat::Rgba8Unorm, GpuFormatRole::CopyDestination)
         .require_format_role(GpuTextureFormat::Rgba8UnormSrgb, GpuFormatRole::Blendable)
+        .require_format_role(
+            GpuTextureFormat::Rgba16Float,
+            GpuFormatRole::ColorAttachment,
+        )
+        .require_format_role(GpuTextureFormat::Rgba16Float, GpuFormatRole::Blendable)
+        .require_format_role(GpuTextureFormat::Rgba16Float, GpuFormatRole::Sampled)
         .with_fallback_policy(GpuSoftwareFallbackPolicy::Require)
         .with_allowed_backends([GpuBackendFamily::Vulkan])
         .with_label("Runenwerk U5 source-only mixed F2 proof");
