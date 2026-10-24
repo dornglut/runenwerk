@@ -200,6 +200,7 @@ impl Renderer {
         let render_pipeline_state =
             gpu_render_pipeline_state_for_pass(flow, pass_id, &color_formats, depth_format)?;
         let pipeline_descriptor = gpu_pipeline_descriptor_for_pass(
+            &mut self.flow_pipeline_cache,
             program_source,
             pass_kind,
             render_pipeline_state,
@@ -317,6 +318,7 @@ fn runtime_binding_value(
 }
 
 fn gpu_pipeline_descriptor_for_pass(
+    cache: &mut FlowPipelineArtifactCache,
     source: &GpuAdmittedProgramSource,
     pass_kind: FlowPassKind,
     render_state: Option<GpuRenderPipelineStateDescriptor>,
@@ -329,8 +331,18 @@ fn gpu_pipeline_descriptor_for_pass(
                 bail!("compute pipeline descriptor cannot carry render state");
             }
             let entry_point = GpuEntryPointName::new("cs_main")?;
-            let program =
-                GpuProgramDescriptor::new(source.clone(), [entry_point.clone()], refinements)?;
+            let program = cache.get_or_validate_program(
+                source,
+                std::slice::from_ref(&entry_point),
+                &refinements,
+                || {
+                    GpuProgramDescriptor::new(
+                        source.clone(),
+                        [entry_point.clone()],
+                        refinements.clone(),
+                    )
+                },
+            )?;
             Ok(FlowPassPipelineDescriptor::Compute(
                 GpuComputePipelineDescriptor::new(
                     program,
@@ -345,10 +357,17 @@ fn gpu_pipeline_descriptor_for_pass(
             })?;
             let vertex = GpuEntryPointName::new("vs_main")?;
             let fragment = GpuEntryPointName::new("fs_main")?;
-            let program = GpuProgramDescriptor::new(
-                source.clone(),
-                [vertex.clone(), fragment.clone()],
-                refinements,
+            let program = cache.get_or_validate_program(
+                source,
+                &[vertex.clone(), fragment.clone()],
+                &refinements,
+                || {
+                    GpuProgramDescriptor::new(
+                        source.clone(),
+                        [vertex.clone(), fragment.clone()],
+                        refinements.clone(),
+                    )
+                },
             )?;
             Ok(FlowPassPipelineDescriptor::Render(
                 GpuRenderPipelineDescriptor::new(
@@ -743,6 +762,166 @@ mod tests {
         PreparedMaterialTextureBinding, PreparedMaterialTextureBindingLocation,
         PreparedMaterialTextureKind,
     };
+
+    fn test_source(cache: &mut FlowPipelineArtifactCache, wgsl: &str) -> GpuAdmittedProgramSource {
+        cache
+            .admit_program_source(
+                runen_gpu::GpuProgramSourceKey::new("test:pipeline-reuse").unwrap(),
+                0,
+                wgsl,
+                runen_gpu::GpuProgramSourceProvenance::new("pipeline-reuse", None).unwrap(),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn reused_compute_program_preserves_specialization_and_validation() {
+        use runen_gpu::{
+            GpuCapabilityRequirements, GpuSpecializationDeclaration, GpuSpecializationEntry,
+            GpuSpecializationKey, GpuSpecializationSchema, GpuSpecializationValue,
+        };
+        let mut cache = FlowPipelineArtifactCache::default();
+        let source = test_source(
+            &mut cache,
+            "override stage: u32 = 0u; @compute @workgroup_size(1) fn cs_main() { let selected = stage; }",
+        );
+        let specialization = |value| {
+            let key = GpuSpecializationKey::new("stage").unwrap();
+            let value = GpuSpecializationValue::U32(value);
+            GpuSpecializationValueSet::new(
+                GpuSpecializationSchema::new([GpuSpecializationDeclaration::new(
+                    key.clone(),
+                    value.value_type(),
+                    None,
+                    GpuCapabilityRequirements::new(),
+                )
+                .unwrap()])
+                .unwrap(),
+                [GpuSpecializationEntry::new(key, value)],
+            )
+            .unwrap()
+        };
+        let first = gpu_pipeline_descriptor_for_pass(
+            &mut cache,
+            &source,
+            FlowPassKind::Compute,
+            None,
+            specialization(0),
+            vec![],
+        )
+        .unwrap();
+        let second = gpu_pipeline_descriptor_for_pass(
+            &mut cache,
+            &source,
+            FlowPassKind::Compute,
+            None,
+            specialization(1),
+            vec![],
+        )
+        .unwrap();
+        assert!(first.program().is_same_record(second.program()));
+        assert_ne!(first, second);
+        assert_ne!(first.specialization(), second.specialization());
+        assert!(
+            gpu_pipeline_descriptor_for_pass(
+                &mut cache,
+                &source,
+                FlowPassKind::Graphics,
+                None,
+                specialization(0),
+                vec![]
+            )
+            .is_err()
+        );
+        cache.retain_flows(&[]);
+        let next = gpu_pipeline_descriptor_for_pass(
+            &mut cache,
+            &source,
+            FlowPassKind::Compute,
+            None,
+            specialization(0),
+            vec![],
+        )
+        .unwrap();
+        assert!(!first.program().is_same_record(next.program()));
+        assert_eq!(first, next, "a clean batch must preserve pipeline meaning");
+    }
+
+    #[test]
+    fn material_program_reuse_preserves_refinements_and_render_targets() {
+        let mut cache = FlowPipelineArtifactCache::default();
+        let source = test_source(
+            &mut cache,
+            r#"
+@group(1) @binding(31) var image: texture_2d<f32>;
+@group(1) @binding(47) var image_sampler: sampler;
+@vertex fn vs_main() -> @builtin(position) vec4f { return vec4f(0.0, 0.0, 0.0, 1.0); }
+@fragment fn fs_main() -> @location(0) vec4f {
+    return textureSample(image, image_sampler, vec2f(0.5));
+}
+"#,
+        );
+        let material = material_with_bindings(vec![texture_binding(0, 1, 31, 47)]);
+        let refinements = gpu_material_binding_refinements(&material, None).unwrap();
+        let state = |format| {
+            GpuRenderPipelineStateDescriptor::new(
+                GpuVertexInputStateDescriptor::new([]).unwrap(),
+                Some(gpu_fragment_output_state(&[format], RenderBlendMode::Replace).unwrap()),
+                GpuPrimitiveStateDescriptor::default(),
+                None,
+                GpuMultisampleStateDescriptor::default(),
+            )
+            .unwrap()
+        };
+        let specialization = || {
+            GpuSpecializationValueSet::new(runen_gpu::GpuSpecializationSchema::new([]).unwrap(), [])
+                .unwrap()
+        };
+        let first = gpu_pipeline_descriptor_for_pass(
+            &mut cache,
+            &source,
+            FlowPassKind::Fullscreen,
+            Some(state(GpuTextureFormat::Rgba8Unorm)),
+            specialization(),
+            refinements.clone(),
+        )
+        .unwrap();
+        let second = gpu_pipeline_descriptor_for_pass(
+            &mut cache,
+            &source,
+            FlowPassKind::Fullscreen,
+            Some(state(GpuTextureFormat::Bgra8Unorm)),
+            specialization(),
+            refinements.clone(),
+        )
+        .unwrap();
+        assert!(first.program().is_same_record(second.program()));
+        assert_ne!(first, second);
+        let mut invalid = refinements.clone();
+        invalid.push(refinements[0].clone());
+        assert!(
+            gpu_pipeline_descriptor_for_pass(
+                &mut cache,
+                &source,
+                FlowPassKind::Fullscreen,
+                Some(state(GpuTextureFormat::Rgba8Unorm)),
+                specialization(),
+                invalid
+            )
+            .is_err()
+        );
+        let repeated = gpu_pipeline_descriptor_for_pass(
+            &mut cache,
+            &source,
+            FlowPassKind::Fullscreen,
+            Some(state(GpuTextureFormat::Rgba8Unorm)),
+            specialization(),
+            refinements,
+        )
+        .unwrap();
+        assert!(first.program().is_same_record(repeated.program()));
+        assert_eq!(first, repeated);
+    }
 
     #[test]
     fn missing_logical_texture_view_rejects_before_bind_group_realization() {
