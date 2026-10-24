@@ -1,11 +1,18 @@
-use super::{build_surface_config, preferred_surface_format};
+use super::{
+    RenderSurfaceAppliedPresentation, RenderSurfaceLifecycleState,
+    RenderSurfacePresentationAttempt, RenderSurfacePresentationDisposition,
+    RenderSurfacePresentationError, RenderSurfacePresentationRequest,
+    RenderSurfacePresentationSnapshot, RenderSurfaceRecord, build_surface_config,
+    preferred_surface_format, select_surface_present_mode,
+};
 use crate::plugins::render::apply_runenwerk_gpu_context_policy;
 use anyhow::Result;
 use pollster::block_on;
 use runen_gpu::{
     GpuAcquiredSurfaceImage, GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement,
     GpuContext, GpuContextDescriptor, GpuFormatRole, GpuPowerPreference, GpuPreferredFallback,
-    GpuSurfaceAcquireErrorCategory, GpuSurfaceConfiguration, GpuSurfaceHandle, GpuTextureFormat,
+    GpuSurfaceAcquireErrorCategory, GpuSurfaceCapabilities, GpuSurfaceConfiguration,
+    GpuSurfaceHandle, GpuTextureFormat,
 };
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -15,10 +22,12 @@ use super::RenderSurfaceId;
 
 #[derive(Debug)]
 struct AttachedSurfaceState {
-    surface: GpuSurfaceHandle,
-    /// None while RunenGPU physically owns a registered but not configured surface.
-    /// Its handle must remain reachable for typed rollback and device-loss detach.
+    surface: Option<GpuSurfaceHandle>,
+    window: Arc<Window>,
+    /// Attachment-time physical capability snapshot, never a live re-probe.
+    capabilities: Option<GpuSurfaceCapabilities>,
     config: Option<GpuSurfaceConfiguration>,
+    applied_revision: u64,
 }
 
 #[derive(Debug)]
@@ -143,160 +152,551 @@ fn renderer_context_descriptor() -> Result<GpuContextDescriptor> {
     Ok(descriptor)
 }
 
+/// Resolve an exact-revision result independently of live physical ownership.
+/// Requested surfaces may expose a strict rejection, but never claim configured output.
+fn presentation_disposition(
+    record: &RenderSurfaceRecord,
+    applied: Option<RenderSurfaceAppliedPresentation>,
+    capabilities_available: bool,
+) -> RenderSurfacePresentationDisposition {
+    if record.lifecycle_state == RenderSurfaceLifecycleState::Retired {
+        return RenderSurfacePresentationDisposition::Unavailable;
+    }
+    if let Some(RenderSurfacePresentationAttempt::Rejected { revision, reason }) =
+        record.presentation_attempt
+        && revision == record.presentation_revision
+    {
+        return RenderSurfacePresentationDisposition::Rejected(reason);
+    }
+    if record.lifecycle_state != RenderSurfaceLifecycleState::Attached {
+        return RenderSurfacePresentationDisposition::Unavailable;
+    }
+    if applied.is_some_and(|current| {
+        current.revision == record.presentation_revision
+            && current.request == record.presentation_request
+    }) {
+        RenderSurfacePresentationDisposition::Applied
+    } else if !capabilities_available {
+        RenderSurfacePresentationDisposition::Unavailable
+    } else {
+        RenderSurfacePresentationDisposition::Pending
+    }
+}
+
 impl RenderGpuContext {
-    async fn new_async(window: Arc<Window>) -> Result<Self> {
+    async fn new_async(
+        window: Arc<Window>,
+        request: RenderSurfacePresentationRequest,
+        revision: u64,
+    ) -> Result<Self> {
         let descriptor = renderer_context_descriptor()?;
         let descriptor = apply_runenwerk_gpu_context_policy(descriptor);
         let (context, surface) =
             GpuContext::request_for_surface(descriptor, Arc::clone(&window)).await?;
-
+        let adapter = context.adapter_facts();
+        tracing::debug!(
+            target: "runenwerk.rpres",
+            backend = ?adapter.backend(),
+            name = ?adapter.diagnostic_name(),
+            driver = ?adapter.driver(),
+            driver_info = ?adapter.driver_info(),
+            vendor = ?adapter.vendor(),
+            device = ?adapter.device(),
+            "renderer native GPU context admitted adapter"
+        );
         let size = window.inner_size();
-        let caps = context.surface_capabilities(surface)?;
-        let format = preferred_surface_format(&caps)
-            .ok_or_else(|| anyhow::anyhow!("render surface reports no supported format"))?;
-        let surface_config = build_surface_config(size.width, size.height, format, &caps)?;
-        let surface = context.configure_surface(surface, surface_config.clone())?;
-
+        let capabilities = context
+            .surface_capabilities(surface)
+            .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?;
+        let format = preferred_surface_format(&capabilities)
+            .ok_or(RenderSurfacePresentationError::NoCompatibleFormat)?;
+        // A zero-size attachment must still reject a physically unsupported mode.
+        select_surface_present_mode(capabilities.present_modes(), request.present_mode)?;
+        // A newly created/minimized window may have no drawable extent yet.
+        // Keep the attachment and logical policy, but do not invent a configured swapchain.
+        let (surface, config) = if size.width > 0 && size.height > 0 {
+            let config =
+                build_surface_config(size.width, size.height, format, &capabilities, request)?;
+            let configured = context
+                .configure_surface(surface, config.clone())
+                .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?;
+            (configured, Some(config))
+        } else {
+            (surface, None)
+        };
         Ok(Self {
             context,
             surfaces: BTreeMap::from([(
                 RenderSurfaceId::primary(),
                 AttachedSurfaceState {
-                    surface,
-                    config: Some(surface_config),
+                    surface: Some(surface),
+                    window,
+                    capabilities: Some(capabilities),
+                    config,
+                    applied_revision: revision,
                 },
             )]),
         })
     }
 
     pub fn new(window: Arc<Window>) -> Result<Self> {
-        block_on(Self::new_async(window))
+        Self::new_with_presentation(window, RenderSurfacePresentationRequest::default(), 0)
+    }
+
+    pub fn new_with_presentation(
+        window: Arc<Window>,
+        request: RenderSurfacePresentationRequest,
+        revision: u64,
+    ) -> Result<Self> {
+        block_on(Self::new_async(window, request, revision))
     }
 
     pub fn attach_surface(
         &mut self,
-        render_surface_id: RenderSurfaceId,
+        id: RenderSurfaceId,
         window: Arc<Window>,
-        target_size_px: (u32, u32),
+        extent: (u32, u32),
     ) -> Result<()> {
-        if self.surfaces.contains_key(&render_surface_id) {
-            return Err(anyhow::anyhow!(
-                "render surface {} already retains physical GPU ownership",
-                render_surface_id.raw()
-            ));
+        self.attach_surface_with_presentation(
+            id,
+            window,
+            extent,
+            RenderSurfacePresentationRequest::default(),
+            0,
+        )
+    }
+
+    pub fn attach_surface_with_presentation(
+        &mut self,
+        id: RenderSurfaceId,
+        window: Arc<Window>,
+        extent: (u32, u32),
+        request: RenderSurfacePresentationRequest,
+        revision: u64,
+    ) -> Result<()> {
+        if self.surfaces.contains_key(&id) {
+            return Err(RenderSurfacePresentationError::RequiresReattachment.into());
         }
-        let surface = self.context.attach_surface(window)?;
-        // RunenGPU physically owns this window as soon as registration succeeds.
-        // Publish the handle *before* fallible capabilities/configuration so a
-        // failed setup cannot make the Host rollback mistake it for a no-op.
+        let physical = self
+            .context
+            .attach_surface(Arc::clone(&window))
+            .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?;
+        // RunenGPU acquires physical ownership at registration, before capability
+        // admission or configuration can fail. Track that ownership immediately.
         self.surfaces.insert(
-            render_surface_id,
+            id,
             AttachedSurfaceState {
-                surface,
+                surface: Some(physical),
+                window: Arc::clone(&window),
+                capabilities: None,
                 config: None,
+                applied_revision: 0,
             },
         );
-        let caps = self.context.surface_capabilities(surface)?;
-        let format = preferred_surface_format(&caps)
-            .ok_or_else(|| anyhow::anyhow!("render surface reports no supported format"))?;
-        let config = build_surface_config(target_size_px.0, target_size_px.1, format, &caps)?;
-        let configured = self.context.configure_surface(surface, config.clone())?;
-        let state = self
-            .surfaces
-            .get_mut(&render_surface_id)
-            .expect("registered GPU surface remains tracked across synchronous setup");
-        state.surface = configured;
-        state.config = Some(config);
+        let outcome = (|| -> Result<_, RenderSurfacePresentationError> {
+            let capabilities = self
+                .context
+                .surface_capabilities(physical)
+                .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?;
+            let format = preferred_surface_format(&capabilities)
+                .ok_or(RenderSurfacePresentationError::NoCompatibleFormat)?;
+            select_surface_present_mode(capabilities.present_modes(), request.present_mode)?;
+            let config = if extent.0 > 0 && extent.1 > 0 {
+                Some(build_surface_config(
+                    extent.0,
+                    extent.1,
+                    format,
+                    &capabilities,
+                    request,
+                )?)
+            } else {
+                None
+            };
+            let configured = if let Some(config) = &config {
+                self.context
+                    .configure_surface(physical, config.clone())
+                    .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?
+            } else {
+                physical
+            };
+            Ok((configured, capabilities, config))
+        })();
+        let (surface, capabilities, config) = match outcome {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                // Do not lose track of an attachment if rollback itself fails.
+                if let Err(detach_error) = self.context.detach_surface(physical) {
+                    // Preserve the already tracked physical handle and native Window.
+                    return Err(RenderSurfacePresentationError::Gpu(detach_error.category()).into());
+                }
+                self.surfaces.remove(&id);
+                return Err(error.into());
+            }
+        };
+        self.surfaces.insert(
+            id,
+            AttachedSurfaceState {
+                surface: Some(surface),
+                window,
+                capabilities: Some(capabilities),
+                config,
+                applied_revision: revision,
+            },
+        );
         Ok(())
     }
 
-    pub fn detach_surface(&mut self, render_surface_id: RenderSurfaceId) -> bool {
-        let Some(state) = self.surfaces.get(&render_surface_id) else {
+    pub fn detach_surface(&mut self, id: RenderSurfaceId) -> bool {
+        let Some(state) = self.surfaces.get(&id) else {
             return false;
         };
-        if self.context.detach_surface(state.surface).is_err() {
+        if let Some(handle) = state.surface
+            && self.context.detach_surface(handle).is_err()
+        {
             return false;
         }
-        self.surfaces.remove(&render_surface_id);
+        self.surfaces.remove(&id);
         true
     }
 
-    pub fn has_surface(&self, render_surface_id: RenderSurfaceId) -> bool {
-        self.surfaces.contains_key(&render_surface_id)
+    pub fn has_surface(&self, id: RenderSurfaceId) -> bool {
+        self.surfaces
+            .get(&id)
+            .is_some_and(|state| state.surface.is_some())
     }
 
-    pub fn surface_config(
-        &self,
-        render_surface_id: RenderSurfaceId,
-    ) -> Option<&GpuSurfaceConfiguration> {
+    /// Stable logical attachment record survives failed physical reattachment.
+    pub(crate) fn has_surface_record(&self, id: RenderSurfaceId) -> bool {
+        self.surfaces.contains_key(&id)
+    }
+
+    pub fn surface_config(&self, id: RenderSurfaceId) -> Option<&GpuSurfaceConfiguration> {
         self.surfaces
-            .get(&render_surface_id)
+            .get(&id)
             .and_then(|state| state.config.as_ref())
     }
 
-    pub fn resize(&mut self, render_surface_id: RenderSurfaceId, width: u32, height: u32) -> bool {
-        let Some(state) = self.surfaces.get_mut(&render_surface_id) else {
-            return false;
+    /// A normalized logical extent is not proof that a native window can display.
+    pub fn is_surface_drawable(&self, id: RenderSurfaceId) -> bool {
+        self.surfaces.get(&id).is_some_and(|state| {
+            let size = state.window.inner_size();
+            size.width > 0 && size.height > 0
+        })
+    }
+
+    pub fn presentation_snapshot(
+        &self,
+        record: &RenderSurfaceRecord,
+    ) -> RenderSurfacePresentationSnapshot {
+        // Only a confirmed logical attachment may publish current physical facts.
+        // Requested and retired records must not claim an applied configuration.
+        let state = (record.lifecycle_state == RenderSurfaceLifecycleState::Attached)
+            .then(|| self.surfaces.get(&record.render_surface_id))
+            .flatten();
+        let supported = state
+            .and_then(|state| state.capabilities.as_ref())
+            .map(|caps| caps.present_modes().to_vec());
+        let selected = supported.as_ref().and_then(|modes| {
+            select_surface_present_mode(modes, record.presentation_request.present_mode).ok()
+        });
+        let attachment_epoch = state.and_then(|state| {
+            state.capabilities.as_ref()?;
+            let surface = state.surface?;
+            Some((surface.id(), surface.generation()))
+        });
+        let applied = state.and_then(|state| {
+            Some(RenderSurfaceAppliedPresentation {
+                request: RenderSurfacePresentationRequest::new(
+                    state.config.as_ref()?.present_mode(),
+                    state.config.as_ref()?.desired_maximum_frame_latency(),
+                )
+                .ok()?,
+                surface_generation: state.surface?.generation(),
+                revision: state.applied_revision,
+            })
+        });
+        let disposition = presentation_disposition(record, applied, supported.is_some());
+        RenderSurfacePresentationSnapshot {
+            render_surface_id: record.render_surface_id,
+            native_window_id: record.native_window_id,
+            requested: record.presentation_request,
+            request_revision: record.presentation_revision,
+            supported_at_attachment: supported,
+            attachment_epoch,
+            selected,
+            applied,
+            disposition,
+            last_attempt: record.presentation_attempt,
+        }
+    }
+
+    /// Run only before acquisition in the existing serial RenderSubmit/Gfx owner.
+    /// A failed physical reconfiguration invalidates the prior applied claim.
+    pub(crate) fn configure_presentation(
+        &mut self,
+        id: RenderSurfaceId,
+        request: RenderSurfacePresentationRequest,
+        revision: u64,
+        extent: (u32, u32),
+    ) -> Result<(), RenderSurfacePresentationError> {
+        if extent.0 == 0 || extent.1 == 0 {
+            return Err(RenderSurfacePresentationError::ZeroExtent);
+        }
+        let state = self
+            .surfaces
+            .get(&id)
+            .ok_or(RenderSurfacePresentationError::UnknownSurface)?;
+        if state.config.as_ref().is_some_and(|config| {
+            config.width() == extent.0
+                && config.height() == extent.1
+                && config.present_mode() == request.present_mode
+                && config.desired_maximum_frame_latency()
+                    == request.desired_maximum_frame_latency.get()
+        }) {
+            // Previously configured physical policy already satisfies this revision.
+            // Avoid an unnecessary GPU-idle swapchain reconfiguration.
+            if let Some(state) = self.surfaces.get_mut(&id) {
+                state.applied_revision = revision;
+            }
+            return Ok(());
+        }
+        if state.capabilities.is_none() || state.surface.is_none() {
+            // Missing/stale attachment facts require a new physical registration.
+            tracing::debug!(
+                target: "runenwerk.rpres",
+                surface = id.raw(),
+                old_handle = ?state.surface,
+                revision,
+                ?extent,
+                "pre-acquisition reattach required because cached attachment facts are unavailable"
+            );
+            self.reattach_surface(id, request, revision, extent)?;
+            return Ok(());
+        }
+        let (surface, capabilities, config) = {
+            let state = self
+                .surfaces
+                .get(&id)
+                .ok_or(RenderSurfacePresentationError::UnknownSurface)?;
+            let caps = state
+                .capabilities
+                .as_ref()
+                .ok_or(RenderSurfacePresentationError::RequiresReattachment)?;
+            // A valid, never-configured zero-size attachment may configure in place.
+            // Subsequent policy/resize changes preserve the existing physical format.
+            let config = if let Some(former) = state.config.as_ref() {
+                GpuSurfaceConfiguration::new(
+                    extent.0,
+                    extent.1,
+                    former.format(),
+                    former.color_space(),
+                    former.usages().iter().copied(),
+                    request.present_mode,
+                    former.alpha_mode(),
+                    request.desired_maximum_frame_latency.get(),
+                    former.view_formats().iter().copied(),
+                )
+                .map_err(|error| RenderSurfacePresentationError::Configuration(error.cause()))?
+            } else {
+                let format = preferred_surface_format(caps)
+                    .ok_or(RenderSurfacePresentationError::NoCompatibleFormat)?;
+                build_surface_config(extent.0, extent.1, format, caps, request)?
+            };
+            select_surface_present_mode(caps.present_modes(), request.present_mode)?;
+            (
+                state
+                    .surface
+                    .ok_or(RenderSurfacePresentationError::RequiresReattachment)?,
+                caps.clone(),
+                config,
+            )
         };
-        let Some(current) = state.config.as_ref() else {
-            // A failed attach still retains a physical surface for rollback,
-            // but no successfully admitted configuration exists to resize.
-            return false;
-        };
-        let Ok(config) = GpuSurfaceConfiguration::new(
-            width.max(1),
-            height.max(1),
-            current.format(),
-            current.color_space(),
-            current.usages().iter().copied(),
-            current.present_mode(),
-            current.alpha_mode(),
-            current.desired_maximum_frame_latency(),
-            current.view_formats().iter().copied(),
-        ) else {
-            return false;
-        };
-        let Ok(surface) = self
+        if !capabilities.supports_pair(config.format(), config.color_space())
+            || !capabilities.supports_alpha_mode(config.alpha_mode())
+            || config
+                .usages()
+                .iter()
+                .any(|usage| !capabilities.supports_usage(*usage))
+        {
+            return Err(RenderSurfacePresentationError::RequiresReattachment);
+        }
+        let configured = self.context.configure_surface(surface, config.clone());
+        match configured {
+            Ok(surface) => {
+                let state = self
+                    .surfaces
+                    .get_mut(&id)
+                    .ok_or(RenderSurfacePresentationError::UnknownSurface)?;
+                state.surface = Some(surface);
+                state.config = Some(config);
+                state.applied_revision = revision;
+                Ok(())
+            }
+            Err(error) => {
+                // An attempted physical configure can have side effects before returning.
+                if let Some(state) = self.surfaces.get_mut(&id) {
+                    state.config = None;
+                    state.capabilities = None;
+                }
+                Err(RenderSurfacePresentationError::Gpu(error.category()))
+            }
+        }
+    }
+
+    /// Re-register against this window to refresh attachment-time capabilities.
+    /// Never call inside a render or with an outstanding surface image lease.
+    pub(crate) fn reattach_surface(
+        &mut self,
+        id: RenderSurfaceId,
+        request: RenderSurfacePresentationRequest,
+        revision: u64,
+        extent: (u32, u32),
+    ) -> Result<(), RenderSurfacePresentationError> {
+        if extent.0 == 0 || extent.1 == 0 {
+            return Err(RenderSurfacePresentationError::ZeroExtent);
+        }
+        let state = self
+            .surfaces
+            .get(&id)
+            .ok_or(RenderSurfacePresentationError::UnknownSurface)?;
+        let window = Arc::clone(&state.window);
+        if let Some(old) = state.surface {
+            self.context
+                .detach_surface(old)
+                .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?;
+        }
+        {
+            let state = self
+                .surfaces
+                .get_mut(&id)
+                .ok_or(RenderSurfacePresentationError::UnknownSurface)?;
+            state.surface = None;
+            state.capabilities = None;
+            state.config = None;
+        }
+        let physical = self
             .context
-            .configure_surface(state.surface, config.clone())
-        else {
+            .attach_surface(Arc::clone(&window))
+            .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?;
+        let configuration = (|| {
+            let capabilities = self
+                .context
+                .surface_capabilities(physical)
+                .map_err(|error| RenderSurfacePresentationError::Gpu(error.category()))?;
+            let format = preferred_surface_format(&capabilities)
+                .ok_or(RenderSurfacePresentationError::NoCompatibleFormat)?;
+            let config = build_surface_config(extent.0, extent.1, format, &capabilities, request)?;
+            Ok::<_, RenderSurfacePresentationError>((capabilities, config))
+        })();
+        let (capabilities, config) = match configuration {
+            Ok(config) => config,
+            Err(error) => {
+                if let Err(detach_error) = self.context.detach_surface(physical) {
+                    if let Some(state) = self.surfaces.get_mut(&id) {
+                        state.surface = Some(physical);
+                    }
+                    return Err(RenderSurfacePresentationError::Gpu(detach_error.category()));
+                }
+                return Err(error);
+            }
+        };
+        let configured = match self.context.configure_surface(physical, config.clone()) {
+            Ok(configured) => configured,
+            Err(error) => {
+                if let Err(detach_error) = self.context.detach_surface(physical) {
+                    if let Some(state) = self.surfaces.get_mut(&id) {
+                        state.surface = Some(physical);
+                    }
+                    return Err(RenderSurfacePresentationError::Gpu(detach_error.category()));
+                }
+                return Err(RenderSurfacePresentationError::Gpu(error.category()));
+            }
+        };
+        let state = self
+            .surfaces
+            .get_mut(&id)
+            .ok_or(RenderSurfacePresentationError::UnknownSurface)?;
+        state.surface = Some(configured);
+        state.capabilities = Some(capabilities);
+        state.config = Some(config);
+        state.applied_revision = revision;
+        tracing::debug!(
+            target: "runenwerk.rpres",
+            surface = id.raw(),
+            new_handle = ?configured,
+            revision,
+            ?extent,
+            "new physical surface attachment was configured"
+        );
+        Ok(())
+    }
+
+    /// After Outdated/Lost, cached capabilities are not a fresh probe.
+    pub(crate) fn invalidate_surface(&mut self, id: RenderSurfaceId) {
+        if let Some(state) = self.surfaces.get_mut(&id) {
+            state.config = None;
+            state.capabilities = None;
+        }
+    }
+
+    pub fn resize(&mut self, id: RenderSurfaceId, width: u32, height: u32) -> bool {
+        let Some(config) = self.surface_config(id) else {
             return false;
         };
-        state.surface = surface;
-        state.config = Some(config);
-        true
+        let request = RenderSurfacePresentationRequest::new(
+            config.present_mode(),
+            config.desired_maximum_frame_latency(),
+        )
+        .expect("valid configured surface has positive latency");
+        let revision = self
+            .surfaces
+            .get(&id)
+            .map(|state| state.applied_revision)
+            .unwrap_or(0);
+        self.configure_presentation(id, request, revision, (width, height))
+            .is_ok()
     }
 
     pub fn acquire_surface_image(
-        &self,
-        render_surface_id: RenderSurfaceId,
+        &mut self,
+        id: RenderSurfaceId,
     ) -> Result<GpuAcquiredSurfaceImage, RenderSurfaceAcquireError> {
         let surface = self
             .surfaces
-            .get(&render_surface_id)
-            .ok_or(RenderSurfaceAcquireError::Lost)?
-            .surface;
-        self.context
-            .acquire_surface_image(surface)
-            .map_err(|error| match error.category() {
-                GpuSurfaceAcquireErrorCategory::Timeout
-                | GpuSurfaceAcquireErrorCategory::Occluded => RenderSurfaceAcquireError::Timeout,
-                GpuSurfaceAcquireErrorCategory::Outdated => RenderSurfaceAcquireError::Outdated,
-                GpuSurfaceAcquireErrorCategory::Lost
-                | GpuSurfaceAcquireErrorCategory::UnknownSurface
-                | GpuSurfaceAcquireErrorCategory::StaleGeneration
-                | GpuSurfaceAcquireErrorCategory::ContextOrDeviceUnavailableOrLost => {
-                    RenderSurfaceAcquireError::Lost
-                }
-                GpuSurfaceAcquireErrorCategory::NotConfigured
-                | GpuSurfaceAcquireErrorCategory::AlreadyAcquired
-                | GpuSurfaceAcquireErrorCategory::Validation
-                | GpuSurfaceAcquireErrorCategory::ForeignContext
-                | GpuSurfaceAcquireErrorCategory::IdentityExhausted
-                | GpuSurfaceAcquireErrorCategory::InternalInvariant => {
-                    RenderSurfaceAcquireError::Validation
-                }
-            })
+            .get(&id)
+            .and_then(|state| state.surface)
+            .ok_or(RenderSurfaceAcquireError::Lost)?;
+        let result = self.context.acquire_surface_image(surface);
+        if let Err(error) = &result
+            && matches!(
+                error.category(),
+                GpuSurfaceAcquireErrorCategory::Outdated
+                    | GpuSurfaceAcquireErrorCategory::Lost
+                    | GpuSurfaceAcquireErrorCategory::StaleGeneration
+                    | GpuSurfaceAcquireErrorCategory::ContextOrDeviceUnavailableOrLost
+            )
+        {
+            tracing::debug!(
+                target: "runenwerk.rpres",
+                surface = id.raw(),
+                category = ?error.category(),
+                "native acquisition invalidated cached physical presentation facts"
+            );
+            self.invalidate_surface(id);
+        }
+        result.map_err(|error| match error.category() {
+            GpuSurfaceAcquireErrorCategory::Timeout | GpuSurfaceAcquireErrorCategory::Occluded => {
+                RenderSurfaceAcquireError::Timeout
+            }
+            GpuSurfaceAcquireErrorCategory::Outdated => RenderSurfaceAcquireError::Outdated,
+            GpuSurfaceAcquireErrorCategory::Lost
+            | GpuSurfaceAcquireErrorCategory::UnknownSurface
+            | GpuSurfaceAcquireErrorCategory::StaleGeneration
+            | GpuSurfaceAcquireErrorCategory::ContextOrDeviceUnavailableOrLost => {
+                RenderSurfaceAcquireError::Lost
+            }
+            _ => RenderSurfaceAcquireError::Validation,
+        })
     }
 
     pub(crate) fn context(&self) -> &GpuContext {
@@ -307,6 +707,47 @@ impl RenderGpuContext {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn strict_pre_attach_rejection_is_visible_and_retirement_hides_physical_state() {
+        use super::super::{RenderSurfacePresentationAttempt, RenderSurfaceRegistryResource};
+        use crate::runtime::NativeWindowId;
+        use runen_gpu::GpuSurfacePresentMode;
+
+        let mut registry = RenderSurfaceRegistryResource::default();
+        let id = registry.reserve_surface_for_native_window(NativeWindowId::primary(), (0, 0));
+        let requested =
+            RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Mailbox, 1).unwrap();
+        assert_eq!(registry.set_presentation_request(id, requested), Ok(1));
+        let record = registry.record(id).unwrap();
+        assert_eq!(
+            presentation_disposition(record, None, false),
+            RenderSurfacePresentationDisposition::Unavailable
+        );
+        registry.record_presentation_attempt(
+            id,
+            RenderSurfacePresentationAttempt::Rejected {
+                revision: 1,
+                reason: RenderSurfacePresentationError::UnsupportedPresentMode(
+                    GpuSurfacePresentMode::Mailbox,
+                ),
+            },
+        );
+        let record = registry.record(id).unwrap();
+        assert_eq!(
+            presentation_disposition(record, None, false),
+            RenderSurfacePresentationDisposition::Rejected(
+                RenderSurfacePresentationError::UnsupportedPresentMode(
+                    GpuSurfacePresentMode::Mailbox,
+                )
+            )
+        );
+        registry.retire_surface_for_native_window(NativeWindowId::primary());
+        assert_eq!(
+            presentation_disposition(registry.record(id).unwrap(), None, true),
+            RenderSurfacePresentationDisposition::Unavailable
+        );
+    }
 
     #[test]
     fn alpha_blended_target_formats_are_explicitly_admitted() {
