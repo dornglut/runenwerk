@@ -205,6 +205,121 @@ wake must fail rather than be helped by an application timer.
 This autonomous probe rejects external raw mouse motion as contaminated evidence;
 run it on a quiet native display.
 
+## Native RunenUI resource lifetime
+
+The existing `native_ui_input_qualification` example retains its owner-operated
+`--interactive` mode with on-demand pacing. Its explicit lifetime modes use the
+same native Host, selected UI recipient and RenderFlow at 30 FPS:
+
+```text
+cargo test -p engine --example native_ui_input_qualification --locked
+cargo build -p engine --example native_ui_input_qualification --locked
+cargo run -p engine --example native_ui_input_qualification --locked -- --lifetime-static --frames 4096
+cargo run -p engine --example native_ui_input_qualification --locked -- --lifetime-changing --frames 4096
+cargo run -p engine --example native_ui_input_qualification --locked -- --lifetime-control --frames 4096
+```
+
+`--frames` requires at least that many terminal GPU frame completions with the
+selected UI publication confirmed by the existing completed-Present association,
+not host callbacks. Changing mode additionally requires that many applied text
+generations to reach newer matching paint and completed publications; it waits
+for each acknowledgement before requesting the next change. Missing UI or a
+stalled change fails after 15 seconds. The control does not require UI evidence.
+Short runs qualify fixture plumbing only. The 4,096-frame operator runs exceed
+the original 148/594-frame failures; they do not establish a universal duration
+or memory threshold. The control keeps the same mounted UI and Host while
+omitting its GPU UI composite pass; it is a non-UI GPU baseline, not a different
+UI framework or a direct standalone text-rendering proof.
+
+Changing mode submits explicit application state changes through the existing
+World-owned native UI transaction and typed action ingress. It does not inject keyboard, pointer or IME events.
+During the UI runs, physically click the button, use W/Space/Tab, change focus,
+and move/resize the window. Preserve the original `U9C_OS`, `U9C_FRAME` and
+activation observations. Absence of actual input cannot qualify input behavior.
+Set `RUST_LOG=engine.runtime.input=trace` to retain the native input owner's
+withholding and failure diagnostics on stderr. The example enables tracing only
+when this variable is set; diagnostics do not grant input permission.
+
+A native close intent cancels the current UI gesture before product close policy
+approves or vetoes it. Input received while that decision is pending remains
+neutral physical evidence without UI, Editor or game permission. A veto does
+not restore a cancelled gesture or held gameplay grant; recovery requires a
+genuine release and new press. Focus, modifiers, resize/DPI and repeated close
+callbacks must preserve this boundary. Focused Engine tests cover these pending
+and veto cases; they do not replace original OS interaction evidence.
+
+After the requested completion count, the example removes its flow, requires
+all observed accepted frame submissions to drain within 15 seconds, observes
+three seconds of idle without new GPU submissions, recreates the flow, requires
+120 recovery completions, drains again and explicitly approves native close.
+Closing early, a failed/invalidated submission, a terminal delivery gap, a
+changing-text action failure or incomplete drain is failure. A successful run
+prints both `U9C_LIFETIME_COMPLETE` and `U9C_EXIT result=ok` and exits zero.
+Restart the executable for a second fresh-process run of each case; flow
+recreation is not device-loss reconstruction or process restart.
+
+Each `U9C_RESOURCE` record contains G4C1 resource kinds/count/limit, G4C2
+binding counts/limit/reservations, instantaneous G5 in-flight count and separate
+renderer-accepted/terminal observations. UI frame credit additionally requires
+the existing terminal outcome to carry the matching publication: the renderer
+verified its exact contribution token and Present against that submission and
+context affinity. This optional metadata uses the existing bounded delivery
+queue; missing metadata grants no credit. It does not replace native input
+permission. These are point-in-time diagnostic
+snapshots, not atomic cross-owner statistics. Registry-only entries can remain
+until pressure; idle does not promise zero registry counts. Inspect the full
+post-warm-up series for repeated pressure recovery, bounded working-set shape,
+and exceptions rather than treating a final low count as a memory proof.
+Set `GROTTO_RENDER_REALIZATION_LOG=1` to retain the existing binding log and
+the exact successfully projected UI-publication count at the preparation
+boundary, labeled `prepared_not_submitted`. Neither preparation nor a paint
+intake ID establishes accepted work, completion or displayed input permission.
+
+For exact-source Windows qualification, use a clean committed checkout, retain
+`git rev-parse HEAD`, `git status --porcelain`, `rustc -Vv` and the build log,
+and set `RUNENWERK_SOURCE_REVISION` to that verified SHA. The example prints this
+as an operator-provided provenance claim, not self-verifying source evidence.
+Retain stdout/stderr separately, actual adapter facts, exit status and memory
+samples. For example, after building in PowerShell (adjust the executable path
+when using `CARGO_TARGET_DIR`):
+
+```powershell
+$env:RUNENWERK_SOURCE_REVISION = (git rev-parse HEAD).Trim()
+if (git status --porcelain) { throw 'Qualification requires a clean source' }
+$env:GROTTO_RENDER_REALIZATION_LOG = '1'
+$env:RUST_LOG = 'engine.runtime.input=trace'
+$exe = (Resolve-Path 'target/debug/examples/native_ui_input_qualification.exe').Path
+$case = 'static-1'
+$evidence = Join-Path $env:TEMP ('runenwerk-u9c-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))
+New-Item -ItemType Directory -Path $evidence -ErrorAction Stop | Out-Null
+$case = Join-Path $evidence $case
+$proc = Start-Process -FilePath $exe -ArgumentList '--lifetime-static','--frames','4096' -PassThru -RedirectStandardOutput "$case.stdout.log" -RedirectStandardError "$case.stderr.log"
+$deadline = (Get-Date).AddMinutes(15)
+while (-not $proc.HasExited) {
+    $proc.Refresh()
+    if (-not $proc.HasExited) {
+        [pscustomobject]@{Time=(Get-Date).ToUniversalTime().ToString('o');Pid=$proc.Id;WorkingSet=$proc.WorkingSet64;PrivateBytes=$proc.PrivateMemorySize64} | Export-Csv "$case.memory.csv" -Append -NoTypeInformation
+    }
+    if ((Get-Date) -gt $deadline) { Stop-Process -Id $proc.Id; throw 'Qualification timed out' }
+    Start-Sleep -Seconds 1
+}
+$proc.WaitForExit()
+$proc.Refresh()
+if ($null -eq $proc.ExitCode) { throw 'Exit status was not observed' }
+$proc.ExitCode | Set-Content "$case.exit.txt"
+if ($proc.ExitCode -ne 0) { throw 'Qualification failed; retain stderr' }
+```
+
+Repeat with changing/control flags and fresh case names, twice per case. Process
+working set/private bytes are CPU/process observations, not GPU driver memory.
+Compare like-for-like adapter, extent, pacing and input conditions; retain any
+failures. Independent review must inspect source provenance, complete logs,
+resource/completion evolution, idle/recovery and shutdown before claiming native
+qualification. Software-Vulkan execution requires its actual native display and
+adapter; local Metal evidence cannot substitute for the original Windows GPU.
+No arbitrary driver reset, readback-map fault or monitor scanout is established
+by this fixture.
+
 ## Evidence
 
 Report focused checks, `cargo validate`, exact-head CI, and anything not run. Do not convert source inspection or user-reported output into a stronger validation claim.

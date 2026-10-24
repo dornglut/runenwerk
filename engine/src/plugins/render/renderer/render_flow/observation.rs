@@ -18,6 +18,12 @@ pub(in crate::plugins::render::renderer) struct RendererGpuObservationOutput {
     /// GPU has accepted this exact work, but it is not yet displayed.
     pub runenui_accepted: Vec<RunenUiPublicationId>,
     pub runenui_presented: Vec<RunenUiPublicationId>,
+    /// Same successful token/Present verdict, retaining its exact submission for diagnostics.
+    pub runenui_completed: Vec<(
+        runen_gpu::GpuSubmissionId,
+        GpuContextAffinity,
+        RunenUiPublicationId,
+    )>,
     /// Terminal failures are diagnostic; they never grant displayed input.
     pub runenui_rejected: Vec<(RunenUiPublicationId, &'static str)>,
 }
@@ -25,6 +31,7 @@ pub(in crate::plugins::render::renderer) struct RendererGpuObservationOutput {
 #[derive(Debug, Default)]
 pub(in crate::plugins::render::renderer) struct RendererGpuObservationState {
     accepted: Vec<AcceptedRendererObservation>,
+    ui_terminal_diagnostics: bool,
 }
 
 #[derive(Debug)]
@@ -166,6 +173,13 @@ pub(super) struct AcceptedFrameObservations {
 }
 
 impl RendererGpuObservationState {
+    pub(in crate::plugins::render::renderer) fn set_ui_terminal_diagnostics(
+        &mut self,
+        enabled: bool,
+    ) {
+        self.ui_terminal_diagnostics = enabled;
+    }
+
     /// Retains the exact accepted submission for timing/capture obligations
     /// and the single-use RunenRender F2 presentation witnesses.
     pub(super) fn accept(
@@ -406,7 +420,16 @@ impl RendererGpuObservationState {
                             }
                             match witness.contribution {
                                 Some(token) => match token.completed_by(&accepted.submission) {
-                                    Ok(_) => output.runenui_presented.push(witness.publication_id),
+                                    Ok(_) => {
+                                        output.runenui_presented.push(witness.publication_id);
+                                        if self.ui_terminal_diagnostics {
+                                            output.runenui_completed.push((
+                                                accepted.submission.id(),
+                                                accepted.submission.affinity(),
+                                                witness.publication_id,
+                                            ));
+                                        }
+                                    }
                                     Err(_) => output.runenui_rejected.push((
                                         witness.publication_id,
                                         "terminal submission lacks exact completed F2 work",

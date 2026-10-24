@@ -314,6 +314,34 @@ impl UiRuntimePresentationAssociationsResource {
         self.last_publication.remove(&slot);
     }
 
+    /// Deny every older staged, accepted or displayed input generation when a
+    /// selected native RunenUI slot has unfinished M13 work. A previously
+    /// published immutable *visual* contribution may continue to render only
+    /// while its existing binding and exact physical mapping remain unchanged.
+    ///
+    /// This deliberately retains no hit, focus, capture or successful-Present
+    /// permission. In particular, a late terminal receipt for an earlier GPU
+    /// submission cannot re-promote its stale input. The next settled RunenUI
+    /// frame must publish an independent aligned generation before input can
+    /// become eligible again.
+    ///
+    /// Returns only compatibility with the currently recorded visual target;
+    /// the caller must independently verify the old renderer-owned paint still
+    /// exists, and withdraw it if the target is incompatible or the paint absent.
+    pub(crate) fn defer_unsettled_publication(
+        &mut self,
+        binding: &UiRuntimePresentationBinding,
+        mapping: UiRuntimeNativeMapping,
+    ) -> bool {
+        let compatible = self.bindings.get(&binding.slot_id) == Some(binding)
+            && self.current_mappings.get(&binding.slot_id) == Some(&mapping);
+        self.pending.remove(&binding.slot_id);
+        self.retire_in_flight_for_slot(binding.slot_id);
+        self.displayed.remove(&binding.slot_id);
+        self.last_publication.remove(&binding.slot_id);
+        compatible
+    }
+
     /// Returns whether a new host ingress generation or native mapping needs publication.
     /// The runtime remains authority for internal paint/redraw facts.
     #[must_use]
@@ -533,6 +561,22 @@ impl UiRuntimePresentationAssociationsResource {
             self.last_publication.remove(&slot);
         }
         true
+    }
+
+    /// Only the existing terminal completed-Present state at this exact
+    /// window and current mapping is eligible for native pointer translation.
+    /// Neither visual order nor a queued publication selects a recipient.
+    #[must_use]
+    pub fn displayed_for_native_recipient(
+        &self,
+        slot: UiRuntimeSlotId,
+        window: NativeWindowId,
+    ) -> Option<&UiRuntimeDisplayedPresentation> {
+        let current = *self.current_mappings.get(&slot)?;
+        if current.native_window_id() != window {
+            return None;
+        }
+        self.displayed_for_mapping(slot, current)
     }
 
     /// Hides input authority immediately when the native mapping changes.

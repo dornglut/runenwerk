@@ -3,7 +3,8 @@ use crate::app::App;
 use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
 
 use super::{
-    UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeFontConfiguration,
+    NativeInputRecipient, NativeInputRecipientError, UiNativeInputRecipientsResource,
+    UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeFontConfiguration, UiRuntimeSlotId,
     UiRuntimeSlotMountFailure, UiRuntimeSlotMountReport, UiRuntimeSlotsResource, UiScreen,
 };
 
@@ -34,6 +35,33 @@ pub struct UiAppMounting<'a> {
 }
 
 impl UiAppMounting<'_> {
+    /// Explicitly selects the primary native window's semantic RunenUI input
+    /// recipient for the mounted slot. The selection is checked at native
+    /// realization against its live M13 scope, not inferred from rendering.
+    /// This may be declared before the operating-system window is created.
+    ///
+    /// # Errors
+    /// Rejects a nonexistent slot or a conflicting already requested owner.
+    pub fn bind_native_primary_input(
+        &mut self,
+        slot: UiRuntimeSlotId,
+    ) -> Result<(), NativeInputRecipientError> {
+        let mounted = self
+            .app
+            .world_mut()
+            .resource::<UiRuntimeSlotsResource>()
+            .is_ok_and(|slots| slots.contains(slot));
+        if !mounted {
+            return Err(NativeInputRecipientError::StaleSlot);
+        }
+        self.app.init_resource::<UiNativeInputRecipientsResource>();
+        self.app
+            .world_mut()
+            .resource_mut::<UiNativeInputRecipientsResource>()
+            .expect("native recipient resource initialized before input declaration")
+            .request_primary(NativeInputRecipient::RunenUiSlot(slot))
+    }
+
     pub fn mount<S>(&mut self, screen: S) -> UiRuntimeSlotMountReport
     where
         S: UiScreen,
