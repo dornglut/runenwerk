@@ -8,8 +8,7 @@ use engine::prelude::{App, AppRenderExt};
 use engine::runtime::platform::PlatformWindowEventQueueResource;
 use engine::runtime::{
     FrameEnd, FramePacingPolicyResource, FramePacingRuntimeStateResource, NativeWindowHook,
-    NativeWindowHookRegistryResource, NativeWindowId, RenderSubmit,
-    WindowStateRegistryResource,
+    NativeWindowHookRegistryResource, NativeWindowId, RenderSubmit, WindowStateRegistryResource,
 };
 use runen_ecs::{Res, ResMut, Resource, World};
 use std::collections::{BTreeMap, VecDeque};
@@ -284,13 +283,21 @@ fn synthetic_render_schedule_delay(delay: Res<SlowFrameDelay>) {
 }
 
 fn write_report(file: &mut File, counters: &Counters) -> Result<()> {
-    writeln!(file, "elapsed_ms={}", counters.started.elapsed().as_millis())?;
+    writeln!(
+        file,
+        "elapsed_ms={}",
+        counters.started.elapsed().as_millis()
+    )?;
     writeln!(file, "callback_total={}", counters.callback_count)?;
     writeln!(file, "primary_callbacks={}", counters.primary_callbacks)?;
     writeln!(file, "secondary_callbacks={}", counters.secondary_callbacks)?;
     writeln!(file, "device_callbacks={}", counters.device_callbacks)?;
     writeln!(file, "frame_entries={}", counters.frame_entries)?;
-    writeln!(file, "frame_end_visits_not_successes={}", counters.frame_end_visits)?;
+    writeln!(
+        file,
+        "frame_end_visits_not_successes={}",
+        counters.frame_end_visits
+    )?;
     writeln!(
         file,
         "post_frame_end_empty_journal_checks={}",
@@ -304,7 +311,11 @@ fn write_report(file: &mut File, counters: &Counters) -> Result<()> {
     writeln!(file, "journal_high_water_observed={}", counters.high_water)?;
     writeln!(file, "journal_first_full_ms={:?}", counters.first_full_ms)?;
     writeln!(file, "last_callback_ms={:?}", counters.last_callback_ms)?;
-    writeln!(file, "last_frame_start_ms={:?}", counters.last_frame_start_ms)?;
+    writeln!(
+        file,
+        "last_frame_start_ms={:?}",
+        counters.last_frame_start_ms
+    )?;
     writeln!(file, "last_frame_end_ms={:?}", counters.last_frame_end_ms)?;
     writeln!(
         file,
@@ -312,7 +323,10 @@ fn write_report(file: &mut File, counters: &Counters) -> Result<()> {
         counters.last_journal_before_frame_end
     )?;
     writeln!(file, "about_to_wait_entries=not_exposed_by_public_hook")?;
-    writeln!(file, "private_frame_requested_bit=not_exposed_by_public_hook")?;
+    writeln!(
+        file,
+        "private_frame_requested_bit=not_exposed_by_public_hook"
+    )?;
     writeln!(file, "event_types:")?;
     for (kind, count) in &counters.counts {
         writeln!(file, "  {kind}={count}")?;
@@ -322,8 +336,13 @@ fn write_report(file: &mut File, counters: &Counters) -> Result<()> {
         writeln!(
             file,
             "  ms={} callback={} source={} kind={} journal_before={} primary={} pacing_redraw_interest={}",
-            sample.ms, sample.callback, sample.source, sample.kind, sample.journal_before,
-            sample.is_primary, sample.redraw_interest,
+            sample.ms,
+            sample.callback,
+            sample.source,
+            sample.kind,
+            sample.journal_before,
+            sample.is_primary,
+            sample.redraw_interest,
         )?;
     }
     Ok(())
@@ -337,7 +356,10 @@ fn main() -> Result<()> {
     writeln!(file, "render={}", args.render)?;
     writeln!(file, "pacing={}", args.pacing)?;
     writeln!(file, "synthetic_render_schedule_delay_ms={}", args.slow_ms)?;
-    writeln!(file, "journal_callback_measurement=before_native_host_admission")?;
+    writeln!(
+        file,
+        "journal_callback_measurement=before_native_host_admission"
+    )?;
     file.flush()?;
 
     let counters = Arc::new(Mutex::new(Counters::new()));
