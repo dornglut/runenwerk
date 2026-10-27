@@ -1233,7 +1233,7 @@ fn partition_source_capture_results(
 }
 
 fn drain_progressed_gpu_captures(
-    world: &mut WorldMut,
+    world: &mut runen_ecs::World,
     gfx: &mut Gfx,
     host_frame_index: u64,
     current_source: Option<(u64, u64)>,
@@ -1268,7 +1268,7 @@ fn drain_progressed_gpu_captures(
 }
 
 fn publish_completed_render_frame_reports(
-    world: &mut WorldMut,
+    world: &mut runen_ecs::World,
     completed_reports: Vec<CompletedRenderFrameDiagnostics>,
 ) {
     for completed in completed_reports {
@@ -1297,6 +1297,45 @@ fn publish_completed_render_frame_reports(
 fn publish_progressed_gpu_captures(world: &mut WorldMut, gfx: &mut Gfx, frame_index: u64) {
     let (_, _, completed) = drain_progressed_gpu_captures(world, gfx, frame_index, None);
     publish_completed_render_frame_reports(world, completed);
+}
+
+/// Deliver delayed facts through the ordinary source-keyed consumers without
+/// preparing/submitting a frame or creating a frame-history row.
+pub(crate) fn deliver_native_gpu_progress(
+    world: &mut runen_ecs::World,
+    host_frame_index: u64,
+) -> anyhow::Result<()> {
+    let Some(mut gfx) = world.remove_resource::<Gfx>() else {
+        return Ok(());
+    };
+    let result = gfx.progress_gpu_without_frame();
+    if result.is_ok() {
+        let policy = world
+            .resource::<RenderFrameObservationPolicyResource>()
+            .ok()
+            .copied()
+            .unwrap_or_default();
+        if let Ok(history) = world.resource_mut::<RenderFrameHistoryState>() {
+            history.observe_gpu_pass_timing_evidence(
+                policy,
+                gfx.renderer.last_gpu_pass_timing_evidence(),
+            );
+            history.observe_composed_gpu_timing_evidence(
+                policy,
+                gfx.renderer.last_composed_gpu_timing_evidence(),
+            );
+        }
+        if let Ok(timings) = world.resource_mut::<RenderDebugTimingsState>() {
+            timings.observe_gpu_pass_timing_evidence(gfx.renderer.last_gpu_pass_timing_evidence());
+        }
+        gfx.renderer.clear_published_gpu_pass_timing_evidence();
+        gfx.renderer.clear_published_composed_gpu_timing_evidence();
+        let (_, _, completed) =
+            drain_progressed_gpu_captures(world, &mut gfx, host_frame_index, None);
+        publish_completed_render_frame_reports(world, completed);
+    }
+    world.insert_resource(gfx);
+    result
 }
 
 fn defer_unsubmitted_after_error(

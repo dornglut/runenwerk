@@ -20,6 +20,7 @@ pub enum NativeWindowHookStage {
     WindowEvent,
     DeviceEvent,
     Frame,
+    GpuProgress,
     Detach,
 }
 
@@ -47,6 +48,14 @@ pub trait NativeWindowHook: 'static {
 
     fn frame(&mut self, _window: &Window, _world: &mut World) -> Result<()> {
         Ok(())
+    }
+
+    /// Observe already-delivered GPU terminal facts on the native invoker.
+    /// Return true only once for a live, compatible application wait whose
+    /// next action requires an ordinary frame. Passive completion is not demand.
+    /// This callback must not execute frame bookkeeping or poll the GPU.
+    fn gpu_progress(&mut self, _world: &mut World) -> Result<bool> {
+        Ok(false)
     }
 
     fn detach(&mut self, _world: &mut World) -> Result<()> {
@@ -149,6 +158,24 @@ impl NativeWindowHookRegistryResource {
             }
         }
     }
+
+    pub(crate) fn dispatch_gpu_progress(&mut self, world: &mut World) -> Result<bool> {
+        let mut requested = false;
+        for hook in &mut self.hooks {
+            match hook.gpu_progress(world) {
+                Ok(continuation) => requested |= continuation,
+                Err(error) => {
+                    self.diagnostics.push(NativeWindowHookDiagnostic {
+                        hook_name: hook.name(),
+                        stage: NativeWindowHookStage::GpuProgress,
+                        message: format!("{error:#}"),
+                    });
+                    return Err(error);
+                }
+            }
+        }
+        Ok(requested)
+    }
 }
 
 pub(crate) fn with_native_window_hooks(
@@ -160,4 +187,53 @@ pub(crate) fn with_native_window_hooks(
     };
     f(&mut registry, world);
     world.insert_resource(registry);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct WaitingConsumer(bool);
+    impl NativeWindowHook for WaitingConsumer {
+        fn name(&self) -> &'static str {
+            "waiting consumer"
+        }
+        fn gpu_progress(&mut self, _: &mut World) -> Result<bool> {
+            Ok(std::mem::take(&mut self.0))
+        }
+    }
+
+    #[test]
+    fn native_gpu_delivery_has_no_implicit_or_repeated_continuation() {
+        let mut world = World::new();
+        let mut hooks = NativeWindowHookRegistryResource::default();
+        assert!(!hooks.dispatch_gpu_progress(&mut world).unwrap());
+        hooks.register_hook(WaitingConsumer(false));
+        assert!(!hooks.dispatch_gpu_progress(&mut world).unwrap());
+        hooks.register_hook(WaitingConsumer(true));
+        assert!(hooks.dispatch_gpu_progress(&mut world).unwrap());
+        assert!(!hooks.dispatch_gpu_progress(&mut world).unwrap());
+    }
+
+    #[test]
+    fn native_gpu_consumer_failure_cannot_return_a_successful_frame_request() {
+        struct FailedConsumer;
+        impl NativeWindowHook for FailedConsumer {
+            fn name(&self) -> &'static str {
+                "failed consumer"
+            }
+            fn gpu_progress(&mut self, _: &mut World) -> Result<bool> {
+                anyhow::bail!("retired consumer wait")
+            }
+        }
+        let mut world = World::new();
+        let mut hooks = NativeWindowHookRegistryResource::default();
+        hooks.register_hook(WaitingConsumer(true));
+        hooks.register_hook(FailedConsumer);
+        assert!(hooks.dispatch_gpu_progress(&mut world).is_err());
+        assert_eq!(
+            hooks.diagnostics()[0].stage,
+            NativeWindowHookStage::GpuProgress
+        );
+    }
 }

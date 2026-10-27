@@ -140,8 +140,15 @@ impl Renderer {
             capture_results,
             runenui_accepted,
             runenui_presented,
+            runenui_completed,
             runenui_rejected,
         } = self.gpu_observations.progress(context);
+        // This only enriches an existing bounded terminal-delivery row. A missing
+        // row grants no credit; UI publication/input delivery remains unchanged.
+        for (submission, affinity, publication) in runenui_completed {
+            self.submission_lifecycle
+                .annotate_completed_ui(submission, affinity, publication);
+        }
         self.pending_gpu_observation_output
             .timing_evidence
             .extend(timing_evidence);
@@ -211,6 +218,7 @@ impl Renderer {
     /// Exact accepted submission handles remain tracked either way.
     pub fn set_gpu_frame_terminal_delivery(&mut self, enabled: bool) {
         self.submission_lifecycle.set_terminal_delivery(enabled);
+        self.gpu_observations.set_ui_terminal_diagnostics(enabled);
     }
 
     /// Returns terminal outcomes once, preserving a nonzero loss counter when

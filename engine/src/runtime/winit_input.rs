@@ -16,7 +16,10 @@ use winit::keyboard::{Key, NativeKey, NativeKeyCode, PhysicalKey};
 
 const FIRST_WINIT_SOURCE_ID: u64 = 1024;
 
-#[derive(Debug)]
+/// The sole original native window/device → RunenInput identity allocator.
+/// It is stored directly in the Engine World so a native UI mutation
+/// transaction can query original source identity without shadow mappings.
+#[derive(Debug, runen_ecs::Resource)]
 pub(crate) struct WinitInputAdapter {
     next_source_id: u64,
     next_device_id: u64,
@@ -140,6 +143,17 @@ impl WinitInputAdapter {
             .get(&native_window_id)
             .copied()
             .map(|source| InputContext::new(source, None))
+    }
+
+    /// Enumerate precisely the still-live original native source mappings,
+    /// including sources whose window registry record was unexpectedly lost.
+    /// This is not a second window/source authority or a new held-key store.
+    pub(crate) fn window_source_ids(
+        &self,
+    ) -> impl Iterator<Item = (NativeWindowId, InputSourceId)> + '_ {
+        self.window_sources
+            .iter()
+            .map(|(window, source)| (*window, *source))
     }
 
     pub(crate) fn retire_window_source(
@@ -475,6 +489,60 @@ mod tests {
             .unwrap();
         assert_ne!(replacement.source, initial.source);
         assert_eq!(replacement.device, initial.device);
+    }
+
+    #[test]
+    fn raw_removal_never_retires_colliding_window_device_or_source() {
+        let mut adapter = WinitInputAdapter::default();
+        let backend = DeviceId::dummy();
+        let first = NativeWindowId::primary();
+        let second = NativeWindowId::try_from_raw(2).expect("secondary window");
+        let a = adapter.window_context(first, backend).expect("window A");
+        let b = adapter.window_context(second, backend).expect("window B");
+        let raw = adapter
+            .raw_device_context(backend)
+            .expect("raw motion source");
+
+        assert_eq!(adapter.retire_raw_device(backend), Ok(Some(raw)));
+        assert_eq!(adapter.retire_raw_device(backend), Ok(None));
+        assert_eq!(adapter.window_context(first, backend), Ok(a));
+        assert_eq!(adapter.window_context(second, backend), Ok(b));
+        assert_eq!(
+            adapter.window_source_context(first),
+            Some(InputContext::new(a.source, None))
+        );
+
+        let reincarnated = adapter
+            .raw_device_context(backend)
+            .expect("raw reappearance");
+        assert_ne!(reincarnated.source, raw.source);
+        assert_ne!(reincarnated.device, raw.device);
+        assert_eq!(adapter.window_context(first, backend), Ok(a));
+    }
+
+    #[test]
+    fn corrupted_raw_identity_must_not_mutate_window_source_or_device() {
+        let mut adapter = WinitInputAdapter::default();
+        let backend = DeviceId::dummy();
+        let window = NativeWindowId::primary();
+        let original = adapter
+            .window_context(window, backend)
+            .expect("window source");
+        let raw = adapter.raw_device_context(backend).expect("raw source");
+        let raw_device = raw.device.expect("raw context device");
+        let raw_source = adapter
+            .raw_sources
+            .remove(&raw_device)
+            .expect("raw mapping");
+
+        assert_eq!(
+            adapter.retire_raw_device(backend),
+            Err(NativeInputIdentityFailure::MissingRawSource)
+        );
+        assert_eq!(adapter.window_context(window, backend), Ok(original));
+        adapter.raw_sources.insert(raw_device, raw_source);
+        assert_eq!(adapter.retire_raw_device(backend), Ok(Some(raw)));
+        assert_eq!(adapter.window_context(window, backend), Ok(original));
     }
 
     #[test]
