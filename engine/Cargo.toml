@@ -105,6 +105,10 @@ name = "window_input_demo"
 path = "examples/window_input_demo/main.rs"
 
 [[example]]
+name = "native_ui_input_qualification"
+path = "examples/native_ui_input_qualification/main.rs"
+
+[[example]]
 name = "render_flow_fullscreen_minimal"
 path = "examples/render_flow_fullscreen_minimal/main.rs"
 

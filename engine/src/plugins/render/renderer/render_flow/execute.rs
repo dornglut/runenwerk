@@ -522,8 +522,15 @@ impl Renderer {
             capture_results,
             runenui_accepted,
             runenui_presented,
+            runenui_completed,
             runenui_rejected,
         } = observation_output;
+        // This only enriches an existing bounded terminal-delivery row. A missing
+        // row grants no credit; UI publication/input delivery remains unchanged.
+        for (submission, affinity, publication) in runenui_completed {
+            self.submission_lifecycle
+                .annotate_completed_ui(submission, affinity, publication);
+        }
         self.pending_gpu_observation_output
             .timing_evidence
             .extend(timing_evidence);

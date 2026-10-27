@@ -996,6 +996,32 @@ impl Gfx {
         self.ctx.context().affinity()
     }
 
+    /// Point-in-time G4C1 resource realization counts for the renderer's GPU context.
+    ///
+    /// This diagnostic snapshot does not expose mutable context access and is not
+    /// atomic with the other realization or execution observations.
+    pub fn resource_realization_stats(&self) -> runen_gpu::GpuResourceRealizationStats {
+        self.ctx.context().resource_realization_stats()
+    }
+
+    /// Point-in-time G4C2 program and binding realization counts for the renderer's GPU context.
+    ///
+    /// This diagnostic snapshot does not expose mutable context access and is not
+    /// atomic with the other realization or execution observations.
+    pub fn program_binding_realization_stats(
+        &self,
+    ) -> runen_gpu::GpuProgramBindingRealizationStats {
+        self.ctx.context().program_binding_realization_stats()
+    }
+
+    /// Point-in-time execution queue counts for the renderer's GPU context.
+    ///
+    /// In-flight counts are not GPU completion evidence. This diagnostic snapshot
+    /// is not atomic with the other realization or execution observations.
+    pub fn execution_stats(&self) -> runen_gpu::GpuExecutionStats {
+        self.ctx.context().execution_stats()
+    }
+
     pub fn temporal_execution_evidence(
         &self,
         frame_index: u64,
@@ -1045,6 +1071,33 @@ impl Gfx {
             .begin_frame_gpu_observation(self.ctx.context())?;
         self.early_gpu_progress_affinity = Some(self.ctx.context().affinity());
         Ok(())
+    }
+
+    /// Native invoker observation only. This never leases a surface or submits
+    /// work and cannot supply the next frame's early-observation token.
+    pub(crate) fn progress_gpu_without_frame(&mut self) -> Result<()> {
+        self.early_gpu_progress_affinity = None;
+        if self.gpu_observation_pending() {
+            self.renderer
+                .begin_frame_gpu_observation(self.ctx.context())?;
+        }
+        self.renderer.publish_progressed_gpu_observations();
+        Ok(())
+    }
+
+    fn gpu_observation_pending(&self) -> bool {
+        let execution = self.execution_stats();
+        gpu_execution_needs_progress(
+            execution.in_flight_submissions(),
+            execution.pending_readbacks(),
+        ) || self.renderer.submission_lifecycle.has_pending()
+            || self.renderer.gpu_observations.has_pending()
+    }
+
+    /// Prepared, unsubmitted work and delivered diagnostic history are inert.
+    /// Buffered facts need a delivery turn even after GPU execution has drained.
+    pub(crate) fn native_gpu_progress_pending(&self) -> bool {
+        self.gpu_observation_pending() || self.renderer.gpu_delivery_pending()
     }
 
     /// Enable lightweight, surface-keyed gate counts for native performance
@@ -1313,6 +1366,10 @@ fn should_defer_deterministic_surface(
     has_deterministic_contribution && has_in_flight_producer_submission
 }
 
+fn gpu_execution_needs_progress(submissions: usize, readbacks: usize) -> bool {
+    submissions != 0 || readbacks != 0
+}
+
 fn frame_gpu_timing_capability(
     timestamp_queries_enabled: bool,
     has_deterministic_composition: bool,
@@ -1362,6 +1419,24 @@ use crate::plugins::RenderFeatureId;
 // Therefore rebuilding this CPU-side preparation cache does not require GPU
 // quiescence, which may never occur during continuous UI submission.
 impl Renderer {
+    fn gpu_delivery_pending(&self) -> bool {
+        let pending = &self.pending_gpu_observation_output;
+        !pending.timing_evidence.is_empty()
+            || !pending.composed_timing_evidence.is_empty()
+            || !pending.captured_textures.is_empty()
+            || !pending.capture_results.is_empty()
+            || !pending.runenui_accepted.is_empty()
+            || !pending.runenui_presented.is_empty()
+            || !pending.runenui_rejected.is_empty()
+            || !self.runenui_gpu_accepted.is_empty()
+            || !self.runenui_gpu_presented.is_empty()
+            || !self.runenui_gpu_rejected.is_empty()
+            || !self.last_gpu_pass_timing_evidence.is_empty()
+            || !self.last_composed_gpu_timing_evidence.is_empty()
+            || !self.last_captured_textures.is_empty()
+            || !self.last_capture_selector_results.is_empty()
+    }
+
     pub(in crate::plugins::render) fn reclaim_obsolete_runenui_resources(
         &mut self,
         paints: &crate::plugins::render::RunenUiPaintSubmissionRegistryResource,
@@ -1394,8 +1469,10 @@ impl Renderer {
 mod tests {
     use super::{
         Renderer, composed_frame_gpu_timing_capability, frame_gpu_timing_capability,
-        should_defer_deterministic_surface, validate_deterministic_surface_scope,
+        gpu_execution_needs_progress, should_defer_deterministic_surface,
+        validate_deterministic_surface_scope,
     };
+    use crate::plugins::render::RunenUiPublicationId;
     use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::render::inspect::{
         CaptureStage, CaptureTextureClass, RenderCaptureIdentity, RenderCapturePointIdentity,
@@ -1411,6 +1488,187 @@ mod tests {
 
         let none = Renderer::clip_to_scissor([200.0, 200.0, 10.0, 10.0], 100, 80);
         assert!(none.is_none());
+    }
+
+    #[test]
+    fn native_progress_interest_survives_submission_completion_until_readback_terminal() {
+        assert!(gpu_execution_needs_progress(1, 1));
+        assert!(
+            gpu_execution_needs_progress(0, 1),
+            "submission completion cannot retire mapping interest"
+        );
+        assert!(!gpu_execution_needs_progress(0, 0));
+    }
+
+    #[test]
+    fn native_buffered_ui_delivery_drains_once_without_a_gpu_submission() {
+        let mut renderer = Renderer::new();
+        let accepted = RunenUiPublicationId::try_from_raw(41).unwrap();
+        let completed = RunenUiPublicationId::try_from_raw(42).unwrap();
+        let rejected = RunenUiPublicationId::try_from_raw(43).unwrap();
+        renderer
+            .pending_gpu_observation_output
+            .runenui_accepted
+            .push(accepted);
+        renderer
+            .pending_gpu_observation_output
+            .runenui_presented
+            .push(completed);
+        renderer
+            .pending_gpu_observation_output
+            .runenui_rejected
+            .push((rejected, "generation retired"));
+        assert!(renderer.gpu_delivery_pending());
+        assert!(!renderer.submission_lifecycle.has_pending());
+        assert!(!renderer.gpu_observations.has_pending());
+        renderer.publish_progressed_gpu_observations();
+        assert_eq!(
+            renderer.take_runenui_terminal_publications(),
+            (
+                vec![accepted],
+                vec![completed],
+                vec![(rejected, "generation retired")]
+            )
+        );
+        assert!(!renderer.gpu_delivery_pending());
+        renderer.publish_progressed_gpu_observations();
+        assert_eq!(
+            renderer.take_runenui_terminal_publications(),
+            (vec![], vec![], vec![])
+        );
+    }
+
+    /// Process-isolated native proof; run this exact test with the opt-in set.
+    #[test]
+    #[allow(deprecated)]
+    #[cfg(target_os = "windows")]
+    fn native_progress_clears_frame_affinity_and_ignores_prepared_only_work() -> anyhow::Result<()>
+    {
+        use super::{Gfx, consume_matching_early_gpu_progress};
+        use std::{sync::Arc, time::Instant};
+        use winit::window::Window;
+        if std::env::var_os("RUNENWERK_NATIVE_GPU_PROGRESS_TEST").is_none() {
+            return Ok(());
+        }
+        use runen_gpu::*;
+        use winit::platform::windows::EventLoopBuilderExtWindows;
+        let event_loop = winit::event_loop::EventLoop::builder()
+            .with_any_thread(true)
+            .build()?;
+        let window =
+            Arc::new(event_loop.create_window(Window::default_attributes().with_visible(false))?);
+        let mut gfx = Gfx::new(window)?;
+        let affinity = gfx.gpu_context_affinity();
+        gfx.progress_gpu_before_producer_update()?;
+        assert_eq!(gfx.early_gpu_progress_affinity, Some(affinity));
+        gfx.progress_gpu_without_frame()?;
+        assert!(
+            !consume_matching_early_gpu_progress(&mut gfx.early_gpu_progress_affinity, &affinity),
+            "a no-render frame's early token cannot suppress the next genuine frame"
+        );
+        gfx.progress_gpu_before_producer_update()?;
+        assert!(consume_matching_early_gpu_progress(
+            &mut gfx.early_gpu_progress_affinity,
+            &affinity
+        ));
+
+        let mut ids = GpuWorkResourceIdAllocator::new();
+        let buffer = ids.allocate_buffer_handle(GpuBufferDescriptor::ordinary_owned(
+            "native.progress.prepared",
+            GpuResourceLifetime::Transient,
+            GpuReconstruction::SourceBacked,
+            64,
+            [GpuBufferUsage::CopySource],
+            GpuBufferInitialization::Zeroed,
+        )?)?;
+        let label = GpuResourceLabel::new("native.progress.readback")?;
+        let provenance = GpuResourceProvenance::new(label.clone(), None, None);
+        let readback = GpuReadbackId::allocate()?;
+        let mut builder = GpuWorkFragmentBuilder::new(label.clone(), provenance.clone());
+        builder.declare_resource(buffer.clone().into())?;
+        builder.add_node(
+            label,
+            GpuWorkOperation::Readback(GpuReadbackOperation::new(
+                GpuBufferRegion::whole(&buffer)?.into(),
+                readback,
+            )?),
+            [],
+            GpuCapabilityRequirements::new(),
+            GpuExecutionPreference::TransferPreferred,
+            provenance,
+        )?;
+        let graph = gfx.ctx.context().prepare_work_graph(
+            GpuResourceLabel::new("native.progress.prepared")?,
+            [builder.finish()?],
+        )?;
+        let prepared = pollster::block_on(gfx.ctx.context().prepare_submission(graph.clone()))?;
+        assert_eq!(gfx.execution_stats().prepared_submissions(), 1);
+        assert!(
+            !gfx.native_gpu_progress_pending(),
+            "unsubmitted work must not start native polling"
+        );
+        let submitted = gfx
+            .ctx
+            .context()
+            .submit_prepared(prepared)
+            .map_err(|error| anyhow::anyhow!("prepared test submission rejected: {error:?}"))?;
+        assert!(gfx.native_gpu_progress_pending());
+        let deadline = Instant::now() + std::time::Duration::from_secs(10);
+        loop {
+            gfx.progress_gpu_without_frame()?;
+            if !gfx.native_gpu_progress_pending() {
+                break;
+            }
+            anyhow::ensure!(
+                Instant::now() < deadline,
+                "native submission/readback failed to drain"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(matches!(submitted.status(), GpuSubmissionStatus::Completed));
+        assert!(matches!(
+            submitted.readback(readback).unwrap().status(),
+            GpuReadbackStatus::Ready(_)
+        ));
+        // Graceful shutdown must preserve accepted work and independent maps
+        // until their actual terminal facts drain through this same owner.
+        let prepared = pollster::block_on(gfx.ctx.context().prepare_submission(graph))?;
+        let shutdown_submission = gfx
+            .ctx
+            .context()
+            .submit_prepared(prepared)
+            .map_err(|error| anyhow::anyhow!("shutdown test submission rejected: {error:?}"))?;
+        assert!(gfx.native_gpu_progress_pending());
+        assert_eq!(
+            gfx.ctx.context().begin_shutdown(),
+            GpuExecutionLifecycleState::ShuttingDown
+        );
+        let deadline = Instant::now() + std::time::Duration::from_secs(10);
+        while gfx.native_gpu_progress_pending() {
+            gfx.progress_gpu_without_frame()?;
+            anyhow::ensure!(
+                Instant::now() < deadline,
+                "pending shutdown failed to drain"
+            );
+            std::thread::sleep(std::time::Duration::from_millis(2));
+        }
+        assert!(matches!(
+            shutdown_submission.status(),
+            GpuSubmissionStatus::Completed
+        ));
+        assert!(matches!(
+            shutdown_submission.readback(readback).unwrap().status(),
+            GpuReadbackStatus::Ready(_)
+        ));
+        assert_eq!(
+            gfx.ctx.context().execution_lifecycle_state(),
+            GpuExecutionLifecycleState::Closed
+        );
+        println!(
+            "native_gpu_progress=pass prepared_only_idle=true stale_frame_affinity_cleared=true independent_readback_terminal=true pending_shutdown_drained=true adapter={:?}",
+            gfx.adapter_facts().diagnostic_name()
+        );
+        Ok(())
     }
 
     #[test]

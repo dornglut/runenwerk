@@ -560,6 +560,16 @@ impl Renderer {
                 semantic,
             });
         }
+        if std::env::var("GROTTO_RENDER_REALIZATION_LOG").is_ok() {
+            eprintln!(
+                "runenwerk_render_lab_runenui_prepare frame={} surface={} extent={}x{} publications={} stage=prepared_not_submitted",
+                prepared_frame.context.frame_index,
+                prepared_frame.surface.render_surface_id.raw(),
+                surface_width_u32,
+                surface_height_u32,
+                runenui_2d.len()
+            );
+        }
         self.runenui_2d_resource_ids = staged_resource_ids;
         prepare_timings.prepare_ui_ms = prepare_ui_start.elapsed().as_secs_f32() * 1000.0;
         prepare_timings.prepare_mesh_ms = 0.0;

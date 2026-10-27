@@ -56,6 +56,9 @@ pub fn dispatch_editor_target_input_system(
         if native_window_id == NativeWindowId::primary() {
             continue;
         }
+        if !window_event.authorized_for_legacy_editor() {
+            continue;
+        }
         let Some(target_id) = host
             .shell_state
             .composition_target_bindings()

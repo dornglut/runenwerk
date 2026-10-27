@@ -1,8 +1,9 @@
 use crate::plugins::InputState;
+use crate::plugins::ui::NativeInputRecipient;
 use crate::runtime::window::{NativeWindowId, NativeWindowRecord};
 use runen_input::{
-    ContactInput, ContinuityLoss, InputContext, KeyboardInput, Point2, PointerButtonInput,
-    ScrollInput,
+    ContactInput, ContinuityLoss, InputContext, InputObservation, KeyboardInput, Point2,
+    PointerButtonInput, ScrollInput,
 };
 
 #[derive(Debug, Clone)]
@@ -55,6 +56,8 @@ pub enum PlatformEvent {
 pub struct PlatformWindowEvent {
     pub native_window_id: NativeWindowId,
     pub event: PlatformEvent,
+    /// Frozen original host-selected semantic recipient, never a UI-consumed flag.
+    input_recipient: Option<NativeInputRecipient>,
 }
 
 #[derive(Debug, Clone, runen_ecs::Component, runen_ecs::Resource)]
@@ -188,10 +191,42 @@ fn text_bytes(event: &PlatformEvent) -> usize {
 }
 
 impl PlatformWindowEvent {
+    /// Existing explicit legacy producers retain their established Editor reader.
     pub fn new(native_window_id: NativeWindowId, event: PlatformEvent) -> Self {
         Self {
             native_window_id,
             event,
+            input_recipient: Some(NativeInputRecipient::LegacyNativeConsumer),
+        }
+    }
+
+    /// Only the native input authority may attach its original recipient.
+    /// Later target retirement cannot reinterpret an earlier journal entry.
+    pub(crate) fn with_native_input_recipient(
+        mut self,
+        recipient: Option<NativeInputRecipient>,
+    ) -> Self {
+        self.input_recipient = recipient;
+        self
+    }
+
+    /// Window lifecycle is still visible to legacy readers. Semantic input
+    /// is delivered to Editor only when the original native target was legacy.
+    #[must_use]
+    pub fn authorized_for_legacy_editor(&self) -> bool {
+        if matches!(
+            &self.event,
+            PlatformEvent::KeyboardInput { .. }
+                | PlatformEvent::InputContinuityLost { .. }
+                | PlatformEvent::TextInput { .. }
+                | PlatformEvent::MouseWheel { .. }
+                | PlatformEvent::CursorMoved { .. }
+                | PlatformEvent::MouseInput { .. }
+                | PlatformEvent::Touch { .. }
+        ) {
+            self.input_recipient == Some(NativeInputRecipient::LegacyNativeConsumer)
+        } else {
+            true
         }
     }
 }
@@ -227,6 +262,56 @@ pub fn apply_platform_input_event(input: &mut InputState, event: &PlatformEvent)
         | PlatformEvent::Resized { .. }
         | PlatformEvent::ScaleFactorChanged { .. }
         | PlatformEvent::RedrawRequested => {}
+    }
+}
+
+/// The selected original native recipient controls only derived legacy
+/// gameplay input. RunenInput always receives the physical pointer observation;
+/// RunenUI/M13 independently decides its own semantic input processing.
+pub(crate) fn apply_native_recipient_input_event(
+    input: &mut InputState,
+    event: &PlatformEvent,
+    recipient: Option<NativeInputRecipient>,
+) {
+    if recipient == Some(NativeInputRecipient::LegacyNativeConsumer) {
+        apply_platform_input_event(input, event);
+        return;
+    }
+    match event {
+        PlatformEvent::MouseWheel {
+            context,
+            input: scroll,
+        } => input.handle_nonlegacy_native_pointer_observation(
+            *context,
+            InputObservation::Scroll(*scroll),
+        ),
+        PlatformEvent::CursorMoved { context, position } => {
+            input.handle_nonlegacy_native_pointer_observation(
+                *context,
+                InputObservation::AbsolutePointerPosition {
+                    position: *position,
+                },
+            );
+        }
+        PlatformEvent::MouseInput {
+            context,
+            input: button,
+        } => input.handle_nonlegacy_native_pointer_observation(
+            *context,
+            InputObservation::PointerButton(*button),
+        ),
+        PlatformEvent::Touch {
+            context,
+            input: contact,
+        } => input.handle_nonlegacy_native_pointer_observation(
+            *context,
+            InputObservation::Contact(contact.clone()),
+        ),
+        PlatformEvent::TextInput { .. } => {
+            // Original UI-bound text is submitted to the owning M13 runtime;
+            // it is not simultaneously legacy gameplay/Editor typed text.
+        }
+        _ => apply_platform_input_event(input, event),
     }
 }
 
@@ -275,10 +360,45 @@ mod tests {
     use crate::plugins::{ActionState, InputState};
     use crate::runtime::window::{NativeWindowId, WindowStateRegistryResource};
     use runen_input::{
-        ContactId, ContactInput, ContactPhase, CoordinateSpace, DigitalState, InputContext,
-        InputSourceId, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey, ObservationOrigin,
-        PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
+        ContactId, ContactInput, ContactPhase, ContinuityLoss, CoordinateSpace, DigitalState,
+        InputContext, InputSourceId, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+        ObservationOrigin, PhysicalKeyIdentity, Point2, PointerButton, PointerButtonInput,
     };
+
+    #[test]
+    fn native_recipient_journal_cannot_dispatch_unassigned_input_to_editor() {
+        let id = NativeWindowId::primary();
+        let keyboard = PlatformEvent::KeyboardInput {
+            context: test_context(),
+            input: KeyboardInput {
+                physical_key: PhysicalKeyIdentity::code("KeyA"),
+                logical_key: LogicalKey::Character(String::from("a")),
+                location: KeyLocation::Standard,
+                state: DigitalState::Pressed,
+                repeat: false,
+                origin: ObservationOrigin::SourceReport,
+            },
+        };
+        let legacy = PlatformWindowEvent::new(id, keyboard.clone());
+        assert!(legacy.authorized_for_legacy_editor());
+        let unassigned = PlatformWindowEvent::new(id, keyboard).with_native_input_recipient(None);
+        assert!(!unassigned.authorized_for_legacy_editor());
+        let lifecycle = PlatformWindowEvent::new(id, PlatformEvent::Focused { focused: false })
+            .with_native_input_recipient(None);
+        assert!(lifecycle.authorized_for_legacy_editor());
+        let revoked = PlatformWindowEvent::new(
+            id,
+            PlatformEvent::InputContinuityLost {
+                context: test_context(),
+                loss: ContinuityLoss::Source,
+            },
+        )
+        .with_native_input_recipient(None);
+        assert!(
+            !revoked.authorized_for_legacy_editor(),
+            "a foreign source continuity loss must not mutate legacy Editor input"
+        );
+    }
 
     fn test_context() -> InputContext {
         InputContext::new(InputSourceId::new(90), None)

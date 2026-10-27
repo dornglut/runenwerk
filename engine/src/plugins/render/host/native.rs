@@ -6,6 +6,27 @@ use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
 use winit::window::Window;
 
+/// Current Render-owned progress interest, including buffered terminal delivery.
+/// Absence means that this host has no initialized renderer.
+pub(crate) fn gpu_progress_snapshot(
+    world: &runen_ecs::World,
+) -> Option<(runen_gpu::GpuContextAffinity, bool)> {
+    world.resource::<Gfx>().ok().map(|gfx| {
+        (
+            gfx.gpu_context_affinity(),
+            gfx.native_gpu_progress_pending(),
+        )
+    })
+}
+
+/// Progress and deliver through the same Render consumers used by frame submission.
+pub(crate) fn deliver_gpu_progress(
+    world: &mut runen_ecs::World,
+    host_frame_index: u64,
+) -> Result<()> {
+    super::super::runtime::frame_submit::deliver_native_gpu_progress(world, host_frame_index)
+}
+
 pub(crate) fn initialize_primary(
     world: &mut runen_ecs::World,
     window: Arc<Window>,

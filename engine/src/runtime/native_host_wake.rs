@@ -111,6 +111,7 @@ impl NativeWakeTransport {
             .compare_exchange(IDLE, PENDING, Ordering::AcqRel, Ordering::Acquire)
         {
             Ok(_) => {
+                tracing::debug!(target: "engine.runtime.native_wake", "UI notification enqueued");
                 if self
                     .0
                     .proxy
@@ -123,17 +124,27 @@ impl NativeWakeTransport {
                 }
                 Ok(())
             }
-            Err(PENDING) => Ok(()),
+            Err(PENDING) => {
+                tracing::debug!(target: "engine.runtime.native_wake", "UI notification coalesced");
+                Ok(())
+            }
             Err(_) => Err(NativeWakeClosed),
         }
     }
 
-    pub(crate) fn acknowledge(&self) {
+    /// Consume pending observation intent, not merely a queued proxy callback.
+    /// The invoker may also acknowledge immediately before settling all native
+    /// slots: that settlement covers earlier intent. A later producer can then
+    /// claim PENDING again and must retain its own observation opportunity.
+    pub(crate) fn acknowledge(&self) -> bool {
         // A late callback must not reopen a terminal gate.
-        let _ = self
+        let acknowledged = self
             .0
             .state
-            .compare_exchange(PENDING, IDLE, Ordering::AcqRel, Ordering::Acquire);
+            .compare_exchange(PENDING, IDLE, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok();
+        tracing::debug!(target: "engine.runtime.native_wake", acknowledged, "UI notification acknowledged");
+        acknowledged
     }
 
     pub(crate) fn close(&self) {
@@ -164,6 +175,116 @@ impl WakeTransport for NativeWakeTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Uses a real proxy; isolate from other native event-loop tests in a fresh process.
+    #[test]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    fn native_wake_acknowledgement_preserves_racing_and_closed_intent() -> anyhow::Result<()> {
+        if std::env::var_os("RUNENWERK_NATIVE_WAKE_ACK_TEST").is_none() {
+            return Ok(());
+        }
+        use std::sync::Barrier;
+        let mut builder = winit::event_loop::EventLoop::<NativeHostEvent>::with_user_event();
+        #[cfg(target_os = "windows")]
+        {
+            use winit::platform::windows::EventLoopBuilderExtWindows;
+            builder.with_any_thread(true);
+        }
+        #[cfg(target_os = "linux")]
+        {
+            use winit::platform::x11::EventLoopBuilderExtX11;
+            builder.with_any_thread(true).with_x11();
+        }
+        let event_loop = builder.build()?;
+        let transport = NativeWakeTransport::new(event_loop.create_proxy());
+        assert!(!transport.acknowledge());
+        transport.notify()?;
+        transport.notify()?;
+        assert!(
+            transport.acknowledge(),
+            "coalesced intent needs one observation"
+        );
+        assert!(
+            !transport.acknowledge(),
+            "queued duplicates cannot add work"
+        );
+
+        // Deliberately park a producer on each side of the invoker's checkpoint.
+        for before_checkpoint in [true, false] {
+            let producer = transport.clone();
+            let gate = Arc::new(Barrier::new(2));
+            let worker_gate = gate.clone();
+            let worker = std::thread::spawn(move || {
+                if before_checkpoint {
+                    producer.notify().unwrap();
+                    worker_gate.wait();
+                } else {
+                    worker_gate.wait();
+                    producer.notify().unwrap();
+                }
+            });
+            if before_checkpoint {
+                gate.wait();
+                assert!(transport.acknowledge(), "upcoming settlement covers intent");
+            } else {
+                assert!(!transport.acknowledge());
+                gate.wait();
+            }
+            worker.join().unwrap();
+            assert_eq!(transport.acknowledge(), !before_checkpoint);
+            assert!(!transport.acknowledge());
+        }
+
+        for _ in 0..128 {
+            let producer = transport.clone();
+            let gate = Arc::new(Barrier::new(2));
+            let worker_gate = gate.clone();
+            let worker = std::thread::spawn(move || {
+                worker_gate.wait();
+                producer.notify().unwrap();
+            });
+            gate.wait();
+            let consumed = transport.acknowledge();
+            worker.join().unwrap();
+            assert_eq!(
+                transport.acknowledge(),
+                !consumed,
+                "racing wake was lost or duplicated"
+            );
+            assert!(!transport.acknowledge());
+        }
+
+        transport.notify()?;
+        transport.close();
+        assert!(
+            !transport.acknowledge(),
+            "late callback must not reopen CLOSED"
+        );
+        assert!(transport.notify().is_err());
+        let restarted = NativeWakeTransport::new(event_loop.create_proxy());
+        restarted.notify()?;
+        assert!(
+            restarted.acknowledge(),
+            "new host transport has independent intent"
+        );
+        assert!(
+            transport.notify().is_err(),
+            "restart cannot revive old transport"
+        );
+        let rejected = NativeWakeTransport::new(event_loop.create_proxy());
+        drop(event_loop);
+        assert!(
+            rejected.notify().is_err(),
+            "closed event loop must reject delivery"
+        );
+        assert!(rejected.ensure_delivery().is_err());
+        assert!(!rejected.acknowledge());
+        assert!(rejected.notify().is_err());
+        println!(
+            "native_wake_ack=pass race_iterations=128 before_after_checkpoint=pass coalescing=pass closed_restart_rejected_delivery=pass"
+        );
+        Ok(())
+    }
 
     #[test]
     fn clock_clones_share_epoch_and_exhaustion_is_terminal_without_rebasing() {
