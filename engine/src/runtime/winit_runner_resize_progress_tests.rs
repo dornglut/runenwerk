@@ -7,6 +7,7 @@ use std::time::Duration;
 #[derive(Debug, Default, runen_ecs::Resource)]
 struct ResizeObservations {
     frame_ends: usize,
+    redraw_occurrences: usize,
     widths: Vec<u32>,
     window_ids: Vec<NativeWindowId>,
 }
@@ -18,8 +19,10 @@ fn observe_frame_end(
     observations.frame_ends += 1;
     for event in journal.events() {
         observations.window_ids.push(event.native_window_id);
-        if let PlatformEvent::Resized { width, .. } = event.event {
-            observations.widths.push(width);
+        match event.event {
+            PlatformEvent::Resized { width, .. } => observations.widths.push(width),
+            PlatformEvent::RedrawRequested => observations.redraw_occurrences += 1,
+            _ => {}
         }
     }
 }
@@ -294,4 +297,88 @@ fn slow_render_schedule_runs_only_once_per_admitted_frame() {
         1
     );
     assert_eq!(journal_len(&runner), 0);
+}
+
+#[test]
+fn windows_native_callback_eligibility_preserves_redraw_and_excludes_move_only() {
+    assert!(WinitRunner::windows_native_frame_opportunity(
+        &WindowEvent::Resized(winit::dpi::PhysicalSize::new(1600, 900))
+    ));
+    assert!(WinitRunner::windows_native_frame_opportunity(
+        &WindowEvent::RedrawRequested
+    ));
+    assert!(!WinitRunner::windows_native_frame_opportunity(
+        &WindowEvent::Moved(winit::dpi::PhysicalPosition::new(10, 20))
+    ));
+    assert!(!WinitRunner::windows_native_frame_opportunity(
+        &WindowEvent::Focused(true)
+    ));
+}
+
+#[test]
+fn uncapped_redraw_callback_flood_retains_all_occurrences_without_about_to_wait() {
+    // The negative Windows case produced >39k redraw callbacks and then
+    // exhausted the journal after 118 ms without FrameEnd. Simulate the
+    // same missing ordinary wait callback with many original redraws,
+    // periodically supplying the new redraw callback opportunity.
+    let policy = FramePacingPolicyResource::continuous_uncapped();
+    let mut runner = runner_for_progress(policy);
+    let primary = NativeWindowId::primary();
+    let start = Instant::now();
+    const REDRAW_COUNT: usize = 8_192;
+    for index in 0..REDRAW_COUNT {
+        // Exact native redraw acknowledgment (unowned external redraw)
+        // plus lossless original occurrence admission.
+        runner.acknowledge_native_redraw(primary);
+        runner.apply_event(PlatformEvent::RedrawRequested).unwrap();
+        if (index + 1) % 32 == 0 {
+            let now = start + Duration::from_micros(index as u64 + 1);
+            let decision = runner.frame_pacing_schedule.decide(policy, now);
+            assert!(decision.request_redraw, "uncapped work remains eligible");
+            runner.frame_requested = true;
+            assert!(
+                runner
+                    .run_requested_frame(now, true, |_| Ok(()))
+                    .expect("redraw callback must drive canonical progress")
+            );
+            assert_eq!(journal_len(&runner), 0);
+        }
+    }
+    let observed = runner.state.world.resource::<ResizeObservations>().unwrap();
+    assert_eq!(observed.redraw_occurrences, REDRAW_COUNT);
+    assert_eq!(observed.frame_ends, REDRAW_COUNT / 32);
+    assert_eq!(observed.window_ids.len(), REDRAW_COUNT);
+    assert!(observed.window_ids.iter().all(|&id| id == primary));
+    assert_eq!(journal_len(&runner), 0);
+    assert!(!runner.frame_requested);
+}
+
+#[test]
+fn owned_redraw_acknowledgement_does_not_fabricate_on_demand_frame() {
+    let mut runner = runner_for_progress(FramePacingPolicyResource::on_demand());
+    let primary = NativeWindowId::primary();
+    runner.owned_redraws.insert(primary);
+    runner.acknowledge_native_redraw(primary);
+    runner.apply_event(PlatformEvent::RedrawRequested).unwrap();
+    assert!(!runner.frame_requested);
+    assert!(!runner.run_requested_frame(Instant::now(), true, |_| Ok(())).unwrap());
+    assert_eq!(journal_len(&runner), 1, "retirement requires a real frame");
+    assert_eq!(
+        runner
+            .state
+            .world
+            .resource::<ResizeObservations>()
+            .unwrap()
+            .frame_ends,
+        0
+    );
+    // An independently requested redraw is legitimate OnDemand work.
+    runner.acknowledge_native_redraw(primary);
+    runner.apply_event(PlatformEvent::RedrawRequested).unwrap();
+    assert!(runner.frame_requested);
+    assert!(runner.run_requested_frame(Instant::now(), true, |_| Ok(())).unwrap());
+    assert_eq!(journal_len(&runner), 0);
+    let observed = runner.state.world.resource::<ResizeObservations>().unwrap();
+    assert_eq!(observed.redraw_occurrences, 2);
+    assert_eq!(observed.frame_ends, 1);
 }

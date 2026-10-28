@@ -624,7 +624,7 @@ impl WinitRunner {
     }
 
     /// Drives one ordinary Engine frame from either normal event-loop delivery or
-    /// a Windows resize/move callback. The caller already owns a fully admitted
+    /// a Windows resize/redraw callback. The caller already owns a fully admitted
     /// callback and has applied pacing. Neither opportunity owns a second
     /// schedule or a separate journal-retirement rule.
     fn run_requested_frame<F>(
@@ -653,6 +653,14 @@ impl WinitRunner {
         self.frame_in_progress = false;
         result?;
         Ok(true)
+    }
+
+    /// A Windows sizing/move modal loop can deliver resize/redraw callbacks
+    /// without an about_to_wait turn. Only actual resize and redraw callbacks
+    /// supply an alternative opportunity; move-only events do not.
+    #[cfg(any(test, target_os = "windows"))]
+    fn windows_native_frame_opportunity(event: &WindowEvent) -> bool {
+        matches!(event, WindowEvent::Resized(_) | WindowEvent::RedrawRequested)
     }
 
     fn progress_requested_frame(&mut self, event_loop: &ActiveEventLoop) {
@@ -865,12 +873,11 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             return;
         };
 
-        // Win32's interactive sizing loop can dispatch resize callbacks
-        // without delivering about_to_wait. A fully processed resize provides
-        // a canonical frame opportunity; move-only notifications do not
-        // manufacture OnDemand visual work.
+        // Win32 can dispatch resize/redraw callbacks without about_to_wait.
+        // Both supply the same paced ordinary-frame opportunity after
+        // admission. Moving the window alone never creates a visual frame.
         #[cfg(target_os = "windows")]
-        let resize_progress_opportunity = matches!(event, WindowEvent::Resized(_));
+        let native_frame_opportunity = Self::windows_native_frame_opportunity(&event);
         self.dispatch_native_window_event(&window, &event);
         if !matches!(event, WindowEvent::RedrawRequested) {
             self.frame_requested = true;
@@ -1009,7 +1016,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
         }
         self.pace_or_exit(event_loop);
         #[cfg(target_os = "windows")]
-        if resize_progress_opportunity {
+        if native_frame_opportunity {
             self.progress_requested_frame(event_loop);
         }
     }
