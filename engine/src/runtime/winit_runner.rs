@@ -665,10 +665,9 @@ impl WinitRunner {
             |runner| runner.apply_window_effects(event_loop),
         ) {
             Ok(false) => {}
-            Err(error) => self.exit_with_error(
-                event_loop,
-                anyhow!("runtime frame failed: {error:#}"),
-            ),
+            Err(error) => {
+                self.exit_with_error(event_loop, anyhow!("runtime frame failed: {error:#}"))
+            }
             Ok(true) => {
                 self.pace_or_exit(event_loop);
                 if !event_loop.exiting()

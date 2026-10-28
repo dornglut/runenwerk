@@ -26,7 +26,10 @@ fn observe_frame_end(
 
 fn runner_for_progress(policy: FramePacingPolicyResource) -> WinitRunner {
     let mut runner = runner_with_frame_pacing(policy);
-    runner.state.world.insert_resource(ResizeObservations::default());
+    runner
+        .state
+        .world
+        .insert_resource(ResizeObservations::default());
     runner
         .state
         .scheduler
@@ -75,7 +78,11 @@ fn blocked_about_to_wait_can_process_more_than_4096_original_resize_occurrences(
                     .expect("canonical resize frame")
                 {
                     frame_starts.push(now);
-                    assert_eq!(journal_len(&runner), 0, "successful FrameEnd retires the journal");
+                    assert_eq!(
+                        journal_len(&runner),
+                        0,
+                        "successful FrameEnd retires the journal"
+                    );
                 }
             }
         }
@@ -86,7 +93,11 @@ fn blocked_about_to_wait_can_process_more_than_4096_original_resize_occurrences(
         assert!(journal_len(&runner) == 0);
         assert!(!runner.frame_requested);
         if let Some(interval) = policy.target_frame_interval() {
-            assert!(frame_starts.windows(2).all(|w| w[1].duration_since(w[0]) >= interval));
+            assert!(
+                frame_starts
+                    .windows(2)
+                    .all(|w| w[1].duration_since(w[0]) >= interval)
+            );
         }
     }
 }
@@ -101,14 +112,31 @@ fn capped_frame_eligibility_is_shared_by_normal_and_resize_opportunities() {
         runner.last_primary_redraw_at = Some(start);
         queue_resize(&mut runner, 1600);
 
-        assert!(!runner.run_requested_frame(start + interval / 2, true, |_| Ok(())).unwrap());
+        assert!(
+            !runner
+                .run_requested_frame(start + interval / 2, true, |_| Ok(()))
+                .unwrap()
+        );
         assert_eq!(journal_len(&runner), 1);
         assert!(runner.frame_requested);
-        assert!(runner.run_requested_frame(start + interval, true, |_| Ok(())).unwrap());
+        assert!(
+            runner
+                .run_requested_frame(start + interval, true, |_| Ok(()))
+                .unwrap()
+        );
         assert_eq!(journal_len(&runner), 0);
-        assert!(!runner.run_requested_frame(start + interval, true, |_| Ok(())).unwrap());
+        assert!(
+            !runner
+                .run_requested_frame(start + interval, true, |_| Ok(()))
+                .unwrap()
+        );
         assert_eq!(
-            runner.state.world.resource::<ResizeObservations>().unwrap().frame_ends,
+            runner
+                .state
+                .world
+                .resource::<ResizeObservations>()
+                .unwrap()
+                .frame_ends,
             1
         );
     }
