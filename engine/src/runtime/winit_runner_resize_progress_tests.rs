@@ -125,7 +125,15 @@ fn on_demand_idle_and_unrealized_primary_do_not_run_frames() {
     assert_eq!(journal_len(&runner), 1);
     assert!(runner.run_requested_frame(now, true, |_| Ok(())).unwrap());
     assert!(!runner.run_requested_frame(now, true, |_| Ok(())).unwrap());
-    assert_eq!(runner.state.world.resource::<ResizeObservations>().unwrap().frame_ends, 1);
+    assert_eq!(
+        runner
+            .state
+            .world
+            .resource::<ResizeObservations>()
+            .unwrap()
+            .frame_ends,
+        1
+    );
 }
 
 #[test]
@@ -147,7 +155,15 @@ fn nested_frame_request_is_not_run_reentrantly_or_discarded() {
     assert!(!runner.frame_in_progress);
     assert!(runner.frame_requested);
     assert!(runner.run_requested_frame(now, true, |_| Ok(())).unwrap());
-    assert_eq!(runner.state.world.resource::<ResizeObservations>().unwrap().frame_ends, 2);
+    assert_eq!(
+        runner
+            .state
+            .world
+            .resource::<ResizeObservations>()
+            .unwrap()
+            .frame_ends,
+        2
+    );
 }
 
 #[test]
@@ -156,7 +172,11 @@ fn frame_end_failure_never_retires_the_native_journal() {
         anyhow::bail!("injected FrameEnd failure")
     }
     let mut runner = runner_for_progress(FramePacingPolicyResource::on_demand());
-    runner.state.scheduler.add_systems(FrameEnd, failing_frame_end).unwrap();
+    runner
+        .state
+        .scheduler
+        .add_systems(FrameEnd, failing_frame_end)
+        .unwrap();
     queue_resize(&mut runner, 1700);
     let error = runner
         .run_requested_frame(Instant::now(), true, |_| Ok(()))
@@ -178,23 +198,43 @@ fn focus_continuity_and_multiwindow_occurrences_remain_ordered_through_frame_end
         .unwrap()
         .request_window("second", (640, 480))
         .native_window_id;
-    runner.input_adapter.window_context(primary, winit::event::DeviceId::dummy()).unwrap();
+    runner
+        .input_adapter
+        .window_context(primary, winit::event::DeviceId::dummy())
+        .unwrap();
     runner.apply_window_focus_event(primary, false).unwrap();
     runner
         .apply_event_for_native_window(
             secondary,
-            PlatformEvent::Resized { width: 1920, height: 1080 },
+            PlatformEvent::Resized {
+                width: 1920,
+                height: 1080,
+            },
         )
         .unwrap();
     {
-        let journal = runner.state.world.resource::<PlatformWindowEventQueueResource>().unwrap();
+        let journal = runner
+            .state
+            .world
+            .resource::<PlatformWindowEventQueueResource>()
+            .unwrap();
         assert_eq!(journal.events().len(), 3);
-        assert!(matches!(journal.events()[0].event, PlatformEvent::Focused { focused: false }));
-        assert!(matches!(journal.events()[1].event, PlatformEvent::InputContinuityLost { .. }));
+        assert!(matches!(
+            journal.events()[0].event,
+            PlatformEvent::Focused { focused: false }
+        ));
+        assert!(matches!(
+            journal.events()[1].event,
+            PlatformEvent::InputContinuityLost { .. }
+        ));
         assert_eq!(journal.events()[2].native_window_id, secondary);
     }
     runner.frame_requested = true;
-    assert!(runner.run_requested_frame(Instant::now(), true, |_| Ok(())).unwrap());
+    assert!(
+        runner
+            .run_requested_frame(Instant::now(), true, |_| Ok(()))
+            .unwrap()
+    );
     assert_eq!(journal_len(&runner), 0);
     let observed = runner.state.world.resource::<ResizeObservations>().unwrap();
     assert_eq!(observed.window_ids, vec![primary, primary, secondary]);
@@ -207,11 +247,23 @@ fn slow_render_schedule_runs_only_once_per_admitted_frame() {
         std::thread::sleep(Duration::from_millis(2));
     }
     let mut runner = runner_for_progress(FramePacingPolicyResource::continuous_capped(60));
-    runner.state.scheduler.add_systems(RenderSubmit, slow_submit).unwrap();
+    runner
+        .state
+        .scheduler
+        .add_systems(RenderSubmit, slow_submit)
+        .unwrap();
     queue_resize(&mut runner, 1350);
     let now = Instant::now();
     assert!(runner.run_requested_frame(now, true, |_| Ok(())).unwrap());
     assert!(!runner.run_requested_frame(now, true, |_| Ok(())).unwrap());
-    assert_eq!(runner.state.world.resource::<ResizeObservations>().unwrap().frame_ends, 1);
+    assert_eq!(
+        runner
+            .state
+            .world
+            .resource::<ResizeObservations>()
+            .unwrap()
+            .frame_ends,
+        1
+    );
     assert_eq!(journal_len(&runner), 0);
 }
