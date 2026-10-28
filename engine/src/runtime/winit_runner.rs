@@ -62,6 +62,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         frame_pacing_schedule: FramePacingSchedule::default(),
         fatal_error: None,
         frame_requested: false,
+        frame_in_progress: false,
         owned_redraws: HashSet::new(),
         shutdown_done: false,
     };
@@ -114,6 +115,8 @@ struct WinitRunner {
     frame_pacing_schedule: FramePacingSchedule,
     fatal_error: Option<anyhow::Error>,
     frame_requested: bool,
+    /// Suppresses reentrant ordinary frames across the schedule and window effects.
+    frame_in_progress: bool,
     /// Acknowledges host-requested redraws without advancing the frame twice.
     owned_redraws: HashSet<NativeWindowId>,
     shutdown_done: bool,
@@ -608,8 +611,7 @@ impl WinitRunner {
         }
     }
 
-    fn observe_primary_frame_started(&mut self) {
-        let now = Instant::now();
+    fn observe_primary_frame_started(&mut self, now: Instant) {
         if let Some(previous) = self.last_primary_redraw_at
             && let Ok(state) = self
                 .state
@@ -619,6 +621,80 @@ impl WinitRunner {
             state.observe_frame_interval(now.saturating_duration_since(previous));
         }
         self.last_primary_redraw_at = Some(now);
+    }
+
+    /// Drives one ordinary Engine frame from either normal event-loop delivery or
+    /// a Windows resize/redraw callback. The caller already owns a fully admitted
+    /// callback and has applied pacing. Neither opportunity owns a second
+    /// schedule or a separate journal-retirement rule.
+    fn run_requested_frame<F>(
+        &mut self,
+        now: Instant,
+        primary_window_ready: bool,
+        after_frame: F,
+    ) -> Result<bool>
+    where
+        F: FnOnce(&mut Self) -> Result<()>,
+    {
+        if self.frame_in_progress
+            || !self.frame_requested
+            || !primary_window_ready
+            || !self.frame_is_ready(now)
+        {
+            return Ok(false);
+        }
+
+        // Consume only this request. An actual request arising during the frame
+        // remains pending for a later, separately paced opportunity.
+        self.frame_requested = false;
+        self.frame_in_progress = true;
+        self.observe_primary_frame_started(now);
+        let result = self.run_frame().and_then(|_| after_frame(self));
+        self.frame_in_progress = false;
+        result?;
+        Ok(true)
+    }
+
+    /// A Windows sizing/move modal loop can deliver resize/redraw callbacks
+    /// without an about_to_wait turn. Only actual resize and redraw callbacks
+    /// supply an alternative opportunity; move-only events do not.
+    #[cfg(any(test, target_os = "windows"))]
+    fn windows_native_frame_opportunity(event: &WindowEvent) -> bool {
+        matches!(
+            event,
+            WindowEvent::Resized(_) | WindowEvent::RedrawRequested
+        )
+    }
+
+    fn progress_requested_frame(&mut self, event_loop: &ActiveEventLoop) {
+        if event_loop.exiting() {
+            return;
+        }
+        match self.run_requested_frame(
+            Instant::now(),
+            self.window_realizer.has_primary_window(),
+            |runner| runner.apply_window_effects(event_loop),
+        ) {
+            Ok(false) => {}
+            Err(error) => {
+                self.exit_with_error(event_loop, anyhow!("runtime frame failed: {error:#}"))
+            }
+            Ok(true) => {
+                self.pace_or_exit(event_loop);
+                if !event_loop.exiting()
+                    && self.frame_requested
+                    && self.frame_is_ready(Instant::now())
+                {
+                    // Preserve the original bounded continuation: a fresh
+                    // request requires its own native event-loop opportunity.
+                    if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>()
+                        && let Err(error) = transport.notify()
+                    {
+                        self.exit_with_error(event_loop, error.into());
+                    }
+                }
+            }
+        }
     }
 
     fn frame_is_ready(&self, now: Instant) -> bool {
@@ -800,6 +876,11 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             return;
         };
 
+        // Win32 can dispatch resize/redraw callbacks without about_to_wait.
+        // Both supply the same paced ordinary-frame opportunity after
+        // admission. Moving the window alone never creates a visual frame.
+        #[cfg(target_os = "windows")]
+        let native_frame_opportunity = Self::windows_native_frame_opportunity(&event);
         self.dispatch_native_window_event(&window, &event);
         if !matches!(event, WindowEvent::RedrawRequested) {
             self.frame_requested = true;
@@ -937,6 +1018,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             return;
         }
         self.pace_or_exit(event_loop);
+        #[cfg(target_os = "windows")]
+        if native_frame_opportunity {
+            self.progress_requested_frame(event_loop);
+        }
     }
 
     fn device_event(
@@ -978,33 +1063,8 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             return;
         }
         self.pace_or_exit(event_loop);
-        if event_loop.exiting() {
-            return;
-        }
-        if self.frame_requested
-            && self.window_realizer.has_primary_window()
-            && self.frame_is_ready(Instant::now())
-        {
-            self.frame_requested = false;
-            self.observe_primary_frame_started();
-            if let Err(error) = self
-                .run_frame()
-                .and_then(|_| self.apply_window_effects(event_loop))
-            {
-                self.exit_with_error(event_loop, anyhow!("runtime frame failed: {error:#}"));
-                return;
-            }
-            self.pace_or_exit(event_loop);
-            if !event_loop.exiting() && self.frame_requested && self.frame_is_ready(Instant::now())
-            {
-                // A deadline or bounded continuation can become due during the
-                // frame. Supply another native turn rather than strand it in Wait.
-                if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>()
-                    && let Err(error) = transport.notify()
-                {
-                    self.exit_with_error(event_loop, error.into());
-                }
-            }
+        if !event_loop.exiting() {
+            self.progress_requested_frame(event_loop);
         }
     }
 
@@ -1023,6 +1083,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
 #[cfg(test)]
 #[path = "winit_runner_retirement_tests.rs"]
 mod retirement_tests;
+
+#[cfg(test)]
+#[path = "winit_runner_resize_progress_tests.rs"]
+mod resize_progress_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1067,6 +1131,7 @@ mod tests {
             frame_pacing_schedule: FramePacingSchedule::default(),
             fatal_error: None,
             frame_requested: false,
+            frame_in_progress: false,
             owned_redraws: HashSet::new(),
             shutdown_done: false,
         }
@@ -1115,6 +1180,7 @@ mod tests {
             frame_pacing_schedule: FramePacingSchedule::default(),
             fatal_error: None,
             frame_requested: false,
+            frame_in_progress: false,
             owned_redraws: HashSet::new(),
             shutdown_done: false,
         };
