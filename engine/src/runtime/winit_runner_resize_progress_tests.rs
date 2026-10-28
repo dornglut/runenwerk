@@ -361,7 +361,11 @@ fn owned_redraw_acknowledgement_does_not_fabricate_on_demand_frame() {
     runner.acknowledge_native_redraw(primary);
     runner.apply_event(PlatformEvent::RedrawRequested).unwrap();
     assert!(!runner.frame_requested);
-    assert!(!runner.run_requested_frame(Instant::now(), true, |_| Ok(())).unwrap());
+    assert!(
+        !runner
+            .run_requested_frame(Instant::now(), true, |_| Ok(()))
+            .unwrap()
+    );
     assert_eq!(journal_len(&runner), 1, "retirement requires a real frame");
     assert_eq!(
         runner
@@ -376,7 +380,11 @@ fn owned_redraw_acknowledgement_does_not_fabricate_on_demand_frame() {
     runner.acknowledge_native_redraw(primary);
     runner.apply_event(PlatformEvent::RedrawRequested).unwrap();
     assert!(runner.frame_requested);
-    assert!(runner.run_requested_frame(Instant::now(), true, |_| Ok(())).unwrap());
+    assert!(
+        runner
+            .run_requested_frame(Instant::now(), true, |_| Ok(()))
+            .unwrap()
+    );
     assert_eq!(journal_len(&runner), 0);
     let observed = runner.state.world.resource::<ResizeObservations>().unwrap();
     assert_eq!(observed.redraw_occurrences, 2);

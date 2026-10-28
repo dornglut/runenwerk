@@ -660,7 +660,10 @@ impl WinitRunner {
     /// supply an alternative opportunity; move-only events do not.
     #[cfg(any(test, target_os = "windows"))]
     fn windows_native_frame_opportunity(event: &WindowEvent) -> bool {
-        matches!(event, WindowEvent::Resized(_) | WindowEvent::RedrawRequested)
+        matches!(
+            event,
+            WindowEvent::Resized(_) | WindowEvent::RedrawRequested
+        )
     }
 
     fn progress_requested_frame(&mut self, event_loop: &ActiveEventLoop) {
