@@ -865,12 +865,12 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             return;
         };
 
-        // Win32's interactive sizing/move loop can dispatch these callbacks
-        // without delivering about_to_wait. A completed callback supplies one
-        // additional opportunity to run the same canonical Engine frame.
+        // Win32's interactive sizing loop can dispatch resize callbacks
+        // without delivering about_to_wait. A fully processed resize provides
+        // a canonical frame opportunity; move-only notifications do not
+        // manufacture OnDemand visual work.
         #[cfg(target_os = "windows")]
-        let resize_progress_opportunity =
-            matches!(event, WindowEvent::Resized(_) | WindowEvent::Moved(_));
+        let resize_progress_opportunity = matches!(event, WindowEvent::Resized(_));
         self.dispatch_native_window_event(&window, &event);
         if !matches!(event, WindowEvent::RedrawRequested) {
             self.frame_requested = true;
