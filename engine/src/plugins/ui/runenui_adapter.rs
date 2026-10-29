@@ -3188,18 +3188,25 @@ mod tests {
             .unwrap();
 
         assert!(app.ui().unmount_presented(id).is_err());
-        assert!(app.world().resource::<UiRuntimeSlotsResource>().unwrap().contains(id));
-        assert!(app
-            .world()
-            .resource::<UiRuntimePresentationAssociationsResource>()
-            .unwrap()
-            .binding(id)
-            .is_some());
-        assert!(app
-            .world()
-            .resource::<ManagedRenderProducerIds>()
-            .unwrap()
-            .is_owned_by(producer, id.value()));
+        assert!(
+            app.world()
+                .resource::<UiRuntimeSlotsResource>()
+                .unwrap()
+                .contains(id)
+        );
+        assert!(
+            app.world()
+                .resource::<UiRuntimePresentationAssociationsResource>()
+                .unwrap()
+                .binding(id)
+                .is_some()
+        );
+        assert!(
+            app.world()
+                .resource::<ManagedRenderProducerIds>()
+                .unwrap()
+                .is_owned_by(producer, id.value())
+        );
 
         let retirement = app
             .ui()
@@ -3207,18 +3214,25 @@ mod tests {
             .expect("retry succeeds")
             .expect("real RunenUI retirement");
         assert_eq!(retirement.final_ownership().status(), RuntimeStatus::Closed);
-        assert!(!app.world().resource::<UiRuntimeSlotsResource>().unwrap().contains(id));
-        assert!(app
-            .world()
-            .resource::<UiRuntimePresentationAssociationsResource>()
-            .unwrap()
-            .binding(id)
-            .is_none());
-        assert!(!app
-            .world()
-            .resource::<ManagedRenderProducerIds>()
-            .unwrap()
-            .is_owned_by(producer, id.value()));
+        assert!(
+            !app.world()
+                .resource::<UiRuntimeSlotsResource>()
+                .unwrap()
+                .contains(id)
+        );
+        assert!(
+            app.world()
+                .resource::<UiRuntimePresentationAssociationsResource>()
+                .unwrap()
+                .binding(id)
+                .is_none()
+        );
+        assert!(
+            !app.world()
+                .resource::<ManagedRenderProducerIds>()
+                .unwrap()
+                .is_owned_by(producer, id.value())
+        );
     }
 
     #[test]
