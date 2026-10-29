@@ -141,76 +141,6 @@ jobs:
                 --test native_host_smoke \
                 --locked
 
-      - name: Run Boids example-local unit and shader-contract tests
-        run: cargo +stable test -p engine --example boids_render_flow --locked
-
-      - name: Prove Boids producer fail-stop before fresh native source epoch
-        env:
-          RUST_BACKTRACE: '1'
-          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
-          RUNENWERK_G5_REQUIRE_GPU: '1'
-          RUNENWERK_BOIDS_NATIVE_SOURCE_FAULT_AFTER_TICK: '12'
-        run: |
-          set -euo pipefail
-          for mode in flocking species; do
-            log="$(mktemp)"
-            args=()
-            if [ "$mode" = species ]; then args=(--species); fi
-            if xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-                 cargo +stable run -p engine --example boids_render_flow --locked -- "${args[@]}" >"$log" 2>&1; then
-              cat "$log"
-              echo "Expected injected Boids source rejection, but the process exited successfully" >&2
-              rm -f "$log"
-              exit 1
-            fi
-            if ! grep -F "Boids native injected source fault after verified GPU tick" "$log"; then
-              cat "$log"
-              echo "Native Boids did not exit for the intended producer fault" >&2
-              rm -f "$log"
-              exit 1
-            fi
-            echo "native_boids_source_fail_stop=pass mode=$mode"
-            rm -f "$log"
-          done
-
-      - name: Run real original and species Boids native GPU continuity proof
-        env:
-          RUST_BACKTRACE: '1'
-          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
-          RUNENWERK_G5_REQUIRE_GPU: '1'
-        run: |
-          set -euo pipefail
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-            cargo +stable run -p engine --example boids_render_flow --locked
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-            cargo +stable run -p engine --example boids_render_flow --locked -- --species
-
-      - name: Prove actual Boids native launch pacing (capped and uncapped)
-        env:
-          RUST_BACKTRACE: '1'
-          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
-          RUNENWERK_G5_REQUIRE_GPU: '1'
-        run: |
-          set -euo pipefail
-          for mode in capped:120 uncapped; do
-            args=(--host-pacing "$mode")
-            if [ "$mode" = uncapped ]; then args+=(--species); fi
-            log="$(mktemp)"
-            if ! xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-                 cargo +stable run -p engine --example boids_render_flow --locked -- "${args[@]}" >"$log" 2>&1; then
-              cat "$log"
-              rm -f "$log"
-              exit 1
-            fi
-            if ! grep -F "native_boids_gpu_smoke=pass" "$log"; then
-              cat "$log"
-              echo "Boids Host CLI mode $mode did not complete actual GPU continuity smoke" >&2
-              rm -f "$log"
-              exit 1
-            fi
-            rm -f "$log"
-          done
-
       - name: Prove actual Arena native capped and uncapped launch modes
         env:
           RUNENWERK_ARENA_NATIVE_LAUNCH_SMOKE: '1'
@@ -331,6 +261,295 @@ jobs:
           fi
           rm -f "$log"
 
+      - name: Run maintained arena presentation GPU proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_ARENA_GPU_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            cargo +stable test -p runenwerk_arena \
+              --test arena_presentation_gpu \
+              --locked -- --ignored --exact --nocapture --test-threads=1
+
+      - name: Run standalone RunenRender public consumer proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENRENDER_R8_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            --test runenrender_ordinary_public_api \
+            --locked -- --nocapture --test-threads=1
+
+      - name: Prove downstream retained cross-frame G5 submission semantics
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            --test render_gpu_retained_cross_frame \
+            --locked -- --nocapture --test-threads=1
+
+      - name: Prove downstream fixed GPU step continuity under deferred frames
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine \
+            --test render_gpu_fixed_step_continuity \
+            --locked -- --nocapture --test-threads=1
+
+      - name: Prove producer checkpoint reimport after G5 context failure
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          cargo +stable test -p engine --lib \
+            accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay \
+            --locked -- --nocapture --test-threads=1
+
+  runenrender-r6-vulkan-boids-continuity:
+    name: RunenRender Vulkan Boids continuity/pacing proofs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Resolve expected revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            merge_group) expected_revision="$EVENT_SHA" ;;
+            push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+          test -n "$expected_revision"
+          echo "expected_revision=$expected_revision" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.revision.outputs.expected_revision }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove checked-out revision
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          actual_revision="$(git rev-parse HEAD)"
+          echo "Expected revision: $EXPECTED_REVISION"
+          echo "Actual revision:   $actual_revision"
+          test "$actual_revision" = "$EXPECTED_REVISION"
+
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache Cargo data
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-targets: false
+
+      # The remote GHA compiler cache has an account-level egress quota; required
+      # merge-group validation must remain executable without that service.
+      - name: Set up Rust compiler cache
+        if: github.event_name != 'merge_group'
+        uses: "Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba" # v0.0.11
+        with:
+          version: "v0.18.0"
+
+      - name: Configure Rust compiler cache
+        run: |
+          echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+          if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
+            {
+              echo "SCCACHE_GHA_ENABLED=on"
+              echo "RUSTC_WRAPPER=sccache"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Install Mesa Vulkan fallback
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools xvfb xauth libxkbcommon-x11-0
+          icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
+          test -n "$icd"
+          echo "Lavapipe ICD: $icd"
+          echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+          echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
+          echo "WGPU_BACKEND=vulkan" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=${RUNNER_TEMP}/runenrender-vulkan-xdg" >> "$GITHUB_ENV"
+          mkdir -p "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+          chmod 700 "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+
+      - name: Prove Vulkan software adapter
+        run: vulkaninfo --summary
+
+      - name: Run Boids example-local unit and shader-contract tests
+        run: cargo +stable test -p engine --example boids_render_flow --locked
+
+      - name: Prove Boids producer fail-stop before fresh native source epoch
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+          RUNENWERK_BOIDS_NATIVE_SOURCE_FAULT_AFTER_TICK: '12'
+        run: |
+          set -euo pipefail
+          for mode in flocking species; do
+            log="$(mktemp)"
+            args=()
+            if [ "$mode" = species ]; then args=(--species); fi
+            if xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+                 cargo +stable run -p engine --example boids_render_flow --locked -- "${args[@]}" >"$log" 2>&1; then
+              cat "$log"
+              echo "Expected injected Boids source rejection, but the process exited successfully" >&2
+              rm -f "$log"
+              exit 1
+            fi
+            if ! grep -F "Boids native injected source fault after verified GPU tick" "$log"; then
+              cat "$log"
+              echo "Native Boids did not exit for the intended producer fault" >&2
+              rm -f "$log"
+              exit 1
+            fi
+            echo "native_boids_source_fail_stop=pass mode=$mode"
+            rm -f "$log"
+          done
+
+      - name: Run real original and species Boids native GPU continuity proof
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            cargo +stable run -p engine --example boids_render_flow --locked
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            cargo +stable run -p engine --example boids_render_flow --locked -- --species
+
+      - name: Prove actual Boids native launch pacing (capped and uncapped)
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+        run: |
+          set -euo pipefail
+          for mode in capped:120 uncapped; do
+            args=(--host-pacing "$mode")
+            if [ "$mode" = uncapped ]; then args+=(--species); fi
+            log="$(mktemp)"
+            if ! xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+                 cargo +stable run -p engine --example boids_render_flow --locked -- "${args[@]}" >"$log" 2>&1; then
+              cat "$log"
+              rm -f "$log"
+              exit 1
+            fi
+            if ! grep -F "native_boids_gpu_smoke=pass" "$log"; then
+              cat "$log"
+              echo "Boids Host CLI mode $mode did not complete actual GPU continuity smoke" >&2
+              rm -f "$log"
+              exit 1
+            fi
+            rm -f "$log"
+          done
+
+  runenrender-r6-vulkan-boids-readback:
+    name: RunenRender Vulkan Boids readback/PreUpdate proofs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Resolve expected revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            merge_group) expected_revision="$EVENT_SHA" ;;
+            push|workflow_dispatch) expected_revision="$EVENT_SHA" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+          test -n "$expected_revision"
+          echo "expected_revision=$expected_revision" >> "$GITHUB_OUTPUT"
+
+      - name: Check out exact revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.revision.outputs.expected_revision }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove checked-out revision
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.expected_revision }}
+        run: |
+          set -euo pipefail
+          actual_revision="$(git rev-parse HEAD)"
+          echo "Expected revision: $EXPECTED_REVISION"
+          echo "Actual revision:   $actual_revision"
+          test "$actual_revision" = "$EXPECTED_REVISION"
+
+      - name: Install stable Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Cache Cargo data
+        uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-targets: false
+
+      # The remote GHA compiler cache has an account-level egress quota; required
+      # merge-group validation must remain executable without that service.
+      - name: Set up Rust compiler cache
+        if: github.event_name != 'merge_group'
+        uses: "Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba" # v0.0.11
+        with:
+          version: "v0.18.0"
+
+      - name: Configure Rust compiler cache
+        run: |
+          echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+          if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
+            {
+              echo "SCCACHE_GHA_ENABLED=on"
+              echo "RUSTC_WRAPPER=sccache"
+            } >> "$GITHUB_ENV"
+          fi
+
+      - name: Install Mesa Vulkan fallback
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools xvfb xauth libxkbcommon-x11-0
+          icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
+          test -n "$icd"
+          echo "Lavapipe ICD: $icd"
+          echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+          echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
+          echo "WGPU_BACKEND=vulkan" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=${RUNNER_TEMP}/runenrender-vulkan-xdg" >> "$GITHUB_ENV"
+          mkdir -p "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+          chmod 700 "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+
+      - name: Prove Vulkan software adapter
+        run: vulkaninfo --summary
+
       - name: Prove original and species Boids native without GPU image readback
         env:
           RUST_BACKTRACE: '1'
@@ -383,57 +602,6 @@ jobs:
             fi
             rm -f "$log"
           done
-
-      - name: Run maintained arena presentation GPU proof
-        env:
-          RUST_BACKTRACE: '1'
-          RUNENWERK_ARENA_GPU_SMOKE: '1'
-        run: |
-          set -euo pipefail
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-            cargo +stable test -p runenwerk_arena \
-              --test arena_presentation_gpu \
-              --locked -- --ignored --exact --nocapture --test-threads=1
-
-      - name: Run standalone RunenRender public consumer proof
-        env:
-          RUST_BACKTRACE: '1'
-          RUNENRENDER_R8_REQUIRE_GPU: '1'
-        run: |
-          set -euo pipefail
-          cargo +stable test -p engine \
-            --test runenrender_ordinary_public_api \
-            --locked -- --nocapture --test-threads=1
-
-      - name: Prove downstream retained cross-frame G5 submission semantics
-        env:
-          RUST_BACKTRACE: '1'
-          RUNENWERK_G5_REQUIRE_GPU: '1'
-        run: |
-          set -euo pipefail
-          cargo +stable test -p engine \
-            --test render_gpu_retained_cross_frame \
-            --locked -- --nocapture --test-threads=1
-
-      - name: Prove downstream fixed GPU step continuity under deferred frames
-        env:
-          RUST_BACKTRACE: '1'
-          RUNENWERK_G5_REQUIRE_GPU: '1'
-        run: |
-          set -euo pipefail
-          cargo +stable test -p engine \
-            --test render_gpu_fixed_step_continuity \
-            --locked -- --nocapture --test-threads=1
-
-      - name: Prove producer checkpoint reimport after G5 context failure
-        env:
-          RUST_BACKTRACE: '1'
-          RUNENWERK_G5_REQUIRE_GPU: '1'
-        run: |
-          set -euo pipefail
-          cargo +stable test -p engine --lib \
-            accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay \
-            --locked -- --nocapture --test-threads=1
 
   runenrender-r6-vulkan-render-lab:
     name: RunenRender Vulkan Render Lab proofs
@@ -909,6 +1077,8 @@ jobs:
     name: RunenRender Vulkan execution proofs
     needs:
       - runenrender-r6-vulkan-native
+      - runenrender-r6-vulkan-boids-continuity
+      - runenrender-r6-vulkan-boids-readback
       - runenrender-r6-vulkan-render-lab
     if: ${{ always() }}
     runs-on: ubuntu-24.04
@@ -917,9 +1087,14 @@ jobs:
       - name: Require successful native and Render Lab execution proofs
         env:
           NATIVE_RESULT: ${{ needs.runenrender-r6-vulkan-native.result }}
+          BOIDS_CONTINUITY_RESULT: ${{ needs.runenrender-r6-vulkan-boids-continuity.result }}
+          BOIDS_READBACK_RESULT: ${{ needs.runenrender-r6-vulkan-boids-readback.result }}
           RENDER_LAB_RESULT: ${{ needs.runenrender-r6-vulkan-render-lab.result }}
         run: |
           set -euo pipefail
-          printf 'Native: %s\nRender Lab: %s\n' "$NATIVE_RESULT" "$RENDER_LAB_RESULT"
+          printf 'Native: %s\nBoids continuity: %s\nBoids readback: %s\nRender Lab: %s\n' \
+            "$NATIVE_RESULT" "$BOIDS_CONTINUITY_RESULT" "$BOIDS_READBACK_RESULT" "$RENDER_LAB_RESULT"
           test "$NATIVE_RESULT" = success
+          test "$BOIDS_CONTINUITY_RESULT" = success
+          test "$BOIDS_READBACK_RESULT" = success
           test "$RENDER_LAB_RESULT" = success
