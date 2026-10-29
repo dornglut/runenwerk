@@ -9,8 +9,8 @@ use runenui_runtime::{LogicalSize, RasterScale, SurfaceBuildContext};
 
 use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::plugins::render::{
-    Gfx, ManagedRenderProducerIds, RunenUiPaintSubmission, RunenUiPaintSubmissionRegistryResource,
-    SurfaceFrameSubmissionRegistryResource,
+    Gfx, ManagedRenderProducerIds, RenderFrameProducerId, RunenUiPaintSubmission,
+    RunenUiPaintSubmissionRegistryResource, SurfaceFrameSubmissionRegistryResource,
 };
 use crate::runtime::{NativeWindowLifecycleState, WindowStateRegistryResource, WorldMut};
 
@@ -138,6 +138,7 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
         world
             .resource_mut::<RunenUiPaintSubmissionRegistryResource>()?
             .remove_for_surface(&producer, surface);
+        retire_withdrawn_managed_producer(&mut world, producer);
     }
 
     for binding in bindings {
@@ -385,8 +386,45 @@ fn withdraw_binding(world: &mut WorldMut, binding: &UiRuntimePresentationBinding
         Vec::new()
     };
     if let Ok(registry) = world.resource_mut::<RunenUiPaintSubmissionRegistryResource>() {
-        for (producer, surface) in withdrawals {
+        for &(producer, surface) in &withdrawals {
             registry.remove_for_surface(&producer, surface);
+        }
+    }
+    for (producer, _) in withdrawals {
+        retire_withdrawn_managed_producer(world, producer);
+    }
+}
+
+/// A low-level expert unbind or slot retirement can withdraw a managed paint
+/// without calling the high-level unpresent API. The existing association
+/// ledger owns the resulting withdrawal; only that exact retired producer
+/// may release its old lease. A same-producer surface rebind keeps the lease.
+fn retire_withdrawn_managed_producer(
+    world: &mut WorldMut,
+    producer: RenderFrameProducerId,
+) {
+    let owner = world
+        .resource::<ManagedRenderProducerIds>()
+        .ok()
+        .and_then(|leases| {
+            leases
+                .active_leases()
+                .find_map(|(id, owner)| (id == producer).then_some(owner))
+        });
+    let Some(owner) = owner else {
+        return;
+    };
+    let still_bound = world
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .ok()
+        .is_some_and(|associations| {
+            associations.bindings().any(|binding| {
+                binding.producer_id == producer && binding.slot_id.value() == owner
+            })
+        });
+    if !still_bound {
+        if let Ok(leases) = world.resource_mut::<ManagedRenderProducerIds>() {
+            let _ = leases.release_owned(producer, owner);
         }
     }
 }
