@@ -533,12 +533,11 @@ fn managed_producer_lease_can_be_reconciled_after_expert_unbind() {
 
 #[test]
 fn late_explicit_legacy_claim_rejects_managed_producer_before_render_prepare() {
-    use std::collections::BTreeSet;
-    use engine::plugins::{RenderPlugin, TimePlugin};
     use engine::plugins::render::{
-        ManagedRenderProducerIds, SurfaceFrameSubmission,
-        SurfaceFrameSubmissionRegistryResource,
+        ManagedRenderProducerIds, SurfaceFrameSubmission, SurfaceFrameSubmissionRegistryResource,
     };
+    use engine::plugins::{RenderPlugin, TimePlugin};
+    use std::collections::BTreeSet;
 
     let mut app = App::headless();
     app.add_plugin(TimePlugin);

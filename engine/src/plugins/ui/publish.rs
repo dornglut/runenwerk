@@ -9,8 +9,8 @@ use runenui_runtime::{LogicalSize, RasterScale, SurfaceBuildContext};
 
 use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::plugins::render::{
-    Gfx, ManagedRenderProducerIds, RunenUiPaintSubmission,
-    RunenUiPaintSubmissionRegistryResource, SurfaceFrameSubmissionRegistryResource,
+    Gfx, ManagedRenderProducerIds, RunenUiPaintSubmission, RunenUiPaintSubmissionRegistryResource,
+    SurfaceFrameSubmissionRegistryResource,
 };
 use crate::runtime::{NativeWindowLifecycleState, WindowStateRegistryResource, WorldMut};
 
