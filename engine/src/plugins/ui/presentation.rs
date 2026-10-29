@@ -309,9 +309,12 @@ impl UiRuntimePresentationAssociationsResource {
             && Some(binding.render_surface_id) == submission.render_surface_id
             && binding.route == submission.route
             && binding.order == submission.order
-            && self.last_renderer_paint.get(&slot).is_some_and(|(id, paint)| {
-                *id == submission.publication_id && paint == &submission.publication
-            })
+            && self
+                .last_renderer_paint
+                .get(&slot)
+                .is_some_and(|(id, paint)| {
+                    *id == submission.publication_id && paint == &submission.publication
+                })
     }
 
     /// A changed physical mapping invalidates pending work and guards displayed

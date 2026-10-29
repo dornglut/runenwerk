@@ -336,9 +336,7 @@ fn managed_admission_rejects_same_identity_modified_route_and_order() {
         ))
         .unwrap();
 
-    let app = app
-        .run_for_frames(1)
-        .expect("canonical paint is admitted");
+    let app = app.run_for_frames(1).expect("canonical paint is admitted");
     let canonical = app
         .world()
         .resource::<RunenUiPaintSubmissionRegistryResource>()
