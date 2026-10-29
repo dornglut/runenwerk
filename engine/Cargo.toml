@@ -141,6 +141,11 @@ name = "render_product_visual_evidence"
 path = "examples/render_product_visual_evidence.rs"
 
 [[test]]
+name = "native_primary_close_os"
+path = "tests/native_primary_close_os.rs"
+harness = false
+
+[[test]]
 name = "native_host_smoke"
 path = "tests/native_host_smoke.rs"
 harness = false

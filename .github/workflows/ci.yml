@@ -142,11 +142,24 @@ jobs:
                 --locked
 
       - name: Prove physical X11 primary close approval and veto
+        env:
+          RUNENWERK_NATIVE_CLOSE_OS_SMOKE: '1'
         run: |
           set -euo pipefail
-          timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-            cargo +stable test -p engine --test native_primary_close_os --locked -- \
-              --ignored --nocapture --test-threads=1
+          log="$(mktemp)"
+          if ! timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --test native_primary_close_os --locked >"$log" 2>&1; then
+            cat "$log"
+            rm -f "$log"
+            exit 1
+          fi
+          cat "$log"
+          if ! grep -F "native_primary_close_os=pass approve=physical_x11 veto=physical_x11" "$log"; then
+            echo "Native close proof did not exercise both physical X11 cases" >&2
+            rm -f "$log"
+            exit 1
+          fi
+          rm -f "$log"
 
       - name: Prove actual Arena native capped and uncapped launch modes
         env:

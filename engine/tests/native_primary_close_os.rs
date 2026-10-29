@@ -1,24 +1,33 @@
 //! Physical X11 proof that the selected native Host close policy honors a
 //! real WM_DELETE_WINDOW request without defeating product Update veto.
-#![cfg(target_os = "linux")]
-
+#[cfg(target_os = "linux")]
 use std::env;
+#[cfg(target_os = "linux")]
 use std::path::PathBuf;
+#[cfg(target_os = "linux")]
 use std::process::{Child, Command, Stdio};
+#[cfg(target_os = "linux")]
 use std::thread;
+#[cfg(target_os = "linux")]
 use std::time::{Duration, Instant};
 
+#[cfg(target_os = "linux")]
 use engine::prelude::{
     App, AppNativeHostExt, FramePacingPolicyResource, NativePrimaryClosePolicy, ResMut,
     WindowStateRegistryResource,
 };
+#[cfg(target_os = "linux")]
 use engine::runtime::schedules::Update;
 
+#[cfg(target_os = "linux")]
 const CHILD_MODE: &str = "RUNENWERK_CLOSE_PROOF_CHILD_MODE";
+#[cfg(target_os = "linux")]
 const VETO_MARKER: &str = "RUNENWERK_CLOSE_PROOF_VETO_MARKER";
 
+#[cfg(target_os = "linux")]
 struct ChildGuard(Child);
 
+#[cfg(target_os = "linux")]
 impl Drop for ChildGuard {
     fn drop(&mut self) {
         let _ = self.0.kill();
@@ -26,6 +35,7 @@ impl Drop for ChildGuard {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn veto_primary_intent(mut windows: ResMut<WindowStateRegistryResource>) {
     if let Some(id) = windows.primary_window_id()
         && let Some(record) = windows.record_mut(id)
@@ -38,6 +48,7 @@ fn veto_primary_intent(mut windows: ResMut<WindowStateRegistryResource>) {
     }
 }
 
+#[cfg(target_os = "linux")]
 fn run_child(mode: &str) {
     let mut app = App::new();
     let title = format!("Runenwerk OS Close Proof {mode}");
@@ -51,6 +62,7 @@ fn run_child(mode: &str) {
     app.run().expect("native window exits after approved close");
 }
 
+#[cfg(target_os = "linux")]
 fn visible_window_id(title: &str, until: Instant) -> String {
     while Instant::now() < until {
         let output = Command::new("xdotool")
@@ -69,6 +81,7 @@ fn visible_window_id(title: &str, until: Instant) -> String {
     panic!("native window did not become visible: {title}");
 }
 
+#[cfg(target_os = "linux")]
 fn wait_for_success(child: &mut Child, until: Instant) {
     while Instant::now() < until {
         if let Some(exit) = child.try_wait().expect("poll native App child") {
@@ -80,6 +93,7 @@ fn wait_for_success(child: &mut Child, until: Instant) {
     panic!("native App did not exit after physical X11 CloseRequested");
 }
 
+#[cfg(target_os = "linux")]
 fn wait_for_veto(marker: &PathBuf, child: &mut Child, until: Instant) {
     while Instant::now() < until {
         assert!(
@@ -105,11 +119,17 @@ fn wait_for_veto(marker: &PathBuf, child: &mut Child, until: Instant) {
     panic!("native CloseRequested did not reach product Update veto");
 }
 
-#[test]
-#[ignore = "requires Linux X11/Xvfb and xdotool; enforced in native CI"]
-fn physical_native_primary_close_approval_and_veto() {
+#[cfg(not(target_os = "linux"))]
+fn main() {}
+
+#[cfg(target_os = "linux")]
+fn main() {
     if let Ok(mode) = env::var(CHILD_MODE) {
         run_child(&mode);
+        return;
+    }
+    if env::var("RUNENWERK_NATIVE_CLOSE_OS_SMOKE").as_deref() != Ok("1") {
+        println!("native_primary_close_os=skipped explicit Linux X11 opt-in absent");
         return;
     }
 
@@ -122,13 +142,6 @@ fn physical_native_primary_close_approval_and_veto() {
         let _ = std::fs::remove_file(&marker);
 
         let child = Command::new(env::current_exe().expect("find exact test binary"))
-            .args([
-                "--ignored",
-                "--exact",
-                "physical_native_primary_close_approval_and_veto",
-                "--nocapture",
-                "--test-threads=1",
-            ])
             .env(CHILD_MODE, mode)
             .env(VETO_MARKER, &marker)
             .stdout(Stdio::inherit())
