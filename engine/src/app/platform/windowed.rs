@@ -23,9 +23,7 @@ pub enum NativePrimaryClosePolicy {
     ApproveUnhandled,
 }
 
-fn approve_unhandled_primary_close_intent(
-    mut windows: ResMut<WindowStateRegistryResource>,
-) {
+fn approve_unhandled_primary_close_intent(mut windows: ResMut<WindowStateRegistryResource>) {
     if let Some(primary) = windows.primary_window_id()
         && let Some(record) = windows.record_mut(primary)
         && record.close_intent_pending
@@ -41,17 +39,11 @@ pub trait AppNativeHostExt {
     ///
     /// Only ApproveUnhandled installs a FrameEnd close handler. An application
     /// requiring unsaved-work confirmation must use Explicit instead.
-    fn with_primary_close_policy(
-        &mut self,
-        policy: NativePrimaryClosePolicy,
-    ) -> Result<&mut Self>;
+    fn with_primary_close_policy(&mut self, policy: NativePrimaryClosePolicy) -> Result<&mut Self>;
 }
 
 impl AppNativeHostExt for App {
-    fn with_primary_close_policy(
-        &mut self,
-        policy: NativePrimaryClosePolicy,
-    ) -> Result<&mut Self> {
+    fn with_primary_close_policy(&mut self, policy: NativePrimaryClosePolicy) -> Result<&mut Self> {
         ensure!(
             self.allow_topology_mutation("with_primary_close_policy", None),
             "primary close policy must be selected during App configuration"
@@ -296,9 +288,11 @@ mod tests {
         app.insert_resource(windows);
 
         let mut state = app.into_windowed_state();
-        crate::runtime::frame_lifecycle::run_frame(&mut state.world, &mut state.scheduler)
+        crate::runtime::frame_lifecycle::run_frame(&mut state.world, &mut state.scheduler).unwrap();
+        let windows = state
+            .world
+            .resource::<WindowStateRegistryResource>()
             .unwrap();
-        let windows = state.world.resource::<WindowStateRegistryResource>().unwrap();
         let primary = windows.record(NativeWindowId::primary()).unwrap();
         assert!(primary.close_intent_pending);
         assert!(!primary.close_requested);
@@ -330,9 +324,11 @@ mod tests {
         app.insert_resource(windows);
 
         let mut state = app.into_windowed_state();
-        crate::runtime::frame_lifecycle::run_frame(&mut state.world, &mut state.scheduler)
+        crate::runtime::frame_lifecycle::run_frame(&mut state.world, &mut state.scheduler).unwrap();
+        let windows = state
+            .world
+            .resource::<WindowStateRegistryResource>()
             .unwrap();
-        let windows = state.world.resource::<WindowStateRegistryResource>().unwrap();
         assert!(windows.record(primary).unwrap().close_requested);
         assert!(!windows.record(primary).unwrap().close_intent_pending);
         assert!(
@@ -377,9 +373,11 @@ mod tests {
         app.insert_resource(windows);
 
         let mut state = app.into_windowed_state();
-        crate::runtime::frame_lifecycle::run_frame(&mut state.world, &mut state.scheduler)
+        crate::runtime::frame_lifecycle::run_frame(&mut state.world, &mut state.scheduler).unwrap();
+        let windows = state
+            .world
+            .resource::<WindowStateRegistryResource>()
             .unwrap();
-        let windows = state.world.resource::<WindowStateRegistryResource>().unwrap();
         let record = windows.record(primary).unwrap();
         assert!(!record.close_requested);
         assert!(!record.close_intent_pending);
@@ -443,7 +441,10 @@ mod tests {
                 .is_err()
         );
         assert_eq!(
-            *native.world().resource::<NativePrimaryClosePolicy>().unwrap(),
+            *native
+                .world()
+                .resource::<NativePrimaryClosePolicy>()
+                .unwrap(),
             NativePrimaryClosePolicy::Explicit
         );
 
