@@ -295,8 +295,9 @@ fn late_typed_paint_cannot_replace_managed_publication() {
     assert!(format!("{error:#}").contains("does not match the authoritative publication"));
 }
 
-#[test]
-fn managed_admission_rejects_same_identity_modified_route_and_order() {
+fn assert_managed_paint_mutation_rejected(
+    mutate: impl FnOnce(&mut engine::plugins::render::RunenUiPaintSubmission),
+) {
     use std::collections::BTreeSet;
 
     use engine::plugins::render::ManagedRenderProducerIds;
@@ -346,8 +347,7 @@ fn managed_admission_rejects_same_identity_modified_route_and_order() {
         .clone();
 
     let mut forged = canonical.clone();
-    forged.route = SurfaceFrameRoute::ViewportOverlay;
-    forged.order = SurfaceFrameSubmissionOrder::new(42, 7);
+    mutate(&mut forged);
     let mut app = app;
     app.world_mut()
         .resource_mut::<RunenUiPaintSubmissionRegistryResource>()
@@ -358,6 +358,20 @@ fn managed_admission_rejects_same_identity_modified_route_and_order() {
         .err()
         .expect("exact-ID reordered paint is forbidden");
     assert!(format!("{error:#}").contains("does not match the authoritative publication"));
+}
+
+#[test]
+fn managed_admission_rejects_same_identity_modified_route() {
+    assert_managed_paint_mutation_rejected(|paint| {
+        paint.route = SurfaceFrameRoute::ViewportOverlay;
+    });
+}
+
+#[test]
+fn managed_admission_rejects_same_identity_modified_order() {
+    assert_managed_paint_mutation_rejected(|paint| {
+        paint.order = SurfaceFrameSubmissionOrder::new(42, 7);
+    });
 }
 
 #[test]
