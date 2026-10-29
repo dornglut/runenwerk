@@ -251,7 +251,8 @@ fn native_primary_typed_convenience_mounts_two_apps_under_one_selected_flow() {
     use engine::prelude::AppRenderExt;
 
     let mut app = App::new();
-    app.select_native_ui_only().expect("native composition selected");
+    app.select_native_ui_only()
+        .expect("native composition selected");
     let first = app
         .ui()
         .mount_app_on_primary::<DiagnosticTypedApp>(
@@ -294,8 +295,18 @@ fn native_primary_typed_convenience_mounts_two_apps_under_one_selected_flow() {
 
     assert!(app.ui().unpresent(first).unwrap());
     assert!(app.ui().unmount_presented(second).unwrap().is_some());
-    assert!(app.world().resource::<UiRuntimeSlotsResource>().unwrap().contains(first));
-    assert!(!app.world().resource::<UiRuntimeSlotsResource>().unwrap().contains(second));
+    assert!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .contains(first)
+    );
+    assert!(
+        !app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .contains(second)
+    );
 }
 
 #[test]
@@ -327,7 +338,13 @@ fn native_primary_typed_convenience_preflight_rejects_without_mounting_or_gpu() 
         )
         .unwrap_err();
     assert!(matches!(error, UiAppPrimaryMountError::Preflight(_)));
-    assert!(no_render.world().resource::<UiRuntimeSlotsResource>().unwrap().is_empty());
+    assert!(
+        no_render
+            .world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .is_empty()
+    );
     assert!(!no_render.world().has_resource::<Gfx>());
 
     let mut no_ui = App::new();
@@ -356,7 +373,13 @@ fn native_primary_typed_convenience_preflight_rejects_without_mounting_or_gpu() 
         )
         .unwrap_err();
     assert!(matches!(error, UiAppPrimaryMountError::Preflight(_)));
-    assert!(headless.world().resource::<UiRuntimeSlotsResource>().unwrap().is_empty());
+    assert!(
+        headless
+            .world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .is_empty()
+    );
     assert!(!headless.world().has_resource::<Gfx>());
 }
 
@@ -379,9 +402,17 @@ fn native_primary_typed_convenience_preserves_font_mount_rejection_report() {
     let UiAppPrimaryMountError::MountRejected { report } = error else {
         panic!("font failure must return the original typed mount report");
     };
-    assert_eq!(report.failure(), Some(UiRuntimeSlotMountFailure::FontProvisioning));
+    assert_eq!(
+        report.failure(),
+        Some(UiRuntimeSlotMountFailure::FontProvisioning)
+    );
     assert_eq!(report.screen_id().as_str(), "primary.bad-font");
-    assert!(app.world().resource::<UiRuntimeSlotsResource>().unwrap().is_empty());
+    assert!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .is_empty()
+    );
     assert_eq!(
         app.world()
             .resource::<UiRuntimePresentationAssociationsResource>()
@@ -422,19 +453,30 @@ fn native_primary_typed_convenience_placement_failure_retains_slot_and_foreign_l
         panic!("failed placement must return a recoverable mounted slot");
     };
     assert_eq!(slot_id.value(), 1);
-    assert!(source.to_string().contains("already holds a managed Render producer"));
-    assert!(app.world().resource::<UiRuntimeSlotsResource>().unwrap().contains(slot_id));
-    assert!(app
-        .world()
-        .resource::<UiRuntimePresentationAssociationsResource>()
-        .unwrap()
-        .binding(slot_id)
-        .is_none());
-    assert!(app
-        .world()
-        .resource::<ManagedRenderProducerIds>()
-        .unwrap()
-        .is_owned_by(existing, slot_id.value()));
+    assert!(
+        source
+            .to_string()
+            .contains("already holds a managed Render producer")
+    );
+    assert!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .contains(slot_id)
+    );
+    assert!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(slot_id)
+            .is_none()
+    );
+    assert!(
+        app.world()
+            .resource::<ManagedRenderProducerIds>()
+            .unwrap()
+            .is_owned_by(existing, slot_id.value())
+    );
     // Explicit retirement exposes the full RunenUI terminal batch to its
     // caller. The convenience path must not discard it or release this lease.
     let shutdown = app
@@ -444,11 +486,12 @@ fn native_primary_typed_convenience_placement_failure_retains_slot_and_foreign_l
         .unmount_with_retirement(slot_id)
         .expect("caller can explicitly settle retained slot");
     assert!(shutdown.is_some());
-    assert!(app
-        .world()
-        .resource::<ManagedRenderProducerIds>()
-        .unwrap()
-        .is_owned_by(existing, slot_id.value()));
+    assert!(
+        app.world()
+            .resource::<ManagedRenderProducerIds>()
+            .unwrap()
+            .is_owned_by(existing, slot_id.value())
+    );
     assert!(!app.world().has_resource::<Gfx>());
 }
 

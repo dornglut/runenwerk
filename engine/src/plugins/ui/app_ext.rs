@@ -49,9 +49,7 @@ pub enum UiAppPrimaryMountError {
     Preflight(#[source] anyhow::Error),
     #[error("typed RunenUI mount rejected: {report:?}")]
     MountRejected { report: UiRuntimeSlotMountReport },
-    #[error(
-        "native-primary placement failed for retained slot {slot_id:?}: {source}"
-    )]
+    #[error("native-primary placement failed for retained slot {slot_id:?}: {source}")]
     PlacementRetained {
         slot_id: UiRuntimeSlotId,
         #[source]
