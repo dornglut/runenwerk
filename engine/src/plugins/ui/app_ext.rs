@@ -132,7 +132,7 @@ impl UiAppMounting<'_> {
                 self.app
                     .world()
                     .resource::<ManagedRenderProducerIds>()?
-                    .is_leased(binding.producer_id),
+                    .is_owned_by(binding.producer_id, slot_id.value()),
                 "existing RunenUI presentation binding is externally managed"
             );
             binding.render_surface_id = target;
@@ -172,7 +172,7 @@ impl UiAppMounting<'_> {
             .app
             .world_mut()
             .resource_mut::<ManagedRenderProducerIds>()?
-            .allocate(&occupied)?;
+            .allocate(slot_id.value(), &occupied)?;
         let result = self
             .app
             .world_mut()
@@ -187,7 +187,7 @@ impl UiAppMounting<'_> {
             self.app
                 .world_mut()
                 .resource_mut::<ManagedRenderProducerIds>()?
-                .release(producer);
+                .release_owned(producer, slot_id.value());
             return Err(anyhow!("RunenUI placement rejected: {error}"));
         }
         Ok(())
@@ -205,13 +205,20 @@ impl UiAppMounting<'_> {
             Err(_) => None,
         };
         let Some(binding) = existing else {
-            return Ok(false);
+            // A low-level unbind may already have retired its association.
+            // The managed caller may still settle its outstanding producer lease.
+            return Ok(self
+                .app
+                .world_mut()
+                .resource_mut::<ManagedRenderProducerIds>()
+                .map(|leases| leases.release_for_owner(slot_id.value()))
+                .unwrap_or(false));
         };
         let leased = self
             .app
             .world()
             .resource::<ManagedRenderProducerIds>()?
-            .is_leased(binding.producer_id);
+            .is_owned_by(binding.producer_id, slot_id.value());
         ensure!(
             leased,
             "cannot withdraw an externally owned UI presentation binding"
@@ -223,7 +230,7 @@ impl UiAppMounting<'_> {
         self.app
             .world_mut()
             .resource_mut::<ManagedRenderProducerIds>()?
-            .release(binding.producer_id);
+            .release_owned(binding.producer_id, slot_id.value());
         Ok(true)
     }
 
@@ -246,7 +253,7 @@ impl UiAppMounting<'_> {
                 self.app
                     .world()
                     .resource::<ManagedRenderProducerIds>()?
-                    .is_leased(binding.producer_id),
+                    .is_owned_by(binding.producer_id, slot_id.value()),
                 "cannot unmount a UI with an externally managed presentation binding"
             );
         }
@@ -258,9 +265,7 @@ impl UiAppMounting<'_> {
             .map_err(|error| anyhow!("RunenUI shutdown rejected: {error:?}"))?;
         // A preceding expert unmount can leave its old presentation awaiting the
         // next RenderPrepare. Retire this managed association even if no slot remains.
-        if existing.is_some() {
-            self.unpresent(slot_id)?;
-        }
+        self.unpresent(slot_id)?;
         Ok(retirement)
     }
 

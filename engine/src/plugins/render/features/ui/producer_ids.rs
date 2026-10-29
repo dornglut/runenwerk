@@ -1,6 +1,6 @@
 //! Render-owned issuance of producer identities for managed UI composition.
 //! Explicit/expert producer callers remain responsible for their own IDs.
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::plugins::render::RenderFrameProducerId;
 
@@ -8,7 +8,7 @@ use crate::plugins::render::RenderFrameProducerId;
 #[derive(Debug, Default, runen_ecs::Resource)]
 pub struct ManagedRenderProducerIds {
     last_issued: u64,
-    leased: BTreeSet<RenderFrameProducerId>,
+    leased: BTreeMap<RenderFrameProducerId, u64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -23,6 +23,7 @@ impl ManagedRenderProducerIds {
     /// No publication or target attachment is implied.
     pub fn allocate(
         &mut self,
+        owner: u64,
         externally_occupied: &BTreeSet<RenderFrameProducerId>,
     ) -> Result<RenderFrameProducerId, ManagedRenderProducerError> {
         loop {
@@ -33,21 +34,39 @@ impl ManagedRenderProducerIds {
             self.last_issued = raw;
             let id = RenderFrameProducerId::try_from_raw(raw)
                 .map_err(|_| ManagedRenderProducerError::Exhausted)?;
-            if !self.leased.contains(&id) && !externally_occupied.contains(&id) {
-                self.leased.insert(id);
+            if !self.leased.contains_key(&id) && !externally_occupied.contains(&id) {
+                self.leased.insert(id, owner);
                 return Ok(id);
             }
         }
     }
 
+    /// An opaque integration owner is part of the lease identity.
+    /// A matching raw Render ID owned by a different UI slot is not authorization.
     #[must_use]
-    pub fn is_leased(&self, id: RenderFrameProducerId) -> bool {
-        self.leased.contains(&id)
+    pub fn is_owned_by(&self, id: RenderFrameProducerId, owner: u64) -> bool {
+        self.leased.get(&id) == Some(&owner)
     }
 
-    /// Retires a managed producer identity without ever reissuing its old value.
-    pub fn release(&mut self, id: RenderFrameProducerId) -> bool {
-        self.leased.remove(&id)
+    /// Retires only the caller's exact lease; old values are never reissued.
+    pub fn release_owned(&mut self, id: RenderFrameProducerId, owner: u64) -> bool {
+        if !self.is_owned_by(id, owner) {
+            return false;
+        }
+        self.leased.remove(&id);
+        true
+    }
+
+    /// Reconciles a managed lease after an expert already removed its binding.
+    pub fn release_for_owner(&mut self, owner: u64) -> bool {
+        let id = self
+            .leased
+            .iter()
+            .find_map(|(id, held_by)| (*held_by == owner).then_some(*id));
+        match id {
+            Some(id) => self.leased.remove(&id).is_some(),
+            None => false,
+        }
     }
 }
 
@@ -59,22 +78,27 @@ mod tests {
     fn producer_leases_skip_existing_identities_and_never_reuse_retired_ids() {
         let mut leases = ManagedRenderProducerIds::default();
         let occupied = BTreeSet::from([RenderFrameProducerId::try_from_raw(1).unwrap()]);
-        let first = leases.allocate(&occupied).unwrap();
+        let first = leases.allocate(101, &occupied).unwrap();
         assert_eq!(first.raw(), 2);
-        assert!(leases.is_leased(first));
-        assert!(leases.release(first));
-        assert!(!leases.is_leased(first));
-        assert_eq!(leases.allocate(&BTreeSet::new()).unwrap().raw(), 3);
+        assert!(leases.is_owned_by(first, 101));
+        assert!(!leases.is_owned_by(first, 102));
+        assert!(!leases.release_owned(first, 102));
+        assert!(leases.release_owned(first, 101));
+        assert!(!leases.is_owned_by(first, 101));
+        let second = leases.allocate(102, &BTreeSet::new()).unwrap();
+        assert_eq!(second.raw(), 3);
+        assert!(leases.release_for_owner(102));
+        assert!(!leases.is_owned_by(second, 102));
     }
 
     #[test]
     fn producer_id_exhaustion_does_not_wrap() {
         let mut leases = ManagedRenderProducerIds {
             last_issued: u64::MAX,
-            leased: BTreeSet::new(),
+            leased: BTreeMap::new(),
         };
         assert_eq!(
-            leases.allocate(&BTreeSet::new()),
+            leases.allocate(1, &BTreeSet::new()),
             Err(ManagedRenderProducerError::Exhausted)
         );
     }

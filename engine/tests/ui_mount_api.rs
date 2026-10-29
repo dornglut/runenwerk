@@ -402,3 +402,110 @@ fn managed_placement_rejects_headless_host_without_changing_runtime() {
             .is_none()
     );
 }
+
+#[test]
+fn managed_producer_ownership_does_not_confuse_expert_binding_on_other_surface() {
+    use engine::plugins::render::RenderPlugin;
+    use engine::plugins::render::host::RenderSurfaceId;
+    use engine::plugins::ui::{
+        UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding,
+    };
+    use runenui_core::StyleEnvironment;
+
+    let mut app = App::new();
+    app.add_plugin(RenderPlugin);
+    app.add_plugin(UiPlugin);
+    let owned = app
+        .ui()
+        .mount_app::<DiagnosticTypedApp>(
+            UiTypedScreenId::new("lease.owner"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .unwrap();
+    let foreign = app
+        .ui()
+        .mount_app::<SecondaryTypedApp>(
+            UiTypedScreenId::new("lease.foreign"),
+            0,
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .unwrap();
+    let primary = RenderSurfaceId::primary();
+    let secondary = RenderSurfaceId::try_from_raw(2).unwrap();
+    app.ui().present(owned, primary).unwrap();
+    let producer = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .binding(owned)
+        .unwrap()
+        .producer_id;
+
+    // Expert API can bind the same raw ID on another surface, but ownership
+    // must not be inferred from that scalar identity.
+    app.world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .bind(UiRuntimePresentationBinding::new(
+            foreign,
+            producer,
+            secondary,
+            StyleEnvironment::default(),
+        ))
+        .unwrap();
+
+    assert!(app.ui().unpresent(foreign).is_err());
+    assert!(app.ui().present(foreign, primary).is_err());
+    assert!(app.ui().unmount_presented(foreign).is_err());
+    assert!(app
+        .world()
+        .resource::<UiRuntimeSlotsResource>()
+        .unwrap()
+        .contains(foreign));
+    assert_eq!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(owned)
+            .unwrap()
+            .render_surface_id,
+        primary
+    );
+    assert!(app.ui().unpresent(owned).unwrap());
+    assert!(app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .binding(foreign)
+        .is_some());
+}
+
+#[test]
+fn managed_producer_lease_can_be_reconciled_after_expert_unbind() {
+    use engine::plugins::render::RenderPlugin;
+    use engine::plugins::render::host::RenderSurfaceId;
+    use engine::plugins::ui::UiRuntimePresentationAssociationsResource;
+
+    let mut app = App::new();
+    app.add_plugin(RenderPlugin);
+    app.add_plugin(UiPlugin);
+    let slot = app
+        .ui()
+        .mount_app::<DiagnosticTypedApp>(
+            UiTypedScreenId::new("lease.orphan"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .unwrap();
+    app.ui().present(slot, RenderSurfaceId::primary()).unwrap();
+    app.world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .unbind(slot);
+    assert!(app.ui().unpresent(slot).unwrap());
+    assert!(!app.ui().unpresent(slot).unwrap());
+}
