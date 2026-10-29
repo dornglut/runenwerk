@@ -419,9 +419,7 @@ fn retire_withdrawn_managed_producer(world: &mut WorldMut, producer: RenderFrame
                 .bindings()
                 .any(|binding| binding.producer_id == producer && binding.slot_id.value() == owner)
         });
-    if !still_bound
-        && let Ok(leases) = world.resource_mut::<ManagedRenderProducerIds>()
-    {
+    if !still_bound && let Ok(leases) = world.resource_mut::<ManagedRenderProducerIds>() {
         let _ = leases.release_owned(producer, owner);
     }
 }
