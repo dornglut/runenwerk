@@ -460,11 +460,12 @@ fn managed_producer_ownership_does_not_confuse_expert_binding_on_other_surface()
     assert!(app.ui().unpresent(foreign).is_err());
     assert!(app.ui().present(foreign, primary).is_err());
     assert!(app.ui().unmount_presented(foreign).is_err());
-    assert!(app
-        .world()
-        .resource::<UiRuntimeSlotsResource>()
-        .unwrap()
-        .contains(foreign));
+    assert!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .contains(foreign)
+    );
     assert_eq!(
         app.world()
             .resource::<UiRuntimePresentationAssociationsResource>()
@@ -475,12 +476,13 @@ fn managed_producer_ownership_does_not_confuse_expert_binding_on_other_surface()
         primary
     );
     assert!(app.ui().unpresent(owned).unwrap());
-    assert!(app
-        .world()
-        .resource::<UiRuntimePresentationAssociationsResource>()
-        .unwrap()
-        .binding(foreign)
-        .is_some());
+    assert!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(foreign)
+            .is_some()
+    );
 }
 
 #[test]
