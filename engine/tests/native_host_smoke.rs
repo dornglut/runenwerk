@@ -177,12 +177,16 @@ fn main() {
             native_no_render_host_smoke().expect("native no-Render Host smoke should succeed")
         }
         (false, true, false, false) => {
-            native_render_host_smoke(false).expect("bare native Render Host smoke should succeed");
+            native_render_host_smoke(false, false).expect("bare native Render Host smoke should succeed");
             run_native_render_ui_child_smoke()
                 .expect("native Render + UI Host child smoke should succeed");
         }
         (false, false, true, false) => {
-            native_render_host_smoke(true).expect("native Render + UI Host smoke should succeed")
+            native_render_host_smoke(
+                true,
+                std::env::var(RENDER_UI_HOST_ENV).as_deref() == Ok("managed"),
+            )
+            .expect("native Render + UI Host smoke should succeed")
         }
         (false, false, false, true) => {
             native_historical_gpu_smoke().expect("native historical GPU RenderFlow must succeed")
@@ -734,15 +738,19 @@ mod native_readiness {
 
 fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
     let executable = std::env::current_exe()?;
-    let status = Command::new(executable)
-        .env_remove(NO_RENDER_ENV)
-        .env_remove(RENDER_HOST_ENV)
-        .env(RENDER_UI_HOST_ENV, "1")
-        .status()?;
-    anyhow::ensure!(
-        status.success(),
-        "native Render + UI Host child smoke exited with {status}"
-    );
+    // Preserve the existing explicit/expert path and exercise managed
+    // placement separately in the same real native GPU CI smoke lane.
+    for mode in ["1", "managed"] {
+        let status = Command::new(&executable)
+            .env_remove(NO_RENDER_ENV)
+            .env_remove(RENDER_HOST_ENV)
+            .env(RENDER_UI_HOST_ENV, mode)
+            .status()?;
+        anyhow::ensure!(
+            status.success(),
+            "native Render + UI Host child smoke mode={mode} exited with {status}"
+        );
+    }
     Ok(())
 }
 
@@ -1333,7 +1341,8 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
+fn native_render_host_smoke(with_ui: bool, managed_ui: bool) -> anyhow::Result<()> {
+    anyhow::ensure!(!managed_ui || with_ui, "managed presentation requires UiPlugin");
     let startup_ran = Arc::new(AtomicBool::new(false));
     let update_ran = Arc::new(AtomicBool::new(false));
     let frame_seen = Arc::new(AtomicBool::new(false));
@@ -1354,17 +1363,35 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
             .mount_with_fonts(NativeCounterScreen, &native_counter_fonts())
             .slot_id()
             .ok_or_else(|| anyhow::anyhow!("native U5 Counter failed to mount"))?;
-        app.world_mut()
-            .resource_mut::<UiRuntimePresentationAssociationsResource>()?
-            .bind(
-                UiRuntimePresentationBinding::new(
-                    slot,
-                    RenderFrameProducerId::try_from_raw(71).expect("test producer is nonzero"),
-                    RenderSurfaceId::primary(),
-                    StyleEnvironment::default(),
-                )
-                .with_order(SurfaceFrameSubmissionOrder::new(20, 0)),
-            )?;
+        if managed_ui {
+            // Product-facing API: no raw Render producer identity or caller-owned
+            // binding resource. The native Host supplies exact surface facts.
+            app.ui().present(slot, RenderSurfaceId::primary())?;
+            let binding = app
+                .world()
+                .resource::<UiRuntimePresentationAssociationsResource>()?
+                .binding(slot)
+                .ok_or_else(|| anyhow::anyhow!("managed native UI placement was not bound"))?;
+            anyhow::ensure!(
+                app.world()
+                    .resource::<engine::plugins::render::ManagedRenderProducerIds>()?
+                    .is_owned_by(binding.producer_id, slot.value()),
+                "managed native UI must hold the exact producer lease"
+            );
+        } else {
+            // Retain the original expert-producer native integration evidence.
+            app.world_mut()
+                .resource_mut::<UiRuntimePresentationAssociationsResource>()?
+                .bind(
+                    UiRuntimePresentationBinding::new(
+                        slot,
+                        RenderFrameProducerId::try_from_raw(71).expect("test producer is nonzero"),
+                        RenderSurfaceId::primary(),
+                        StyleEnvironment::default(),
+                    )
+                    .with_order(SurfaceFrameSubmissionOrder::new(20, 0)),
+                )?;
+        }
         Some(slot)
     } else {
         None
@@ -1452,8 +1479,9 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
         );
     }
     println!(
-        "native_render_host_smoke=pass ui_plugin={}",
-        if with_ui { "selected" } else { "absent" }
+        "native_render_host_smoke=pass ui_plugin={} placement={}",
+        if with_ui { "selected" } else { "absent" },
+        if managed_ui { "managed" } else { "explicit" }
     );
     Ok(())
 }
