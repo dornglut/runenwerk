@@ -106,6 +106,27 @@ impl UiScreen for NativeCounterScreen {
     }
 }
 
+/// A real public typed UiApp consumer, not the legacy UiScreen adapter.
+/// Used by the managed mode to qualify the full App-to-Render native path.
+struct NativeManagedTypedApp;
+
+impl runenui_core::UiApp for NativeManagedTypedApp {
+    type State = ();
+    type Action = ();
+    type HostProtocol = runenui_core::NoHostProtocol;
+
+    fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+        runenui_core::text("Native managed typed RunenUI")
+    }
+
+    fn update(
+        _: &mut Self::State,
+        (): Self::Action,
+    ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+        runenui_core::Effects::none()
+    }
+}
+
 fn native_counter_fonts() -> UiRuntimeFontConfiguration {
     UiRuntimeFontConfiguration::new(vec![COUNTER_FONT.to_vec()]).with_generic_mapping(
         GenericFontFamily::SansSerif,
@@ -177,17 +198,16 @@ fn main() {
             native_no_render_host_smoke().expect("native no-Render Host smoke should succeed")
         }
         (false, true, false, false) => {
-            native_render_host_smoke(false, false).expect("bare native Render Host smoke should succeed");
+            native_render_host_smoke(false, false)
+                .expect("bare native Render Host smoke should succeed");
             run_native_render_ui_child_smoke()
                 .expect("native Render + UI Host child smoke should succeed");
         }
-        (false, false, true, false) => {
-            native_render_host_smoke(
-                true,
-                std::env::var(RENDER_UI_HOST_ENV).as_deref() == Ok("managed"),
-            )
-            .expect("native Render + UI Host smoke should succeed")
-        }
+        (false, false, true, false) => native_render_host_smoke(
+            true,
+            std::env::var(RENDER_UI_HOST_ENV).as_deref() == Ok("managed"),
+        )
+        .expect("native Render + UI Host smoke should succeed"),
         (false, false, false, true) => {
             native_historical_gpu_smoke().expect("native historical GPU RenderFlow must succeed")
         }
@@ -1342,7 +1362,10 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
 }
 
 fn native_render_host_smoke(with_ui: bool, managed_ui: bool) -> anyhow::Result<()> {
-    anyhow::ensure!(!managed_ui || with_ui, "managed presentation requires UiPlugin");
+    anyhow::ensure!(
+        !managed_ui || with_ui,
+        "managed presentation requires UiPlugin"
+    );
     let startup_ran = Arc::new(AtomicBool::new(false));
     let update_ran = Arc::new(AtomicBool::new(false));
     let frame_seen = Arc::new(AtomicBool::new(false));
@@ -1358,11 +1381,21 @@ fn native_render_host_smoke(with_ui: bool, managed_ui: bool) -> anyhow::Result<(
     }
     app.add_plugin(RenderPlugin);
     let counter_slot = if with_ui {
-        let slot = app
-            .ui()
-            .mount_with_fonts(NativeCounterScreen, &native_counter_fonts())
-            .slot_id()
-            .ok_or_else(|| anyhow::anyhow!("native U5 Counter failed to mount"))?;
+        let slot = if managed_ui {
+            app.ui()
+                .mount_app::<NativeManagedTypedApp>(
+                    UiTypedScreenId::new("native.managed.typed"),
+                    (),
+                    &native_counter_fonts(),
+                )
+                .slot_id()
+                .ok_or_else(|| anyhow::anyhow!("native managed typed UiApp failed to mount"))?
+        } else {
+            app.ui()
+                .mount_with_fonts(NativeCounterScreen, &native_counter_fonts())
+                .slot_id()
+                .ok_or_else(|| anyhow::anyhow!("native U5 Counter failed to mount"))?
+        };
         if managed_ui {
             // Product-facing API: no raw Render producer identity or caller-owned
             // binding resource. The native Host supplies exact surface facts.
