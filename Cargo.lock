@@ -1076,6 +1076,7 @@ dependencies = [
  "winit",
  "world_ops",
  "world_sdf",
+ "x11rb",
 ]
 
 [[package]]

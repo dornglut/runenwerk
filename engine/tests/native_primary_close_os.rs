@@ -18,6 +18,10 @@ use engine::prelude::{
 };
 #[cfg(target_os = "linux")]
 use engine::runtime::schedules::Update;
+#[cfg(target_os = "linux")]
+use x11rb::connection::Connection as _;
+#[cfg(target_os = "linux")]
+use x11rb::protocol::xproto::{AtomEnum, ClientMessageEvent, ConnectionExt as _, EventMask};
 
 #[cfg(target_os = "linux")]
 const CHILD_MODE: &str = "RUNENWERK_CLOSE_PROOF_CHILD_MODE";
@@ -50,27 +54,6 @@ fn veto_primary_intent(mut windows: ResMut<WindowStateRegistryResource>) {
 
 
 #[cfg(target_os = "linux")]
-static UPDATE_OBSERVATIONS: std::sync::atomic::AtomicUsize =
-    std::sync::atomic::AtomicUsize::new(0);
-
-#[cfg(target_os = "linux")]
-fn trace_primary_close_update(mut windows: ResMut<WindowStateRegistryResource>) {
-    let step = UPDATE_OBSERVATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let Some(id) = windows.primary_window_id() else {
-        eprintln!("native_close_diagnostic=update_without_primary step={step}");
-        return;
-    };
-    if let Some(record) = windows.record_mut(id)
-        && (step < 2 || record.close_intent_pending || record.close_requested)
-    {
-        eprintln!(
-            "native_close_diagnostic=update step={step} pending={} approved={}",
-            record.close_intent_pending, record.close_requested
-        );
-    }
-}
-
-#[cfg(target_os = "linux")]
 fn run_child(mode: &str) {
     let mut app = App::new();
     app.add_plugins(default_plugins());
@@ -79,7 +62,6 @@ fn run_child(mode: &str) {
     app.with_frame_pacing(FramePacingPolicyResource::on_demand());
     app.with_primary_close_policy(NativePrimaryClosePolicy::ApproveUnhandled)
         .expect("primary-close policy selected");
-    app.add_systems(Update, trace_primary_close_update);
     if mode == "veto" {
         app.add_systems(Update, veto_primary_intent);
     }
@@ -103,6 +85,23 @@ fn visible_window_id(title: &str, until: Instant) -> String {
         thread::sleep(Duration::from_millis(100));
     }
     panic!("native window did not become visible: {title}");
+}
+
+#[cfg(target_os = "linux")]
+fn request_wm_delete_window(window_id: &str) {
+    let window: u32 = window_id.parse().expect("valid X11 window ID");
+    let (conn, _) = x11rb::connect(None).expect("open the X11 display");
+    let protocols = conn.intern_atom(false, b"WM_PROTOCOLS").unwrap().reply().unwrap().atom;
+    let delete = conn.intern_atom(false, b"WM_DELETE_WINDOW").unwrap().reply().unwrap().atom;
+    let supported = conn.get_property(false, window, protocols, AtomEnum::ATOM, 0, 32)
+        .unwrap().reply().unwrap();
+    assert!(
+        supported.value32().is_some_and(|mut atoms| atoms.any(|a| a == delete)),
+        "native X11 window must advertise WM_DELETE_WINDOW"
+    );
+    let message = ClientMessageEvent::new(32, window, protocols, [delete, 0, 0, 0, 0]);
+    conn.send_event(false, window, EventMask::NO_EVENT, message).unwrap().check().unwrap();
+    conn.flush().unwrap();
 }
 
 #[cfg(target_os = "linux")]
@@ -174,11 +173,7 @@ fn main() {
             .expect("launch native App child in same real X11 display");
         let mut child = ChildGuard(child);
         let window = visible_window_id(&title, Instant::now() + Duration::from_secs(30));
-        let close = Command::new("xdotool")
-            .args(["windowclose", &window])
-            .status()
-            .expect("request real X11 WM_DELETE_WINDOW");
-        assert!(close.success(), "X11 close request was not delivered");
+        request_wm_delete_window(&window);
 
         if mode == "approve" {
             wait_for_success(&mut child.0, Instant::now() + Duration::from_secs(20));
