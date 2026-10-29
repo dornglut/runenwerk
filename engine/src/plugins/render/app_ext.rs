@@ -24,9 +24,7 @@ pub(crate) fn reject_selected_native_ui_only_plugin(
     world: &mut runen_ecs::World,
     name: &str,
 ) -> bool {
-    if name != std::any::type_name::<UiPlugin>()
-        && name != std::any::type_name::<RenderPlugin>()
-    {
+    if name != std::any::type_name::<UiPlugin>() && name != std::any::type_name::<RenderPlugin>() {
         return false;
     }
     let Ok(selection) = world.resource_mut::<SelectedNativeUiOnlyComposition>() else {
