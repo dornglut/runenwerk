@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 #[cfg(target_os = "linux")]
 use engine::prelude::{
     App, AppNativeHostExt, FramePacingPolicyResource, NativePrimaryClosePolicy, ResMut,
-    WindowStateRegistryResource,
+    WindowStateRegistryResource, default_plugins,
 };
 #[cfg(target_os = "linux")]
 use engine::runtime::schedules::Update;
@@ -51,6 +51,7 @@ fn veto_primary_intent(mut windows: ResMut<WindowStateRegistryResource>) {
 #[cfg(target_os = "linux")]
 fn run_child(mode: &str) {
     let mut app = App::new();
+    app.add_plugins(default_plugins());
     let title = format!("Runenwerk OS Close Proof {mode}");
     app.set_title(title);
     app.with_frame_pacing(FramePacingPolicyResource::on_demand());
