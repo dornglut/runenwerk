@@ -198,15 +198,19 @@ fn main() {
             native_no_render_host_smoke().expect("native no-Render Host smoke should succeed")
         }
         (false, true, false, false) => {
-            native_render_host_smoke(false, false)
+            native_render_host_smoke(false, false, false)
                 .expect("bare native Render Host smoke should succeed");
             run_native_render_ui_child_smoke()
                 .expect("native Render + UI Host child smoke should succeed");
         }
-        (false, false, true, false) => native_render_host_smoke(
-            true,
-            std::env::var(RENDER_UI_HOST_ENV).as_deref() == Ok("managed"),
-        )
+        (false, false, true, false) => {
+            let mode = std::env::var(RENDER_UI_HOST_ENV)?;
+            anyhow::ensure!(
+                ["1", "managed", "ui-only"].contains(&mode.as_str()),
+                "unexpected native UI smoke mode: {mode}"
+            );
+            native_render_host_smoke(true, mode != "1", mode == "ui-only")
+        }
         .expect("native Render + UI Host smoke should succeed"),
         (false, false, false, true) => {
             native_historical_gpu_smoke().expect("native historical GPU RenderFlow must succeed")
@@ -758,9 +762,9 @@ mod native_readiness {
 
 fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
     let executable = std::env::current_exe()?;
-    // Preserve the existing explicit/expert path and exercise managed
-    // placement separately in the same real native GPU CI smoke lane.
-    for mode in ["1", "managed"] {
+    // Preserve the explicit and managed paths, and execute the selected
+    // native UI-only recipe under the same physical GPU/Present smoke lane.
+    for mode in ["1", "managed", "ui-only"] {
         let status = Command::new(&executable)
             .env_remove(NO_RENDER_ENV)
             .env_remove(RENDER_HOST_ENV)
@@ -1361,7 +1365,7 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn native_render_host_smoke(with_ui: bool, managed_ui: bool) -> anyhow::Result<()> {
+fn native_render_host_smoke(with_ui: bool, managed_ui: bool, ui_only: bool) -> anyhow::Result<()> {
     anyhow::ensure!(
         !managed_ui || with_ui,
         "managed presentation requires UiPlugin"
@@ -1376,10 +1380,16 @@ fn native_render_host_smoke(with_ui: bool, managed_ui: bool) -> anyhow::Result<(
 
     let mut app = App::new();
     app.add_plugins(default_plugins());
-    if with_ui {
-        app.add_plugin(UiPlugin);
+    if ui_only {
+        // The public selected recipe installs UiPlugin, RenderPlugin and the
+        // single native-primary UI-only RenderFlow without app-built passes.
+        app.select_native_ui_only()?;
+    } else {
+        if with_ui {
+            app.add_plugin(UiPlugin);
+        }
+        app.add_plugin(RenderPlugin);
     }
-    app.add_plugin(RenderPlugin);
     let counter_slot = if with_ui {
         let slot = if managed_ui {
             app.ui()
@@ -1429,7 +1439,8 @@ fn native_render_host_smoke(with_ui: bool, managed_ui: bool) -> anyhow::Result<(
     } else {
         None
     };
-    let flow = RenderFlow::new("native.render.host.smoke")
+    if !ui_only {
+        let flow = RenderFlow::new("native.render.host.smoke")
         .with_surface_color()?
         .fullscreen_pass("native.render.host.smoke.clear")
         .main_surface_only()
@@ -1449,7 +1460,13 @@ fn native_render_host_smoke(with_ui: bool, managed_ui: bool) -> anyhow::Result<(
         .surface_color()?
         .finish()
         .validate()?;
-    app.add_render_flow(flow);
+        app.add_render_flow(flow);
+    } else {
+        anyhow::ensure!(
+            app.world().resource::<engine::plugins::render::RenderFlowRegistryResource>()?.flow_count() == 1,
+            "selected UI-only path must own exactly one RenderFlow"
+        );
+    }
     app.insert_resource(LifecycleProbe {
         startup_ran: Arc::clone(&startup_ran),
         update_ran: Arc::clone(&update_ran),
@@ -1514,7 +1531,13 @@ fn native_render_host_smoke(with_ui: bool, managed_ui: bool) -> anyhow::Result<(
     println!(
         "native_render_host_smoke=pass ui_plugin={} placement={}",
         if with_ui { "selected" } else { "absent" },
-        if managed_ui { "managed" } else { "explicit" }
+        if ui_only {
+            "ui-only"
+        } else if managed_ui {
+            "managed"
+        } else {
+            "explicit"
+        }
     );
     Ok(())
 }

@@ -154,6 +154,8 @@ impl App {
             ));
         }
 
+        crate::plugins::render::validate_selected_native_ui_only(self)?;
+
         self.scheduler
             .validate()
             .map_err(|source| anyhow::Error::new(AppCompositionAdmissionError::Topology(source)))
