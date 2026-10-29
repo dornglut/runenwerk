@@ -41,6 +41,22 @@ impl AppUiExt for App {
     }
 }
 
+/// A native-primary convenience mount preserves the original RunenUI owner.
+/// On placement failure, the typed runtime remains mounted and identifiable.
+#[derive(Debug, thiserror::Error)]
+pub enum UiAppPrimaryMountError {
+    #[error("native-primary typed UI admission rejected: {0}")]
+    Preflight(#[source] anyhow::Error),
+    #[error("typed RunenUI mount rejected: {report:?}")]
+    MountRejected { report: UiRuntimeSlotMountReport },
+    #[error("native-primary placement failed for retained slot {slot_id:?}: {source}")]
+    PlacementRetained {
+        slot_id: UiRuntimeSlotId,
+        #[source]
+        source: anyhow::Error,
+    },
+}
+
 pub struct UiAppMounting<'a> {
     app: &'a mut App,
 }
@@ -85,6 +101,67 @@ impl UiAppMounting<'_> {
             .mount_app::<A>(screen_id, state, fonts);
         record_slot_mount_diagnostic(self.app, &report);
         report
+    }
+
+    /// Mounts one typed UiApp and requests managed placement on the native
+    /// primary Render surface. This does not install plugins or a RenderFlow.
+    ///
+    /// RunenUI mounting remains independent from physical Present completion.
+    /// On placement failure the slot remains mounted and its typed error
+    /// exposes the slot ID, so the caller retains all pending Host work and
+    /// can retry placement or retire the slot with its full shutdown batch.
+    ///
+    /// # Errors
+    /// Rejects missing native Host or selected owner plugins/resources before
+    /// mounting; propagates RunenUI mount failure reports; or retains the
+    /// mounted but unplaced slot on managed Render placement failure.
+    pub fn mount_app_on_primary<A>(
+        &mut self,
+        screen_id: super::UiTypedScreenId,
+        state: A::State,
+        fonts: &UiRuntimeFontConfiguration,
+    ) -> std::result::Result<UiRuntimeSlotId, UiAppPrimaryMountError>
+    where
+        A: runenui_core::UiApp + 'static,
+    {
+        let admission = (|| -> Result<()> {
+            ensure!(
+                self.app.is_native_window_host() && self.app.native_ui_clock().is_some(),
+                "native-primary typed UI placement requires a native-window Host"
+            );
+            ensure!(
+                self.app
+                    .world()
+                    .resource::<UiPluginStateResource>()
+                    .is_ok_and(UiPluginStateResource::is_installed),
+                "native-primary typed UI placement requires UiPlugin"
+            );
+            ensure!(
+                render_integration_is_active(self.app.world()),
+                "native-primary typed UI placement requires RenderPlugin"
+            );
+            self.app.world().resource::<UiRuntimeSlotsResource>()?;
+            self.app
+                .world()
+                .resource::<UiRuntimePresentationAssociationsResource>()?;
+            self.app.world().resource::<ManagedRenderProducerIds>()?;
+            self.app
+                .world()
+                .resource::<SurfaceFrameSubmissionRegistryResource>()?;
+            self.app
+                .world()
+                .resource::<RunenUiPaintSubmissionRegistryResource>()?;
+            Ok(())
+        })();
+        admission.map_err(UiAppPrimaryMountError::Preflight)?;
+
+        let report = self.mount_app::<A>(screen_id, state, fonts);
+        let Some(slot_id) = report.slot_id() else {
+            return Err(UiAppPrimaryMountError::MountRejected { report });
+        };
+        self.present(slot_id, RenderSurfaceId::primary())
+            .map_err(|source| UiAppPrimaryMountError::PlacementRetained { slot_id, source })?;
+        Ok(slot_id)
     }
 
     /// Places an already mounted RunenUI slot on a selected Render surface.
