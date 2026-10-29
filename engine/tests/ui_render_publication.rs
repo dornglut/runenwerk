@@ -232,3 +232,65 @@ fn attached_counter_prepares_runenui_paint_but_never_forges_presented_input() {
         "RenderPrepare is not a terminal display receipt"
     );
 }
+
+#[test]
+fn late_typed_paint_cannot_replace_managed_publication() {
+    use std::collections::BTreeSet;
+
+    use engine::plugins::render::{ManagedRenderProducerIds, RunenUiPublicationId};
+
+    let mut app = App::headless();
+    app.add_plugin(TimePlugin);
+    app.add_plugin(UiPlugin);
+    app.add_plugin(RenderPlugin);
+    let slot = app
+        .ui()
+        .mount_with_fonts(CounterScreen, &controlled_fonts())
+        .slot_id()
+        .unwrap();
+    let surface = RenderSurfaceId::primary();
+    let mut windows = WindowStateRegistryResource::default();
+    let native = windows.register_primary_window("Managed UI", (320, 160), 1.0, true);
+    app.insert_resource(windows);
+    app.world_mut()
+        .resource_mut::<RenderSurfaceRegistryResource>()
+        .unwrap()
+        .confirm_surface_attachment(surface, native, (320, 160))
+        .unwrap();
+    let producer = app
+        .world_mut()
+        .resource_mut::<ManagedRenderProducerIds>()
+        .unwrap()
+        .allocate(slot.value(), &BTreeSet::new())
+        .unwrap();
+    app.world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .bind(UiRuntimePresentationBinding::new(
+            slot,
+            producer,
+            surface,
+            StyleEnvironment::default(),
+        ))
+        .unwrap();
+    let mut app = app
+        .run_for_frames(1)
+        .expect("authentic managed paint is accepted");
+    let mut foreign = app
+        .world()
+        .resource::<RunenUiPaintSubmissionRegistryResource>()
+        .unwrap()
+        .get_for_surface(&producer, surface)
+        .expect("mounted UI emitted exact paint")
+        .clone();
+    foreign.publication_id = RunenUiPublicationId::try_from_raw(999_991).unwrap();
+    app.world_mut()
+        .resource_mut::<RunenUiPaintSubmissionRegistryResource>()
+        .unwrap()
+        .replace(foreign);
+    let error = app
+        .run_for_frames(1)
+        .err()
+        .expect("foreign typed paint must fail before renderer preparation");
+    assert!(format!("{error:#}").contains("does not match the authoritative publication"));
+}

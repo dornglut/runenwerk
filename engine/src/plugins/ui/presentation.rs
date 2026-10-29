@@ -286,6 +286,41 @@ impl UiRuntimePresentationAssociationsResource {
         self.bindings.values()
     }
 
+    /// Confirms a managed paint matches an exact active RunenUI source
+    /// generation. No renderer/GPU completion is inferred here.
+    pub(crate) fn authorizes_managed_paint(
+        &self,
+        owner: u64,
+        producer: RenderFrameProducerId,
+        target: RenderSurfaceId,
+        publication_id: RunenUiPublicationId,
+        surface_id: &SurfaceId,
+        revision: PaintRevision,
+    ) -> bool {
+        let Some((&slot, binding)) = self.bindings.iter().find(|(slot, _)| slot.value() == owner)
+        else {
+            return false;
+        };
+        if binding.producer_id != producer || binding.render_surface_id != target {
+            return false;
+        }
+        let active = |p: &UiRuntimePendingPresentation| {
+            p.publication_id == publication_id
+                && p.binding == *binding
+                && p.publication.paint_publication().surface_id() == surface_id
+                && p.publication.paint_publication().revision() == revision
+        };
+        self.pending.get(&slot).is_some_and(active)
+            || self.in_flight.get(&publication_id).is_some_and(active)
+            || self.displayed.get(&slot).is_some_and(|displayed| {
+                displayed.publication_id == publication_id
+                    && displayed.producer_id == producer
+                    && displayed.render_surface_id == target
+                    && &displayed.surface_id == surface_id
+                    && displayed.paint_revision == revision
+            })
+    }
+
     /// A changed physical mapping invalidates pending work and guards displayed
     /// input against the previous native transform, without inventing input facts.
     /// True when a new physical mapping invalidated the previous paint intake.

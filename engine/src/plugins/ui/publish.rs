@@ -9,8 +9,8 @@ use runenui_runtime::{LogicalSize, RasterScale, SurfaceBuildContext};
 
 use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::plugins::render::{
-    Gfx, RunenUiPaintSubmission, RunenUiPaintSubmissionRegistryResource,
-    SurfaceFrameSubmissionRegistryResource,
+    Gfx, ManagedRenderProducerIds, RunenUiPaintSubmission,
+    RunenUiPaintSubmissionRegistryResource, SurfaceFrameSubmissionRegistryResource,
 };
 use crate::runtime::{NativeWindowLifecycleState, WindowStateRegistryResource, WorldMut};
 
@@ -18,6 +18,56 @@ use super::{
     UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
     UiRuntimePresentationBinding, UiRuntimeSlotsResource,
 };
+
+/// Rejects late expert claims of a managed Render producer, including
+/// same-family typed paint that replaced a legitimate UI publication.
+pub fn validate_managed_runenui_producers_system(world: WorldMut) -> Result<()> {
+    let Ok(leases) = world.resource::<ManagedRenderProducerIds>() else {
+        return Ok(()); // No Render plugin or managed-producer capability.
+    };
+    let active = leases.active_leases().collect::<Vec<_>>();
+    if active.is_empty() {
+        return Ok(());
+    }
+    let legacy = world.resource::<SurfaceFrameSubmissionRegistryResource>()?;
+    let runenui = world.resource::<RunenUiPaintSubmissionRegistryResource>()?;
+    let associations = world.resource::<UiRuntimePresentationAssociationsResource>()?;
+    for (producer, owner) in active {
+        if legacy
+            .ordered_submissions()
+            .iter()
+            .any(|submission| submission.producer_id == producer)
+        {
+            return Err(anyhow!(
+                "Render producer {producer:?} is leased to UI slot {owner} but claimed by a legacy frame submission"
+            ));
+        }
+        for submission in runenui
+            .ordered_submissions()
+            .into_iter()
+            .filter(|submission| submission.producer_id == producer)
+        {
+            let Some(target) = submission.render_surface_id else {
+                return Err(anyhow!(
+                    "managed Render producer {producer:?} has an unscoped RunenUI paint submission"
+                ));
+            };
+            if !associations.authorizes_managed_paint(
+                owner,
+                producer,
+                target,
+                submission.publication_id,
+                submission.publication.surface_id(),
+                submission.publication.revision(),
+            ) {
+                return Err(anyhow!(
+                    "Render producer {producer:?} is leased to UI slot {owner} but its RunenUI paint does not match the authoritative publication"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Applies only renderer-owned terminal GPU/F2/Present correlation IDs after
 /// the RenderSubmit owner has completed. A submitted/accepted frame never enters

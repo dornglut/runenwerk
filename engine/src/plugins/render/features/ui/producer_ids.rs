@@ -49,6 +49,11 @@ impl ManagedRenderProducerIds {
         }
     }
 
+    /// Exposes active Render leases for source admission validation.
+    pub fn active_leases(&self) -> impl Iterator<Item = (RenderFrameProducerId, u64)> + '_ {
+        self.leased.iter().map(|(&id, &owner)| (id, owner))
+    }
+
     /// An opaque integration owner is part of the lease identity.
     /// A matching raw Render ID owned by a different UI slot is not authorization.
     #[must_use]

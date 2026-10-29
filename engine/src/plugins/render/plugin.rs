@@ -157,6 +157,7 @@ impl Plugin for RenderPlugin {
             RenderPrepare,
             prepare_ui_feature_resource_system
                 .after_if_present(UiRuntimeSet::RenderPublication)
+                .after_if_present(UiRuntimeSet::ManagedProducerValidation)
                 .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(

@@ -530,3 +530,33 @@ fn managed_producer_lease_can_be_reconciled_after_expert_unbind() {
         .producer_id;
     assert_ne!(former_producer, replacement_producer);
 }
+
+#[test]
+fn late_explicit_legacy_claim_rejects_managed_producer_before_render_prepare() {
+    use std::collections::BTreeSet;
+    use engine::plugins::{RenderPlugin, TimePlugin};
+    use engine::plugins::render::{
+        ManagedRenderProducerIds, SurfaceFrameSubmission,
+        SurfaceFrameSubmissionRegistryResource,
+    };
+
+    let mut app = App::headless();
+    app.add_plugin(TimePlugin);
+    app.add_plugin(UiPlugin);
+    app.add_plugin(RenderPlugin);
+    let producer = app
+        .world_mut()
+        .resource_mut::<ManagedRenderProducerIds>()
+        .unwrap()
+        .allocate(123, &BTreeSet::new())
+        .unwrap();
+    app.world_mut()
+        .resource_mut::<SurfaceFrameSubmissionRegistryResource>()
+        .unwrap()
+        .replace(SurfaceFrameSubmission::new(producer));
+    let error = app
+        .run_for_frames(1)
+        .err()
+        .expect("a late legacy claim must fail before frame preparation");
+    assert!(format!("{error:#}").contains("leased to UI slot 123"));
+}

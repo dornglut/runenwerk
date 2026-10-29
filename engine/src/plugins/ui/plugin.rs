@@ -6,6 +6,7 @@ use super::{
     UiPluginStateResource, UiRuntimeDiagnosticsResource, UiRuntimePresentationAssociationsResource,
     UiRuntimeReportResource, UiRuntimeSet, UiRuntimeSlotsResource,
     apply_runenui_terminal_presentations_system, publish_runenui_bound_surfaces_system,
+    validate_managed_runenui_producers_system,
 };
 
 /// Installs the Engine-owned RunenUI integration resources.
@@ -23,6 +24,13 @@ impl Plugin for UiPlugin {
             publish_runenui_bound_surfaces_system
                 .on_invoker_thread()
                 .in_set(UiRuntimeSet::RenderPublication),
+        );
+        app.add_systems(
+            RenderPrepare,
+            validate_managed_runenui_producers_system
+                .on_invoker_thread()
+                .in_set(UiRuntimeSet::ManagedProducerValidation)
+                .after(UiRuntimeSet::RenderPublication),
         );
         app.add_systems(
             RenderSubmit,
