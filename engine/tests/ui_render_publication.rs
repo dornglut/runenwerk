@@ -364,9 +364,9 @@ fn managed_admission_rejects_same_identity_modified_route_and_order() {
 fn last_render_intake_rejects_claim_inserted_after_earlier_ui_validator() {
     use std::collections::BTreeSet;
 
+    use engine::plugins::render::runtime::RenderRuntimeSet;
     use engine::plugins::render::{
         ManagedRenderProducerIds, SurfaceFrameSubmissionRegistryResource,
-        prepare_ui_feature_resource_system,
     };
     use engine::plugins::ui::UiRuntimeSet;
     use engine::runtime::{RenderPrepare, SystemConfigExt, SystemMobilityExt, WorldMut};
@@ -399,7 +399,7 @@ fn last_render_intake_rejects_claim_inserted_after_earlier_ui_validator() {
         late_legacy_writer
             .on_invoker_thread()
             .after(UiRuntimeSet::ManagedProducerValidation)
-            .before(prepare_ui_feature_resource_system.on_invoker_thread()),
+            .before(RenderRuntimeSet::UiFeaturePrepare),
     );
     let error = app
         .run_for_frames(1)

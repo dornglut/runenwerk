@@ -157,6 +157,7 @@ impl Plugin for RenderPlugin {
             RenderPrepare,
             prepare_ui_feature_resource_system
                 .on_invoker_thread()
+                .in_set(RenderRuntimeSet::UiFeaturePrepare)
                 .after_if_present(UiRuntimeSet::RenderPublication)
                 .after_if_present(UiRuntimeSet::ManagedProducerValidation)
                 .before(RenderRuntimeSet::FramePrepare),
