@@ -360,9 +360,9 @@ mod tests {
             let error = app.select_native_ui_only().err().unwrap().to_string();
             assert!(error.contains("before UiPlugin or RenderPlugin"), "{error}");
             assert!(
-            !app.world()
-                .has_resource::<SelectedNativeUiOnlyComposition>()
-        );
+                !app.world()
+                    .has_resource::<SelectedNativeUiOnlyComposition>()
+            );
             assert!(
                 !app.world().has_resource::<RenderFlowRegistryResource>()
                     || app
