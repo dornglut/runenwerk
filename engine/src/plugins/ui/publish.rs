@@ -399,10 +399,7 @@ fn withdraw_binding(world: &mut WorldMut, binding: &UiRuntimePresentationBinding
 /// without calling the high-level unpresent API. The existing association
 /// ledger owns the resulting withdrawal; only that exact retired producer
 /// may release its old lease. A same-producer surface rebind keeps the lease.
-fn retire_withdrawn_managed_producer(
-    world: &mut WorldMut,
-    producer: RenderFrameProducerId,
-) {
+fn retire_withdrawn_managed_producer(world: &mut WorldMut, producer: RenderFrameProducerId) {
     let owner = world
         .resource::<ManagedRenderProducerIds>()
         .ok()
@@ -418,9 +415,9 @@ fn retire_withdrawn_managed_producer(
         .resource::<UiRuntimePresentationAssociationsResource>()
         .ok()
         .is_some_and(|associations| {
-            associations.bindings().any(|binding| {
-                binding.producer_id == producer && binding.slot_id.value() == owner
-            })
+            associations
+                .bindings()
+                .any(|binding| binding.producer_id == producer && binding.slot_id.value() == owner)
         });
     if !still_bound {
         if let Ok(leases) = world.resource_mut::<ManagedRenderProducerIds>() {
