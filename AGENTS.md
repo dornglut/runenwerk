@@ -1,9 +1,9 @@
 # AGENTS.md
 
-Runenwerk follows the organization-wide instructions in [Dornglut Engineering](https://github.com/dornglut/engineering/blob/main/AGENTS.md).
+Runenwerk follows the shared [Dornglut Engineering governance](https://github.com/dornglut/engineering/blob/main/governance/authority-and-work.md) and standards:
 
-- [Authority and work](https://github.com/dornglut/engineering/blob/main/governance/authority-and-work.md)
 - [Software design](https://github.com/dornglut/engineering/blob/main/standards/software-design.md)
+- [Repository standards](https://github.com/dornglut/engineering/blob/main/standards/repositories.md)
 - [GitHub workflow and acceptance](https://github.com/dornglut/engineering/blob/main/standards/github.md)
 - [Validation](https://github.com/dornglut/engineering/blob/main/standards/validation.md)
 - [Runen-family architecture](https://github.com/dornglut/engineering/blob/main/architecture/runen-family.md)
