@@ -48,6 +48,28 @@ fn veto_primary_intent(mut windows: ResMut<WindowStateRegistryResource>) {
     }
 }
 
+
+#[cfg(target_os = "linux")]
+static UPDATE_OBSERVATIONS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+#[cfg(target_os = "linux")]
+fn trace_primary_close_update(mut windows: ResMut<WindowStateRegistryResource>) {
+    let step = UPDATE_OBSERVATIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let Some(id) = windows.primary_window_id() else {
+        eprintln!("native_close_diagnostic=update_without_primary step={step}");
+        return;
+    };
+    if let Some(record) = windows.record_mut(id)
+        && (step < 2 || record.close_intent_pending || record.close_requested)
+    {
+        eprintln!(
+            "native_close_diagnostic=update step={step} pending={} approved={}",
+            record.close_intent_pending, record.close_requested
+        );
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn run_child(mode: &str) {
     let mut app = App::new();
@@ -57,6 +79,7 @@ fn run_child(mode: &str) {
     app.with_frame_pacing(FramePacingPolicyResource::on_demand());
     app.with_primary_close_policy(NativePrimaryClosePolicy::ApproveUnhandled)
         .expect("primary-close policy selected");
+    app.add_systems(Update, trace_primary_close_update);
     if mode == "veto" {
         app.add_systems(Update, veto_primary_intent);
     }
