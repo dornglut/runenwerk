@@ -10,8 +10,9 @@ use std::time::{Duration, Instant};
 
 use engine::prelude::{
     App, AppNativeHostExt, FramePacingPolicyResource, NativePrimaryClosePolicy, ResMut,
-    Update, WindowStateRegistryResource,
+    WindowStateRegistryResource,
 };
+use engine::runtime::schedules::Update;
 
 const CHILD_MODE: &str = "RUNENWERK_CLOSE_PROOF_CHILD_MODE";
 const VETO_MARKER: &str = "RUNENWERK_CLOSE_PROOF_VETO_MARKER";
@@ -87,7 +88,9 @@ fn wait_for_veto(marker: &PathBuf, child: &mut Child, until: Instant) {
         );
         if marker.exists() {
             assert_eq!(
-                std::fs::read(marker).expect("read veto observation"),
+                std::fs::read(marker)
+                    .expect("read veto observation")
+                    .as_slice(),
                 b"veto observed"
             );
             thread::sleep(Duration::from_millis(200));
