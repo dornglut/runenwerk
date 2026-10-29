@@ -12,4 +12,4 @@ pub(crate) use domain::lifecycle::AppLifecycle;
 pub use domain::plugins::*;
 pub(crate) use domain::state::WindowedAppState;
 pub use platform::native_launch::NativeHostLaunchOverrides;
-pub use platform::windowed::AppNativeHostExt;
+pub use platform::windowed::{AppNativeHostExt, NativePrimaryClosePolicy};

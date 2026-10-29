@@ -80,6 +80,9 @@ ui_binding = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = "0.5.1"
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+x11rb = "0.13.2"
+
 [[example]]
 name = "game_of_life_sdf"
 path = "examples/game_of_life_sdf/main.rs"
@@ -139,6 +142,11 @@ path = "examples/render_hybrid_ray_sdf_raster_runtime_proof.rs"
 [[example]]
 name = "render_product_visual_evidence"
 path = "examples/render_product_visual_evidence.rs"
+
+[[test]]
+name = "native_primary_close_os"
+path = "tests/native_primary_close_os.rs"
+harness = false
 
 [[test]]
 name = "native_host_smoke"

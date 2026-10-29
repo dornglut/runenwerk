@@ -96,7 +96,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools xvfb xauth libxkbcommon-x11-0
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools xvfb xauth libxkbcommon-x11-0 xdotool
           icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
           test -n "$icd"
           echo "Lavapipe ICD: $icd"
@@ -140,6 +140,26 @@ jobs:
               cargo +stable test -p engine \
                 --test native_host_smoke \
                 --locked
+
+      - name: Prove physical X11 primary close approval and veto
+        env:
+          RUNENWERK_NATIVE_CLOSE_OS_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          if ! timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --test native_primary_close_os --locked >"$log" 2>&1; then
+            cat "$log"
+            rm -f "$log"
+            exit 1
+          fi
+          cat "$log"
+          if ! grep -F "native_primary_close_os=pass approve=physical_x11 veto=physical_x11" "$log"; then
+            echo "Native close proof did not exercise both physical X11 cases" >&2
+            rm -f "$log"
+            exit 1
+          fi
+          rm -f "$log"
 
       - name: Prove actual Arena native capped and uncapped launch modes
         env:

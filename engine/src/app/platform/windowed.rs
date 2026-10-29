@@ -5,12 +5,66 @@ use crate::runtime::window::PrimaryWindowInitialSizePxResource;
 use crate::runtime::winit_runner;
 use anyhow::Result;
 
+use crate::runtime::schedules::FrameEnd;
+use crate::runtime::window::WindowStateRegistryResource;
+use anyhow::{anyhow, ensure};
+use runen_ecs::ResMut;
+
+/// Policy selected for primary native-window close intents.
+///
+/// The absence of this resource preserves the existing explicit approval
+/// contract. Automatic approval is only for ordinary applications without an
+/// asynchronous confirmation or unsaved-work veto.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, runen_ecs::Resource)]
+pub enum NativePrimaryClosePolicy {
+    /// The application must explicitly approve or veto each close intent.
+    Explicit,
+    /// Approve a primary close intent still pending after product Update.
+    ApproveUnhandled,
+}
+
+fn approve_unhandled_primary_close_intent(mut windows: ResMut<WindowStateRegistryResource>) {
+    if let Some(primary) = windows.primary_window_id()
+        && let Some(record) = windows.record_mut(primary)
+        && record.close_intent_pending
+    {
+        record.approve_close();
+    }
+}
+
 pub trait AppNativeHostExt {
     fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self;
     fn with_primary_window_size_px(&mut self, size_px: (u32, u32)) -> &mut Self;
+    /// Select an explicit primary close policy while App is configuring.
+    ///
+    /// Only ApproveUnhandled installs a FrameEnd close handler. An application
+    /// requiring unsaved-work confirmation must use Explicit instead.
+    fn with_primary_close_policy(&mut self, policy: NativePrimaryClosePolicy) -> Result<&mut Self>;
 }
 
 impl AppNativeHostExt for App {
+    fn with_primary_close_policy(&mut self, policy: NativePrimaryClosePolicy) -> Result<&mut Self> {
+        ensure!(
+            self.allow_topology_mutation("with_primary_close_policy", None),
+            "primary close policy must be selected during App configuration"
+        );
+        if matches!(self.host_selection, AppHostSelection::Headless) {
+            self.record_missing_capability("with_primary_close_policy", "native-window Host");
+            return Err(anyhow!(
+                "primary close policy requires App::new() native-window Host"
+            ));
+        }
+        ensure!(
+            !self.world.has_resource::<NativePrimaryClosePolicy>(),
+            "primary close policy has already been selected"
+        );
+        if policy == NativePrimaryClosePolicy::ApproveUnhandled {
+            self.add_systems(FrameEnd, approve_unhandled_primary_close_intent);
+        }
+        self.insert_resource(policy);
+        Ok(self)
+    }
+
     fn with_frame_pacing(&mut self, policy: FramePacingPolicyResource) -> &mut Self {
         if matches!(self.host_selection, AppHostSelection::Headless) {
             self.record_missing_capability("with_frame_pacing", "native-window Host");
@@ -221,5 +275,186 @@ mod tests {
         assert_eq!(runtime_state.last_frame_interval_ms, 12.5);
         assert_eq!(runtime_state.next_frame_delay_ms, Some(7.25));
         assert!(runtime_state.redraw_requested);
+    }
+
+    #[test]
+    fn primary_close_default_keeps_explicit_intent_pending() {
+        use crate::runtime::window::{NativeWindowId, WindowStateRegistryResource};
+
+        let mut app = App::new();
+        let mut windows = WindowStateRegistryResource::default();
+        let id = windows.register_primary_window("Manual", (800, 600), 1.0, true);
+        windows.record_mut(id).unwrap().receive_close_intent();
+        app.insert_resource(windows);
+
+        let mut state = app.into_windowed_state();
+        crate::runtime::frame_lifecycle::run_frame(&mut state.world, &mut state.scheduler).unwrap();
+        let windows = state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .unwrap();
+        let primary = windows.record(NativeWindowId::primary()).unwrap();
+        assert!(primary.close_intent_pending);
+        assert!(!primary.close_requested);
+        assert!(!state.world.has_resource::<NativePrimaryClosePolicy>());
+    }
+
+    #[test]
+    fn opted_in_primary_close_is_approved_at_frame_end_without_secondary_change() {
+        use crate::runtime::window::WindowStateRegistryResource;
+
+        let mut app = App::new();
+        app.with_primary_close_policy(NativePrimaryClosePolicy::ApproveUnhandled)
+            .unwrap();
+        let mut windows = WindowStateRegistryResource::default();
+        let primary = windows.register_primary_window("Primary", (800, 600), 1.0, true);
+        let secondary = windows.request_window("Secondary", (640, 480));
+        windows.register_created_window(
+            secondary.native_window_id,
+            "Secondary",
+            (640, 480),
+            1.0,
+            true,
+        );
+        windows.record_mut(primary).unwrap().receive_close_intent();
+        windows
+            .record_mut(secondary.native_window_id)
+            .unwrap()
+            .receive_close_intent();
+        app.insert_resource(windows);
+
+        let mut state = app.into_windowed_state();
+        crate::runtime::frame_lifecycle::run_frame(&mut state.world, &mut state.scheduler).unwrap();
+        let windows = state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .unwrap();
+        assert!(windows.record(primary).unwrap().close_requested);
+        assert!(!windows.record(primary).unwrap().close_intent_pending);
+        assert!(
+            windows
+                .record(secondary.native_window_id)
+                .unwrap()
+                .close_intent_pending
+        );
+        assert!(
+            !windows
+                .record(secondary.native_window_id)
+                .unwrap()
+                .close_requested
+        );
+        assert_eq!(
+            *state.world.resource::<NativePrimaryClosePolicy>().unwrap(),
+            NativePrimaryClosePolicy::ApproveUnhandled
+        );
+    }
+
+    #[test]
+    fn product_update_veto_wins_over_selected_frame_end_close() {
+        use crate::runtime::schedules::Update;
+        use crate::runtime::window::WindowStateRegistryResource;
+
+        fn veto_primary_close(mut windows: ResMut<WindowStateRegistryResource>) {
+            if let Some(primary) = windows.primary_window_id()
+                && let Some(record) = windows.record_mut(primary)
+                && record.close_intent_pending
+            {
+                record.veto_close();
+            }
+        }
+
+        let mut app = App::new();
+        app.with_primary_close_policy(NativePrimaryClosePolicy::ApproveUnhandled)
+            .unwrap();
+        app.add_systems(Update, veto_primary_close);
+        let mut windows = WindowStateRegistryResource::default();
+        let primary = windows.register_primary_window("Veto", (800, 600), 1.0, true);
+        windows.record_mut(primary).unwrap().receive_close_intent();
+        app.insert_resource(windows);
+
+        let mut state = app.into_windowed_state();
+        crate::runtime::frame_lifecycle::run_frame(&mut state.world, &mut state.scheduler).unwrap();
+        let windows = state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .unwrap();
+        let record = windows.record(primary).unwrap();
+        assert!(!record.close_requested);
+        assert!(!record.close_intent_pending);
+    }
+
+    #[test]
+    fn explicit_selected_close_remains_manual_and_no_intent_is_inert() {
+        use crate::runtime::window::WindowStateRegistryResource;
+
+        for policy in [
+            NativePrimaryClosePolicy::Explicit,
+            NativePrimaryClosePolicy::ApproveUnhandled,
+        ] {
+            let mut app = App::new();
+            app.with_primary_close_policy(policy).unwrap();
+            let mut windows = WindowStateRegistryResource::default();
+            let id = windows.register_primary_window("No intent", (800, 600), 1.0, true);
+            app.insert_resource(windows);
+            let mut state = app.into_windowed_state();
+            crate::runtime::frame_lifecycle::run_frame(&mut state.world, &mut state.scheduler)
+                .unwrap();
+            assert!(
+                !state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap()
+                    .record(id)
+                    .unwrap()
+                    .close_requested
+            );
+            if policy == NativePrimaryClosePolicy::Explicit {
+                let record = state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap()
+                    .record(id)
+                    .unwrap();
+                assert!(!record.close_intent_pending);
+            }
+        }
+    }
+
+    #[test]
+    fn primary_close_policy_rejects_headless_duplicate_and_late_selection() {
+        let mut headless = App::headless();
+        assert!(
+            headless
+                .with_primary_close_policy(NativePrimaryClosePolicy::ApproveUnhandled)
+                .is_err()
+        );
+        assert!(!headless.world().has_resource::<NativePrimaryClosePolicy>());
+        assert!(headless.admit_composition().is_err());
+
+        let mut native = App::new();
+        native
+            .with_primary_close_policy(NativePrimaryClosePolicy::Explicit)
+            .unwrap();
+        assert!(
+            native
+                .with_primary_close_policy(NativePrimaryClosePolicy::ApproveUnhandled)
+                .is_err()
+        );
+        assert_eq!(
+            *native
+                .world()
+                .resource::<NativePrimaryClosePolicy>()
+                .unwrap(),
+            NativePrimaryClosePolicy::Explicit
+        );
+
+        let mut late = App::new();
+        late.prepare_lifecycle_for_execution().unwrap();
+        assert!(
+            late.with_primary_close_policy(NativePrimaryClosePolicy::ApproveUnhandled)
+                .is_err()
+        );
+        assert!(!late.world().has_resource::<NativePrimaryClosePolicy>());
+        assert!(late.admit_composition().is_err());
     }
 }
