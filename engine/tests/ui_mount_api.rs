@@ -220,3 +220,468 @@ fn typed_app_mount_rejection_records_the_same_engine_diagnostic_as_counter() {
         UiRuntimeSlotMountFailure::FontProvisioning
     );
 }
+
+struct SecondaryTypedApp;
+
+impl runenui_core::UiApp for SecondaryTypedApp {
+    type State = usize;
+    type Action = bool;
+    type HostProtocol = runenui_core::NoHostProtocol;
+
+    fn root(state: &Self::State) -> impl runenui_core::View<Self::Action> {
+        runenui_core::text(format!("secondary {state}"))
+    }
+
+    fn update(
+        state: &mut Self::State,
+        action: Self::Action,
+    ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+        if action {
+            *state += 1;
+        }
+        runenui_core::Effects::none()
+    }
+}
+
+#[test]
+fn managed_ui_placement_allocates_distinct_render_producers_and_rebinds() {
+    use engine::plugins::render::host::RenderSurfaceId;
+    use engine::plugins::render::{RenderFrameProducerId, RenderPlugin};
+    use engine::plugins::ui::UiRuntimePresentationAssociationsResource;
+
+    let mut app = App::new();
+    app.add_plugin(RenderPlugin);
+    app.add_plugin(UiPlugin);
+    let first = app
+        .ui()
+        .mount_app::<DiagnosticTypedApp>(
+            UiTypedScreenId::new("managed.first"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .expect("first mount");
+    let second = app
+        .ui()
+        .mount_app::<SecondaryTypedApp>(
+            UiTypedScreenId::new("managed.second"),
+            0,
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .expect("second mount");
+    let primary = RenderSurfaceId::primary();
+    app.ui().present(first, primary).expect("first placement");
+    app.ui().present(second, primary).expect("second placement");
+    let bindings = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap();
+    let first_id = bindings.binding(first).unwrap().producer_id;
+    let second_id = bindings.binding(second).unwrap().producer_id;
+    assert_ne!(first_id, second_id);
+    assert_eq!(first_id, RenderFrameProducerId::try_from_raw(1).unwrap());
+
+    let secondary = RenderSurfaceId::try_from_raw(2).unwrap();
+    app.ui().present(first, secondary).expect("rebind");
+    let bindings = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap();
+    assert_eq!(
+        bindings.binding(first).unwrap().render_surface_id,
+        secondary
+    );
+    assert_eq!(bindings.binding(first).unwrap().producer_id, first_id);
+    assert_eq!(bindings.binding(second).unwrap().render_surface_id, primary);
+
+    assert!(app.ui().unpresent(first).unwrap());
+    assert!(!app.ui().unpresent(first).unwrap());
+    assert!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(first)
+            .is_none()
+    );
+    assert!(app.ui().unmount_presented(second).unwrap().is_some());
+    assert!(
+        !app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .contains(second)
+    );
+    assert!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(second)
+            .is_none()
+    );
+    // It is valid to continue headlessly after withdrawing presentation.
+    assert!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .contains(first)
+    );
+}
+
+#[test]
+fn managed_placement_skips_legacy_producer_id_and_rejects_missing_capabilities() {
+    use engine::plugins::render::host::RenderSurfaceId;
+    use engine::plugins::render::{
+        RenderFrameProducerId, RenderPlugin, SurfaceFrameSubmission,
+        SurfaceFrameSubmissionRegistryResource,
+    };
+    use engine::plugins::ui::UiRuntimePresentationAssociationsResource;
+
+    let mut app = App::new();
+    app.add_plugin(UiPlugin);
+    let slot = app
+        .ui()
+        .mount_app::<DiagnosticTypedApp>(
+            UiTypedScreenId::new("managed.not-ready"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .unwrap();
+    assert!(app.ui().present(slot, RenderSurfaceId::primary()).is_err());
+    app.add_plugin(RenderPlugin);
+    app.world_mut()
+        .resource_mut::<SurfaceFrameSubmissionRegistryResource>()
+        .unwrap()
+        .replace(
+            SurfaceFrameSubmission::new(RenderFrameProducerId::try_from_raw(1).unwrap())
+                .with_render_surface(RenderSurfaceId::primary()),
+        );
+    app.ui()
+        .present(slot, RenderSurfaceId::primary())
+        .expect("reserved producer");
+    let assigned = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .binding(slot)
+        .unwrap()
+        .producer_id;
+    assert_ne!(assigned, RenderFrameProducerId::try_from_raw(1).unwrap());
+}
+
+#[test]
+fn managed_placement_rejects_headless_host_without_changing_runtime() {
+    use engine::plugins::render::RenderPlugin;
+    use engine::plugins::render::host::RenderSurfaceId;
+    use engine::plugins::ui::UiRuntimePresentationAssociationsResource;
+
+    let mut app = App::headless();
+    app.add_plugin(RenderPlugin);
+    app.add_plugin(UiPlugin);
+    let slot = app
+        .ui()
+        .mount_app::<DiagnosticTypedApp>(
+            UiTypedScreenId::new("headless.mount"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .unwrap();
+    assert!(app.ui().present(slot, RenderSurfaceId::primary()).is_err());
+    assert!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .contains(slot)
+    );
+    assert!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(slot)
+            .is_none()
+    );
+}
+
+#[test]
+fn managed_producer_ownership_does_not_confuse_expert_binding_on_other_surface() {
+    use engine::plugins::render::RenderPlugin;
+    use engine::plugins::render::host::RenderSurfaceId;
+    use engine::plugins::ui::{
+        UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding,
+    };
+    use runenui_core::StyleEnvironment;
+
+    let mut app = App::new();
+    app.add_plugin(RenderPlugin);
+    app.add_plugin(UiPlugin);
+    let owned = app
+        .ui()
+        .mount_app::<DiagnosticTypedApp>(
+            UiTypedScreenId::new("lease.owner"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .unwrap();
+    let foreign = app
+        .ui()
+        .mount_app::<SecondaryTypedApp>(
+            UiTypedScreenId::new("lease.foreign"),
+            0,
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .unwrap();
+    let primary = RenderSurfaceId::primary();
+    let secondary = RenderSurfaceId::try_from_raw(2).unwrap();
+    app.ui().present(owned, primary).unwrap();
+    let producer = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .binding(owned)
+        .unwrap()
+        .producer_id;
+
+    // Expert API can bind the same raw ID on another surface, but ownership
+    // must not be inferred from that scalar identity.
+    app.world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .bind(UiRuntimePresentationBinding::new(
+            foreign,
+            producer,
+            secondary,
+            StyleEnvironment::default(),
+        ))
+        .unwrap();
+
+    assert!(app.ui().unpresent(foreign).is_err());
+    assert!(app.ui().present(foreign, primary).is_err());
+    assert!(app.ui().unmount_presented(foreign).is_err());
+    assert!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .contains(foreign)
+    );
+    assert_eq!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(owned)
+            .unwrap()
+            .render_surface_id,
+        primary
+    );
+    assert!(app.ui().unpresent(owned).unwrap());
+    assert!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(foreign)
+            .is_some()
+    );
+}
+
+#[test]
+fn managed_producer_lease_can_be_reconciled_after_expert_unbind() {
+    use engine::plugins::render::RenderPlugin;
+    use engine::plugins::render::host::RenderSurfaceId;
+    use engine::plugins::ui::UiRuntimePresentationAssociationsResource;
+
+    let mut app = App::new();
+    app.add_plugin(RenderPlugin);
+    app.add_plugin(UiPlugin);
+    let slot = app
+        .ui()
+        .mount_app::<DiagnosticTypedApp>(
+            UiTypedScreenId::new("lease.orphan"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .unwrap();
+    app.ui().present(slot, RenderSurfaceId::primary()).unwrap();
+    let former_producer = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .binding(slot)
+        .unwrap()
+        .producer_id;
+    app.world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .unbind(slot);
+    // An expert unbind leaves a managed lease, so a second presentation
+    // must not silently allocate a second lease for the same UI slot.
+    assert!(app.ui().present(slot, RenderSurfaceId::primary()).is_err());
+    assert!(app.ui().unpresent(slot).unwrap());
+    assert!(!app.ui().unpresent(slot).unwrap());
+    app.ui().present(slot, RenderSurfaceId::primary()).unwrap();
+    let replacement_producer = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .binding(slot)
+        .unwrap()
+        .producer_id;
+    assert_ne!(former_producer, replacement_producer);
+}
+
+#[test]
+fn late_explicit_legacy_claim_rejects_managed_producer_before_render_prepare() {
+    use engine::plugins::render::{
+        ManagedRenderProducerIds, SurfaceFrameSubmission, SurfaceFrameSubmissionRegistryResource,
+    };
+    use engine::plugins::{RenderPlugin, TimePlugin};
+    use std::collections::BTreeSet;
+
+    let mut app = App::headless();
+    app.add_plugin(TimePlugin);
+    app.add_plugin(UiPlugin);
+    app.add_plugin(RenderPlugin);
+    let producer = app
+        .world_mut()
+        .resource_mut::<ManagedRenderProducerIds>()
+        .unwrap()
+        .allocate(123, &BTreeSet::new())
+        .unwrap();
+    app.world_mut()
+        .resource_mut::<SurfaceFrameSubmissionRegistryResource>()
+        .unwrap()
+        .replace(SurfaceFrameSubmission::new(producer));
+    let error = app
+        .run_for_frames(1)
+        .err()
+        .expect("a late legacy claim must fail before frame preparation");
+    assert!(format!("{error:#}").contains("leased to UI slot 123"));
+}
+
+#[test]
+fn expert_unbind_retires_managed_lease_at_next_render_publication() {
+    use engine::plugins::TimePlugin;
+    use engine::plugins::render::host::RenderSurfaceId;
+    use engine::plugins::render::{ManagedRenderProducerIds, RenderPlugin};
+    use engine::plugins::ui::{
+        UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding,
+    };
+    use runenui_core::StyleEnvironment;
+    use std::collections::BTreeSet;
+
+    let mut app = App::headless();
+    app.add_plugin(TimePlugin);
+    app.add_plugin(UiPlugin);
+    app.add_plugin(RenderPlugin);
+    let slot = app
+        .ui()
+        .mount_app::<DiagnosticTypedApp>(
+            UiTypedScreenId::new("managed.withdrawal"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .unwrap();
+    let producer = app
+        .world_mut()
+        .resource_mut::<ManagedRenderProducerIds>()
+        .unwrap()
+        .allocate(slot.value(), &BTreeSet::new())
+        .unwrap();
+    app.world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .bind(UiRuntimePresentationBinding::new(
+            slot,
+            producer,
+            RenderSurfaceId::primary(),
+            StyleEnvironment::default(),
+        ))
+        .unwrap();
+    app.world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .unbind(slot);
+    assert!(
+        app.world()
+            .resource::<ManagedRenderProducerIds>()
+            .unwrap()
+            .is_owned_by(producer, slot.value())
+    );
+    let app = app
+        .run_for_frames(1)
+        .expect("withdrawals settle under headless RenderPrepare");
+    assert!(
+        !app.world()
+            .resource::<ManagedRenderProducerIds>()
+            .unwrap()
+            .is_owned_by(producer, slot.value())
+    );
+}
+
+#[test]
+fn expert_unmount_retires_managed_lease_and_binding() {
+    use engine::plugins::TimePlugin;
+    use engine::plugins::render::host::RenderSurfaceId;
+    use engine::plugins::render::{ManagedRenderProducerIds, RenderPlugin};
+    use engine::plugins::ui::{
+        UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding,
+    };
+    use runenui_core::StyleEnvironment;
+    use std::collections::BTreeSet;
+
+    let mut app = App::headless();
+    app.add_plugin(TimePlugin);
+    app.add_plugin(UiPlugin);
+    app.add_plugin(RenderPlugin);
+    let slot = app
+        .ui()
+        .mount_app::<DiagnosticTypedApp>(
+            UiTypedScreenId::new("managed.retired"),
+            (),
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .unwrap();
+    let producer = app
+        .world_mut()
+        .resource_mut::<ManagedRenderProducerIds>()
+        .unwrap()
+        .allocate(slot.value(), &BTreeSet::new())
+        .unwrap();
+    app.world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .bind(UiRuntimePresentationBinding::new(
+            slot,
+            producer,
+            RenderSurfaceId::primary(),
+            StyleEnvironment::default(),
+        ))
+        .unwrap();
+    let retirement = app
+        .world_mut()
+        .resource_mut::<UiRuntimeSlotsResource>()
+        .unwrap()
+        .unmount_with_retirement(slot);
+    assert!(retirement.unwrap().is_some());
+
+    let app = app
+        .run_for_frames(1)
+        .expect("missing slot withdraws at RenderPrepare");
+    assert!(
+        !app.world()
+            .resource::<ManagedRenderProducerIds>()
+            .unwrap()
+            .is_owned_by(producer, slot.value())
+    );
+    assert!(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(slot)
+            .is_none()
+    );
+}

@@ -9,8 +9,8 @@ use runenui_runtime::{LogicalSize, RasterScale, SurfaceBuildContext};
 
 use crate::plugins::render::host::{RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::plugins::render::{
-    Gfx, RunenUiPaintSubmission, RunenUiPaintSubmissionRegistryResource,
-    SurfaceFrameSubmissionRegistryResource,
+    Gfx, ManagedRenderProducerIds, RenderFrameProducerId, RunenUiPaintSubmission,
+    RunenUiPaintSubmissionRegistryResource, SurfaceFrameSubmissionRegistryResource,
 };
 use crate::runtime::{NativeWindowLifecycleState, WindowStateRegistryResource, WorldMut};
 
@@ -18,6 +18,50 @@ use super::{
     UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
     UiRuntimePresentationBinding, UiRuntimeSlotsResource,
 };
+
+/// Rejects late expert claims of a managed Render producer, including
+/// same-family typed paint that replaced a legitimate UI publication.
+pub fn validate_managed_runenui_producers_system(world: WorldMut) -> Result<()> {
+    validate_managed_runenui_producers(&world)
+}
+
+/// Final admission is also performed synchronously inside Render preparation,
+/// so intervening RenderPrepare writers cannot bypass this check.
+pub(crate) fn validate_managed_runenui_producers(world: &WorldMut) -> Result<()> {
+    let Ok(leases) = world.resource::<ManagedRenderProducerIds>() else {
+        return Ok(()); // No Render plugin or managed-producer capability.
+    };
+    let active = leases.active_leases().collect::<Vec<_>>();
+    if active.is_empty() {
+        return Ok(());
+    }
+    let legacy = world.resource::<SurfaceFrameSubmissionRegistryResource>()?;
+    let runenui = world.resource::<RunenUiPaintSubmissionRegistryResource>()?;
+    let associations = world.resource::<UiRuntimePresentationAssociationsResource>()?;
+    for (producer, owner) in active {
+        if legacy
+            .ordered_submissions()
+            .iter()
+            .any(|submission| submission.producer_id == producer)
+        {
+            return Err(anyhow!(
+                "Render producer {producer:?} is leased to UI slot {owner} but claimed by a legacy frame submission"
+            ));
+        }
+        for submission in runenui
+            .ordered_submissions()
+            .into_iter()
+            .filter(|submission| submission.producer_id == producer)
+        {
+            if !associations.authorizes_managed_paint(owner, submission) {
+                return Err(anyhow!(
+                    "Render producer {producer:?} is leased to UI slot {owner} but its RunenUI paint does not match the authoritative publication"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
 
 /// Applies only renderer-owned terminal GPU/F2/Present correlation IDs after
 /// the RenderSubmit owner has completed. A submitted/accepted frame never enters
@@ -88,6 +132,7 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
         world
             .resource_mut::<RunenUiPaintSubmissionRegistryResource>()?
             .remove_for_surface(&producer, surface);
+        retire_withdrawn_managed_producer(&mut world, producer);
     }
 
     for binding in bindings {
@@ -335,9 +380,41 @@ fn withdraw_binding(world: &mut WorldMut, binding: &UiRuntimePresentationBinding
         Vec::new()
     };
     if let Ok(registry) = world.resource_mut::<RunenUiPaintSubmissionRegistryResource>() {
-        for (producer, surface) in withdrawals {
+        for &(producer, surface) in &withdrawals {
             registry.remove_for_surface(&producer, surface);
         }
+    }
+    for (producer, _) in withdrawals {
+        retire_withdrawn_managed_producer(world, producer);
+    }
+}
+
+/// A low-level expert unbind or slot retirement can withdraw a managed paint
+/// without calling the high-level unpresent API. The existing association
+/// ledger owns the resulting withdrawal; only that exact retired producer
+/// may release its old lease. A same-producer surface rebind keeps the lease.
+fn retire_withdrawn_managed_producer(world: &mut WorldMut, producer: RenderFrameProducerId) {
+    let owner = world
+        .resource::<ManagedRenderProducerIds>()
+        .ok()
+        .and_then(|leases| {
+            leases
+                .active_leases()
+                .find_map(|(id, owner)| (id == producer).then_some(owner))
+        });
+    let Some(owner) = owner else {
+        return;
+    };
+    let still_bound = world
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .ok()
+        .is_some_and(|associations| {
+            associations
+                .bindings()
+                .any(|binding| binding.producer_id == producer && binding.slot_id.value() == owner)
+        });
+    if !still_bound && let Ok(leases) = world.resource_mut::<ManagedRenderProducerIds>() {
+        let _ = leases.release_owned(producer, owner);
     }
 }
 

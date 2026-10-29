@@ -5,7 +5,8 @@ use crate::plugins::render::features::{
     SurfaceFrameSubmissionRegistryResource, ordered_mixed_ui_submissions_for_surface,
 };
 use crate::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
-use crate::runtime::{Res, ResMut};
+use crate::plugins::ui::publish::validate_managed_runenui_producers;
+use crate::runtime::WorldMut;
 use rusttype::{Font, Scale, point};
 use std::collections::HashMap;
 use ui_render_data::ViewportSurfaceBindingRegistry;
@@ -256,44 +257,44 @@ impl PreparedUiFrameResource {
 ///
 /// Rejects ambiguity between RunenUI and legacy frame producers or compositor
 /// position overflow; never emits a partially prepared mixed frame.
-pub fn prepare_ui_feature_resource_system(
-    submissions: Res<SurfaceFrameSubmissionRegistryResource>,
-    runenui: Res<RunenUiPaintSubmissionRegistryResource>,
-    surfaces: Res<RenderSurfaceRegistryResource>,
-    mut prepared: ResMut<PreparedUiFrameResource>,
-) -> anyhow::Result<()> {
-    // Preserve the accepted legacy-only default: the historical unscoped
-    // fallback contains every legacy submission, including secondary surfaces.
-    // A mixed frame uses exact primary selection rather than inventing an
-    // arbitrary global RunenUI/legacy presentation association.
-    let ordered = if runenui.is_empty() {
-        submissions
-            .ordered_submissions()
-            .into_iter()
-            .map(OrderedSurfaceUiSubmission::Legacy)
-            .collect()
-    } else {
-        ordered_mixed_ui_submissions_for_surface(
-            &submissions,
-            &runenui,
-            RenderSurfaceId::primary(),
-        )?
+pub fn prepare_ui_feature_resource_system(mut world: WorldMut) -> anyhow::Result<()> {
+    // Single exclusive intake boundary: no other RenderPrepare writer can
+    // intervene between the final integrity check and prepared paint snapshot.
+    validate_managed_runenui_producers(&world)?;
+    let (status, payload, payload_by_surface, status_by_surface) = {
+        let submissions = world.resource::<SurfaceFrameSubmissionRegistryResource>()?;
+        let runenui = world.resource::<RunenUiPaintSubmissionRegistryResource>()?;
+        let surfaces = world.resource::<RenderSurfaceRegistryResource>()?;
+        // Preserve the accepted legacy-only fallback.
+        let ordered = if runenui.is_empty() {
+            submissions
+                .ordered_submissions()
+                .into_iter()
+                .map(OrderedSurfaceUiSubmission::Legacy)
+                .collect()
+        } else {
+            ordered_mixed_ui_submissions_for_surface(
+                submissions,
+                runenui,
+                RenderSurfaceId::primary(),
+            )?
+        };
+        let (status, payload) = prepare_submissions(ordered)?;
+        let mut payload_by_surface = std::collections::BTreeMap::new();
+        let mut status_by_surface = std::collections::BTreeMap::new();
+        for surface in surfaces.records() {
+            let selected = ordered_mixed_ui_submissions_for_surface(
+                submissions,
+                runenui,
+                surface.render_surface_id,
+            )?;
+            let (surface_status, surface_payload) = prepare_submissions(selected)?;
+            payload_by_surface.insert(surface.render_surface_id, surface_payload);
+            status_by_surface.insert(surface.render_surface_id, surface_status);
+        }
+        (status, payload, payload_by_surface, status_by_surface)
     };
-    let (status, payload) = prepare_submissions(ordered)?;
-
-    let mut payload_by_surface = std::collections::BTreeMap::new();
-    let mut status_by_surface = std::collections::BTreeMap::new();
-    for surface in surfaces.records() {
-        let selected = ordered_mixed_ui_submissions_for_surface(
-            &submissions,
-            &runenui,
-            surface.render_surface_id,
-        )?;
-        let (status, payload) = prepare_submissions(selected)?;
-        payload_by_surface.insert(surface.render_surface_id, payload);
-        status_by_surface.insert(surface.render_surface_id, status);
-    }
-
+    let prepared = world.resource_mut::<PreparedUiFrameResource>()?;
     prepared.status = status;
     prepared.payload = payload;
     prepared.payload_by_surface = payload_by_surface;

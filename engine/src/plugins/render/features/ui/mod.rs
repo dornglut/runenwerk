@@ -1,5 +1,6 @@
 pub mod descriptor;
 pub mod prepared;
+pub mod producer_ids;
 pub mod render_output_proof;
 pub mod resource;
 pub mod runenui_2d;
@@ -8,6 +9,7 @@ pub mod submission;
 
 pub use descriptor::*;
 pub use prepared::*;
+pub use producer_ids::*;
 pub use render_output_proof::*;
 pub use resource::*;
 pub use runenui_2d::*;
