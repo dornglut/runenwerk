@@ -13,10 +13,10 @@ use crate::plugins::render::{
 use ui_controls::{ControlPackageRegistry, runenwerk_control_package};
 
 use super::{
-    UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource, UiRuntimeFontConfiguration,
-    UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
-    UiRuntimeSlotMountFailure, UiRuntimeSlotMountReport, UiRuntimeSlotsResource,
-    UiPluginStateResource, UiScreen,
+    UiPluginStateResource, UiRuntimeDiagnostic, UiRuntimeDiagnosticsResource,
+    UiRuntimeFontConfiguration, UiRuntimePresentationAssociationsResource,
+    UiRuntimePresentationBinding, UiRuntimeSlotId, UiRuntimeSlotMountFailure,
+    UiRuntimeSlotMountReport, UiRuntimeSlotsResource, UiScreen,
 };
 
 pub trait AppUiExt {
@@ -99,7 +99,9 @@ impl UiAppMounting<'_> {
     /// externally owned bindings and producer allocation/binding failures.
     pub fn present(&mut self, slot_id: UiRuntimeSlotId, target: RenderSurfaceId) -> Result<()> {
         ensure!(
-            self.app.world().resource::<UiPluginStateResource>()
+            self.app
+                .world()
+                .resource::<UiPluginStateResource>()
                 .is_ok_and(UiPluginStateResource::is_installed),
             "UiPlugin must be installed before presenting a mounted UI"
         );
@@ -108,7 +110,10 @@ impl UiAppMounting<'_> {
             "RenderPlugin must be installed before presenting a mounted UI"
         );
         ensure!(
-            self.app.world().resource::<UiRuntimeSlotsResource>()?.contains(slot_id),
+            self.app
+                .world()
+                .resource::<UiRuntimeSlotsResource>()?
+                .contains(slot_id),
             "cannot present an unknown or retired RunenUI slot"
         );
         ensure!(
@@ -116,18 +121,23 @@ impl UiAppMounting<'_> {
             "the current native-window presentation path requires a native Host"
         );
 
-        let existing = self.app.world()
+        let existing = self
+            .app
+            .world()
             .resource::<UiRuntimePresentationAssociationsResource>()?
             .binding(slot_id)
             .cloned();
         if let Some(mut binding) = existing {
             ensure!(
-                self.app.world().resource::<ManagedRenderProducerIds>()?
+                self.app
+                    .world()
+                    .resource::<ManagedRenderProducerIds>()?
                     .is_leased(binding.producer_id),
                 "existing RunenUI presentation binding is externally managed"
             );
             binding.render_surface_id = target;
-            self.app.world_mut()
+            self.app
+                .world_mut()
                 .resource_mut::<UiRuntimePresentationAssociationsResource>()?
                 .bind(binding)?;
             return Ok(());
@@ -135,36 +145,47 @@ impl UiAppMounting<'_> {
 
         let mut occupied = BTreeSet::<RenderFrameProducerId>::new();
         occupied.extend(
-            self.app.world()
+            self.app
+                .world()
                 .resource::<UiRuntimePresentationAssociationsResource>()?
                 .bindings()
-                .map(|binding| binding.producer_id)
+                .map(|binding| binding.producer_id),
         );
         occupied.extend(
-            self.app.world()
+            self.app
+                .world()
                 .resource::<SurfaceFrameSubmissionRegistryResource>()?
                 .ordered_submissions()
                 .into_iter()
-                .map(|submission| submission.producer_id)
+                .map(|submission| submission.producer_id),
         );
         occupied.extend(
-            self.app.world()
+            self.app
+                .world()
                 .resource::<RunenUiPaintSubmissionRegistryResource>()?
                 .ordered_submissions()
                 .into_iter()
-                .map(|submission| submission.producer_id)
+                .map(|submission| submission.producer_id),
         );
 
-        let producer = self.app.world_mut()
+        let producer = self
+            .app
+            .world_mut()
             .resource_mut::<ManagedRenderProducerIds>()?
             .allocate(&occupied)?;
-        let result = self.app.world_mut()
+        let result = self
+            .app
+            .world_mut()
             .resource_mut::<UiRuntimePresentationAssociationsResource>()?
             .bind(UiRuntimePresentationBinding::new(
-                slot_id, producer, target, StyleEnvironment::default(),
+                slot_id,
+                producer,
+                target,
+                StyleEnvironment::default(),
             ));
         if let Err(error) = result {
-            self.app.world_mut()
+            self.app
+                .world_mut()
                 .resource_mut::<ManagedRenderProducerIds>()?
                 .release(producer);
             return Err(anyhow!("RunenUI placement rejected: {error}"));
@@ -175,7 +196,9 @@ impl UiAppMounting<'_> {
     /// Withdraws only an Engine-managed placement, without unmounting its
     /// independent typed RunenUI runtime.
     pub fn unpresent(&mut self, slot_id: UiRuntimeSlotId) -> Result<bool> {
-        let existing = match self.app.world()
+        let existing = match self
+            .app
+            .world()
             .resource::<UiRuntimePresentationAssociationsResource>()
         {
             Ok(associations) => associations.binding(slot_id).cloned(),
@@ -184,14 +207,21 @@ impl UiAppMounting<'_> {
         let Some(binding) = existing else {
             return Ok(false);
         };
-        let leased = self.app.world()
+        let leased = self
+            .app
+            .world()
             .resource::<ManagedRenderProducerIds>()?
             .is_leased(binding.producer_id);
-        ensure!(leased, "cannot withdraw an externally owned UI presentation binding");
-        self.app.world_mut()
+        ensure!(
+            leased,
+            "cannot withdraw an externally owned UI presentation binding"
+        );
+        self.app
+            .world_mut()
             .resource_mut::<UiRuntimePresentationAssociationsResource>()?
             .unbind(slot_id);
-        self.app.world_mut()
+        self.app
+            .world_mut()
             .resource_mut::<ManagedRenderProducerIds>()?
             .release(binding.producer_id);
         Ok(true)
@@ -205,18 +235,24 @@ impl UiAppMounting<'_> {
     ) -> Result<Option<runenui_runtime::InputShutdownBatch>> {
         // Do not retire an application if its presentation is controlled by
         // another caller; otherwise failure after retirement would orphan paint.
-        let existing = self.app.world()
+        let existing = self
+            .app
+            .world()
             .resource::<UiRuntimePresentationAssociationsResource>()
             .ok()
             .and_then(|associations| associations.binding(slot_id).cloned());
         if let Some(binding) = &existing {
             ensure!(
-                self.app.world().resource::<ManagedRenderProducerIds>()?
+                self.app
+                    .world()
+                    .resource::<ManagedRenderProducerIds>()?
                     .is_leased(binding.producer_id),
                 "cannot unmount a UI with an externally managed presentation binding"
             );
         }
-        let retirement = self.app.world_mut()
+        let retirement = self
+            .app
+            .world_mut()
             .resource_mut::<UiRuntimeSlotsResource>()?
             .unmount_with_retirement(slot_id)
             .map_err(|error| anyhow!("RunenUI shutdown rejected: {error:?}"))?;

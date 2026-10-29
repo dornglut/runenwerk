@@ -2,12 +2,11 @@ use super::composition::{
     RenderFlowRegistryResource, RenderFragmentRegistryResource, sync_render_flow_registry_system,
 };
 use super::features::{
-    EditorPickingResultResource, PreparedDeformationFeatureResource, PreparedDetailFeatureResource,
-    PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
+    EditorPickingResultResource, ManagedRenderProducerIds, PreparedDeformationFeatureResource,
+    PreparedDetailFeatureResource, PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedParticleVfxFeatureResource, PreparedUiFrameResource, PreparedWorldFeatureResource,
-    ManagedRenderProducerIds, RenderFeatureRegistryResource,
-    RunenUiPaintSubmissionRegistryResource, SurfaceFrameSubmissionRegistryResource,
-    UiFontAtlasResource,
+    RenderFeatureRegistryResource, RunenUiPaintSubmissionRegistryResource,
+    SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
     ViewportSurfaceBindingRegistryResource, prepare_ui_feature_resource_system,
     register_particle_vfx_feature_collector, sync_render_feature_registry_system,
     world::{
