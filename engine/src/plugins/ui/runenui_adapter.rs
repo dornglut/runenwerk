@@ -3138,6 +3138,87 @@ mod tests {
                 .map(|value| value.is_none()),
             Ok(true)
         );
+        // Prove the actual App-level managed operation is failure-atomic as
+        // well: a rejected RunenUI shutdown must keep the runtime, placement
+        // association and the Render-owned producer lease available for retry.
+        use std::collections::BTreeSet;
+
+        use crate::app::App;
+        use crate::plugins::render::host::RenderSurfaceId;
+        use crate::plugins::render::{ManagedRenderProducerIds, RenderPlugin};
+        use crate::plugins::ui::{
+            AppUiExt, UiPlugin, UiRuntimePresentationAssociationsResource,
+            UiRuntimePresentationBinding,
+        };
+
+        let mut managed_slots = UiRuntimeSlotsResource::default();
+        managed_slots.slots.push(UiRuntimeSlot {
+            id,
+            screen_id: UiTypedScreenId::new("managed.shutdown-preflight"),
+            runtime: UiRuntimeSlotKind::Typed(Box::new(FailOnceOnShutdown {
+                runtime: AppRuntime::<EmptyApp>::mount(()),
+                fail_next_shutdown: true,
+            })),
+            ingress_epoch: 1,
+            requires_settlement: false,
+            next_deadline: None,
+            native_clock: None,
+            deadline_observed_at: None,
+        });
+        managed_slots.next_slot_id = 2;
+        let mut app = App::headless();
+        app.add_plugin(UiPlugin);
+        app.add_plugin(RenderPlugin);
+        app.insert_resource(managed_slots);
+        let producer = app
+            .world_mut()
+            .resource_mut::<ManagedRenderProducerIds>()
+            .unwrap()
+            .allocate(id.value(), &BTreeSet::new())
+            .unwrap();
+        app.world_mut()
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .bind(UiRuntimePresentationBinding::new(
+                id,
+                producer,
+                RenderSurfaceId::primary(),
+                StyleEnvironment::default(),
+            ))
+            .unwrap();
+
+        assert!(app.ui().unmount_presented(id).is_err());
+        assert!(app.world().resource::<UiRuntimeSlotsResource>().unwrap().contains(id));
+        assert!(app
+            .world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(id)
+            .is_some());
+        assert!(app
+            .world()
+            .resource::<ManagedRenderProducerIds>()
+            .unwrap()
+            .is_owned_by(producer, id.value()));
+
+        let retirement = app
+            .ui()
+            .unmount_presented(id)
+            .expect("retry succeeds")
+            .expect("real RunenUI retirement");
+        assert_eq!(retirement.final_ownership().status(), RuntimeStatus::Closed);
+        assert!(!app.world().resource::<UiRuntimeSlotsResource>().unwrap().contains(id));
+        assert!(app
+            .world()
+            .resource::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .binding(id)
+            .is_none());
+        assert!(!app
+            .world()
+            .resource::<ManagedRenderProducerIds>()
+            .unwrap()
+            .is_owned_by(producer, id.value()));
     }
 
     #[test]
