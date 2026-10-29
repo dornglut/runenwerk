@@ -54,12 +54,32 @@ impl App {
         if !self.allow_topology_mutation("add_plugin", None) {
             return self;
         }
+        if crate::plugins::render::reject_selected_native_ui_only_plugin(
+            &mut self.world,
+            plugin.name(),
+        ) {
+            self.composition_errors
+                .push(AppCompositionError::DuplicateSelectedCapability {
+                    plugin: plugin.name(),
+                });
+            return self;
+        }
         plugin.build(self);
         self
     }
 
     pub fn add_boxed_plugin(&mut self, plugin: Box<dyn Plugin>) -> &mut Self {
         if !self.allow_topology_mutation("add_boxed_plugin", None) {
+            return self;
+        }
+        if crate::plugins::render::reject_selected_native_ui_only_plugin(
+            &mut self.world,
+            plugin.name(),
+        ) {
+            self.composition_errors
+                .push(AppCompositionError::DuplicateSelectedCapability {
+                    plugin: plugin.name(),
+                });
             return self;
         }
         plugin.build(self);
@@ -202,6 +222,9 @@ impl App {
 
 #[derive(Debug)]
 enum AppCompositionError {
+    DuplicateSelectedCapability {
+        plugin: &'static str,
+    },
     MissingCapability {
         operation: &'static str,
         capability: &'static str,
@@ -220,6 +243,10 @@ enum AppCompositionError {
 impl fmt::Display for AppCompositionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::DuplicateSelectedCapability { plugin } => write!(
+                formatter,
+                "native UI-only composition rejects duplicate plugin installation: {plugin}"
+            ),
             Self::MissingCapability {
                 operation,
                 capability,
@@ -255,7 +282,9 @@ impl Error for AppCompositionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::SystemRegistration { source, .. } => Some(source),
-            Self::MissingCapability { .. } | Self::LateTopologyMutation { .. } => None,
+            Self::MissingCapability { .. }
+            | Self::DuplicateSelectedCapability { .. }
+            | Self::LateTopologyMutation { .. } => None,
         }
     }
 }

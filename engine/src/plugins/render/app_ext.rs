@@ -15,6 +15,25 @@ use super::{
 struct SelectedNativeUiOnlyComposition {
     flow_id: RenderFlowId,
     registry_revision: u64,
+    duplicate_capability_attempted: bool,
+}
+
+/// An App plugin-registration ingress must not reinstall one of the
+/// selected capabilities; mark the selection invalid even if admission is retried.
+pub(crate) fn reject_selected_native_ui_only_plugin(
+    world: &mut runen_ecs::World,
+    name: &str,
+) -> bool {
+    if name != std::any::type_name::<UiPlugin>()
+        && name != std::any::type_name::<RenderPlugin>()
+    {
+        return false;
+    }
+    let Ok(selection) = world.resource_mut::<SelectedNativeUiOnlyComposition>() else {
+        return false;
+    };
+    selection.duplicate_capability_attempted = true;
+    true
 }
 
 /// Checked during App composition admission, before native Host execution.
@@ -32,6 +51,10 @@ pub(crate) fn validate_selected_native_ui_only(app: &App) -> Result<()> {
             .is_ok_and(UiPluginStateResource::is_installed)
             && render_integration_is_active(app.world()),
         "native UI-only composition requires its selected UiPlugin and RenderPlugin"
+    );
+    ensure!(
+        !selection.duplicate_capability_attempted,
+        "native UI-only composition rejects duplicate UiPlugin/RenderPlugin installation after selection"
     );
     let registry = app.world().resource::<RenderFlowRegistryResource>()?;
     ensure!(
@@ -122,6 +145,7 @@ impl AppRenderExt for App {
         self.insert_resource(SelectedNativeUiOnlyComposition {
             flow_id,
             registry_revision,
+            duplicate_capability_attempted: false,
         });
         Ok(self)
     }
@@ -298,6 +322,30 @@ mod tests {
             revision
         );
         app.admit_composition().unwrap();
+    }
+
+    #[test]
+    fn native_ui_only_rejects_later_direct_and_boxed_plugin_duplicates() {
+        for boxed in [false, true] {
+            let mut app = App::new();
+            app.select_native_ui_only().unwrap();
+            if boxed {
+                app.add_boxed_plugin(Box::new(RenderPlugin));
+            } else {
+                app.add_plugin(UiPlugin);
+            }
+            assert_eq!(
+                app.world()
+                    .resource::<RenderFlowRegistryResource>()
+                    .unwrap()
+                    .flow_count(),
+                1
+            );
+            let error = app.admit_composition().err().unwrap().to_string();
+            assert!(error.contains("duplicate"), "{error}");
+            let retry = app.admit_composition().err().unwrap().to_string();
+            assert!(retry.contains("duplicate"), "{retry}");
+        }
     }
 
     #[test]
