@@ -369,7 +369,7 @@ fn last_render_intake_rejects_claim_inserted_after_earlier_ui_validator() {
         prepare_ui_feature_resource_system,
     };
     use engine::plugins::ui::UiRuntimeSet;
-    use engine::runtime::{RenderPrepare, SystemConfigExt, WorldMut};
+    use engine::runtime::{RenderPrepare, SystemConfigExt, SystemMobilityExt, WorldMut};
 
     fn late_legacy_writer(mut world: WorldMut) -> anyhow::Result<()> {
         let producer = world
@@ -397,8 +397,9 @@ fn last_render_intake_rejects_claim_inserted_after_earlier_ui_validator() {
     app.add_systems(
         RenderPrepare,
         late_legacy_writer
+            .on_invoker_thread()
             .after(UiRuntimeSet::ManagedProducerValidation)
-            .before(prepare_ui_feature_resource_system),
+            .before(prepare_ui_feature_resource_system.on_invoker_thread()),
     );
     let error = app
         .run_for_frames(1)
