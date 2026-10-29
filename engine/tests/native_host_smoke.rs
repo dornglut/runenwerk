@@ -212,7 +212,7 @@ fn main() {
             );
             native_render_host_smoke(true, mode != "1", mode == "ui-only")
                 .expect("native Render + UI Host smoke should succeed");
-        },
+        }
         (false, false, false, true) => {
             native_historical_gpu_smoke().expect("native historical GPU RenderFlow must succeed")
         }

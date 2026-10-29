@@ -74,11 +74,14 @@ impl AppRenderExt for App {
             "native UI-only composition requires App::new() native-window Host"
         );
         ensure!(
-            !self.world().has_resource::<SelectedNativeUiOnlyComposition>(),
+            !self
+                .world()
+                .has_resource::<SelectedNativeUiOnlyComposition>(),
             "native UI-only composition was already selected"
         );
         ensure!(
-            !self.world()
+            !self
+                .world()
                 .resource::<UiPluginStateResource>()
                 .is_ok_and(UiPluginStateResource::is_installed)
                 && !render_integration_is_active(self.world()),
@@ -112,7 +115,10 @@ impl AppRenderExt for App {
         self.add_plugin(UiPlugin);
         self.add_plugin(RenderPlugin);
         self.add_render_flow(flow);
-        let registry_revision = self.world().resource::<RenderFlowRegistryResource>()?.revision();
+        let registry_revision = self
+            .world()
+            .resource::<RenderFlowRegistryResource>()?
+            .revision();
         self.insert_resource(SelectedNativeUiOnlyComposition {
             flow_id,
             registry_revision,
@@ -175,11 +181,15 @@ mod tests {
         app.select_native_ui_only()
             .expect("native UI-only composition must select");
         assert!(render_integration_is_active(app.world()));
-        assert!(app
+        assert!(
+            app.world()
+                .resource::<UiPluginStateResource>()
+                .is_ok_and(UiPluginStateResource::is_installed)
+        );
+        let registry = app
             .world()
-            .resource::<UiPluginStateResource>()
-            .is_ok_and(UiPluginStateResource::is_installed));
-        let registry = app.world().resource::<RenderFlowRegistryResource>().unwrap();
+            .resource::<RenderFlowRegistryResource>()
+            .unwrap();
         assert_eq!(registry.flow_count(), 1);
         assert_eq!(registry.revision(), 1);
         assert!(app.world().resource::<Gfx>().is_err());
@@ -191,13 +201,23 @@ mod tests {
     fn native_ui_only_preexisting_custom_flow_fails_without_plugin_installation() {
         let mut app = App::new();
         app.add_render_flow(RenderFlow::new("game.owns.present"));
-        let revision = app.world().resource::<RenderFlowRegistryResource>().unwrap().revision();
+        let revision = app
+            .world()
+            .resource::<RenderFlowRegistryResource>()
+            .unwrap()
+            .revision();
         let error = app.select_native_ui_only().err().unwrap().to_string();
         assert!(error.contains("existing RenderFlow"), "{error}");
         assert!(!render_integration_is_active(app.world()));
-        assert!(!app.world().has_resource::<SelectedNativeUiOnlyComposition>());
+        assert!(
+            !app.world()
+                .has_resource::<SelectedNativeUiOnlyComposition>()
+        );
         assert_eq!(
-            app.world().resource::<RenderFlowRegistryResource>().unwrap().revision(),
+            app.world()
+                .resource::<RenderFlowRegistryResource>()
+                .unwrap()
+                .revision(),
             revision
         );
         app.admit_composition()
@@ -210,7 +230,10 @@ mod tests {
         app.select_native_ui_only().unwrap();
         app.add_render_flow(RenderFlow::new("game.additional.present"));
         let error = app.admit_composition().err().unwrap().to_string();
-        assert!(error.contains("changed or additional RenderFlow"), "{error}");
+        assert!(
+            error.contains("changed or additional RenderFlow"),
+            "{error}"
+        );
     }
 
     #[test]
@@ -232,7 +255,10 @@ mod tests {
             .flow_id;
         // A direct registry removal followed by an unrelated flow must not be
         // mistaken for the original selected recipe.
-        let registry = app.world_mut().resource_mut::<RenderFlowRegistryResource>().unwrap();
+        let registry = app
+            .world_mut()
+            .resource_mut::<RenderFlowRegistryResource>()
+            .unwrap();
         assert!(registry.remove_flow(flow_id));
         registry.upsert_flow(RenderFlow::new("game.replacement"));
         assert!(app.admit_composition().is_err());
@@ -244,7 +270,10 @@ mod tests {
         let error = app.select_native_ui_only().err().unwrap().to_string();
         assert!(error.contains("native-window Host"), "{error}");
         assert!(!render_integration_is_active(app.world()));
-        assert!(!app.world().has_resource::<SelectedNativeUiOnlyComposition>());
+        assert!(
+            !app.world()
+                .has_resource::<SelectedNativeUiOnlyComposition>()
+        );
         assert!(!app.world().has_resource::<RenderFlowRegistryResource>());
         assert!(!app.world().has_resource::<Gfx>());
         app.admit_composition().unwrap();
@@ -254,10 +283,20 @@ mod tests {
     fn native_ui_only_duplicate_selection_preserves_original_recipe() {
         let mut app = App::new();
         app.select_native_ui_only().unwrap();
-        let revision = app.world().resource::<RenderFlowRegistryResource>().unwrap().revision();
+        let revision = app
+            .world()
+            .resource::<RenderFlowRegistryResource>()
+            .unwrap()
+            .revision();
         let error = app.select_native_ui_only().err().unwrap().to_string();
         assert!(error.contains("already selected"), "{error}");
-        assert_eq!(app.world().resource::<RenderFlowRegistryResource>().unwrap().revision(), revision);
+        assert_eq!(
+            app.world()
+                .resource::<RenderFlowRegistryResource>()
+                .unwrap()
+                .revision(),
+            revision
+        );
         app.admit_composition().unwrap();
     }
 
@@ -272,9 +311,19 @@ mod tests {
             }
             let error = app.select_native_ui_only().err().unwrap().to_string();
             assert!(error.contains("before UiPlugin or RenderPlugin"), "{error}");
-            assert!(!app.world().has_resource::<SelectedNativeUiOnlyComposition>());
-            assert!(!app.world().has_resource::<RenderFlowRegistryResource>()
-                || app.world().resource::<RenderFlowRegistryResource>().unwrap().flow_count() == 0);
+            assert!(
+            !app.world()
+                .has_resource::<SelectedNativeUiOnlyComposition>()
+        );
+            assert!(
+                !app.world().has_resource::<RenderFlowRegistryResource>()
+                    || app
+                        .world()
+                        .resource::<RenderFlowRegistryResource>()
+                        .unwrap()
+                        .flow_count()
+                        == 0
+            );
             app.admit_composition().unwrap();
         }
     }
@@ -284,7 +333,10 @@ mod tests {
         let mut app = App::new();
         app.prepare_lifecycle_for_execution().unwrap();
         assert!(app.select_native_ui_only().is_err());
-        assert!(!app.world().has_resource::<SelectedNativeUiOnlyComposition>());
+        assert!(
+            !app.world()
+                .has_resource::<SelectedNativeUiOnlyComposition>()
+        );
         assert!(app.admit_composition().is_err());
     }
 
