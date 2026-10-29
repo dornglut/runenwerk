@@ -41,11 +41,8 @@ impl AppUiExt for App {
     }
 }
 
-
-/**
- * A native-primary convenience mount preserves the original RunenUI owner:
- * on placement failure, the typed runtime remains mounted and identifiable.
- */
+/// A native-primary convenience mount preserves the original RunenUI owner.
+/// On placement failure, the typed runtime remains mounted and identifiable.
 #[derive(Debug, thiserror::Error)]
 pub enum UiAppPrimaryMountError {
     #[error("native-primary typed UI admission rejected: {0}")]
@@ -53,7 +50,7 @@ pub enum UiAppPrimaryMountError {
     #[error("typed RunenUI mount rejected: {report:?}")]
     MountRejected { report: UiRuntimeSlotMountReport },
     #[error(
-        "native-primary placement failed; UI slot {slot_id:?} remains mounted without placement: {source}; retry placement or explicitly retire the slot and handle its shutdown batch"
+        "native-primary placement failed for retained slot {slot_id:?}: {source}"
     )]
     PlacementRetained {
         slot_id: UiRuntimeSlotId,
@@ -107,7 +104,6 @@ impl UiAppMounting<'_> {
         record_slot_mount_diagnostic(self.app, &report);
         report
     }
-
 
     /// Mounts one typed UiApp and requests managed placement on the native
     /// primary Render surface. This does not install plugins or a RenderFlow.

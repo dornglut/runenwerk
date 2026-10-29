@@ -243,7 +243,6 @@ impl runenui_core::UiApp for SecondaryTypedApp {
     }
 }
 
-
 #[test]
 fn native_primary_typed_convenience_mounts_two_apps_under_one_selected_flow() {
     use engine::plugins::render::host::RenderSurfaceId;
@@ -364,9 +363,7 @@ fn native_primary_typed_convenience_preflight_rejects_without_mounting_or_gpu() 
 #[test]
 fn native_primary_typed_convenience_preserves_font_mount_rejection_report() {
     use engine::plugins::render::Gfx;
-    use engine::plugins::ui::{
-        UiAppPrimaryMountError, UiRuntimePresentationAssociationsResource,
-    };
+    use engine::plugins::ui::{UiAppPrimaryMountError, UiRuntimePresentationAssociationsResource};
     use engine::prelude::AppRenderExt;
 
     let mut app = App::new();
@@ -399,9 +396,7 @@ fn native_primary_typed_convenience_preserves_font_mount_rejection_report() {
 #[test]
 fn native_primary_typed_convenience_placement_failure_retains_slot_and_foreign_lease() {
     use engine::plugins::render::{Gfx, ManagedRenderProducerIds};
-    use engine::plugins::ui::{
-        UiAppPrimaryMountError, UiRuntimePresentationAssociationsResource,
-    };
+    use engine::plugins::ui::{UiAppPrimaryMountError, UiRuntimePresentationAssociationsResource};
     use engine::prelude::AppRenderExt;
     use std::collections::BTreeSet;
 
