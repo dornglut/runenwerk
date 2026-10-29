@@ -504,10 +504,29 @@ fn managed_producer_lease_can_be_reconciled_after_expert_unbind() {
         .slot_id()
         .unwrap();
     app.ui().present(slot, RenderSurfaceId::primary()).unwrap();
+    let former_producer = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .binding(slot)
+        .unwrap()
+        .producer_id;
     app.world_mut()
         .resource_mut::<UiRuntimePresentationAssociationsResource>()
         .unwrap()
         .unbind(slot);
+    // An expert unbind leaves a managed lease, so a second presentation
+    // must not silently allocate a second lease for the same UI slot.
+    assert!(app.ui().present(slot, RenderSurfaceId::primary()).is_err());
     assert!(app.ui().unpresent(slot).unwrap());
     assert!(!app.ui().unpresent(slot).unwrap());
+    app.ui().present(slot, RenderSurfaceId::primary()).unwrap();
+    let replacement_producer = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .binding(slot)
+        .unwrap()
+        .producer_id;
+    assert_ne!(former_producer, replacement_producer);
 }

@@ -15,6 +15,8 @@ pub struct ManagedRenderProducerIds {
 pub enum ManagedRenderProducerError {
     #[error("Render producer identity space is exhausted")]
     Exhausted,
+    #[error("this integration owner already holds a managed Render producer")]
+    AlreadyLeased,
 }
 
 impl ManagedRenderProducerIds {
@@ -26,6 +28,12 @@ impl ManagedRenderProducerIds {
         owner: u64,
         externally_occupied: &BTreeSet<RenderFrameProducerId>,
     ) -> Result<RenderFrameProducerId, ManagedRenderProducerError> {
+        // A slot can have only one managed presentation binding. An expert
+        // unbind does not implicitly release its producer lease; refuse to
+        // mint a second one until that first lease is explicitly retired.
+        if self.leased.values().any(|held_by| *held_by == owner) {
+            return Err(ManagedRenderProducerError::AlreadyLeased);
+        }
         loop {
             let raw = self
                 .last_issued
@@ -81,6 +89,10 @@ mod tests {
         let first = leases.allocate(101, &occupied).unwrap();
         assert_eq!(first.raw(), 2);
         assert!(leases.is_owned_by(first, 101));
+        assert_eq!(
+            leases.allocate(101, &BTreeSet::new()),
+            Err(ManagedRenderProducerError::AlreadyLeased)
+        );
         assert!(!leases.is_owned_by(first, 102));
         assert!(!leases.release_owned(first, 102));
         assert!(leases.release_owned(first, 101));
