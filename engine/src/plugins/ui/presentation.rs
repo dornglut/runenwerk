@@ -7,11 +7,12 @@
 use std::collections::BTreeMap;
 
 use runenui_core::{StyleEnvironment, SurfaceId, SurfaceInputContext};
-use runenui_runtime::{PaintRevision, SurfacePublication};
+use runenui_runtime::{PaintPublication, PaintRevision, SurfacePublication};
 
 use crate::plugins::render::host::RenderSurfaceId;
 use crate::plugins::render::{
-    RenderFrameProducerId, RunenUiPublicationId, SurfaceFrameRoute, SurfaceFrameSubmissionOrder,
+    RenderFrameProducerId, RunenUiPaintSubmission, RunenUiPublicationId, SurfaceFrameRoute,
+    SurfaceFrameSubmissionOrder,
 };
 use crate::runtime::NativeWindowId;
 
@@ -211,6 +212,10 @@ pub struct UiRuntimePresentationAssociationsResource {
     displayed: BTreeMap<UiRuntimeSlotId, UiRuntimeDisplayedPresentation>,
     current_mappings: BTreeMap<UiRuntimeSlotId, UiRuntimeNativeMapping>,
     last_publication: BTreeMap<UiRuntimeSlotId, (UiRuntimeNativeMapping, u64)>,
+    /// Last renderer paint admitted from the canonical RunenUI source. Retaining
+    /// one snapshot per bound slot also covers frames after terminal Present has
+    /// retired its pending/in-flight input-generation records.
+    last_renderer_paint: BTreeMap<UiRuntimeSlotId, (RunenUiPublicationId, PaintPublication)>,
     /// Render-submission withdrawals owed after unbind/rebind. Never lose ownership cleanup.
     withdrawn: Vec<(RenderFrameProducerId, RenderSurfaceId)>,
     last_issued_publication_id: u64,
@@ -254,6 +259,7 @@ impl UiRuntimePresentationAssociationsResource {
             self.displayed.remove(&slot);
             self.current_mappings.remove(&slot);
             self.last_publication.remove(&slot);
+            self.last_renderer_paint.remove(&slot);
         }
         self.bindings.insert(slot, binding);
         Ok(())
@@ -269,6 +275,7 @@ impl UiRuntimePresentationAssociationsResource {
         self.displayed.remove(&slot);
         self.current_mappings.remove(&slot);
         self.last_publication.remove(&slot);
+        self.last_renderer_paint.remove(&slot);
     }
 
     /// Returns and clears Render withdrawal obligations; called before publishing live bindings.
@@ -286,38 +293,24 @@ impl UiRuntimePresentationAssociationsResource {
         self.bindings.values()
     }
 
-    /// Confirms a managed paint matches an exact active RunenUI source
-    /// generation. No renderer/GPU completion is inferred here.
+    /// Verifies the *entire* canonical renderer publication and compositor
+    /// position captured by `stage`, not the public mutable registry alone.
+    /// This does not infer GPU acceptance or terminal Present.
     pub(crate) fn authorizes_managed_paint(
         &self,
         owner: u64,
-        producer: RenderFrameProducerId,
-        target: RenderSurfaceId,
-        publication_id: RunenUiPublicationId,
-        surface_id: &SurfaceId,
-        revision: PaintRevision,
+        submission: &RunenUiPaintSubmission,
     ) -> bool {
         let Some((&slot, binding)) = self.bindings.iter().find(|(slot, _)| slot.value() == owner)
         else {
             return false;
         };
-        if binding.producer_id != producer || binding.render_surface_id != target {
-            return false;
-        }
-        let active = |p: &UiRuntimePendingPresentation| {
-            p.publication_id == publication_id
-                && p.binding == *binding
-                && p.publication.paint_publication().surface_id() == surface_id
-                && p.publication.paint_publication().revision() == revision
-        };
-        self.pending.get(&slot).is_some_and(active)
-            || self.in_flight.get(&publication_id).is_some_and(active)
-            || self.displayed.get(&slot).is_some_and(|displayed| {
-                displayed.publication_id == publication_id
-                    && displayed.producer_id == producer
-                    && displayed.render_surface_id == target
-                    && &displayed.surface_id == surface_id
-                    && displayed.paint_revision == revision
+        binding.producer_id == submission.producer_id
+            && Some(binding.render_surface_id) == submission.render_surface_id
+            && binding.route == submission.route
+            && binding.order == submission.order
+            && self.last_renderer_paint.get(&slot).is_some_and(|(id, paint)| {
+                *id == submission.publication_id && paint == &submission.publication
             })
     }
 
@@ -336,6 +329,7 @@ impl UiRuntimePresentationAssociationsResource {
             self.retire_in_flight_for_slot(slot);
             self.displayed.remove(&slot);
             self.last_publication.remove(&slot);
+            self.last_renderer_paint.remove(&slot);
         }
         changed
     }
@@ -347,6 +341,7 @@ impl UiRuntimePresentationAssociationsResource {
         self.displayed.remove(&slot);
         self.current_mappings.remove(&slot);
         self.last_publication.remove(&slot);
+        self.last_renderer_paint.remove(&slot);
     }
 
     /// Returns whether a new host ingress generation or native mapping needs publication.
@@ -387,6 +382,8 @@ impl UiRuntimePresentationAssociationsResource {
             .checked_add(1)
             .and_then(RunenUiPublicationId::try_from_raw)
             .ok_or(UiRuntimePresentationAssociationError::PublicationIdentityExhausted)?;
+        self.last_renderer_paint
+            .insert(slot, (next, publication.paint_publication().clone()));
         self.pending.insert(
             slot,
             UiRuntimePendingPresentation {
@@ -566,6 +563,7 @@ impl UiRuntimePresentationAssociationsResource {
                 .is_some_and(|displayed| displayed.publication_id > publication_id);
         if !later_is_live {
             self.last_publication.remove(&slot);
+            self.last_renderer_paint.remove(&slot);
         }
         true
     }

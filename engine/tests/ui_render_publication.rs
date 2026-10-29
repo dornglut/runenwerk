@@ -294,3 +294,117 @@ fn late_typed_paint_cannot_replace_managed_publication() {
         .expect("foreign typed paint must fail before renderer preparation");
     assert!(format!("{error:#}").contains("does not match the authoritative publication"));
 }
+
+#[test]
+fn managed_admission_rejects_same_identity_modified_route_and_order() {
+    use std::collections::BTreeSet;
+
+    use engine::plugins::render::ManagedRenderProducerIds;
+
+    let mut app = App::headless();
+    app.add_plugin(TimePlugin);
+    app.add_plugin(UiPlugin);
+    app.add_plugin(RenderPlugin);
+    let slot = app
+        .ui()
+        .mount_with_fonts(CounterScreen, &controlled_fonts())
+        .slot_id()
+        .unwrap();
+    let surface = RenderSurfaceId::primary();
+    let mut windows = WindowStateRegistryResource::default();
+    let native = windows.register_primary_window("Managed UI", (320, 160), 1.0, true);
+    app.insert_resource(windows);
+    app.world_mut()
+        .resource_mut::<RenderSurfaceRegistryResource>()
+        .unwrap()
+        .confirm_surface_attachment(surface, native, (320, 160))
+        .unwrap();
+    let producer = app
+        .world_mut()
+        .resource_mut::<ManagedRenderProducerIds>()
+        .unwrap()
+        .allocate(slot.value(), &BTreeSet::new())
+        .unwrap();
+    app.world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()
+        .unwrap()
+        .bind(UiRuntimePresentationBinding::new(
+            slot,
+            producer,
+            surface,
+            StyleEnvironment::default(),
+        ))
+        .unwrap();
+
+    let app = app
+        .run_for_frames(1)
+        .expect("canonical paint is admitted");
+    let canonical = app
+        .world()
+        .resource::<RunenUiPaintSubmissionRegistryResource>()
+        .unwrap()
+        .get_for_surface(&producer, surface)
+        .unwrap()
+        .clone();
+
+    let mut forged = canonical.clone();
+    forged.route = SurfaceFrameRoute::ViewportOverlay;
+    forged.order = SurfaceFrameSubmissionOrder::new(42, 7);
+    let mut app = app;
+    app.world_mut()
+        .resource_mut::<RunenUiPaintSubmissionRegistryResource>()
+        .unwrap()
+        .replace(forged);
+    let error = app
+        .run_for_frames(1)
+        .err()
+        .expect("exact-ID reordered paint is forbidden");
+    assert!(format!("{error:#}").contains("does not match the authoritative publication"));
+}
+
+#[test]
+fn last_render_intake_rejects_claim_inserted_after_earlier_ui_validator() {
+    use std::collections::BTreeSet;
+
+    use engine::plugins::render::{
+        ManagedRenderProducerIds, SurfaceFrameSubmissionRegistryResource,
+        prepare_ui_feature_resource_system,
+    };
+    use engine::plugins::ui::UiRuntimeSet;
+    use engine::runtime::{RenderPrepare, SystemConfigExt, WorldMut};
+
+    fn late_legacy_writer(mut world: WorldMut) -> anyhow::Result<()> {
+        let producer = world
+            .resource::<ManagedRenderProducerIds>()?
+            .active_leases()
+            .next()
+            .expect("lease exists before late claim")
+            .0;
+        world
+            .resource_mut::<SurfaceFrameSubmissionRegistryResource>()?
+            .replace(SurfaceFrameSubmission::new(producer));
+        Ok(())
+    }
+
+    let mut app = App::headless();
+    app.add_plugin(TimePlugin);
+    app.add_plugin(UiPlugin);
+    app.add_plugin(RenderPlugin);
+    app.world_mut()
+        .resource_mut::<ManagedRenderProducerIds>()
+        .unwrap()
+        .allocate(123, &BTreeSet::new())
+        .unwrap();
+
+    app.add_systems(
+        RenderPrepare,
+        late_legacy_writer
+            .after(UiRuntimeSet::ManagedProducerValidation)
+            .before(prepare_ui_feature_resource_system),
+    );
+    let error = app
+        .run_for_frames(1)
+        .err()
+        .expect("final Render intake must reject late legacy producer claim");
+    assert!(format!("{error:#}").contains("leased to UI slot 123"));
+}

@@ -22,6 +22,12 @@ use super::{
 /// Rejects late expert claims of a managed Render producer, including
 /// same-family typed paint that replaced a legitimate UI publication.
 pub fn validate_managed_runenui_producers_system(world: WorldMut) -> Result<()> {
+    validate_managed_runenui_producers(&world)
+}
+
+/// Final admission is also performed synchronously inside Render preparation,
+/// so intervening RenderPrepare writers cannot bypass this check.
+pub(crate) fn validate_managed_runenui_producers(world: &WorldMut) -> Result<()> {
     let Ok(leases) = world.resource::<ManagedRenderProducerIds>() else {
         return Ok(()); // No Render plugin or managed-producer capability.
     };
@@ -47,19 +53,7 @@ pub fn validate_managed_runenui_producers_system(world: WorldMut) -> Result<()> 
             .into_iter()
             .filter(|submission| submission.producer_id == producer)
         {
-            let Some(target) = submission.render_surface_id else {
-                return Err(anyhow!(
-                    "managed Render producer {producer:?} has an unscoped RunenUI paint submission"
-                ));
-            };
-            if !associations.authorizes_managed_paint(
-                owner,
-                producer,
-                target,
-                submission.publication_id,
-                submission.publication.surface_id(),
-                submission.publication.revision(),
-            ) {
+            if !associations.authorizes_managed_paint(owner, submission) {
                 return Err(anyhow!(
                     "Render producer {producer:?} is leased to UI slot {owner} but its RunenUI paint does not match the authoritative publication"
                 ));
