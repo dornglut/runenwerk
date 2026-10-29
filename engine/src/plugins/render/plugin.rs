@@ -5,8 +5,9 @@ use super::features::{
     EditorPickingResultResource, PreparedDeformationFeatureResource, PreparedDetailFeatureResource,
     PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedParticleVfxFeatureResource, PreparedUiFrameResource, PreparedWorldFeatureResource,
-    RenderFeatureRegistryResource, RunenUiPaintSubmissionRegistryResource,
-    SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
+    ManagedRenderProducerIds, RenderFeatureRegistryResource,
+    RunenUiPaintSubmissionRegistryResource, SurfaceFrameSubmissionRegistryResource,
+    UiFontAtlasResource,
     ViewportSurfaceBindingRegistryResource, prepare_ui_feature_resource_system,
     register_particle_vfx_feature_collector, sync_render_feature_registry_system,
     world::{
@@ -86,6 +87,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<ViewportSurfaceBindingRegistryResource>();
         app.init_resource::<UiFontAtlasResource>();
         app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
+        app.init_resource::<ManagedRenderProducerIds>();
         app.init_resource::<RunenUiPaintSubmissionRegistryResource>();
         app.init_resource::<EditorPickingResultResource>();
         app.init_resource::<PreparedDrawFeatureResource>();
