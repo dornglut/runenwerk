@@ -52,7 +52,6 @@ fn veto_primary_intent(mut windows: ResMut<WindowStateRegistryResource>) {
     }
 }
 
-
 #[cfg(target_os = "linux")]
 fn run_child(mode: &str) {
     let mut app = App::new();
@@ -91,16 +90,34 @@ fn visible_window_id(title: &str, until: Instant) -> String {
 fn request_wm_delete_window(window_id: &str) {
     let window: u32 = window_id.parse().expect("valid X11 window ID");
     let (conn, _) = x11rb::connect(None).expect("open the X11 display");
-    let protocols = conn.intern_atom(false, b"WM_PROTOCOLS").unwrap().reply().unwrap().atom;
-    let delete = conn.intern_atom(false, b"WM_DELETE_WINDOW").unwrap().reply().unwrap().atom;
-    let supported = conn.get_property(false, window, protocols, AtomEnum::ATOM, 0, 32)
-        .unwrap().reply().unwrap();
+    let protocols = conn
+        .intern_atom(false, b"WM_PROTOCOLS")
+        .unwrap()
+        .reply()
+        .unwrap()
+        .atom;
+    let delete = conn
+        .intern_atom(false, b"WM_DELETE_WINDOW")
+        .unwrap()
+        .reply()
+        .unwrap()
+        .atom;
+    let supported = conn
+        .get_property(false, window, protocols, AtomEnum::ATOM, 0, 32)
+        .unwrap()
+        .reply()
+        .unwrap();
     assert!(
-        supported.value32().is_some_and(|mut atoms| atoms.any(|a| a == delete)),
+        supported
+            .value32()
+            .is_some_and(|mut atoms| atoms.any(|a| a == delete)),
         "native X11 window must advertise WM_DELETE_WINDOW"
     );
     let message = ClientMessageEvent::new(32, window, protocols, [delete, 0, 0, 0, 0]);
-    conn.send_event(false, window, EventMask::NO_EVENT, message).unwrap().check().unwrap();
+    conn.send_event(false, window, EventMask::NO_EVENT, message)
+        .unwrap()
+        .check()
+        .unwrap();
     conn.flush().unwrap();
 }
 
