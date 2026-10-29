@@ -26,6 +26,7 @@ pub mod runtime;
 pub use adapters::*;
 pub use api::*;
 pub use app_ext::AppRenderExt;
+pub(crate) use app_ext::{reject_selected_native_ui_only_plugin, validate_selected_native_ui_only};
 pub use bytemuck;
 pub use composition::*;
 pub use engine_render_macros::{GpuStorage, GpuUniform};
