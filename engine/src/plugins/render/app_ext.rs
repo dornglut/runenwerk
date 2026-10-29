@@ -1,7 +1,6 @@
 use anyhow::{Result, ensure};
 
 use crate::app::App;
-use crate::app::domain::host::AppHostSelection;
 use crate::plugins::ui::{UiPlugin, UiPluginStateResource};
 
 use super::inspect::{RenderDebugConfigResource, RenderDebugControlResource};
@@ -24,7 +23,7 @@ pub(crate) fn validate_selected_native_ui_only(app: &App) -> Result<()> {
         return Ok(());
     };
     ensure!(
-        matches!(app.host_selection, AppHostSelection::NativeWindow),
+        app.is_native_window_host(),
         "native UI-only composition requires App::new() native-window Host"
     );
     ensure!(
@@ -71,7 +70,7 @@ impl AppRenderExt for App {
             "native UI-only composition cannot be selected after App configuration"
         );
         ensure!(
-            matches!(self.host_selection, AppHostSelection::NativeWindow),
+            self.is_native_window_host(),
             "native UI-only composition requires App::new() native-window Host"
         );
         ensure!(
@@ -88,7 +87,7 @@ impl AppRenderExt for App {
         ensure!(
             self.world()
                 .resource::<RenderFlowRegistryResource>()
-                .is_err_or(|registry| registry.flow_count() == 0),
+                .map_or(true, |registry| registry.flow_count() == 0),
             "native UI-only composition conflicts with an existing RenderFlow; select the explicit custom RenderFlow path"
         );
 

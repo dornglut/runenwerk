@@ -204,14 +204,15 @@ fn main() {
                 .expect("native Render + UI Host child smoke should succeed");
         }
         (false, false, true, false) => {
-            let mode = std::env::var(RENDER_UI_HOST_ENV)?;
-            anyhow::ensure!(
+            let mode = std::env::var(RENDER_UI_HOST_ENV)
+                .expect("native Render + UI Host child requires its selected mode");
+            assert!(
                 ["1", "managed", "ui-only"].contains(&mode.as_str()),
                 "unexpected native UI smoke mode: {mode}"
             );
             native_render_host_smoke(true, mode != "1", mode == "ui-only")
-        }
-        .expect("native Render + UI Host smoke should succeed"),
+                .expect("native Render + UI Host smoke should succeed");
+        },
         (false, false, false, true) => {
             native_historical_gpu_smoke().expect("native historical GPU RenderFlow must succeed")
         }
@@ -1441,29 +1442,32 @@ fn native_render_host_smoke(with_ui: bool, managed_ui: bool, ui_only: bool) -> a
     };
     if !ui_only {
         let flow = RenderFlow::new("native.render.host.smoke")
-        .with_surface_color()?
-        .fullscreen_pass("native.render.host.smoke.clear")
-        .main_surface_only()
-        .clear_color([0.0, 0.0, 0.0, 1.0])
-        .write_surface_color()?
-        .finish();
-    let flow = if with_ui {
-        flow.builtin_ui_composite_pass("native.render.host.smoke.runenui")?
+            .with_surface_color()?
+            .fullscreen_pass("native.render.host.smoke.clear")
             .main_surface_only()
+            .clear_color([0.0, 0.0, 0.0, 1.0])
+            .write_surface_color()?
+            .finish();
+        let flow = if with_ui {
+            flow.builtin_ui_composite_pass("native.render.host.smoke.runenui")?
+                .main_surface_only()
+                .finish()
+        } else {
+            flow
+        };
+        let flow = flow
+            .present_pass("native.render.host.smoke.present")?
+            .main_surface_only()
+            .surface_color()?
             .finish()
-    } else {
-        flow
-    };
-    let flow = flow
-        .present_pass("native.render.host.smoke.present")?
-        .main_surface_only()
-        .surface_color()?
-        .finish()
-        .validate()?;
+            .validate()?;
         app.add_render_flow(flow);
     } else {
         anyhow::ensure!(
-            app.world().resource::<engine::plugins::render::RenderFlowRegistryResource>()?.flow_count() == 1,
+            app.world()
+                .resource::<engine::plugins::render::RenderFlowRegistryResource>()?
+                .flow_count()
+                == 1,
             "selected UI-only path must own exactly one RenderFlow"
         );
     }

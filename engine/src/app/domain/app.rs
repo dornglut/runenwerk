@@ -121,6 +121,10 @@ impl App {
         self
     }
 
+    pub(crate) fn is_native_window_host(&self) -> bool {
+        matches!(self.host_selection, AppHostSelection::NativeWindow)
+    }
+
     pub fn world(&self) -> &World {
         &self.world
     }
