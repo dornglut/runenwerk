@@ -35,43 +35,43 @@ decision is accepted. No new generic AppRunner, universal Host trait or mutable
 command registry is accepted by this draft.
 
 Evidence baseline: protected Runenwerk
-\`main@505581b30537901de9964badbf99cd083237f359\`, 2026-10-30. This is
-a static-source review. No Rust compilation, \`cargo validate\`, OS window
+`main@505581b30537901de9964badbf99cd083237f359`, 2026-10-30. This is
+a static-source review. No Rust compilation, `cargo validate`, OS window
 execution, GPU proof or independent consumer qualification is claimed.
 
 ## Context and verified gaps
 
-A single \`App\` must serve an ordinary desktop Todo, Editor/Draw with
+A single `App` must serve an ordinary desktop Todo, Editor/Draw with
 multiple native windows, a custom-render game, a headless server, an offline
 finite job, typed headless UI, a windowless offscreen-GPU worker, and a
 console-first engine which opens its first window after startup.
 
 Current accepted source does not satisfy this entry/lifetime contract:
 
-- \`engine/src/app/domain/app.rs\`: \`App::new()\` immediately selects
-  \`AppHostSelection::NativeWindow\`; \`App::headless()\` selects Headless.
-- \`engine/src/app/runtime/lifecycle.rs\` and
-  \`engine/src/app/platform/headless.rs\`: headless \`run()\` advances one
+- `engine/src/app/domain/app.rs`: `App::new()` immediately selects
+  `AppHostSelection::NativeWindow`; `App::headless()` selects Headless.
+- `engine/src/app/runtime/lifecycle.rs` and
+  `engine/src/app/platform/headless.rs`: headless `run()` advances one
   frame then returns; bounded advancement requires headless selection.
-- \`engine/src/runtime/winit_runner.rs::resumed\`: physical primary-window
+- `engine/src/runtime/winit_runner.rs::resumed`: physical primary-window
   realization occurs *before* Startup. There is no accepted zero-initial-window
   native path; suppressing window creation alone would suppress Startup.
 - The same native runner exits its Winit event loop when the **primary**
   window's close is approved. Other windows and background work may still exist.
-- \`engine/src/runtime/window.rs\`: requested secondary windows already have
-  \`Requested\`, \`Created\` and \`CreationFailed\` states and native identities.
+- `engine/src/runtime/window.rs`: requested secondary windows already have
+  `Requested`, `Created` and `CreationFailed` states and native identities.
   Editor currently reserves corresponding Render surfaces and coordinates
   failed creation; the generic desired public window API is absent.
-- \`engine/src/runtime/native_host_wake.rs\` carries a specific coalesced
+- `engine/src/runtime/native_host_wake.rs` carries a specific coalesced
   RunenUI wake, not a general owner-typed command inbox.
-- \`apps/runenwerk_runtime_preview/src/main.rs\` owns an external Tokio
+- `apps/runenwerk_runtime_preview/src/main.rs` owns an external Tokio
   command loop; its headless path runs that loop before a later single Engine
   frame. The Engine does not currently integrate a sustained headless driver.
-- \`engine/src/plugins/ui/app_ext.rs\` already exposes
-  \`AppUiExt::ui(&mut self) -> UiAppMounting\`; a fluent \`.ui::<A>()\`
+- `engine/src/plugins/ui/app_ext.rs` already exposes
+  `AppUiExt::ui(&mut self) -> UiAppMounting`; a fluent `.ui::<A>()`
   spelling is not a drop-in compatible overload.
 
-A new \`App::new()\` default would deliberately supersede the earlier
+A new `App::new()` default would deliberately supersede the earlier
 behavior-preserving #884 and #875 decisions, rather than reinterpret those
 decisions as having accepted the new behavior.
 
@@ -79,33 +79,33 @@ decisions as having accepted the new behavior.
 
 ### 1. One App, initially unselected, with a stable admitted Host
 
-\`App::new()\` constructs **one** Runenwerk application composition root and
+`App::new()` constructs **one** Runenwerk application composition root and
 initially selects **no physical windowing environment**. It does not initially
 create a window, OS event loop, UI mount, GPU, renderer or network listener.
 During Configuring, declarative capabilities are collected and validated. At
 admission/startup, the execution environment is resolved **once**:
 
 - Without native windowing selection, a windowless/headless environment is used.
-- Declaring an initial \`window(...)\` selects the concrete native-window path.
-- Explicit \`enable_windowing()\` selects native support with **zero** initial
+- Declaring an initial `window(...)` selects the concrete native-window path.
+- Explicit `enable_windowing()` selects native support with **zero** initial
   windows, allowing an OS window to be requested after startup.
 - Once prepared, a Headless-running App may not silently turn into a Native
   App. Window count is *not* Host identity.
 
 Host selection remains a concrete internal Runenwerk/OS integration concern.
-Ordinary application authors do not need \`.host(Host::native())\` or an
+Ordinary application authors do not need `.host(Host::native())` or an
 overloaded public Host hierarchy. Unsupported platform combinations reject
 before entering a running state wherever admission can detect them.
 
 ### 2. Open-ended App lifetime is independent of frames
 
-**Proposed new meaning:** \`App::run(self)\` starts the accepted App exactly once
+**Proposed new meaning:** `App::run(self)` starts the accepted App exactly once
 and normally remains running until an admitted application shutdown occurs or
 the runtime encounters a terminal failure. It does not secretly mean
-\`run_for_frames(1)\` and must not force \`Update\` or a visual frame during an
+`run_for_frames(1)` and must not force `Update` or a visual frame during an
 otherwise idle period.
 
-A deliberately empty \`App::new().run()\` is a valid **passive, idle process**:
+A deliberately empty `App::new().run()` is a valid **passive, idle process**:
 the runtime waits without spinning until it receives a supported shutdown,
 wake or other admitted event. It does **not** imply an interactive terminal,
 stdin parser, OS terminal window, new network port, worker pool or timer.
@@ -113,15 +113,15 @@ This behavior is intentionally different from a finite batch job.
 
 A real external or application-owned shutdown path must exist for the
 blocking run API; the final interface shall expose a practical wakeable
-shutdown request that survives the consuming \`run(self)\` call. Graceful OS
+shutdown request that survives the consuming `run(self)` call. Graceful OS
 signal integration is platform-specific and cannot be claimed solely from
-the presence of an OS process. The exact \`AppControl\`/handle method names
+the presence of an OS process. The exact `AppControl`/handle method names
 remain subject to the Rust API proof.
 
-Accepted bounded operations such as \`run_for_frames(n)\` and the
-fixed-cadence-owner \`run_for_fixed_steps(n)\` remain explicit **nonterminating
+Accepted bounded operations such as `run_for_frames(n)` and the
+fixed-cadence-owner `run_for_fixed_steps(n)` remain explicit **nonterminating
 advancement** on a reusable App instance. Future finite work completion
-policy must not redefine the meaning of open-ended \`run()\`.
+policy must not redefine the meaning of open-ended `run()`.
 
 ### 3. A wake is not automatically an application frame
 
@@ -153,13 +153,13 @@ parallel RunenECS World.
 Windowing is an optionally selected pre-run capability. Individual native
 windows can be **requested and retired while running** through the existing
 native event-loop owner. The public interface uses a stable logical
-\`WindowKey\`; a realized window receives a distinct internal generation,
-\`NativeWindowId\`, platform Winit ID and, when rendering is selected, a
+`WindowKey`; a realized window receives a distinct internal generation,
+`NativeWindowId`, platform Winit ID and, when rendering is selected, a
 Render-owned surface association.
 
 A request accepted into the command queue is **not** a physically created
 window. Its owner must publish a later terminal outcome
-\`Created(key, generation, ...)\` or \`Failed(key, reason)\`, correlated to
+`Created(key, generation, ...)` or `Failed(key, reason)`, correlated to
 that exact request. Reopening the same human-readable key after retirement
 must not allow stale events, inputs, or GPU/UI publications to target its
 replacement. Duplicate live keys reject.
@@ -190,9 +190,9 @@ Proposed ordinary defaults:
 - An App declared with initial desktop windows and no explicit keep-alive
   intent requests **quit after the last eligible window has retired**, once
   the owners permit clean shutdown.
-- An explicitly \`enable_windowing()\` App can remain alive with zero windows
+- An explicitly `enable_windowing()` App can remain alive with zero windows
   so a terminal/IPC/automation caller may reopen one later. This explicit
-  persistent intent is order-independent with \`.window(...)\`.
+  persistent intent is order-independent with `.window(...)`.
 - A windowless App remains active until explicit App shutdown, even if
   it has no active simulation sessions or pending windows.
 - An expert product may override the last-window/keep-alive policy and may
@@ -217,7 +217,7 @@ An explicit stdin console/REPL or other product-owned terminal integration
 may accept commands, while native GUI, headless server, CI runner and
 background service apps may run with no stdin at all.
 
-\`WindowCommands\`, simulation-owner commands, job-owner APIs and App-owned
+`WindowCommands`, simulation-owner commands, job-owner APIs and App-owned
 shutdown requests must remain typed and semantically owned by their existing
 domains. A console, in-app palette, automation, or authorized IPC/RPC endpoint
 may lower parsed input into **those owner contracts**; it may not create a
@@ -252,14 +252,14 @@ because a request was enqueued or submitted.
 
 Failure after a typed UI mount, window attachment or terminal publication
 must retain the owner-specific pending-work/retirement contract. The
-existing \`UiAppPrimaryMountError::PlacementRetained\` is evidence that a
-consuming \`run(self) -> Result<()>\` cannot naively discard partially
+existing `UiAppPrimaryMountError::PlacementRetained` is evidence that a
+consuming `run(self) -> Result<()>` cannot naively discard partially
 mounted UI on failure. Typed preflight and cleanup or an actionable
 recovery outcome require direct proof.
 
 ## Illustrative public surface (not final Rust API)
 
-\`\`\`rust
+```rust
 // Open-ended, windowless, event-driven runtime; no terminal is implied.
 App::new().run()?;
 
@@ -282,18 +282,18 @@ App::new()
 
 // Explicit bounded headless advancement for tests and simulations.
 let app = App::new().run_for_frames(100)?;
-\`\`\`
+```
 
 These snippets specify desired ergonomics, **not compile-proven signatures**.
-Exact \`Window\` construction, typed key representation, explicit UI state,
+Exact `Window` construction, typed key representation, explicit UI state,
 runtime command receivers, return/ownership types, clock admission,
-generic method resolution, error types and \`.ui::<A>()\` naming require
+generic method resolution, error types and `.ui::<A>()` naming require
 an isolated Rust compile probe and an independently maintained consumer.
 
 ## Rejected alternatives
 
-- Keep \`App::new()\` intrinsically native-windowed and add a separate
-  permanent \`HeadlessApp\`: makes application semantics depend on the
+- Keep `App::new()` intrinsically native-windowed and add a separate
+  permanent `HeadlessApp`: makes application semantics depend on the
   desktop-centric constructor and conflicts with one composition root.
 - Construct a running Headless Host and silently upgrade it to Native
   when the first window opens: violates stable Host identity and Winit
@@ -314,21 +314,21 @@ an isolated Rust compile probe and an independently maintained consumer.
 ## Migration and acceptance gates
 
 **Intentional public breaking changes**, if accepted:
-\`App::new()\` no longer immediately selects native; headless
-\`App::run()\` no longer returns after one frame; maintained native
+`App::new()` no longer immediately selects native; headless
+`App::run()` no longer returns after one frame; maintained native
 products must explicitly declare/select windowing; headless one-frame
-tools must choose bounded execution. Existing \`set_title\`, native
-size/close policies, \`AppUiExt::ui()\`, and default-plugin ordering must
+tools must choose bounded execution. Existing `set_title`, native
+size/close policies, `AppUiExt::ui()`, and default-plugin ordering must
 be reconciled without indefinite compatibility aliases.
 
 Before marking the decision accepted or publishing implementation:
 
 1. **Rust API:** Compile-test the fluent by-value/error contract and the
-   \`AppUiExt::ui()\` vs \`.ui::<A>()\` collision; verify typed default
+   `AppUiExt::ui()` vs `.ui::<A>()` collision; verify typed default
    UI state, explicit target, and registration order independence.
 2. **Idle headless:** Prove Startup once, no idle Update/frame spin,
    reliable wake, correct shutdown request while the consuming
-   \`run(self)\` blocks, no implicit console/port/GPU/window.
+   `run(self)` blocks, no implicit console/port/GPU/window.
 3. **Headless bounded:** Prove zero/positive frame counts, repeatability
    and fixed-step cadence errors/progress remain well-defined.
 4. **Native zero-window:** Prove Winit readiness and Startup **without a
@@ -347,11 +347,11 @@ Before marking the decision accepted or publishing implementation:
    reject unauthorized/late/stale/unsupported commands.
 9. **Portability:** Verify actual supported Windows/Linux/macOS and
    explicitly scope other OS/embedded/web behavior; no universal
-   guarantee of a blocking main-thread \`run()\` on every platform.
+   guarantee of a blocking main-thread `run()` on every platform.
 10. **Governance:** Reconcile accepted ADR 0019/0023, #884/#875,
     source-owner split #1423/#1405, strict launch ownership #1311,
     automation/terminal designs, and competing U9-C/Render PRs.
-    Require repository \`cargo validate\`, exact-head hosted evidence,
+    Require repository `cargo validate`, exact-head hosted evidence,
     independent critical review and protected merge.
 
 **Gate verdict at proposal:** architecture direction is supported by
