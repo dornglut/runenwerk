@@ -2567,6 +2567,11 @@ mod tests {
             &mut identities,
         )
         .expect("clipped, half-opacity placeholder projects without altering semantics");
+        assert_eq!(
+            mapped.composition().root_entries().len(),
+            scene.root_entries().len(),
+            "no root paint item may be dropped during item-opacity projection"
+        );
         let mut verified = 0;
         for (entry, rendered) in scene
             .root_entries()
