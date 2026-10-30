@@ -2343,6 +2343,7 @@ mod tests {
             WidgetMeasureInput, text_field,
         };
 
+        #[derive(Debug)]
         struct ClippedPaintProbe;
 
         impl Widget<Box<EditIntent>> for ClippedPaintProbe {
