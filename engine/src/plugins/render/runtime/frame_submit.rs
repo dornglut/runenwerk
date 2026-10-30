@@ -9,7 +9,9 @@ use crate::plugins::inspect::{
 use crate::plugins::pipelines::{PipelineCacheResource, PipelineCacheStats};
 use crate::plugins::render::host::RenderSurfaceAcquireError;
 use crate::plugins::render::host::{
-    RenderSurfaceDiagnostic, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+    RenderSurfaceDiagnostic, RenderSurfaceId, RenderSurfaceLifecycleState,
+    RenderSurfacePresentationAttempt, RenderSurfacePresentationError,
+    RenderSurfaceRegistryResource,
 };
 use crate::plugins::render::renderer::RenderGpuFramePostAcceptAssociationFailure;
 use crate::plugins::render::runtime::{
@@ -649,6 +651,48 @@ fn reconcile_frame_history_policy(world: &mut WorldMut) {
     }
 }
 
+/// A strictly rejected policy is isolated to its own logical window. Backend/lifecycle
+/// failures still fail stop; never treat an unproven physical configuration as a skip.
+fn is_local_surface_presentation_rejection(error: &anyhow::Error) -> bool {
+    matches!(
+        error.downcast_ref::<RenderSurfacePresentationError>(),
+        Some(RenderSurfacePresentationError::UnsupportedPresentMode(_))
+    )
+}
+
+/// Exactly one owner performs Render policy reconciliation, before the surface-image lease.
+fn apply_surface_presentation(
+    world: &mut WorldMut,
+    gfx: &mut Gfx,
+    id: RenderSurfaceId,
+    target_size: (u32, u32),
+) -> anyhow::Result<()> {
+    let record = world
+        .resource::<RenderSurfaceRegistryResource>()?
+        .record(id)
+        .cloned()
+        .ok_or(RenderSurfacePresentationError::UnknownSurface)?;
+    let outcome = gfx.configure_surface_presentation(
+        id,
+        record.presentation_request,
+        record.presentation_revision,
+        target_size,
+    );
+    let attempt = match outcome {
+        Ok(()) => RenderSurfacePresentationAttempt::Applied {
+            revision: record.presentation_revision,
+        },
+        Err(reason) => RenderSurfacePresentationAttempt::Rejected {
+            revision: record.presentation_revision,
+            reason,
+        },
+    };
+    world
+        .resource_mut::<RenderSurfaceRegistryResource>()?
+        .record_presentation_attempt(id, attempt);
+    outcome.map_err(anyhow::Error::new)
+}
+
 pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<()> {
     reconcile_frame_history_policy(&mut world);
     // Product withdrawal retires retained continuity even when no native frame is prepared.
@@ -764,9 +808,26 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             .target_size_px;
 
         let render_surface_id = prepared_frame.surface.render_surface_id;
-        let surface_size = gfx.surface_size(render_surface_id);
-        if surface_size != Some((target_w, target_h)) {
-            gfx.resize(render_surface_id, target_w, target_h);
+        // Presentation rejection or occlusion is scoped to this surface. A
+        // blocked primary must not suppress independent native secondary work.
+        let primary_can_render = if gfx.is_surface_drawable(render_surface_id) {
+            match apply_surface_presentation(
+                &mut world,
+                &mut gfx,
+                render_surface_id,
+                (target_w, target_h),
+            ) {
+                Ok(()) => true,
+                Err(error) if is_local_surface_presentation_rejection(&error) => false,
+                Err(error) => return Err(error),
+            }
+        } else {
+            false
+        };
+        if !primary_can_render {
+            primary_contribution_state = PrimaryContributionState::Deferred;
+            deferred_deterministic_contributions
+                .extend(primary_deterministic_contributions.iter().cloned());
         }
 
         let ui_font_atlas = world
@@ -799,7 +860,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
             .map(|tick| tick.0)
             .unwrap_or_default();
 
-        let render_result = {
+        let render_result = if primary_can_render {
             let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
                 Ok(registry) => registry,
                 Err(_) => {
@@ -827,7 +888,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 .unwrap_or_default()
                 .retains_frame(prepared_frame.context.frame_index);
 
-            gfx.render(
+            Some(gfx.render(
                 &prepared_frame,
                 &mut gpu_step_streams,
                 &deterministic_contributions,
@@ -841,11 +902,14 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 &debug_control,
                 &debug_config,
                 composed_gpu_timing_requested,
-            )
+            ))
+        } else {
+            None
         };
 
         let result = match render_result {
-            Ok(timings) if !timings.submitted => {
+            None => Ok(()),
+            Some(Ok(timings)) if !timings.submitted => {
                 publish_progressed_gpu_captures(
                     &mut world,
                     &mut gfx,
@@ -862,7 +926,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 );
                 Ok(())
             }
-            Ok(timings) => {
+            Some(Ok(timings)) => {
                 primary_contribution_state = PrimaryContributionState::Submitted;
                 world.resource_mut::<DebugMetricsState>()?.last_timings = Some(timings);
 
@@ -1115,7 +1179,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                 gfx.renderer.clear_published_gpu_observations();
                 Ok(())
             }
-            Err(err) => {
+            Some(Err(err)) => {
                 // Earlier GPU work may have completed even when this new
                 // primary surface cannot acquire, prepare, or submit.
                 publish_progressed_gpu_captures(
@@ -1129,7 +1193,7 @@ pub(crate) fn frame_render_submit_system(mut world: WorldMut) -> anyhow::Result<
                             primary_contribution_state = PrimaryContributionState::Deferred;
                             deferred_deterministic_contributions
                                 .extend(primary_deterministic_contributions.iter().cloned());
-                            gfx.resize(render_surface_id, target_w, target_h);
+                            gfx.invalidate_surface_presentation(render_surface_id);
                             Ok(())
                         }
                         RenderSurfaceAcquireError::Timeout
@@ -1456,9 +1520,34 @@ fn render_additional_surfaces(
                 error: anyhow!("prepared render frame is missing a main surface view"),
             });
         };
-        let surface_size = gfx.surface_size(render_surface_id);
-        if surface_size != Some((target_w, target_h)) {
-            gfx.resize(render_surface_id, target_w, target_h);
+        if !gfx.is_surface_drawable(render_surface_id) {
+            defer_contributions_for_surface(
+                &mut deferred,
+                deterministic_contributions,
+                render_surface_id,
+            );
+            continue;
+        }
+        if let Err(error) =
+            apply_surface_presentation(world, gfx, render_surface_id, (target_w, target_h))
+        {
+            if is_local_surface_presentation_rejection(&error) {
+                // Strict policy rejection is local: this window never presents
+                // with a fallback, while other surfaces may still progress.
+                defer_contributions_for_surface(
+                    &mut deferred,
+                    deterministic_contributions,
+                    render_surface_id,
+                );
+                continue;
+            }
+            defer_contributions_for_remaining_surfaces(
+                &mut deferred,
+                deterministic_contributions,
+                prepared_frames,
+                prepared_frame_index,
+            );
+            return Err(AdditionalSurfaceRenderFailure { deferred, error });
         }
 
         let flow_registry = match world.resource::<RenderFlowRegistryResource>() {
@@ -1592,7 +1681,7 @@ fn render_additional_surfaces(
                 if let Some(surface_error) = err.downcast_ref::<RenderSurfaceAcquireError>() {
                     match surface_error {
                         RenderSurfaceAcquireError::Lost | RenderSurfaceAcquireError::Outdated => {
-                            gfx.resize(render_surface_id, target_w, target_h);
+                            gfx.invalidate_surface_presentation(render_surface_id);
                             AdditionalSurfaceRenderOutcome::Retry
                         }
                         RenderSurfaceAcquireError::Timeout
@@ -1724,7 +1813,11 @@ fn validate_prepared_frame_gfx_attachment(
     prepared_frame: &PreparedRenderFrame,
 ) -> anyhow::Result<()> {
     let surface = prepared_frame.surface.render_surface_id;
-    if gfx.has_surface(surface) {
+    // A failed reattachment can leave the logical surface without a physical
+    // handle. Preserve the ordinary RenderSubmit retry path while rejecting
+    // genuinely unknown surface IDs. Physical admission still occurs only
+    // through the strict configure step before image acquisition.
+    if gfx.has_recoverable_surface_record(surface) {
         return Ok(());
     }
     let message = format!(
@@ -1747,6 +1840,34 @@ mod tests {
     use super::*;
     use crate::plugins::render::host::RenderSurfaceId;
     use crate::plugins::render::inspect::{RenderCaptureSelector, RenderPixelProbeRequest};
+
+    #[test]
+    fn only_strict_unsupported_mode_is_surface_local_nonfatal() {
+        use runen_gpu::GpuSurfacePresentMode;
+        for mode in [
+            GpuSurfacePresentMode::Fifo,
+            GpuSurfacePresentMode::Mailbox,
+            GpuSurfacePresentMode::Immediate,
+            GpuSurfacePresentMode::FifoRelaxed,
+        ] {
+            let rejection =
+                anyhow::Error::new(RenderSurfacePresentationError::UnsupportedPresentMode(mode));
+            assert!(is_local_surface_presentation_rejection(&rejection));
+        }
+        for physical_or_lifecycle_failure in [
+            RenderSurfacePresentationError::RequiresReattachment,
+            RenderSurfacePresentationError::ZeroExtent,
+            RenderSurfacePresentationError::UnknownSurface,
+            RenderSurfacePresentationError::NoCompatibleFormat,
+        ] {
+            assert!(!is_local_surface_presentation_rejection(
+                &anyhow::Error::new(physical_or_lifecycle_failure),
+            ));
+        }
+        assert!(!is_local_surface_presentation_rejection(&anyhow!(
+            "unexpected GPU state"
+        )));
+    }
 
     #[test]
     fn native_surface_binding_requires_attached_exact_correlation() {
