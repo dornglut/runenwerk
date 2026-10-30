@@ -1256,14 +1256,21 @@ impl Gfx {
         timings.renderer = render_result?;
         if std::env::var("GROTTO_RENDER_REALIZATION_LOG").is_ok() {
             let stats = context.program_binding_realization_stats();
+            let resources = context.resource_realization_stats();
+            let execution = context.execution_stats();
             eprintln!(
-                "runenwerk_render_lab_realization frame={} retained={} programs={} layouts={} pipelines={} bind_groups={}",
+                "runenwerk_render_lab_realization frame={} retained={} programs={} layouts={} pipelines={} bind_groups={} g4c1={} g4c1_limit={} prepared={} in_flight={} upload_bytes={}",
                 prepared_frame.context.frame_index,
                 stats.retained_records(),
                 stats.programs(),
                 stats.bind_group_layouts(),
                 stats.pipeline_layouts(),
-                stats.bind_groups()
+                stats.bind_groups(),
+                resources.retained_records(),
+                resources.max_records(),
+                execution.prepared_submissions(),
+                execution.in_flight_submissions(),
+                execution.upload_bytes_in_flight()
             );
         }
         // The one terminal Present is part of the accepted RunenGPU submission above.
