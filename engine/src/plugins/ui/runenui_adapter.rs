@@ -2349,10 +2349,8 @@ mod tests {
 
             fn root(_: &()) -> impl View<Self::Action> {
                 let contents = "Example task";
-                let snapshot = TextDocumentSnapshot::new(
-                    TextDocumentId::new(1),
-                    TextDocumentRevision::new(0),
-                );
+                let snapshot =
+                    TextDocumentSnapshot::new(TextDocumentId::new(1), TextDocumentRevision::new(0));
                 let cursor =
                     TextPosition::new(snapshot, contents, 0, TextAffinity::Downstream).unwrap();
                 column([
@@ -2404,13 +2402,17 @@ mod tests {
             scene.items().iter().any(|item| !item.clips().is_empty()),
             "ordinary typed text editing must exercise the real clipped paint path"
         );
-        let mut identities = crate::plugins::render::features::RunenUi2dResourceIdentityMap::default();
+        let mut identities =
+            crate::plugins::render::features::RunenUi2dResourceIdentityMap::default();
         let mapped = crate::plugins::render::features::project_runenui_paint_to_2d(
             publication.paint_publication(),
             &mut identities,
         )
         .expect("ordinary clipped typed UI paint projects without dropping clip semantics");
-        assert_eq!(mapped.composition().root_entries().len(), scene.root_entries().len());
+        assert_eq!(
+            mapped.composition().root_entries().len(),
+            scene.root_entries().len()
+        );
         for (source_entry, rendered_entry) in scene
             .root_entries()
             .iter()

@@ -8,8 +8,8 @@
 use std::collections::{HashMap, HashSet};
 
 use runen_render::composition_2d::{
-    Render2dAffineTransform, Render2dBrush, Render2dColorRgba8, Render2dComposition,
-    Render2dClip, Render2dCompositionError, Render2dCornerRadii, Render2dEntry, Render2dFillRule,
+    Render2dAffineTransform, Render2dBrush, Render2dClip, Render2dColorRgba8, Render2dComposition,
+    Render2dCompositionError, Render2dCornerRadii, Render2dEntry, Render2dFillRule,
     Render2dFontBinding, Render2dGeometryError, Render2dGlyph, Render2dItem, Render2dOpacity,
     Render2dPath, Render2dPathCommand, Render2dPoint, Render2dPrimitive, Render2dRect,
     Render2dResourceBinding, Render2dResourceBindingError, Render2dResourceBindings,
@@ -583,8 +583,8 @@ mod tests {
             bounds,
             Radius::all(runenui_core::LogicalLength::new(2.0).unwrap()),
         );
-        let source = LogicalTransform::try_new(0.0, 1.0, -1.5, 0.25, 24.0, 4.0)
-            .expect("finite affine clip");
+        let source =
+            LogicalTransform::try_new(0.0, 1.0, -1.5, 0.25, 24.0, 4.0).expect("finite affine clip");
         let projected = project_clip(&shape, source).expect("structural clip projection");
         assert_eq!(
             projected.clip_to_parent().components(),
@@ -616,8 +616,7 @@ mod tests {
         use runenui_core::LogicalRect;
 
         let rect = SceneShape::rect(LogicalRect::try_new(2.25, 4.5, 9.75, 11.5).unwrap());
-        let ellipse =
-            SceneShape::ellipse(LogicalRect::try_new(0.0, 0.0, 20.0, 20.0).unwrap());
+        let ellipse = SceneShape::ellipse(LogicalRect::try_new(0.0, 0.0, 20.0, 20.0).unwrap());
         let singular = LogicalTransform::try_new(0.0, 0.0, 0.0, 1.0, 6.0, 8.0)
             .expect("finite singular transform is valid");
         let authored = [
