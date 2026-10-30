@@ -2493,8 +2493,7 @@ mod tests {
             fn root(_: &()) -> impl View<Self::Action> {
                 let snapshot =
                     TextDocumentSnapshot::new(TextDocumentId::new(1), TextDocumentRevision::new(0));
-                let cursor =
-                    TextPosition::new(snapshot, "", 0, TextAffinity::Downstream).unwrap();
+                let cursor = TextPosition::new(snapshot, "", 0, TextAffinity::Downstream).unwrap();
                 text_field(
                     snapshot,
                     String::new(),
