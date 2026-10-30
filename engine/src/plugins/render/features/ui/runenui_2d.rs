@@ -133,6 +133,8 @@ pub enum RunenUi2dProjectionError {
     /// conjunctive-clip subset now projects clips rather than emitting this error.
     #[error("RunenUI paint item has unsupported clips")]
     Clips,
+    /// Retained for downstream exhaustive matches. Validated per-item opacity
+    /// is now projected; atomic group opacity remains outside the flat subset.
     #[error("RunenUI paint item has unsupported opacity")]
     Opacity,
     #[error("RunenUI paint item has unsupported scene layer")]
@@ -153,8 +155,8 @@ pub enum RunenUi2dProjectionError {
     Binding(#[from] Render2dResourceBindingError),
 }
 
-/// Projects direct-root, opaque solid Fill/Stroke and accepted U5 shaped text
-/// with ordered conjunctive item clips in the original RunenUI root order.
+/// Projects direct-root, solid Fill/Stroke and accepted U5 shaped text
+/// with per-item opacity and ordered conjunctive clips in RunenUI root order.
 ///
 /// Resource identities are allocated once per immutable source reference and reused
 /// across publications through the caller-retained identity map. Duplicate items
@@ -163,7 +165,7 @@ pub enum RunenUi2dProjectionError {
 ///
 /// # Errors
 ///
-/// Rejects every paint/group/opacity/transform fact outside the bounded
+/// Rejects every paint/group/transform fact outside the bounded
 /// supported subset, missing shaped text, or invalid RunenRender semantic values.
 pub fn project_runenui_paint_to_2d(
     publication: &PaintPublication,
@@ -225,9 +227,6 @@ fn project_item(
     bound_resources: &mut HashMap<ResourceRef, Render2dResourceId>,
     bindings: &mut Vec<Render2dResourceBinding>,
 ) -> Result<Render2dItem, RunenUi2dProjectionError> {
-    if item.opacity() != SceneOpacity::OPAQUE {
-        return Err(RunenUi2dProjectionError::Opacity);
-    }
     if item.layer() != SceneLayer::ZERO {
         return Err(RunenUi2dProjectionError::Layer);
     }
@@ -265,7 +264,7 @@ fn project_item(
         primitive,
         transform,
         clips,
-        Render2dOpacity::OPAQUE,
+        project_opacity(item.opacity()),
     ))
 }
 
@@ -430,6 +429,14 @@ fn project_stroke_style(
     )?)
 }
 
+/// Map validated source item opacity exactly once at the Render2D item owner.
+/// Source SceneOpacity is already finite and in [0, 1], so f32-to-f64 widening
+/// preserves its value and the Render2D validation cannot fail.
+fn project_opacity(opacity: SceneOpacity) -> Render2dOpacity {
+    Render2dOpacity::new(f64::from(opacity.get()))
+        .expect("validated RunenUI SceneOpacity is a valid Render2D opacity")
+}
+
 /// Preserve a clip's complete independent clip-local-to-surface transform.
 /// Singular matrices must stay singular: RunenRender defines them as no coverage.
 fn project_clip(
@@ -576,6 +583,18 @@ mod tests {
             project_solid_brush(&Brush::Linear(gradient)),
             Err(RunenUi2dProjectionError::Brush)
         ));
+    }
+
+    #[test]
+    fn validated_item_opacity_preserves_zero_half_and_full_alpha_without_color_rewriting() {
+        for value in [0.0_f32, 0.5, 1.0] {
+            let source = SceneOpacity::new(value).unwrap();
+            assert_eq!(
+                project_opacity(source).get(),
+                f64::from(value),
+                "item alpha is transferred to the Render2D owner without pre-multiplication"
+            );
+        }
     }
 
     #[test]
