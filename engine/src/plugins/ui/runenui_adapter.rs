@@ -2334,6 +2334,105 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_typed_editable_publication_preserves_clip_geometry_in_render_projection() {
+        use runenui_core::{
+            EditIntent, NoHostProtocol, SemanticEditableMode, TextAffinity, TextDocumentId,
+            TextDocumentRevision, TextDocumentSnapshot, TextPosition, TextSelection, text_field,
+        };
+
+        struct ClippedEditableApp;
+
+        impl UiApp for ClippedEditableApp {
+            type State = ();
+            type Action = Box<EditIntent>;
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &()) -> impl View<Self::Action> {
+                let contents = "Example task";
+                let snapshot = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1),
+                    TextDocumentRevision::new(0),
+                );
+                let cursor =
+                    TextPosition::new(snapshot, contents, 0, TextAffinity::Downstream).unwrap();
+                column([
+                    text_field(
+                        snapshot,
+                        contents.to_owned(),
+                        TextSelection::collapsed(cursor),
+                        SemanticEditableMode::SingleLine,
+                        Box::new,
+                    )
+                    .expect("valid typed editable")
+                    .id("todo-like.input")
+                    .into_element(),
+                    text("Todo-like editable input").into_element(),
+                ])
+            }
+
+            fn update(
+                _: &mut (),
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                Effects::none()
+            }
+        }
+
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").unwrap()],
+            );
+        let mut slots = UiRuntimeSlotsResource::default();
+        let id = slots
+            .mount_app::<ClippedEditableApp>(UiTypedScreenId::new("clip.editable"), (), &fonts)
+            .slot_id()
+            .expect("typed editable mounts with controlled fonts");
+        let style = StyleEnvironment::default();
+        let context = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(
+                LogicalLength::from(RUNTIME_SURFACE_WIDTH),
+                LogicalLength::from(RUNTIME_SURFACE_HEIGHT),
+            ),
+        );
+        let publication = slots
+            .publish_surface_for_slot(id, &context)
+            .expect("public typed runtime publishes paint");
+        let scene = publication.paint_scene();
+        assert!(
+            scene.items().iter().any(|item| !item.clips().is_empty()),
+            "ordinary typed text editing must exercise the real clipped paint path"
+        );
+        let mut identities = crate::plugins::render::features::RunenUi2dResourceIdentityMap::default();
+        let mapped = crate::plugins::render::features::project_runenui_paint_to_2d(
+            publication.paint_publication(),
+            &mut identities,
+        )
+        .expect("ordinary clipped typed UI paint projects without dropping clip semantics");
+        assert_eq!(mapped.composition().root_entries().len(), scene.root_entries().len());
+        for (source_entry, rendered_entry) in scene
+            .root_entries()
+            .iter()
+            .zip(mapped.composition().root_entries())
+        {
+            let index = source_entry.item_index().expect("flat direct-root paint");
+            let from = &scene.items()[index];
+            let runen_render::composition_2d::Render2dEntry::Item(to) = rendered_entry else {
+                panic!("flat item remains an item");
+            };
+            assert_eq!(to.clips().len(), from.clips().len());
+            for (actual, original) in to.clips().iter().zip(from.clips()) {
+                assert_eq!(
+                    actual.clip_to_parent().components(),
+                    original.clip_to_surface().components().map(f64::from),
+                    "clip is already in direct-root surface coordinates"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn mounted_slot_rejects_non_bool_selected_state_before_runenui_update() {
         let mut slots = UiRuntimeSlotsResource::default();
         let slot_id = mount_counter(&mut slots);

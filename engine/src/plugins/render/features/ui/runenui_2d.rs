@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 
 use runen_render::composition_2d::{
     Render2dAffineTransform, Render2dBrush, Render2dColorRgba8, Render2dComposition,
-    Render2dCompositionError, Render2dCornerRadii, Render2dEntry, Render2dFillRule,
+    Render2dClip, Render2dCompositionError, Render2dCornerRadii, Render2dEntry, Render2dFillRule,
     Render2dFontBinding, Render2dGeometryError, Render2dGlyph, Render2dItem, Render2dOpacity,
     Render2dPath, Render2dPathCommand, Render2dPoint, Render2dPrimitive, Render2dRect,
     Render2dResourceBinding, Render2dResourceBindingError, Render2dResourceBindings,
@@ -129,8 +129,6 @@ pub enum RunenUi2dProjectionError {
     Primitive,
     #[error("RunenUI paint brush is outside the reviewed solid-brush subset")]
     Brush,
-    #[error("RunenUI paint item has unsupported clips")]
-    Clips,
     #[error("RunenUI paint item has unsupported opacity")]
     Opacity,
     #[error("RunenUI paint item has unsupported scene layer")]
@@ -151,8 +149,8 @@ pub enum RunenUi2dProjectionError {
     Binding(#[from] Render2dResourceBindingError),
 }
 
-/// Projects flat, opaque, ungrouped solid Fill/Stroke plus the accepted U5 shaped text
-/// subset in the original RunenUI root order.
+/// Projects direct-root, opaque solid Fill/Stroke and accepted U5 shaped text
+/// with ordered conjunctive item clips in the original RunenUI root order.
 ///
 /// Resource identities are allocated once per immutable source reference and reused
 /// across publications through the caller-retained identity map. Duplicate items
@@ -161,7 +159,7 @@ pub enum RunenUi2dProjectionError {
 ///
 /// # Errors
 ///
-/// Rejects every paint/group/opacity/clip/transform fact outside the bounded
+/// Rejects every paint/group/opacity/transform fact outside the bounded
 /// supported subset, missing shaped text, or invalid RunenRender semantic values.
 pub fn project_runenui_paint_to_2d(
     publication: &PaintPublication,
@@ -223,9 +221,6 @@ fn project_item(
     bound_resources: &mut HashMap<ResourceRef, Render2dResourceId>,
     bindings: &mut Vec<Render2dResourceBinding>,
 ) -> Result<Render2dItem, RunenUi2dProjectionError> {
-    if !item.clips().is_empty() {
-        return Err(RunenUi2dProjectionError::Clips);
-    }
     if item.opacity() != SceneOpacity::OPAQUE {
         return Err(RunenUi2dProjectionError::Opacity);
     }
@@ -233,6 +228,13 @@ fn project_item(
         return Err(RunenUi2dProjectionError::Layer);
     }
     let transform = project_translation(item.local_to_surface())?;
+    // RunenUI clips already live in the surface-logical (direct-root parent) space.
+    // Never reapply this item's local-to-surface transform to clip geometry.
+    let clips = item
+        .clips()
+        .iter()
+        .map(|clip| project_clip(clip.shape(), clip.clip_to_surface()))
+        .collect::<Result<Vec<_>, RunenUi2dProjectionError>>()?;
 
     let primitive =
         match item.primitive() {
@@ -258,7 +260,7 @@ fn project_item(
     Ok(Render2dItem::new(
         primitive,
         transform,
-        Vec::new(),
+        clips,
         Render2dOpacity::OPAQUE,
     ))
 }
@@ -424,6 +426,32 @@ fn project_stroke_style(
     )?)
 }
 
+/// Preserve a clip's complete independent clip-local-to-surface transform.
+/// Singular matrices must stay singular: RunenRender defines them as no coverage.
+fn project_clip(
+    shape: &SceneShape,
+    clip_to_surface: LogicalTransform,
+) -> Result<Render2dClip, RunenUi2dProjectionError> {
+    Ok(Render2dClip::new(
+        project_shape(shape)?,
+        project_affine(clip_to_surface)?,
+    ))
+}
+
+fn project_affine(
+    transform: LogicalTransform,
+) -> Result<Render2dAffineTransform, RunenUi2dProjectionError> {
+    let [m11, m12, m21, m22, tx, ty] = transform.components();
+    Ok(Render2dAffineTransform::new(
+        f64::from(m11),
+        f64::from(m12),
+        f64::from(m21),
+        f64::from(m22),
+        f64::from(tx),
+        f64::from(ty),
+    )?)
+}
+
 fn project_translation(
     transform: LogicalTransform,
 ) -> Result<Render2dAffineTransform, RunenUi2dProjectionError> {
@@ -544,6 +572,75 @@ mod tests {
             project_solid_brush(&Brush::Linear(gradient)),
             Err(RunenUi2dProjectionError::Brush)
         ));
+    }
+
+    #[test]
+    fn clipped_root_items_preserve_exact_affine_clip_coordinates_independent_of_item_motion() {
+        use runenui_core::{LogicalRect, Radius};
+
+        let bounds = LogicalRect::try_new(1.25, 2.5, 18.75, 9.5).unwrap();
+        let shape = SceneShape::rounded_rect(
+            bounds,
+            Radius::all(runenui_core::LogicalLength::new(2.0).unwrap()),
+        );
+        let source = LogicalTransform::try_new(0.0, 1.0, -1.5, 0.25, 24.0, 4.0)
+            .expect("finite affine clip");
+        let projected = project_clip(&shape, source).expect("structural clip projection");
+        assert_eq!(
+            projected.clip_to_parent().components(),
+            [0.0, 1.0, -1.5, 0.25, 24.0, 4.0],
+            "surface-space clip must not inherit the item's separate local transform"
+        );
+        assert_eq!(
+            projected.shape(),
+            &project_shape(&shape).expect("same structural rounded-rect geometry")
+        );
+
+        let item_offset = LogicalTransform::translation(18.0, 33.0).unwrap();
+        assert_eq!(
+            project_translation(item_offset).unwrap().components(),
+            [1.0, 0.0, 0.0, 1.0, 18.0, 33.0]
+        );
+        assert_eq!(
+            projected.clip_to_parent().components(),
+            [0.0, 1.0, -1.5, 0.25, 24.0, 4.0]
+        );
+        assert!(matches!(
+            project_translation(source),
+            Err(RunenUi2dProjectionError::Transform)
+        ));
+    }
+
+    #[test]
+    fn conjunctive_clips_retain_authored_order_and_singular_coverage() {
+        use runenui_core::LogicalRect;
+
+        let rect = SceneShape::rect(LogicalRect::try_new(2.25, 4.5, 9.75, 11.5).unwrap());
+        let ellipse =
+            SceneShape::ellipse(LogicalRect::try_new(0.0, 0.0, 20.0, 20.0).unwrap());
+        let singular = LogicalTransform::try_new(0.0, 0.0, 0.0, 1.0, 6.0, 8.0)
+            .expect("finite singular transform is valid");
+        let authored = [
+            (&rect, LogicalTransform::translation(1.0, 2.0).unwrap()),
+            (&ellipse, singular),
+        ];
+        let clips = authored
+            .iter()
+            .map(|(shape, transform)| project_clip(shape, *transform))
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(clips.len(), 2);
+        assert_eq!(clips[0].shape(), &project_shape(&rect).unwrap());
+        assert_eq!(
+            clips[0].clip_to_parent().components(),
+            [1.0, 0.0, 0.0, 1.0, 1.0, 2.0]
+        );
+        assert_eq!(clips[1].shape(), &project_shape(&ellipse).unwrap());
+        assert_eq!(
+            clips[1].clip_to_parent().components(),
+            [0.0, 0.0, 0.0, 1.0, 6.0, 8.0],
+            "singular clip must not be dropped or replaced by an unbounded clip"
+        );
     }
 
     #[test]
