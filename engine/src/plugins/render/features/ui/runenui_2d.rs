@@ -129,6 +129,10 @@ pub enum RunenUi2dProjectionError {
     Primitive,
     #[error("RunenUI paint brush is outside the reviewed solid-brush subset")]
     Brush,
+    /// Retained for downstream exhaustive matches. The accepted direct-root
+    /// conjunctive-clip subset now projects clips rather than emitting this error.
+    #[error("RunenUI paint item has unsupported clips")]
+    Clips,
     #[error("RunenUI paint item has unsupported opacity")]
     Opacity,
     #[error("RunenUI paint item has unsupported scene layer")]
