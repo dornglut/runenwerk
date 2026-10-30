@@ -7,8 +7,8 @@ use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment}
 #[cfg(test)]
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
-    AppRuntime, HostRequestToken, InputObservationError, InputPumpBatch, InputShutdownBatch,
-    PumpBudget, SurfaceBuildContext, SurfacePublication,
+    AppRuntime, FontSourcePolicy, HostRequestToken, InputObservationError, InputPumpBatch,
+    InputShutdownBatch, PumpBudget, RuntimeConfig, SurfaceBuildContext, SurfacePublication,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -53,6 +53,7 @@ impl UiRuntimeSlotId {
 pub struct UiRuntimeFontConfiguration {
     font_bytes: Vec<Vec<u8>>,
     generic_mappings: Vec<(GenericFontFamily, Vec<FontFamilyName>)>,
+    discover_system_fonts: bool,
 }
 
 impl UiRuntimeFontConfiguration {
@@ -62,6 +63,23 @@ impl UiRuntimeFontConfiguration {
         Self {
             font_bytes,
             generic_mappings: Vec::new(),
+            discover_system_fonts: false,
+        }
+    }
+
+    /// Opts this mounted UI runtime into RunenUI's existing system-font discovery.
+    /// Default and bundled-only consumers never access ambient system fonts.
+    #[must_use]
+    pub fn with_system_fonts(mut self) -> Self {
+        self.discover_system_fonts = true;
+        self
+    }
+
+    fn source_policy(&self) -> FontSourcePolicy {
+        if self.discover_system_fonts {
+            FontSourcePolicy::SystemAndBundled
+        } else {
+            FontSourcePolicy::BundledOnly
         }
     }
 
@@ -734,7 +752,10 @@ impl UiRuntimeSlotsResource {
                 UiRuntimeSlotMountFailure::SlotCapacityExhausted,
             );
         }
-        let mut runtime = AppRuntime::<A>::mount(state);
+        let mut runtime = AppRuntime::<A>::mount_with_config(
+            state,
+            RuntimeConfig::default().with_text_font_source_policy(fonts.source_policy()),
+        );
         if let Some(clock) = &self.native_clock {
             runtime.set_monotonic_clock(clock.clone());
         }
@@ -1589,6 +1610,37 @@ mod tests {
     use super::*;
 
     struct InitialTimerApp;
+
+    #[test]
+    fn typed_mount_preserves_explicit_font_source_policy() {
+        for (fonts, expected) in [
+            (
+                UiRuntimeFontConfiguration::default(),
+                FontSourcePolicy::BundledOnly,
+            ),
+            (
+                UiRuntimeFontConfiguration::default().with_system_fonts(),
+                FontSourcePolicy::SystemAndBundled,
+            ),
+        ] {
+            let mut slots = UiRuntimeSlotsResource::default();
+            let id = slots
+                .mount_app::<InitialTimerApp>(UiTypedScreenId::new("font.policy"), 0, &fonts)
+                .slot_id()
+                .expect("typed app mounts with selected font source policy");
+            let mounted = slots
+                .slots
+                .iter()
+                .find(|slot| slot.id == id)
+                .expect("admitted slot remains stored");
+            let actual = mounted
+                .runtime
+                .typed::<InitialTimerApp>()
+                .expect("typed runtime remains selected")
+                .text_font_source_policy();
+            assert_eq!(actual, expected);
+        }
+    }
 
     impl UiApp for InitialTimerApp {
         type State = usize;
