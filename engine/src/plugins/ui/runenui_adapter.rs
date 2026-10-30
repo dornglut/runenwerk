@@ -2351,20 +2351,11 @@ mod tests {
             fn create_state(&self) -> Self::State {}
 
             fn measure(&self, _: &Self::State, _: WidgetMeasureInput) -> WidgetMeasure {
-                WidgetMeasure::measured(
-                    LogicalLength::from(24_u16),
-                    LogicalLength::from(24_u16),
-                )
+                WidgetMeasure::measured(LogicalLength::from(24_u16), LogicalLength::from(24_u16))
             }
 
-            fn paint(
-                &self,
-                _: &Self::State,
-                _: PaintContributionContext,
-            ) -> PaintContribution {
-                let shape = SceneShape::rect(
-                    LogicalRect::try_new(0.0, 0.0, 20.0, 20.0).unwrap(),
-                );
+            fn paint(&self, _: &Self::State, _: PaintContributionContext) -> PaintContribution {
+                let shape = SceneShape::rect(LogicalRect::try_new(0.0, 0.0, 20.0, 20.0).unwrap());
                 let first = ContributionClip::new(
                     SceneShape::rect(LogicalRect::try_new(0.0, 0.0, 16.0, 16.0).unwrap()),
                     LogicalTransform::translation(2.0, 3.0).unwrap(),
@@ -2477,7 +2468,10 @@ mod tests {
                 );
             }
         }
-        assert!(observed_conjunction, "both authored clips must reach Render2D");
+        assert!(
+            observed_conjunction,
+            "both authored clips must reach Render2D"
+        );
     }
 
     #[test]
