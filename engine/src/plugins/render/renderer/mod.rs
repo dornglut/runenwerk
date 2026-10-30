@@ -1259,7 +1259,7 @@ impl Gfx {
             let resources = context.resource_realization_stats();
             let execution = context.execution_stats();
             eprintln!(
-                "runenwerk_render_lab_realization frame={} retained={} programs={} layouts={} pipelines={} bind_groups={} g4c1={} g4c1_limit={} prepared={} in_flight={} upload_bytes={}",
+                "runenwerk_render_lab_realization frame={} retained={} programs={} layouts={} pipelines={} bind_groups={} g4c1={} g4c1_limit={} prepared={} in_flight={} upload_bytes={} buffers={} textures={} views={} samplers={} query_sets={} binding_in_flight={} readback_bytes={} pending_readbacks={}",
                 prepared_frame.context.frame_index,
                 stats.retained_records(),
                 stats.programs(),
@@ -1270,7 +1270,15 @@ impl Gfx {
                 resources.max_records(),
                 execution.prepared_submissions(),
                 execution.in_flight_submissions(),
-                execution.upload_bytes_in_flight()
+                execution.upload_bytes_in_flight(),
+                resources.buffers(),
+                resources.textures(),
+                resources.texture_views(),
+                resources.samplers(),
+                resources.query_sets(),
+                stats.in_flight_records(),
+                execution.readback_bytes_in_flight(),
+                execution.pending_readbacks()
             );
         }
         // The one terminal Present is part of the accepted RunenGPU submission above.
