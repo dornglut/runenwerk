@@ -2353,19 +2353,27 @@ mod tests {
                     TextDocumentSnapshot::new(TextDocumentId::new(1), TextDocumentRevision::new(0));
                 let cursor =
                     TextPosition::new(snapshot, contents, 0, TextAffinity::Downstream).unwrap();
-                column([
-                    text_field(
-                        snapshot,
-                        contents.to_owned(),
-                        TextSelection::collapsed(cursor),
-                        SemanticEditableMode::SingleLine,
-                        Box::new,
-                    )
-                    .expect("valid typed editable")
-                    .id("todo-like.input")
-                    .into_element(),
-                    text("Todo-like editable input").into_element(),
-                ])
+                // An explicit standard clip viewport is required for a deterministic
+                // paint-clip test: a nonempty TextField does not always emit clips.
+                runenui_core::scroll_container(
+                    column([
+                        text_field(
+                            snapshot,
+                            contents.to_owned(),
+                            TextSelection::collapsed(cursor),
+                            SemanticEditableMode::SingleLine,
+                            Box::new,
+                        )
+                        .expect("valid typed editable")
+                        .id("todo-like.input")
+                        .into_element(),
+                        text("Todo-like editable input").into_element(),
+                    ]),
+                    runenui_core::OverflowStyle::new(
+                        runenui_core::OverflowPolicy::Clip,
+                        runenui_core::OverflowPolicy::Clip,
+                    ),
+                )
             }
 
             fn update(
