@@ -50,7 +50,7 @@ struct Evidence {
     input_events: u64,
     terminal_callbacks: u64,
     requests: u64,
-    held: BTreeMap<u64, runen_gpu::GpuSubmission>,
+    held: BTreeMap<u64, (runen_gpu::GpuSubmission, Instant)>,
     complete: bool,
     last_accepted_frame: Option<u64>,
 }
@@ -96,34 +96,49 @@ fn observe_terminal(world: &mut World) -> Result<()> {
         ensure!(evidence.completed.insert(id), "duplicate terminal {id}");
         println!("terminal {terminal:?}");
     }
-    evidence.held.retain(|id, submission| {
-        let readbacks = submission
-            .readbacks()
-            .iter()
-            .map(|r| {
-                let status = match r.status() {
-                    runen_gpu::GpuReadbackStatus::Pending => "Pending".to_owned(),
-                    runen_gpu::GpuReadbackStatus::Ready(bytes) => {
-                        format!("Ready({} bytes)", bytes.as_bytes().len())
-                    }
-                    runen_gpu::GpuReadbackStatus::Failed(failure) => format!("Failed({failure:?})"),
-                };
-                (r.id(), status)
-            })
-            .collect::<Vec<_>>();
-        println!(
-            "submission_status id={id} status={:?} readbacks={:?}",
-            submission.status(),
-            readbacks
-        );
-        matches!(
-            submission.status(),
-            runen_gpu::GpuSubmissionStatus::Accepted
-        ) || submission
-            .readbacks()
-            .iter()
-            .any(|r| matches!(r.status(), runen_gpu::GpuReadbackStatus::Pending))
-    });
+    evidence
+        .held
+        .retain(|id, (submission, accepted_observed_at)| {
+            if !matches!(
+                submission.status(),
+                runen_gpu::GpuSubmissionStatus::Accepted
+            ) {
+                // Measures FrameEnd receipt observation to first terminal observation,
+                // including Host scheduling. This is not a GPU execution duration.
+                println!(
+                    "terminal_observation_latency_ms id={id} elapsed={:.3}",
+                    accepted_observed_at.elapsed().as_secs_f64() * 1000.0
+                );
+            }
+            let readbacks = submission
+                .readbacks()
+                .iter()
+                .map(|r| {
+                    let status = match r.status() {
+                        runen_gpu::GpuReadbackStatus::Pending => "Pending".to_owned(),
+                        runen_gpu::GpuReadbackStatus::Ready(bytes) => {
+                            format!("Ready({} bytes)", bytes.as_bytes().len())
+                        }
+                        runen_gpu::GpuReadbackStatus::Failed(failure) => {
+                            format!("Failed({failure:?})")
+                        }
+                    };
+                    (r.id(), status)
+                })
+                .collect::<Vec<_>>();
+            println!(
+                "submission_status id={id} status={:?} readbacks={:?}",
+                submission.status(),
+                readbacks
+            );
+            matches!(
+                submission.status(),
+                runen_gpu::GpuSubmissionStatus::Accepted
+            ) || submission
+                .readbacks()
+                .iter()
+                .any(|r| matches!(r.status(), runen_gpu::GpuReadbackStatus::Pending))
+        });
     println!(
         "gpu_state in_flight={} readbacks={} prepared={}",
         gfx.execution_stats().in_flight_submissions(),
@@ -153,7 +168,10 @@ fn observe_frame_end(mut world: WorldMut) -> Result<()> {
     for receipt in &receipts {
         let id = receipt.submission().id().get();
         evidence.accepted.insert(id);
-        evidence.held.insert(id, receipt.submission().clone());
+        evidence
+            .held
+            .entry(id)
+            .or_insert_with(|| (receipt.submission().clone(), Instant::now()));
         evidence.last_accepted_frame = Some(receipt.frame());
         println!(
             "accepted id={id} frame={} surface={} affinity={:?} status={:?}",
@@ -491,44 +509,47 @@ fn main() -> Result<()> {
     app.set_title("Runenwerk #1392 OnDemand GPU progress");
     app.add_plugins(default_plugins());
     app.add_plugins((RenderPlugin, UiPlugin));
-    if capture {
-        use engine::plugins::render::inspect::{
-            RenderCaptureSelector, RenderDebugConfigResource, RenderDebugControlResource,
-        };
-        let control = app
-            .world_mut()
-            .resource_mut::<RenderDebugControlResource>()?;
-        control.capture_enabled = true;
-        control.readback_enabled = true;
-        app.world_mut()
-            .resource_mut::<RenderDebugConfigResource>()?
-            .capture_selectors = vec![RenderCaptureSelector::named_pass_surface_color(
-            "progress.main",
-            "ui",
-        )];
-    }
     app.with_frame_pacing(if pacing == "on-demand" {
         FramePacingPolicyResource::on_demand()
     } else {
         FramePacingPolicyResource::continuous_capped(30)
     });
-    app.add_render_flow(
-        RenderFlow::new("progress.main")
-            .with_surface_color()?
-            .fullscreen_pass("clear")
-            .main_surface_only()
-            .clear_color([0.06, 0.07, 0.09, 1.0])
-            .write_surface_color()?
-            .finish()
-            .builtin_ui_composite_pass("ui")?
-            .main_surface_only()
-            .finish()
-            .present_pass("present")?
-            .main_surface_only()
-            .surface_color()?
-            .finish()
-            .validate()?,
-    );
+    let flow = RenderFlow::new("progress.main")
+        .with_surface_color()?
+        .fullscreen_pass("clear")
+        .main_surface_only()
+        .clear_color([0.06, 0.07, 0.09, 1.0])
+        .write_surface_color()?
+        .finish()
+        .builtin_ui_composite_pass("ui")?
+        .main_surface_only()
+        .finish()
+        .present_pass("present")?
+        .main_surface_only()
+        .surface_color()?
+        .finish()
+        .validate()?;
+    if capture {
+        use engine::plugins::render::inspect::{
+            RenderCaptureSelector, RenderDebugConfigResource, RenderDebugControlResource,
+        };
+        let ui_pass = flow
+            .pass_id("ui")
+            .ok_or_else(|| anyhow::anyhow!("UI composite pass missing"))?;
+        let control = app
+            .world_mut()
+            .resource_mut::<RenderDebugControlResource>()?;
+        control.capture_enabled = true;
+        control.readback_enabled = true;
+        // Capture selectors identify the compiled flow and pass, not their authoring labels.
+        app.world_mut()
+            .resource_mut::<RenderDebugConfigResource>()?
+            .capture_selectors = vec![RenderCaptureSelector::named_pass_surface_color(
+            flow.id().to_string(),
+            ui_pass.to_string(),
+        )];
+    }
+    app.add_render_flow(flow);
     let fonts = UiRuntimeFontConfiguration::new(vec![
         include_bytes!("../../assets/fonts/JetBrainsMono-Regular.ttf").to_vec(),
     ])
