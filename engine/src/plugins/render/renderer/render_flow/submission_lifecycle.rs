@@ -280,6 +280,10 @@ fn classify_submission(
 }
 
 impl RendererSubmissionLifecycle {
+    pub(in crate::plugins::render::renderer) fn has_pending(&self) -> bool {
+        !self.accepted.is_empty()
+    }
+
     pub(in crate::plugins::render::renderer) fn set_terminal_delivery(&mut self, enabled: bool) {
         self.terminal_delivery_enabled = enabled;
         if !enabled {

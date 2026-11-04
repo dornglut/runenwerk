@@ -166,6 +166,10 @@ pub(super) struct AcceptedFrameObservations {
 }
 
 impl RendererGpuObservationState {
+    pub(in crate::plugins::render::renderer) fn has_pending(&self) -> bool {
+        !self.accepted.is_empty()
+    }
+
     /// Retains the exact accepted submission for timing/capture obligations
     /// and the single-use RunenRender F2 presentation witnesses.
     pub(super) fn accept(

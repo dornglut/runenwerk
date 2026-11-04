@@ -25,11 +25,15 @@ use crate::runtime::{NativeHostEvent, NativeWakeTransport};
 use anyhow::{Context, Result, anyhow};
 use runen_input::{ContinuityLoss, InputContext};
 use std::collections::HashSet;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use winit::application::ApplicationHandler;
 use winit::event::{DeviceEvent, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use winit::window::{Window, WindowId};
+
+// Bounded nonblocking observation only while the existing execution owners
+// retain work. Native latency/idle qualification must cover this cadence.
+const NATIVE_GPU_PROGRESS_INTERVAL: Duration = Duration::from_millis(8);
 
 pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
     install_native_window_provider_resources(&mut state.world);
@@ -63,6 +67,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         fatal_error: None,
         frame_requested: false,
         frame_in_progress: false,
+        gpu_progress_deadline: None,
         owned_redraws: HashSet::new(),
         shutdown_done: false,
     };
@@ -117,6 +122,8 @@ struct WinitRunner {
     frame_requested: bool,
     /// Suppresses reentrant ordinary frames across the schedule and window effects.
     frame_in_progress: bool,
+    /// A GPU-only wake is never an ordinary frame request.
+    gpu_progress_deadline: Option<(runen_gpu::GpuContextAffinity, Instant)>,
     /// Acknowledges host-requested redraws without advancing the frame twice.
     owned_redraws: HashSet<NativeWindowId>,
     shutdown_done: bool,
@@ -359,15 +366,27 @@ impl WinitRunner {
             });
         }
         if self.state.world.has_resource::<UiRuntimeSlotsResource>() {
+            // This full-slot settlement covers prior wake intent. A queued
+            // proxy callback is transport, not a second application demand.
+            // A producer arriving after this acknowledgement claims its own
+            // pending opportunity and cannot be erased after settlement.
+            if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>() {
+                transport.acknowledge();
+            }
             self.state
                 .world
                 .resource_mut::<UiRuntimeSlotsResource>()?
                 .settle_native_slots()?;
         }
-        run_runtime_frame(&mut self.state.world, &mut self.state.scheduler)
+        run_runtime_frame(&mut self.state.world, &mut self.state.scheduler)?;
+        if render_native_host::has_gpu_context(&self.state.world) {
+            self.observe_gpu_continuations()?;
+        }
+        Ok(())
     }
 
     fn shutdown_native(&mut self) -> Result<()> {
+        self.gpu_progress_deadline = None;
         if self.shutdown_done {
             return Ok(());
         }
@@ -521,6 +540,7 @@ impl WinitRunner {
 
             if record.close_requested {
                 if native_window_id == NativeWindowId::primary() {
+                    self.gpu_progress_deadline = None;
                     // Windows winit must not enter a blocking wait after exit.
                     event_loop.set_control_flow(ControlFlow::Poll);
                     event_loop.exit();
@@ -714,6 +734,57 @@ impl WinitRunner {
         }
     }
 
+    fn refresh_gpu_progress_deadline(
+        &mut self,
+        now: Instant,
+        interest: Option<runen_gpu::GpuContextAffinity>,
+    ) {
+        self.gpu_progress_deadline = interest.map(|affinity| {
+            let deadline = self
+                .gpu_progress_deadline
+                .filter(|(previous, _)| *previous == affinity)
+                .map_or(now + NATIVE_GPU_PROGRESS_INTERVAL, |(_, deadline)| deadline);
+            (affinity, deadline)
+        });
+    }
+
+    /// One native observation/delivery turn, with no frame lifecycle invocation.
+    fn progress_gpu_if_due(&mut self, now: Instant) -> Result<bool> {
+        let interest = render_native_host::gpu_progress_interest(&self.state.world);
+        self.refresh_gpu_progress_deadline(now, interest);
+        if self.frame_in_progress
+            || !self
+                .gpu_progress_deadline
+                .is_some_and(|(_, deadline)| deadline <= now)
+        {
+            return Ok(false);
+        }
+        self.gpu_progress_deadline = None;
+        render_native_host::deliver_gpu_progress(&mut self.state.world)?;
+        let continuation = self.observe_gpu_continuations()?;
+        self.refresh_gpu_progress_deadline(
+            Instant::now(),
+            render_native_host::gpu_progress_interest(&self.state.world),
+        );
+        tracing::trace!(target: "engine.runtime.gpu_progress",
+            continuation,
+            next_deadline = ?self.gpu_progress_deadline,
+            "native GPU-only observation delivered");
+        Ok(true)
+    }
+
+    fn observe_gpu_continuations(&mut self) -> Result<bool> {
+        let mut continuation = Ok(false);
+        with_native_window_hooks(&mut self.state.world, |hooks, world| {
+            continuation = hooks.dispatch_gpu_progress(world);
+        });
+        // The consumer owns the wait and exact terminal identity. The next
+        // ordinary frame remains subject to run_requested_frame and pacing.
+        let continuation = continuation?;
+        self.frame_requested |= continuation;
+        Ok(continuation)
+    }
+
     fn apply_frame_pacing(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         if event_loop.exiting() {
             return Ok(());
@@ -722,6 +793,10 @@ impl WinitRunner {
             transport.ensure_delivery()?;
         }
         let now = Instant::now();
+        self.refresh_gpu_progress_deadline(
+            now,
+            render_native_host::gpu_progress_interest(&self.state.world),
+        );
         let policy = self.frame_pacing_policy();
         let decision = self.frame_pacing_schedule.decide(policy, now);
         let (unfinished, ui_deadline) = self.ui_readiness()?;
@@ -749,6 +824,7 @@ impl WinitRunner {
             decision.next_deadline,
             ui_deadline.filter(|deadline| *deadline > now),
             capped_deadline,
+            self.gpu_progress_deadline.map(|(_, deadline)| deadline),
         ]
         .into_iter()
         .flatten()
@@ -768,6 +844,7 @@ impl WinitRunner {
     }
 
     fn exit_with_error(&mut self, event_loop: &ActiveEventLoop, err: anyhow::Error) {
+        self.gpu_progress_deadline = None;
         tracing::error!(error = %format!("{err:#}"), "runtime windowed execution failed");
         self.fatal_error = Some(err);
         event_loop.set_control_flow(ControlFlow::Poll);
@@ -791,10 +868,14 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
         if event_loop.exiting() {
             return;
         }
-        if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>() {
-            transport.acknowledge();
+        if self
+            .state
+            .world
+            .resource::<NativeWakeTransport>()
+            .is_ok_and(NativeWakeTransport::acknowledge)
+        {
+            self.frame_requested = true;
         }
-        self.frame_requested = true;
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
@@ -1062,6 +1143,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
         if event_loop.exiting() {
             return;
         }
+        if let Err(error) = self.progress_gpu_if_due(Instant::now()) {
+            self.exit_with_error(event_loop, error.context("native GPU progress failed"));
+            return;
+        }
         self.pace_or_exit(event_loop);
         if !event_loop.exiting() {
             self.progress_requested_frame(event_loop);
@@ -1087,6 +1172,10 @@ mod retirement_tests;
 #[cfg(test)]
 #[path = "winit_runner_resize_progress_tests.rs"]
 mod resize_progress_tests;
+
+#[cfg(test)]
+#[path = "winit_runner_gpu_progress_tests.rs"]
+mod gpu_progress_tests;
 
 #[cfg(test)]
 mod tests {
@@ -1132,6 +1221,7 @@ mod tests {
             fatal_error: None,
             frame_requested: false,
             frame_in_progress: false,
+            gpu_progress_deadline: None,
             owned_redraws: HashSet::new(),
             shutdown_done: false,
         }
@@ -1181,6 +1271,7 @@ mod tests {
             fatal_error: None,
             frame_requested: false,
             frame_in_progress: false,
+            gpu_progress_deadline: None,
             owned_redraws: HashSet::new(),
             shutdown_done: false,
         };
