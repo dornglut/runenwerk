@@ -72,6 +72,12 @@ pub(crate) fn validate_managed_runenui_producers(world: &WorldMut) -> Result<()>
 /// Returns a resource access failure when an installed RunenUI association
 /// resource unexpectedly becomes unavailable.
 pub fn apply_runenui_terminal_presentations_system(mut world: WorldMut) -> Result<()> {
+    apply_runenui_terminal_presentations(&mut world)
+}
+
+/// The same exact terminal association consumer on the native invoker, without
+/// running RenderSubmit or publishing a new UI generation.
+pub(crate) fn apply_runenui_terminal_presentations(world: &mut runen_ecs::World) -> Result<()> {
     let (accepted, completed, rejected) = match world.resource_mut::<Gfx>() {
         Ok(gfx) => gfx.take_runenui_terminal_publications(),
         Err(_) => return Ok(()),
@@ -79,6 +85,7 @@ pub fn apply_runenui_terminal_presentations_system(mut world: WorldMut) -> Resul
     if accepted.is_empty() && completed.is_empty() && rejected.is_empty() {
         return Ok(());
     }
+    reconcile_terminal_mappings(world)?;
     let associations = world.resource_mut::<UiRuntimePresentationAssociationsResource>()?;
     for publication_id in accepted {
         // Input remains pending/in-flight; GPU submission acceptance alone is
@@ -96,6 +103,44 @@ pub fn apply_runenui_terminal_presentations_system(mut world: WorldMut) -> Resul
                 reason,
                 "RunenUI GPU publication retired without displayed-input promotion"
             );
+        }
+    }
+    Ok(())
+}
+
+/// A terminal-only turn cannot rely on a previous RenderPrepare to have seen
+/// detach, close, slot retirement, or a changed native transform. Retire stale
+/// derived paint and mappings through their existing owners before promotion.
+fn reconcile_terminal_mappings(world: &mut runen_ecs::World) -> Result<()> {
+    let bindings = world
+        .resource::<UiRuntimePresentationAssociationsResource>()?
+        .bindings()
+        .cloned()
+        .collect::<Vec<_>>();
+    for binding in bindings {
+        let live = world
+            .resource::<UiRuntimeSlotsResource>()
+            .is_ok_and(|slots| slots.contains(binding.slot_id))
+            && world
+                .resource::<Gfx>()
+                .is_ok_and(|gfx| gfx.has_surface(binding.render_surface_id));
+        let mapping = if live {
+            current_attached_mapping(world, &binding)?
+        } else {
+            None
+        };
+        let associations = world.resource_mut::<UiRuntimePresentationAssociationsResource>()?;
+        let changed = match mapping {
+            Some(mapping) => associations.update_mapping(binding.slot_id, mapping),
+            None => {
+                associations.invalidate_mapping(binding.slot_id);
+                true
+            }
+        };
+        if changed
+            && let Ok(paints) = world.resource_mut::<RunenUiPaintSubmissionRegistryResource>()
+        {
+            paints.remove_for_surface(&binding.producer_id, binding.render_surface_id);
         }
     }
     Ok(())
@@ -280,7 +325,7 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
 }
 
 fn current_attached_mapping(
-    world: &WorldMut,
+    world: &runen_ecs::World,
     binding: &UiRuntimePresentationBinding,
 ) -> Result<Option<UiRuntimeNativeMapping>> {
     let Ok(surfaces) = world.resource::<RenderSurfaceRegistryResource>() else {
@@ -445,5 +490,104 @@ mod exact_raster_extent_tests {
         assert!(exact_logical_axis_for_pixels(1, 0.0).is_err());
         assert!(exact_logical_axis_for_pixels(1, f32::INFINITY).is_err());
         assert!(exact_logical_axis_for_pixels(1, f32::NAN).is_err());
+    }
+
+    #[test]
+    fn missing_physical_attachment_retires_cached_terminal_mapping_and_paint() -> anyhow::Result<()>
+    {
+        use super::super::*;
+        use crate::app::App;
+        use crate::plugins::render::RenderFrameProducerId;
+        use crate::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
+        use crate::plugins::render::{
+            RunenUiPaintSubmission, RunenUiPaintSubmissionRegistryResource,
+        };
+        use crate::runtime::{NativeWindowId, WindowStateRegistryResource};
+        use runenui_core::{
+            Effects, FontFamilyName, GenericFontFamily, NoHostProtocol, StyleEnvironment, UiApp,
+            View, text,
+        };
+        use runenui_runtime::{LogicalSize, SurfaceBuildContext};
+        struct Label;
+        impl UiApp for Label {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+            fn root(_: &()) -> impl View<()> {
+                text("terminal mapping")
+            }
+            fn update(
+                _: &mut (),
+                _: (),
+            ) -> impl runenui_core::IntoUpdateOutput<(), NoHostProtocol> {
+                Effects::none()
+            }
+        }
+        let mut app = App::headless();
+        app.add_plugin(UiPlugin);
+        let fonts = UiRuntimeFontConfiguration::new(vec![
+            include_bytes!("../../../../assets/fonts/JetBrainsMono-Regular.ttf").to_vec(),
+        ])
+        .with_generic_mapping(
+            GenericFontFamily::SansSerif,
+            vec![FontFamilyName::new("JetBrains Mono")?],
+        );
+        let slot = app
+            .ui()
+            .mount_app::<Label>(UiTypedScreenId::new("terminal.mapping"), (), &fonts)
+            .slot_id()
+            .unwrap();
+        let native = NativeWindowId::primary();
+        let surface = RenderSurfaceId::primary();
+        let producer = RenderFrameProducerId::try_from_raw(1).unwrap();
+        let mapping = UiRuntimeNativeMapping::new(native, surface, (320, 200), 1.0)?;
+        let style = StyleEnvironment::default();
+        let publication = app
+            .world_mut()
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .publish_surface_for_slot(
+                slot,
+                &SurfaceBuildContext::tight(&style, LogicalSize::try_new(320.0, 200.0)?),
+            )
+            .map_err(|error| anyhow::anyhow!("publication: {error:?}"))?;
+        let binding = UiRuntimePresentationBinding::new(slot, producer, surface, style);
+        let associations = app
+            .world_mut()
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()?;
+        associations.bind(binding.clone())?;
+        associations.update_mapping(slot, mapping);
+        let id = associations.stage(binding, mapping, 1, publication.clone())?;
+        // Fixture setup represents previously delivered facts. It is not GPU proof.
+        assert!(associations.associate_accepted_submission(id));
+        assert!(associations.promote_completed_publication(id).is_some());
+        app.init_resource::<RunenUiPaintSubmissionRegistryResource>();
+        app.world_mut()
+            .resource_mut::<RunenUiPaintSubmissionRegistryResource>()?
+            .replace(
+                RunenUiPaintSubmission::new(producer, id, publication.paint_publication().clone())
+                    .with_render_surface(surface),
+            );
+        app.init_resource::<WindowStateRegistryResource>();
+        app.world_mut()
+            .resource_mut::<WindowStateRegistryResource>()?
+            .register_primary_window("fixture", (320, 200), 1.0, true);
+        app.init_resource::<RenderSurfaceRegistryResource>();
+        app.world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()?
+            .confirm_surface_attachment(surface, native, (320, 200))?;
+        // Logical attachment alone cannot preserve a missing physical owner.
+        super::reconcile_terminal_mappings(app.world_mut())?;
+        let associations = app
+            .world()
+            .resource::<UiRuntimePresentationAssociationsResource>()?;
+        assert!(associations.binding(slot).is_some());
+        assert!(associations.displayed_for_mapping(slot, mapping).is_none());
+        assert!(
+            app.world()
+                .resource::<RunenUiPaintSubmissionRegistryResource>()?
+                .get_for_surface(&producer, surface)
+                .is_none()
+        );
+        Ok(())
     }
 }

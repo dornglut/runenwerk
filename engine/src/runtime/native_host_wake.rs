@@ -128,12 +128,15 @@ impl NativeWakeTransport {
         }
     }
 
-    pub(crate) fn acknowledge(&self) {
+    /// Consume actual pending intent, including immediately before a full-slot
+    /// native settlement. A later queued callback cannot request that work twice;
+    /// a racing producer after this transition retains a new pending intent.
+    pub(crate) fn acknowledge(&self) -> bool {
         // A late callback must not reopen a terminal gate.
-        let _ = self
-            .0
+        self.0
             .state
-            .compare_exchange(PENDING, IDLE, Ordering::AcqRel, Ordering::Acquire);
+            .compare_exchange(PENDING, IDLE, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
     }
 
     pub(crate) fn close(&self) {
@@ -164,6 +167,62 @@ impl WakeTransport for NativeWakeTransport {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    fn native_wake_acknowledgement_preserves_racing_and_closed_intent() -> anyhow::Result<()> {
+        if std::env::var_os("RUNENWERK_NATIVE_WAKE_ACK_TEST").is_none() {
+            return Ok(());
+        }
+        let mut builder = winit::event_loop::EventLoop::<NativeHostEvent>::with_user_event();
+        #[cfg(target_os = "windows")]
+        {
+            use winit::platform::windows::EventLoopBuilderExtWindows;
+            builder.with_any_thread(true);
+        }
+        #[cfg(target_os = "linux")]
+        {
+            use winit::platform::x11::EventLoopBuilderExtX11;
+            builder.with_any_thread(true).with_x11();
+        }
+        let event_loop = builder.build()?;
+        let transport = NativeWakeTransport::new(event_loop.create_proxy());
+        transport.notify()?;
+        transport.notify()?;
+        assert!(transport.acknowledge());
+        assert!(
+            !transport.acknowledge(),
+            "stale queued callback is not fresh demand"
+        );
+        for _ in 0..128 {
+            transport.notify()?;
+            let worker_transport = transport.clone();
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let worker_barrier = barrier.clone();
+            let worker = std::thread::spawn(move || {
+                worker_barrier.wait();
+                worker_transport.notify().unwrap();
+            });
+            barrier.wait();
+            let covered_before_settlement = transport.acknowledge();
+            worker.join().unwrap();
+            let later_intent = transport.acknowledge();
+            assert!(covered_before_settlement || later_intent);
+            transport.notify()?;
+            assert!(
+                transport.acknowledge(),
+                "producer after acknowledgement retains its opportunity"
+            );
+            assert!(!transport.acknowledge());
+        }
+        transport.close();
+        assert!(!transport.acknowledge());
+        assert!(transport.notify().is_err());
+        println!(
+            "native_wake_ack=pass races=128 stale_callback_inert=true late_producer_preserved=true closed=true"
+        );
+        Ok(())
+    }
 
     #[test]
     fn clock_clones_share_epoch_and_exhaustion_is_terminal_without_rebasing() {

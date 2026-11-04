@@ -201,6 +201,27 @@ impl Renderer {
             .append(&mut progressed.runenui_rejected);
     }
 
+    /// Undelivered facts require one native handoff even after execution drains.
+    /// Derived ECS history and the opt-in terminal receipt archive are already
+    /// observable; retaining them is not a reason to poll again.
+    pub(super) fn gpu_delivery_pending(&self) -> bool {
+        let pending = &self.pending_gpu_observation_output;
+        !pending.timing_evidence.is_empty()
+            || !pending.composed_timing_evidence.is_empty()
+            || !pending.captured_textures.is_empty()
+            || !pending.capture_results.is_empty()
+            || !pending.runenui_accepted.is_empty()
+            || !pending.runenui_presented.is_empty()
+            || !pending.runenui_rejected.is_empty()
+            || !self.last_gpu_pass_timing_evidence.is_empty()
+            || !self.last_composed_gpu_timing_evidence.is_empty()
+            || !self.last_captured_textures.is_empty()
+            || !self.last_capture_selector_results.is_empty()
+            || !self.runenui_gpu_accepted.is_empty()
+            || !self.runenui_gpu_presented.is_empty()
+            || !self.runenui_gpu_rejected.is_empty()
+    }
+
     /// Accepted work is traced independently of optional timing/capture/UI.
     /// These receipts reference the exact RunenGPU submission status handles.
     pub fn pending_gpu_frame_submissions(&self) -> Vec<super::RenderGpuFrameSubmissionReceipt> {

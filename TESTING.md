@@ -205,6 +205,52 @@ wake must fail rather than be helped by an application timer.
 This autonomous probe rejects external raw mouse motion as contaminated evidence;
 run it on a quiet native display.
 
+## Native OnDemand GPU progress
+
+The source-neutral `native_gpu_progress` example uses the ordinary App/Render/UI
+path with OnDemand pacing. Argument `0` is passive static UI; `16` requests one
+application action after each exact completed publication. Application actions
+run in the ordinary native frame hook before native slot settlement; GPU-only
+callbacks observe terminal facts and request a continuation, without acting.
+
+```text
+cargo build -p engine --example native_gpu_progress --locked
+cargo run -p engine --example native_gpu_progress --locked -- 0
+cargo run -p engine --example native_gpu_progress --locked -- 16
+cargo run -p engine --example native_gpu_progress --locked -- 0 on-demand capture
+cargo run -p engine --example native_gpu_progress --locked -- 0 continuous-30
+```
+
+Use an external process watchdog and a quiet native display. Startup OS resize
+events can create legitimate initial frames; retain their causes separately.
+Require `qualification_complete`, exact accepted/completed identities, matching
+final typed application state/paint publication, and zero assisting input. After
+`idle_start`, observe a stationary frame/Present count and process CPU before
+closing the test window. A watchdog termination is not graceful shutdown proof.
+`RUST_LOG=warn,engine.runtime.gpu_progress=trace` exposes GPU-only turns and deadline
+retirement. Record the source, executable, actual adapter, wake causes and idle
+measurement conditions; close competing games/GPU workloads for latency evidence.
+
+Two opt-in owner-local native tests run in separate filtered processes:
+
+```text
+cargo test -p engine --lib plugins::render::renderer::gpu_progress_tests::native_prepared_readback_affinity_and_shutdown --locked -- --exact --nocapture --test-threads=1
+cargo test -p engine --lib runtime::winit_runner::gpu_progress_tests::native_deadline_retirement_and_context_replacement --locked -- --exact --nocapture --test-threads=1
+```
+
+Set `RUNENWERK_NATIVE_GPU_PROGRESS_SMOKE=1` for the first test and
+`RUNENWERK_NATIVE_GPU_DEADLINE_SMOKE=1` for the second. These exercise real native
+contexts, prepared-only idle, independent readback terminality, stale early-frame
+affinity, controlled shutdown, and deterministic deadline retirement/replacement.
+Controlled shutdown/context replacement is not physical driver-loss evidence;
+a deterministic readback-interest test is not a forced physical readback-only
+interval. Retain the separate physical qualification requirements.
+
+The existing timer-free idle-wake probe also protects late producer delivery.
+Set `RUNENWERK_NATIVE_WAKE_ACK_TEST=1` in a separate filtered process for
+`runtime::native_host_wake::tests::native_wake_acknowledgement_preserves_racing_and_closed_intent`
+to exercise the real proxy's stale-callback, racing-producer and closed-gate cases.
+
 ## Evidence
 
 Report focused checks, `cargo validate`, exact-head CI, and anything not run. Do not convert source inspection or user-reported output into a stronger validation claim.

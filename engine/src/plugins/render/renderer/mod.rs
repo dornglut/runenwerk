@@ -919,6 +919,10 @@ fn consume_matching_early_gpu_progress<T: PartialEq>(marker: &mut Option<T>, cur
     marker.take().as_ref() == Some(current)
 }
 
+fn gpu_execution_needs_progress(in_flight_submissions: usize, pending_readbacks: usize) -> bool {
+    in_flight_submissions != 0 || pending_readbacks != 0
+}
+
 /// Cumulative, opt-in host gate decisions for one render surface. Gates may
 /// overlap: each reason counts every decision at which it was true. This is
 /// neither GPU completion latency nor a physical display frame counter.
@@ -996,6 +1000,12 @@ impl Gfx {
         self.ctx.context().affinity()
     }
 
+    /// Public execution-owner counters, including independently pending maps.
+    /// Prepared work has not been submitted and does not require native polling.
+    pub fn execution_stats(&self) -> runen_gpu::GpuExecutionStats {
+        self.ctx.context().execution_stats()
+    }
+
     pub fn temporal_execution_evidence(
         &self,
         frame_index: u64,
@@ -1045,6 +1055,32 @@ impl Gfx {
             .begin_frame_gpu_observation(self.ctx.context())?;
         self.early_gpu_progress_affinity = Some(self.ctx.context().affinity());
         Ok(())
+    }
+
+    /// Native invoker observation without an ordinary frame or surface lease.
+    pub(crate) fn progress_gpu_without_frame(&mut self) -> Result<()> {
+        // A previous PreUpdate may not have reached RenderSubmit. Its token
+        // cannot stand in for observation in a future legitimate frame.
+        self.early_gpu_progress_affinity = None;
+        if self.gpu_observation_pending() {
+            self.renderer
+                .begin_frame_gpu_observation(self.ctx.context())?;
+        }
+        self.renderer.publish_progressed_gpu_observations();
+        Ok(())
+    }
+
+    fn gpu_observation_pending(&self) -> bool {
+        let execution = self.execution_stats();
+        gpu_execution_needs_progress(
+            execution.in_flight_submissions(),
+            execution.pending_readbacks(),
+        ) || self.renderer.submission_lifecycle.has_pending()
+            || self.renderer.gpu_observations.has_pending()
+    }
+
+    pub(crate) fn native_gpu_progress_pending(&self) -> bool {
+        self.gpu_observation_pending() || self.renderer.gpu_delivery_pending()
     }
 
     /// Enable lightweight, surface-keyed gate counts for native performance
@@ -1367,6 +1403,9 @@ mod render_flow;
 mod resource_descriptors;
 mod retained_sessions;
 mod setup;
+
+#[cfg(test)]
+mod gpu_progress_tests;
 
 use crate::plugins::RenderFeatureId;
 
