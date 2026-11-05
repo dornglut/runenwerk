@@ -1132,11 +1132,13 @@ mod tests {
 
         // The alternate public Editor writer must also reject aliases
         // without changing either the logical or structural registry.
-        assert!(!host.shell_state.bind_composition_target_presentation(
-            secondary_target,
-            secondary_window,
-            primary_binding,
-        ));
+        for attempted in [primary_binding, native_collision, render_collision] {
+            assert!(!host.shell_state.bind_composition_target_presentation(
+                secondary_target,
+                secondary_window,
+                attempted,
+            ));
+        }
         assert!(!host.shell_state.bind_composition_target_presentation(
             secondary_target,
             primary_window,
