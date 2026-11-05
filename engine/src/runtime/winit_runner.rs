@@ -178,7 +178,7 @@ struct NativeUiKeyboardTranslator {
     /// was pending. A device marker requests source-local canonical Cancels
     /// when the original slot settles; this is not another pressed-key store
     /// or a queue of replayable input events.
-    unrouted_release_devices: HashSet<UiInputDeviceId>,
+    unrouted_release_devices: HashMap<UiInputDeviceId, Option<u64>>,
     binding_epoch: u64,
     /// Last actual M13 revision observed for this exact native UI keyboard
     /// lifetime. This is only a continuity witness, never copied focus,
@@ -1048,7 +1048,7 @@ impl WinitRunner {
                     recipient: slot,
                     source,
                     devices: HashSet::new(),
-                    unrouted_release_devices: HashSet::new(),
+                    unrouted_release_devices: HashMap::new(),
                     binding_epoch,
                     last_observed_revision: None,
                     keyboard: KeyboardInputState::default(),
@@ -1947,7 +1947,12 @@ impl WinitRunner {
             && lifetime.source == context.source
             && lifetime.devices.contains(&device)
         {
-            lifetime.unrouted_release_devices.insert(device);
+            // Freeze the first witnessed revision for a missed original Up:
+            // later pre-ingress observations cannot upgrade this permit.
+            lifetime
+                .unrouted_release_devices
+                .entry(device)
+                .or_insert(lifetime.last_observed_revision);
             // Winit modifier snapshots have no per-device attribution.
             // A missed terminal event cannot leave stale modifier authority.
             self.native_ui_modifiers.remove(&window);
@@ -1969,7 +1974,7 @@ impl WinitRunner {
             .iter()
             .filter(|(window, _)| only_window.is_none_or(|selected| **window == selected))
             .flat_map(|(window, lifetime)| {
-                lifetime.unrouted_release_devices.iter().map(|device| {
+                lifetime.unrouted_release_devices.keys().map(|device| {
                     (
                         *window,
                         *device,
@@ -2029,8 +2034,8 @@ impl WinitRunner {
                                 lifetime.source == source
                                     && lifetime.recipient == slot
                                     && lifetime.binding_epoch == epoch
-                                    && lifetime.last_observed_revision
-                                        == Some(snapshot.revision().get())
+                                    && lifetime.unrouted_release_devices.get(&device)
+                                        == Some(&Some(snapshot.revision().get()))
                             });
                     if !exact_revision {
                         self.revoke_native_game_keyboard_source(source)?;
@@ -6043,7 +6048,7 @@ mod tests {
                 recipient: slot,
                 source: first.source,
                 devices: HashSet::new(),
-                unrouted_release_devices: HashSet::new(),
+                unrouted_release_devices: HashMap::new(),
                 binding_epoch: epoch,
                 last_observed_revision: Some(u64::MAX),
                 keyboard: KeyboardInputState::default(),
@@ -7918,7 +7923,7 @@ mod tests {
                 .get(&secondary)
                 .unwrap()
                 .unrouted_release_devices
-                .contains(&recovering)
+                .contains_key(&recovering)
         );
         let checked_revision = runner
             .state
@@ -7949,7 +7954,7 @@ mod tests {
                 .get(&secondary)
                 .unwrap()
                 .unrouted_release_devices
-                .contains(&recovering),
+                .contains_key(&recovering),
             "an unresolved original Up stays pending, not silently claimed terminal"
         );
         runner
@@ -7959,12 +7964,29 @@ mod tests {
             .last_observed_revision = Some(checked_revision);
         assert!(
             runner
+                .reconcile_unrouted_native_keyboard_releases(None)
+                .is_err(),
+            "a later current observation must not launder an originally stale release"
+        );
+        assert!(
+            runner
                 .native_ui_keyboards
                 .get(&secondary)
                 .unwrap()
                 .unrouted_release_devices
-                .contains(&recovering)
+                .contains_key(&recovering)
         );
+        // A fresh test-only original release starts a distinct witness:
+        // production never clears a stale marker just to claim success.
+        runner
+            .native_ui_keyboards
+            .get_mut(&secondary)
+            .expect("test translator")
+            .unrouted_release_devices
+            .clear();
+        runner
+            .record_unrouted_native_keyboard_release(secondary, physical_context)
+            .expect("fresh identical-revision release fixture");
         runner
             .reconcile_unrouted_native_keyboard_releases(None)
             .expect("source-qualified ordinary M13 Cancel recovery");
