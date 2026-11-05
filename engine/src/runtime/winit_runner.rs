@@ -1960,10 +1960,14 @@ impl WinitRunner {
     /// translator's cancel_device over its original pressed-key lifetimes,
     /// not a second key ledger or a synthetic physical Up. B survives A's
     /// missed release; terminal/stale owners never receive an invented Cancel.
-    fn reconcile_unrouted_native_keyboard_releases(&mut self) -> Result<()> {
+    fn reconcile_unrouted_native_keyboard_releases(
+        &mut self,
+        only_window: Option<NativeWindowId>,
+    ) -> Result<()> {
         let pending = self
             .native_ui_keyboards
             .iter()
+            .filter(|(window, _)| only_window.is_none_or(|selected| **window == selected))
             .flat_map(|(window, lifetime)| {
                 lifetime.unrouted_release_devices.iter().map(|device| {
                     (
@@ -3506,7 +3510,7 @@ impl WinitRunner {
         // An original physical Up can have been neutral-only while a prior
         // bounded M13 pump was still in progress. Reconcile its translator
         // lifetime before any game projection in the next ordinary frame.
-        self.reconcile_unrouted_native_keyboard_releases()?;
+        self.reconcile_unrouted_native_keyboard_releases(None)?;
         self.reconcile_native_ui_keyboard_before_frame()?;
         run_runtime_frame(&mut self.state.world, &mut self.state.scheduler)?;
         if render_native_host::has_gpu_context(&self.state.world) {
@@ -4282,9 +4286,9 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 is_synthetic,
             } => {
                 // A previous neutral-only physical Up may have left a
-                // framework-owned pressed key. Reconcile its exact original
-                // device before translating this new keyboard transition.
-                self.reconcile_unrouted_native_keyboard_releases()?;
+                // framework-owned pressed key, but no recovery failure may
+                // suppress the next original Winit event before neutral
+                // physical truth has been admitted to the journal.
                 // Even a stale/missing recipient must not suppress original
                 // physical truth. Admit it before reporting the UI route error,
                 // and fail gameplay closed for that exact lifetime.
@@ -4329,6 +4333,11 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             input,
                             text_input(&event, is_synthetic),
                         )?;
+                        // Only after journaling the original input can a
+                        // pending old-key cleanup safely run. Limit recovery
+                        // to this exact window; another window's unresolved
+                        // native source cannot block this occurrence.
+                        self.reconcile_unrouted_native_keyboard_releases(Some(native_window_id))?;
                         self.route_ui_keyboard(
                             native_window_id,
                             slot,
@@ -7930,7 +7939,7 @@ mod tests {
             .expect("the original device-only release is marked");
         assert!(
             runner
-                .reconcile_unrouted_native_keyboard_releases()
+                .reconcile_unrouted_native_keyboard_releases(None)
                 .is_err(),
             "a missing original M13 revision witness must not issue a Cancel to a successor focus"
         );
@@ -7957,7 +7966,7 @@ mod tests {
                 .contains(&recovering)
         );
         runner
-            .reconcile_unrouted_native_keyboard_releases()
+            .reconcile_unrouted_native_keyboard_releases(None)
             .expect("source-qualified ordinary M13 Cancel recovery");
         let live = runner
             .native_ui_keyboards
