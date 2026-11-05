@@ -347,10 +347,17 @@ impl Probe {
                     );
                 }
             }
-            (gfx.execution_stats(), gfx.pending_gpu_frame_submissions().len())
+            (
+                gfx.execution_stats(),
+                gfx.pending_gpu_frame_submissions().len(),
+            )
         };
-        self.peak_gpu_in_flight = self.peak_gpu_in_flight.max(execution.in_flight_submissions());
-        self.peak_pending_readbacks = self.peak_pending_readbacks.max(execution.pending_readbacks());
+        self.peak_gpu_in_flight = self
+            .peak_gpu_in_flight
+            .max(execution.in_flight_submissions());
+        self.peak_pending_readbacks = self
+            .peak_pending_readbacks
+            .max(execution.pending_readbacks());
         println!(
             "U9C_WORKLOAD frame={host_frame} ui_ready={} qualified_completed={} published_changes={}",
             self.ui.latest.ready(),
@@ -504,7 +511,10 @@ mod tests {
     #[test]
     fn unavailable_per_submission_ui_terminal_receipts_fail_closed() {
         for content in [Content::Static, Content::Changing] {
-            let probe = Probe::new(content_options(content), Arc::new(Mutex::new(Report::default())));
+            let probe = Probe::new(
+                content_options(content),
+                Arc::new(Mutex::new(Report::default())),
+            );
             assert!(probe.require_terminal_evidence().is_err());
         }
         let control = Probe::new(
