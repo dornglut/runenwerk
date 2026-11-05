@@ -4488,6 +4488,79 @@ mod tests {
             ),
             Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongDevice)
         );
+
+        // REV-001: RunenUI can complete the exact original keyboard receipt
+        // before unrelated, legally queued application actions finish. This
+        // canonical fixture observes the distinction without granting gameplay
+        // permission or fabricating a new receipt from a later pump.
+        let backlog_receipt = slots
+            .submit_native_keyboard(slot, keyboard(Some(native_device)))
+            .expect("focused native keyboard admits an original input");
+        {
+            let runtime = slots
+                .slot_mut(slot)
+                .expect("same mounted runtime")
+                .runtime
+                .typed_mut::<NativeKeyboardApp>()
+                .expect("same typed runtime");
+            for _ in 0..(RUNTIME_PUMP_WORK_LIMIT + 2) {
+                runtime
+                    .submit_action(())
+                    .expect("independent application actions are legally queued");
+            }
+        }
+        let (partial_batch, partial_status) = slots
+            .pump_native_input_records(slot)
+            .expect("partial canonical pump remains observable");
+        assert_eq!(
+            partial_batch.report().outcome(),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        );
+        assert_eq!(
+            partial_status,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        assert!(
+            partial_batch
+                .processed_through()
+                .is_some_and(|through| through >= backlog_receipt.sequence())
+        );
+        assert!(partial_batch.ordered_records().iter().any(|record| matches!(
+            record,
+            InputArbitrationRecord::InputSettled(settlement)
+                if settlement.sequence() == backlog_receipt.sequence()
+                    && settlement.scope() == focused.scope()
+                    && settlement.device_id() == Some(native_device)
+                    && matches!(settlement.finality(), UiInputFinality::Committed(_))
+        )));
+        assert_eq!(
+            slots.input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            "a reached receipt cannot make the selected slot globally ready"
+        );
+        for _ in 0..4 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        let resumed = slots
+            .input_ownership(slot)
+            .expect("ordinary bounded continuation eventually settles");
+        assert_eq!(resumed.scope(), focused.scope());
+        assert!(
+            !slots
+                .pump_native_input_records(slot)
+                .expect("later quiescent observation is available")
+                .0
+                .ordered_records()
+                .iter()
+                .any(|record| matches!(
+                    record,
+                    InputArbitrationRecord::InputSettled(settlement)
+                        if settlement.sequence() == backlog_receipt.sequence()
+                )),
+            "an earlier exact keyboard terminal receipt cannot replay"
+        );
     }
 
     #[test]
