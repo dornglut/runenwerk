@@ -32,10 +32,12 @@ use engine::runtime::{
 };
 use runen_ecs::World;
 use runenui_core::{
-    EditIntent, EditResolution, Effects, FontFamilyName, GenericFontFamily, NoHostProtocol,
+    Color, EdgeInsets, EditIntent, EditResolution, Effects, FlexContainerStyle, FlexDirection,
+    FontFamily, FontFamilyName, GenericFontFamily, ItemAlignment, LayoutBound, LayoutContainer,
+    LayoutDimension, LayoutFactor, LayoutStyle, LogicalLength, MainAxisAlignment, NoHostProtocol,
     SemanticEditableMode, StyleEnvironment, TextAffinity, TextDocumentId, TextDocumentRevision,
-    TextDocumentSnapshot, TextPosition, TextSelection, UiApp, UpdateOutput, View, button, column,
-    text, text_field,
+    TextDocumentSnapshot, TextPosition, TextSelection, Typography, UiApp, UpdateOutput, View,
+    button, column, text, text_field,
 };
 use winit::event::{DeviceEvent, Ime, WindowEvent};
 use winit::window::Window;
@@ -47,6 +49,39 @@ const FONT: &[u8] = include_bytes!(concat!(
 
 struct QualificationUi;
 
+fn qualifier_font(size: u16) -> Typography {
+    Typography::new(
+        FontFamily::generic(GenericFontFamily::SansSerif),
+        LogicalLength::from(size),
+    )
+}
+
+fn qualifier_screen_layout() -> LayoutStyle {
+    LayoutStyle::default()
+        .with_width(LayoutDimension::Fill)
+        .with_height(LayoutDimension::Fill)
+        .with_container(LayoutContainer::Flex(
+            FlexContainerStyle::default()
+                .with_direction(FlexDirection::Column)
+                .with_justify_content(MainAxisAlignment::Center)
+                .with_align_items(ItemAlignment::Center),
+        ))
+}
+
+fn qualifier_panel_layout() -> LayoutStyle {
+    LayoutStyle::default()
+        .with_width(LayoutDimension::percent(
+            LayoutFactor::new(0.9).expect("finite panel width"),
+        ))
+        .with_max_width(LayoutBound::length(LogicalLength::from(640_u16)))
+        .with_container(LayoutContainer::Flex(
+            FlexContainerStyle::default()
+                .with_direction(FlexDirection::Column)
+                .with_align_items(ItemAlignment::Stretch),
+        ))
+        .with_gap(LogicalLength::from(16_u16))
+}
+
 struct UiState {
     activations: Arc<AtomicUsize>,
     text_generation: u64,
@@ -54,6 +89,7 @@ struct UiState {
     // settle through RunenUI before this value or its revision may change.
     entered_text: String,
     edit_revision: u64,
+    activation_count: u64,
 }
 
 enum QualificationAction {
@@ -64,27 +100,24 @@ enum QualificationAction {
 
 impl UiApp for QualificationUi {
     fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-        // Fixed authored topology and its initial owner reconciliation.
-        runenui_core::ProducerBudget::new(6, 0).with_reconciliation(5, 0, 5)
+        // Eight stable owners: screen, centered panel, title, two instructions,
+        // editable, actual button and application-derived result.
+        runenui_core::ProducerBudget::new(9, 0).with_reconciliation(8, 0, 8)
     }
 
     fn action_producer_budget(
         _state: &Self::State,
         _action: &Self::Action,
     ) -> runenui_core::ProducerBudget {
-        // One accepted edit resolution can be emitted by the application;
-        // all five owners are conservatively eligible for reconciliation.
-        runenui_core::ProducerBudget::new(7, 1).with_reconciliation(5, 5, 5)
+        // The same eight owners reconcile after accepted edits/activations.
+        runenui_core::ProducerBudget::new(10, 1).with_reconciliation(8, 8, 8)
     }
 
     fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-        // The pinned M11 text-field reference admits *two* framework-service
-        // starts (clipboard/IME), their terminal credits and the text-field
-        // output allowance. Budget the additional button activation and all
-        // five reconciliation owners without silently narrowing the field's
-        // framework-service frontier to one start.
-        runenui_core::ProducerBudget::new(24, 13)
-            .with_reconciliation(5, 5, 5)
+        // Preserve the pinned M11 text-field service frontier, including
+        // clipboard/IME terminal work; noninteractive layout owners reconcile.
+        runenui_core::ProducerBudget::new(28, 13)
+            .with_reconciliation(8, 8, 8)
             .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 2))
             .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
     }
@@ -113,27 +146,78 @@ impl UiApp for QualificationUi {
             |intent| QualificationAction::Edit(Box::new(intent)),
         )
         .expect("the native qualification text source is well formed")
-        // An empty source without a visual placeholder measures to zero width
-        // and leaves the required native click target effectively invisible.
         .placeholder("CLICK HERE - type Unicode text")
-        .id("u9c.qualify.editable");
-        column(vec![
+        .id("u9c.qualify.editable")
+        .with_layout(
+            LayoutStyle::default()
+                .with_width(LayoutDimension::Fill)
+                .with_min_height(LayoutBound::length(LogicalLength::from(52_u16))),
+        )
+        .foreground(Color::rgb(20, 29, 45))
+        .background(Color::rgb(242, 246, 252))
+        .padding(EdgeInsets::symmetric(
+            LogicalLength::from(14_u16),
+            LogicalLength::from(12_u16),
+        ))
+        .radius(LogicalLength::from(10_u16))
+        .typography(qualifier_font(16));
+
+        // Styling never substitutes for native Winit input or exact M13 focus.
+        let panel = column(vec![
             text(if state.text_generation == 0 {
-                "RunenUI native input qualification".to_owned()
+                "RUNENWERK  /  U9-C INPUT TEST".to_owned()
             } else {
-                format!("RunenUI changing text {:08}", state.text_generation)
+                format!("RUNENWERK  /  UI CHANGE {:08}", state.text_generation)
             })
+            .foreground(Color::rgb(244, 247, 253))
+            .typography(qualifier_font(26))
             .into_element(),
-            text("Click the text field, type Unicode, then Tab to the button; test W and Space.")
+            text("1   W halten, dann ins Textfeld klicken.")
+                .foreground(Color::rgb(180, 192, 211))
+                .typography(qualifier_font(14))
+                .into_element(),
+            text("2   Unicode tippen, Tab + Space und Button testen.")
+                .foreground(Color::rgb(180, 192, 211))
+                .typography(qualifier_font(14))
                 .into_element(),
             editable.into_element(),
-            button("Focus / activate this button")
+            button("BUTTON AKTIVIEREN")
                 .id("u9c.qualify.button")
                 .key("u9c.qualify.button")
                 .on_activate(|| QualificationAction::Activate)
+                .with_layout(
+                    LayoutStyle::default()
+                        .with_width(LayoutDimension::Fill)
+                        .with_min_height(LayoutBound::length(LogicalLength::from(52_u16))),
+                )
+                .foreground(Color::WHITE)
+                .background(Color::rgb(55, 111, 208))
+                .padding(EdgeInsets::symmetric(
+                    LogicalLength::from(16_u16),
+                    LogicalLength::from(14_u16),
+                ))
+                .radius(LogicalLength::from(10_u16))
+                .typography(qualifier_font(16))
                 .into_element(),
+            text(format!(
+                "UI-Klicks: {}     Textzeichen: {}",
+                state.activation_count,
+                state.entered_text.chars().count(),
+            ))
+            .foreground(Color::rgb(147, 199, 255))
+            .typography(qualifier_font(14))
+            .into_element(),
         ])
-        .id("u9c.qualify.root")
+        .id("u9c.qualify.panel")
+        .with_layout(qualifier_panel_layout())
+        .background(Color::rgb(24, 33, 49))
+        .padding(EdgeInsets::all(LogicalLength::from(28_u16)))
+        .radius(LogicalLength::from(18_u16));
+
+        column(vec![panel.into_element()])
+            .id("u9c.qualify.root")
+            .with_layout(qualifier_screen_layout())
+            .background(Color::rgb(13, 19, 30))
     }
 
     fn update(
@@ -143,6 +227,10 @@ impl UiApp for QualificationUi {
         match action {
             QualificationAction::Activate => {
                 state.activations.fetch_add(1, Ordering::Relaxed);
+                state.activation_count = state
+                    .activation_count
+                    .checked_add(1)
+                    .expect("native activation count must not wrap");
                 UpdateOutput::effects(Effects::none())
             }
             QualificationAction::ChangeText(generation) => {
@@ -400,6 +488,7 @@ fn main() -> Result<()> {
                 text_generation: 0,
                 entered_text: String::new(),
                 edit_revision: 0,
+                activation_count: 0,
             },
             &fonts,
         )

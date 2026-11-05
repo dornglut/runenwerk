@@ -3289,31 +3289,39 @@ mod tests {
     #[test]
     fn native_qualifier_text_field_survives_repeated_cursor_click_and_publication_rehit() {
         use runenui_core::{
-            LogicalPoint, NoHostProtocol, PointerButton, PointerButtons, PointerDeviceKind,
+            Color, EdgeInsets, FlexContainerStyle, FlexDirection, FontFamily, ItemAlignment,
+            LayoutBound, LayoutContainer, LayoutDimension, LayoutFactor, LayoutStyle, LogicalPoint,
+            MainAxisAlignment, NoHostProtocol, PointerButton, PointerButtons, PointerDeviceKind,
             PointerPhase, SemanticEditableMode, TextAffinity, TextDocumentId, TextDocumentRevision,
-            TextDocumentSnapshot, TextPosition, TextSelection, WorkResidencyBudget,
+            TextDocumentSnapshot, TextPosition, TextSelection, Typography, WorkResidencyBudget,
             WorkStartBudget, text_field,
         };
+
+        fn font(size: u16) -> Typography {
+            Typography::new(
+                FontFamily::generic(GenericFontFamily::SansSerif),
+                LogicalLength::from(size),
+            )
+        }
 
         struct QualificationClickProbe;
         impl UiApp for QualificationClickProbe {
             fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(6, 0).with_reconciliation(5, 0, 5)
+                runenui_core::ProducerBudget::new(9, 0).with_reconciliation(8, 0, 8)
             }
 
             fn action_producer_budget(
                 _state: &Self::State,
                 _action: &Self::Action,
             ) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(7, 1).with_reconciliation(5, 5, 5)
+                runenui_core::ProducerBudget::new(10, 1).with_reconciliation(8, 8, 8)
             }
 
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-                // Must match the real Windows qualification app: the public M11
-                // text field needs two framework-service starts, even when
-                // no actual clipboard/IME request is issued in this scenario.
-                runenui_core::ProducerBudget::new(24, 13)
-                    .with_reconciliation(5, 5, 5)
+                // Match the real eight-owner centered native qualification app
+                // and the pinned M11 two-framework-service input frontier.
+                runenui_core::ProducerBudget::new(28, 13)
+                    .with_reconciliation(8, 8, 8)
                     .with_work_starts(WorkStartBudget::new(0, 0, 0, 0, 2))
                     .with_work_residency(WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
             }
@@ -3329,28 +3337,97 @@ mod tests {
                 );
                 let caret = TextPosition::new(document, "", 0, TextAffinity::Downstream)
                     .expect("empty authored text has valid caret");
-                column(vec![
-                    text("RunenUI native input qualification").into_element(),
-                    text("Click the text field, type Unicode, then Tab to the button.")
+                let editable = text_field(
+                    document,
+                    "",
+                    TextSelection::collapsed(caret),
+                    SemanticEditableMode::SingleLine,
+                    |_| (),
+                )
+                .expect("valid checked native text field")
+                .placeholder("CLICK HERE - type Unicode text")
+                .id("u9c.qualify.editable")
+                .with_layout(
+                    LayoutStyle::default()
+                        .with_width(LayoutDimension::Fill)
+                        .with_min_height(LayoutBound::length(LogicalLength::from(52_u16))),
+                )
+                .foreground(Color::rgb(20, 29, 45))
+                .background(Color::rgb(242, 246, 252))
+                .padding(EdgeInsets::symmetric(
+                    LogicalLength::from(14_u16),
+                    LogicalLength::from(12_u16),
+                ))
+                .radius(LogicalLength::from(10_u16))
+                .typography(font(16));
+                let panel = column(vec![
+                    text("RUNENWERK  /  U9-C INPUT TEST")
+                        .foreground(Color::rgb(244, 247, 253))
+                        .typography(font(26))
                         .into_element(),
-                    text_field(
-                        document,
-                        "",
-                        TextSelection::collapsed(caret),
-                        SemanticEditableMode::SingleLine,
-                        |_| (),
-                    )
-                    .expect("valid checked native text field")
-                    .placeholder("CLICK HERE - type Unicode text")
-                    .id("u9c.qualify.editable")
-                    .into_element(),
-                    button("Focus / activate this button")
+                    text("1   W halten, dann ins Textfeld klicken.")
+                        .foreground(Color::rgb(180, 192, 211))
+                        .typography(font(14))
+                        .into_element(),
+                    text("2   Unicode tippen, Tab + Space und Button testen.")
+                        .foreground(Color::rgb(180, 192, 211))
+                        .typography(font(14))
+                        .into_element(),
+                    editable.into_element(),
+                    button("BUTTON AKTIVIEREN")
                         .id("u9c.qualify.button")
                         .key("u9c.qualify.button")
                         .on_activate(|| ())
+                        .with_layout(
+                            LayoutStyle::default()
+                                .with_width(LayoutDimension::Fill)
+                                .with_min_height(LayoutBound::length(LogicalLength::from(52_u16))),
+                        )
+                        .foreground(Color::WHITE)
+                        .background(Color::rgb(55, 111, 208))
+                        .padding(EdgeInsets::symmetric(
+                            LogicalLength::from(16_u16),
+                            LogicalLength::from(14_u16),
+                        ))
+                        .radius(LogicalLength::from(10_u16))
+                        .typography(font(16))
+                        .into_element(),
+                    text("UI-Klicks: 0     Textzeichen: 0")
+                        .foreground(Color::rgb(147, 199, 255))
+                        .typography(font(14))
                         .into_element(),
                 ])
-                .id("u9c.qualify.root")
+                .id("u9c.qualify.panel")
+                .with_layout(
+                    LayoutStyle::default()
+                        .with_width(LayoutDimension::percent(
+                            LayoutFactor::new(0.9).expect("finite width"),
+                        ))
+                        .with_max_width(LayoutBound::length(LogicalLength::from(640_u16)))
+                        .with_container(LayoutContainer::Flex(
+                            FlexContainerStyle::default()
+                                .with_direction(FlexDirection::Column)
+                                .with_align_items(ItemAlignment::Stretch),
+                        ))
+                        .with_gap(LogicalLength::from(16_u16)),
+                )
+                .background(Color::rgb(24, 33, 49))
+                .padding(EdgeInsets::all(LogicalLength::from(28_u16)))
+                .radius(LogicalLength::from(18_u16));
+                column(vec![panel.into_element()])
+                    .id("u9c.qualify.root")
+                    .with_layout(
+                        LayoutStyle::default()
+                            .with_width(LayoutDimension::Fill)
+                            .with_height(LayoutDimension::Fill)
+                            .with_container(LayoutContainer::Flex(
+                                FlexContainerStyle::default()
+                                    .with_direction(FlexDirection::Column)
+                                    .with_justify_content(MainAxisAlignment::Center)
+                                    .with_align_items(ItemAlignment::Center),
+                            )),
+                    )
+                    .background(Color::rgb(13, 19, 30))
             }
 
             fn update(
@@ -3373,7 +3450,7 @@ mod tests {
                 &fonts,
             )
             .slot_id()
-            .expect("same real five-owner RunenUI app as the Windows qualification");
+            .expect("same eight-owner centered RunenUI app as Windows qualification");
         let style = StyleEnvironment::default();
         let build = SurfaceBuildContext::tight(
             &style,
@@ -3394,8 +3471,36 @@ mod tests {
             field_bounds.width() > 2.0 && field_bounds.height() > 2.0,
             "empty field must retain a real hit target through its visible placeholder"
         );
-        let point = LogicalPoint::new(field_bounds.x() + 1.0, field_bounds.y() + 1.0)
-            .expect("published field point is finite");
+        let panel_id = ElementId::new("u9c.qualify.panel").expect("authored panel ID");
+        let panel_bounds = publication
+            .frame()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&panel_id))
+            .expect("centered panel has real displayed bounds")
+            .bounds();
+        assert!(
+            (panel_bounds.x() + panel_bounds.width() / 2.0 - 640.0).abs() < 4.0
+                && (panel_bounds.y() + panel_bounds.height() / 2.0 - 360.0).abs() < 4.0,
+            "responsive native panel must actually be centered in 1280x720"
+        );
+        let button_id = ElementId::new("u9c.qualify.button").expect("authored button ID");
+        let button_bounds = publication
+            .frame()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&button_id))
+            .expect("actual clickable button has published bounds")
+            .bounds();
+        assert!(
+            button_bounds.width() > 200.0 && button_bounds.height() >= 52.0,
+            "native test must render a conspicuous real button"
+        );
+        let point = LogicalPoint::new(
+            field_bounds.x() + field_bounds.width() / 2.0,
+            field_bounds.y() + field_bounds.height() / 2.0,
+        )
+        .expect("published field center is finite");
         let target = slots
             .slot_mut(slot)
             .expect("mounted typed slot")
