@@ -214,8 +214,8 @@ pub struct Probe {
     recovery_start: u64,
     idle_accepted: u64,
     enabled: bool,
-    peak_resources: usize,
-    peak_bindings: usize,
+    peak_gpu_in_flight: usize,
+    peak_pending_readbacks: usize,
     ui: UiProgress,
     qualified_completed: u64,
     recovery_qualified: u64,
@@ -236,14 +236,27 @@ impl Probe {
             recovery_start: 0,
             idle_accepted: 0,
             enabled: false,
-            peak_resources: 0,
-            peak_bindings: 0,
+            peak_gpu_in_flight: 0,
+            peak_pending_readbacks: 0,
             ui: UiProgress::default(),
             qualified_completed: 0,
             recovery_qualified: 0,
             recovery_changes: 0,
             last_ui_ready: Instant::now(),
         }
+    }
+
+    // The current public renderer outcome carries G5 submission terminality,
+    // but no same-submission RunenUI terminal-Present publication IDs. Only
+    // Control (GPU-only) can be qualified without that missing original proof.
+    // The independently correct displayed-input ledger must NOT be retrofitted
+    // to an unrelated GPU terminal outcome to produce a synthetic per-frame PASS.
+    fn require_terminal_evidence(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.options.content == Content::Control,
+            "RunenUI static/changing GPU lifetime qualification HOLD: the current public GPU terminal outcome does not carry correlated completed-Present publication IDs; existing UI displayed state cannot replace exact per-submission proof"
+        );
+        Ok(())
     }
 
     /// Called before each canonical host frame, including while this example's flow is absent.
@@ -254,6 +267,7 @@ impl Probe {
         host_frame: u64,
         slot: UiRuntimeSlotId,
     ) -> Result<bool> {
+        self.require_terminal_evidence()?;
         if self.options.content != Content::Control {
             self.ui.observe(UiObservation::read(world, slot)?);
             if matches!(self.phase, Phase::Running | Phase::Recovery) {
@@ -270,7 +284,7 @@ impl Probe {
                 );
             }
         }
-        let (resources, bindings, execution, pending) = {
+        let (execution, pending) = {
             let gfx = world.resource_mut::<Gfx>()?;
             if !self.enabled {
                 gfx.set_gpu_frame_terminal_delivery(true);
@@ -319,31 +333,24 @@ impl Probe {
                     outcome.disposition()
                 );
                 self.completed += 1;
-                if self
-                    .ui
-                    .credits(self.options.content, outcome.completed_ui_publications())
-                {
+                // No per-submission UI terminal-publication proof is exported
+                // by this Gfx outcome. An empty slice preserves the original
+                // strict UI credit rule: control-only GPU work can advance;
+                // UI-required work fails the explicit gate above.
+                if self.ui.credits(self.options.content, &[]) {
                     self.qualified_completed += 1;
                     self.last_ui_ready = Instant::now();
-                    if self.options.content != Content::Control {
-                        println!(
-                            "U9C_UI_FRAME submission={} gpu_frame={} publications={:?}",
-                            outcome.submission_id(),
-                            outcome.frame(),
-                            outcome.completed_ui_publications()
-                        );
-                    }
+                    println!(
+                        "U9C_GPU_TERMINAL submission={} gpu_frame={} ui_per_submission=unavailable",
+                        outcome.submission_id(),
+                        outcome.frame()
+                    );
                 }
             }
-            (
-                gfx.resource_realization_stats(),
-                gfx.program_binding_realization_stats(),
-                gfx.execution_stats(),
-                gfx.pending_gpu_frame_submissions().len(),
-            )
+            (gfx.execution_stats(), gfx.pending_gpu_frame_submissions().len())
         };
-        self.peak_resources = self.peak_resources.max(resources.retained_records());
-        self.peak_bindings = self.peak_bindings.max(bindings.retained_records());
+        self.peak_gpu_in_flight = self.peak_gpu_in_flight.max(execution.in_flight_submissions());
+        self.peak_pending_readbacks = self.peak_pending_readbacks.max(execution.pending_readbacks());
         println!(
             "U9C_WORKLOAD frame={host_frame} ui_ready={} qualified_completed={} published_changes={}",
             self.ui.latest.ready(),
@@ -351,24 +358,16 @@ impl Probe {
             self.ui.acknowledged
         );
         println!(
-            "U9C_RESOURCE frame={host_frame} phase={:?} accepted={} completed={} observed_pending={} renderer_pending={pending} g4c1={} g4c1_limit={} buffers={} textures={} views={} samplers={} g4c2={} g4c2_limit={} groups={} g4c2_pending={} g5_in_flight={} peak_g4c1={} peak_g4c2={}",
+            "U9C_EXECUTION frame={host_frame} phase={:?} accepted={} completed={} observed_pending={} renderer_pending={pending} g5_in_flight={} prepared={} pending_readbacks={} peak_g5_in_flight={} peak_pending_readbacks={} g4c1_realization=unavailable g4c2_realization=unavailable",
             self.phase,
             self.accepted,
             self.completed,
             self.observed.len(),
-            resources.retained_records(),
-            resources.max_records(),
-            resources.buffers(),
-            resources.textures(),
-            resources.texture_views(),
-            resources.samplers(),
-            bindings.retained_records(),
-            bindings.max_records(),
-            bindings.bind_groups(),
-            bindings.in_flight_records(),
             execution.in_flight_submissions(),
-            self.peak_resources,
-            self.peak_bindings
+            execution.prepared_submissions(),
+            execution.pending_readbacks(),
+            self.peak_gpu_in_flight,
+            self.peak_pending_readbacks
         );
         let drained = pending == 0
             && execution.in_flight_submissions() == 0
@@ -407,14 +406,14 @@ impl Probe {
                             .map_err(|_| anyhow::anyhow!("report poisoned"))?
                             .complete = true;
                         println!(
-                            "U9C_LIFETIME_COMPLETE content={:?} requested_completed={} accepted={} completed={} recovery_completed={} peak_g4c1={} peak_g4c2={} scanout=unobserved memory=external_operator",
+                            "U9C_LIFETIME_COMPLETE content={:?} requested_completed={} accepted={} completed={} recovery_completed={} peak_g5_in_flight={} peak_pending_readbacks={} g4c1_realization=unobserved g4c2_realization=unobserved scanout=unobserved memory=external_operator",
                             self.options.content,
                             self.options.frames,
                             self.accepted,
                             self.completed,
                             self.completed - self.recovery_start,
-                            self.peak_resources,
-                            self.peak_bindings
+                            self.peak_gpu_in_flight,
+                            self.peak_pending_readbacks
                         );
                         return Ok(true);
                     }
@@ -500,6 +499,23 @@ mod tests {
             report.failure.as_deref(),
             Some("missing presentation observation")
         );
+    }
+
+    #[test]
+    fn unavailable_per_submission_ui_terminal_receipts_fail_closed() {
+        for content in [Content::Static, Content::Changing] {
+            let probe = Probe::new(content_options(content), Arc::new(Mutex::new(Report::default())));
+            assert!(probe.require_terminal_evidence().is_err());
+        }
+        let control = Probe::new(
+            content_options(Content::Control),
+            Arc::new(Mutex::new(Report::default())),
+        );
+        assert!(control.require_terminal_evidence().is_ok());
+    }
+
+    fn content_options(content: Content) -> Options {
+        Options { content, frames: 1 }
     }
 
     #[test]
