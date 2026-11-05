@@ -4809,6 +4809,15 @@ mod tests {
         impl Widget<Box<EditIntent>> for ClippedPaintProbe {
             type State = ();
 
+            fn producer_budget(
+                &self,
+                _: runenui_core::WidgetProducerPhase,
+                _: &Self::State,
+            ) -> runenui_core::WidgetProducerBudget {
+                // Pure geometric paint; no action, command or work producer.
+                runenui_core::WidgetProducerBudget::new(0)
+            }
+
             fn create_state(&self) -> Self::State {}
 
             fn measure(&self, _: &Self::State, _: WidgetMeasureInput) -> WidgetMeasure {
@@ -6051,7 +6060,8 @@ mod tests {
             id,
             screen_id: UiTypedScreenId::new("ordinary.shutdown-preflight"),
             runtime: UiRuntimeSlotKind::Typed(Box::new(FailOnceOnShutdown {
-                runtime: AppRuntime::<EmptyApp>::mount(()),
+                runtime: AppRuntime::<EmptyApp>::mount(())
+                    .expect("one static text fixture must admit initial reconciliation"),
                 fail_next_shutdown: true,
             })),
             ingress_epoch: 1,
@@ -6137,7 +6147,8 @@ mod tests {
             id,
             screen_id: UiTypedScreenId::new("managed.shutdown-preflight"),
             runtime: UiRuntimeSlotKind::Typed(Box::new(FailOnceOnShutdown {
-                runtime: AppRuntime::<EmptyApp>::mount(()),
+                runtime: AppRuntime::<EmptyApp>::mount(())
+                    .expect("one static text fixture must admit initial reconciliation"),
                 fail_next_shutdown: true,
             })),
             ingress_epoch: 1,
@@ -6145,6 +6156,7 @@ mod tests {
             next_deadline: None,
             native_clock: None,
             deadline_observed_at: None,
+            native_input_selected: false,
         });
         managed_slots.next_slot_id = 2;
         let mut app = App::headless();

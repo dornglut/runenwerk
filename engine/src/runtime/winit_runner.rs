@@ -3689,7 +3689,9 @@ impl WinitRunner {
         Ok(true)
     }
 
-    #[cfg(target_os = "windows")]
+    // Keep the pure Windows admission predicate testable on every host;
+    // production still uses it only on Win32.
+    #[cfg(any(target_os = "windows", test))]
     fn windows_native_frame_opportunity(event: &WindowEvent) -> bool {
         matches!(
             event,
@@ -4660,6 +4662,25 @@ mod tests {
 
         struct CompositionProbe;
         impl UiApp for CompositionProbe {
+            // Single authored editable owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -4691,7 +4712,8 @@ mod tests {
         }
 
         let budget = PumpBudget::new(usize::MAX, usize::MAX, usize::MAX, usize::MAX);
-        let mut runtime = AppRuntime::<CompositionProbe>::mount(());
+        let mut runtime = AppRuntime::<CompositionProbe>::mount(())
+            .expect("the single editable fixture must admit initial reconciliation");
         runtime
             .pump(budget)
             .expect("initial mounted reconciliation");
@@ -4799,6 +4821,25 @@ mod tests {
         }
         struct CloseCompositionProbe;
         impl UiApp for CloseCompositionProbe {
+            // Single authored editable owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(3, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = TextState;
             type Action = TextAction;
             type HostProtocol = NoHostProtocol;
@@ -5139,6 +5180,25 @@ mod tests {
 
         struct Probe;
         impl runenui_core::UiApp for Probe {
+            // Single authored button owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -5252,6 +5312,22 @@ mod tests {
 
         struct RawUi;
         impl runenui_core::UiApp for RawUi {
+            // Single authored text owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -5629,6 +5705,25 @@ mod tests {
 
         struct RevisionProbe;
         impl runenui_core::UiApp for RevisionProbe {
+            // Single authored button owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -5974,6 +6069,22 @@ mod tests {
 
         struct UnobservedRecipient;
         impl runenui_core::UiApp for UnobservedRecipient {
+            // Single authored text owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -6274,17 +6385,22 @@ mod tests {
 
         let mut windowed = App::new();
         configure_probe(&mut windowed);
+        install_native_window_provider_resources(windowed.world_mut());
         let mut runner = WinitRunner {
             state: windowed.into_windowed_state(),
             window_realizer: WinitWindowRealizer::default(),
-            input_adapter: WinitInputAdapter::default(),
+            native_ui_keyboards: HashMap::new(),
+            native_ui_mice: HashMap::new(),
+            native_ui_touches: HashMap::new(),
+            native_ui_modifiers: HashMap::new(),
+            native_ime_applied: HashSet::new(),
             last_primary_redraw_at: None,
             frame_pacing_schedule: FramePacingSchedule::default(),
+            gpu_progress_deadline: None,
+            ordinary_frames: 0,
             fatal_error: None,
             frame_requested: false,
             frame_in_progress: false,
-            frame_in_progress: false,
-            gpu_progress_deadline: None,
             owned_redraws: HashSet::new(),
             shutdown_done: false,
         };
@@ -6386,6 +6502,22 @@ mod tests {
 
         struct FocusProbe;
         impl runenui_core::UiApp for FocusProbe {
+            // Single authored text owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -6729,6 +6861,22 @@ mod tests {
 
         struct Probe;
         impl runenui_core::UiApp for Probe {
+            // Single authored text owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -6875,6 +7023,22 @@ mod tests {
 
         struct StartupUi;
         impl runenui_core::UiApp for StartupUi {
+            // Single authored text owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -7029,6 +7193,22 @@ mod tests {
 
         struct NativeInputApp;
         impl runenui_core::UiApp for NativeInputApp {
+            // Single authored text owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -7365,7 +7545,8 @@ mod tests {
         // RunenUI's one contact translator owns both devices. A duplicate
         // or orphan native A observation must leave B's real contact intact;
         // no global M13 Cancel may be derived from a rejected transition.
-        let mut touch_runtime = runenui_runtime::AppRuntime::<NativeInputApp>::mount(());
+        let mut touch_runtime = runenui_runtime::AppRuntime::<NativeInputApp>::mount(())
+            .expect("the single text native-touch fixture must admit initial reconciliation");
         let touch_styles = runenui_core::StyleEnvironment::default();
         let published_touch = touch_runtime
             .publish_surface(&runenui_runtime::SurfaceBuildContext::new(
@@ -7733,6 +7914,22 @@ mod tests {
 
         struct NativeLifetimeApp;
         impl runenui_core::UiApp for NativeLifetimeApp {
+            // Single authored text owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -8247,6 +8444,22 @@ mod tests {
 
         struct GeometryProbe;
         impl runenui_core::UiApp for GeometryProbe {
+            // Single authored text owner; bound this fixture's actual outputs.
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;

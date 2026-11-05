@@ -927,6 +927,21 @@ mod native_publication_tests {
     struct CallbackProbe(usize);
     impl runenui_core::Widget<CallbackAction> for CallbackProbe {
         type State = ();
+
+        fn producer_budget(
+            &self,
+            phase: runenui_core::WidgetProducerPhase,
+            _: &Self::State,
+        ) -> runenui_core::WidgetProducerBudget {
+            match phase {
+                runenui_core::WidgetProducerPhase::Event => {
+                    // One pointer-enter callback emits 'burst' Tick actions,
+                    // then one semantic focus command. No other phase emits.
+                    runenui_core::WidgetProducerBudget::new(self.0.saturating_add(1))
+                }
+                _ => runenui_core::WidgetProducerBudget::new(0),
+            }
+        }
         fn create_state(&self) {}
         fn measure(
             &self,
@@ -956,9 +971,9 @@ mod native_publication_tests {
                     if boundary.kind() == runenui_core::PointerBoundaryKind::Enter)
             {
                 for _ in 0..self.0 {
-                    context.emit(CallbackAction::Tick);
+                    let _ = context.try_emit(CallbackAction::Tick);
                 }
-                context.emit_command(runenui_core::SemanticCommand::RequestFocus);
+                let _ = context.try_emit_command(runenui_core::SemanticCommand::RequestFocus);
             }
             runenui_core::WidgetEventOutput::none()
         }
