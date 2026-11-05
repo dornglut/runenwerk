@@ -2018,16 +2018,16 @@ impl WinitRunner {
                     // Cancel may never be retargeted to a successor focus.
                     // This original translator's M13 revision is the only
                     // witnessed lifetime; missing/gapped history fails closed.
-                    let exact_revision = self
-                        .native_ui_keyboards
-                        .get(&window)
-                        .is_some_and(|lifetime| {
-                            lifetime.source == source
-                                && lifetime.recipient == slot
-                                && lifetime.binding_epoch == epoch
-                                && lifetime.last_observed_revision
-                                    == Some(snapshot.revision().get())
-                        });
+                    let exact_revision =
+                        self.native_ui_keyboards
+                            .get(&window)
+                            .is_some_and(|lifetime| {
+                                lifetime.source == source
+                                    && lifetime.recipient == slot
+                                    && lifetime.binding_epoch == epoch
+                                    && lifetime.last_observed_revision
+                                        == Some(snapshot.revision().get())
+                            });
                     if !exact_revision {
                         self.revoke_native_game_keyboard_source(source)?;
                         return Err(anyhow!(
@@ -7929,7 +7929,9 @@ mod tests {
             .record_unrouted_native_keyboard_release(secondary, physical_context)
             .expect("the original device-only release is marked");
         assert!(
-            runner.reconcile_unrouted_native_keyboard_releases().is_err(),
+            runner
+                .reconcile_unrouted_native_keyboard_releases()
+                .is_err(),
             "a missing original M13 revision witness must not issue a Cancel to a successor focus"
         );
         assert!(
