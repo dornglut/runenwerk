@@ -784,7 +784,14 @@ fn program_ui_producer_budget(
     runenui_core::ProducerBudget::new(credits, outputs)
         .with_reconciliation(owners, owners, owners)
         .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, host_starts, 0))
-        .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, host_starts, 0))
+        .with_work_residency(runenui_core::WorkResidencyBudget::new(
+            0,
+            0,
+            0,
+            0,
+            host_starts,
+            0,
+        ))
 }
 
 impl UiApp for RunenwerkProgramUiApp {
@@ -801,8 +808,8 @@ impl UiApp for RunenwerkProgramUiApp {
     }
 
     fn interaction_producer_budget(state: &Self::State) -> runenui_core::ProducerBudget {
-        let has_buttons = program_ui_owner_counts(state.source.root())
-            .is_some_and(|(_, buttons)| buttons > 0);
+        let has_buttons =
+            program_ui_owner_counts(state.source.root()).is_some_and(|(_, buttons)| buttons > 0);
         program_ui_producer_budget(state, has_buttons, has_buttons)
     }
 
@@ -1308,26 +1315,25 @@ impl UiRuntimeSlotsResource {
             );
         }
 
-        let mut runtime = match AppRuntime::<RunenwerkProgramUiApp>::mount(
-            RunenwerkProgramUiState {
+        let mut runtime =
+            match AppRuntime::<RunenwerkProgramUiApp>::mount(RunenwerkProgramUiState {
                 source,
                 artifact,
                 resolved_state,
                 registry: registry.clone(),
-            },
-        ) {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                tracing::warn!(
-                    kind = ?error.kind(),
-                    "RunenUI program mount refused initial producer admission"
-                );
-                return UiRuntimeSlotMountReport::rejected(
-                    screen_id,
-                    UiRuntimeSlotMountFailure::RuntimeInitialization,
-                );
-            }
-        };
+            }) {
+                Ok(runtime) => runtime,
+                Err(error) => {
+                    tracing::warn!(
+                        kind = ?error.kind(),
+                        "RunenUI program mount refused initial producer admission"
+                    );
+                    return UiRuntimeSlotMountReport::rejected(
+                        screen_id,
+                        UiRuntimeSlotMountFailure::RuntimeInitialization,
+                    );
+                }
+            };
         if let Some(clock) = &self.native_clock {
             runtime.set_monotonic_clock(clock.clone());
         }
@@ -2711,9 +2717,10 @@ mod tests {
 
     impl UiApp for InitialTimerApp {
         fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-            runenui_core::ProducerBudget::new(6, 2).with_reconciliation(1, 1, 1)
-            .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 1, 0, 0))
-            .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 1, 0, 0, 0))
+            runenui_core::ProducerBudget::new(6, 2)
+                .with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 1, 0, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 1, 0, 0, 0))
         }
 
         fn action_producer_budget(
@@ -2809,9 +2816,10 @@ mod tests {
             }
 
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(13, 9).with_reconciliation(1, 1, 1)
-                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
-                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
             }
 
             type State = TextState;
@@ -3568,9 +3576,10 @@ mod tests {
             }
 
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(13, 9).with_reconciliation(1, 1, 1)
-                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
-                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
             }
 
             type State = ();
@@ -4839,9 +4848,10 @@ mod tests {
             }
 
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(15, 9).with_reconciliation(3, 3, 3)
-                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
-                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+                runenui_core::ProducerBudget::new(15, 9)
+                    .with_reconciliation(3, 3, 3)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
             }
 
             type State = ();
@@ -4966,9 +4976,10 @@ mod tests {
             }
 
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(13, 9).with_reconciliation(1, 1, 1)
-                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
-                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
             }
 
             type State = ();
@@ -5330,9 +5341,10 @@ mod tests {
                 _state: &Self::State,
                 _action: &Self::Action,
             ) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(6, 2).with_reconciliation(1, 1, 1)
-                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 1, 0))
-                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 1, 0))
+                runenui_core::ProducerBudget::new(6, 2)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 1, 0))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 1, 0))
             }
 
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
@@ -5664,9 +5676,10 @@ mod tests {
                 _state: &Self::State,
                 _action: &Self::Action,
             ) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(6, 2).with_reconciliation(1, 1, 1)
-                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 1, 0))
-                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 1, 0))
+                runenui_core::ProducerBudget::new(6, 2)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 1, 0))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 1, 0))
             }
 
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
@@ -6428,9 +6441,10 @@ mod tests {
             }
 
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(19, 13).with_reconciliation(3, 3, 3)
-                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
-                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+                runenui_core::ProducerBudget::new(19, 13)
+                    .with_reconciliation(3, 3, 3)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
             }
 
             type State = ();

@@ -592,14 +592,14 @@ mod exact_raster_extent_tests {
                 // Fixed authored topology and its initial owner reconciliation.
                 runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
             }
-        
+
             fn action_producer_budget(
                 _state: &Self::State,
                 _action: &Self::Action,
             ) -> runenui_core::ProducerBudget {
                 runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
             }
-        
+
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
                 runenui_core::ProducerBudget::new(1, 0)
             }
@@ -707,14 +707,14 @@ mod native_publication_tests {
             // Fixed authored topology and its initial owner reconciliation.
             runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
         }
-    
+
         fn action_producer_budget(
             _state: &Self::State,
             _action: &Self::Action,
         ) -> runenui_core::ProducerBudget {
             runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
         }
-    
+
         fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
             runenui_core::ProducerBudget::new(1, 0)
         }
@@ -866,7 +866,10 @@ mod native_publication_tests {
     // The custom focusable widget emits exactly `burst` Tick actions and one
     // RequestFocus command on target Enter; there is never an unbounded app
     // callback or another mounted owner in this fixture.
-    fn callback_profile(state: &CallbackState, include_callback: bool) -> runenui_core::ProducerBudget {
+    fn callback_profile(
+        state: &CallbackState,
+        include_callback: bool,
+    ) -> runenui_core::ProducerBudget {
         let outputs = if include_callback {
             state.burst.checked_add(1)
         } else {
@@ -887,7 +890,10 @@ mod native_publication_tests {
             runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
         }
 
-        fn action_producer_budget(state: &Self::State, _action: &Self::Action) -> runenui_core::ProducerBudget {
+        fn action_producer_budget(
+            state: &Self::State,
+            _action: &Self::Action,
+        ) -> runenui_core::ProducerBudget {
             // A queued Reveal may replace the Column by the focusable widget.
             callback_profile(state, true)
         }

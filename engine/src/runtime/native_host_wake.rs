@@ -286,18 +286,19 @@ mod tests {
         impl UiApp for AsyncApp {
             fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
                 // Fixed authored topology and its initial owner reconciliation.
-                runenui_core::ProducerBudget::new(5, 2).with_reconciliation(1, 1, 1)
-                .with_work_starts(runenui_core::WorkStartBudget::new(1, 0, 0, 0, 0))
-                .with_work_residency(runenui_core::WorkResidencyBudget::new(1, 0, 0, 0, 0, 0))
+                runenui_core::ProducerBudget::new(5, 2)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(1, 0, 0, 0, 0))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(1, 0, 0, 0, 0, 0))
             }
-        
+
             fn action_producer_budget(
                 _state: &Self::State,
                 _action: &Self::Action,
             ) -> runenui_core::ProducerBudget {
                 runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
             }
-        
+
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
                 runenui_core::ProducerBudget::new(1, 0)
             }

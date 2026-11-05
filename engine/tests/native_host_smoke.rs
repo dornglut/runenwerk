@@ -130,7 +130,6 @@ impl runenui_core::UiApp for NativeManagedTypedApp {
         runenui_core::ProducerBudget::new(1, 0)
     }
 
-
     fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
         runenui_core::text("Native managed typed RunenUI")
     }

@@ -69,9 +69,10 @@ impl UiApp for QualificationUi {
     }
 
     fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-        runenui_core::ProducerBudget::new(16, 9).with_reconciliation(4, 4, 4)
-        .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
-        .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+        runenui_core::ProducerBudget::new(16, 9)
+            .with_reconciliation(4, 4, 4)
+            .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+            .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
     }
 
     type State = UiState;
