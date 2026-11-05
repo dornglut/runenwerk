@@ -134,13 +134,14 @@ impl RunenwerkEditorShellState {
         self.editor_window_bindings
             .insert(editor_window_id, binding);
         if editor_window_id == self.editor_windows.primary_window_id() {
-            let target_ids = self
-                .composition_target_bindings
-                .iter()
-                .map(|entry| entry.target_id)
-                .collect::<Vec<_>>();
-            for target_id in target_ids {
-                self.composition_target_bindings.bind(target_id, binding);
+            if let Some(primary_target) = self
+                .composition_runtime
+                .composition()
+                .definition()
+                .targets()
+                .first()
+            {
+                self.composition_target_bindings.bind(primary_target.id, binding);
             }
         }
         true
