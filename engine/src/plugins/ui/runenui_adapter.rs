@@ -1628,6 +1628,32 @@ impl UiRuntimeSlotsResource {
         self.slots.iter().map(|slot| slot.id)
     }
 
+    /// Test-only bounded transcript for an exact typed runtime failure.
+    /// Reads the original RunenUI trace without mutating or replaying input.
+    #[cfg(test)]
+    pub(crate) fn test_trace_tail<A: UiApp + 'static>(
+        &self,
+        slot_id: UiRuntimeSlotId,
+        limit: usize,
+    ) -> Vec<String> {
+        let Some(runtime) = self
+            .slot(slot_id)
+            .and_then(|slot| slot.runtime.typed::<A>())
+        else {
+            return Vec::new();
+        };
+        runtime
+            .trace()
+            .records()
+            .map(|record| format!("{record:?}"))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .take(limit)
+            .rev()
+            .collect()
+    }
+
     /// Returns the Engine ingress generation that might require new RunenUI publication.
     /// This does not mirror or replace RunenUI's own redraw revision.
     #[must_use]

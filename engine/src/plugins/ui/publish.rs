@@ -1177,7 +1177,18 @@ mod native_publication_tests {
                         .input_ownership(slot),
                     Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
                 ));
-                settle_native_ui_slot(&mut world, slot).unwrap();
+                let settlement = settle_native_ui_slot(&mut world, slot);
+                if let Err(error) = &settlement {
+                    let trace = world
+                        .resource::<UiRuntimeSlotsResource>()
+                        .unwrap()
+                        .test_trace_tail::<CallbackApp>(slot, 48);
+                    eprintln!("U9C_CALLBACK_SETTLEMENT_FAILURE burst={burst} error={error:?}");
+                    for record in trace {
+                        eprintln!("U9C_CALLBACK_TRACE {record}");
+                    }
+                }
+                settlement.unwrap();
                 runtime.run_schedule::<Update>(&mut world).unwrap();
             }
             let slots = world.resource_mut::<UiRuntimeSlotsResource>().unwrap();
