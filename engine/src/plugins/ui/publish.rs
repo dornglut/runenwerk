@@ -874,15 +874,19 @@ mod native_publication_tests {
     // RequestFocus command on target Enter; there is never an unbounded app
     // callback or another mounted owner in this fixture.
     fn callback_profile(state: &CallbackState) -> runenui_core::ProducerBudget {
-        // The custom routed Event emits 'burst' Tick actions and one focus
-        // command. Budget four additional focus notices, four pointer
-        // activation/scroll/default outputs and one cursor-service result.
-        // These are the same bounded M4 admission classes as the accepted
-        // RunenUI Counter application, scaled by the actual test burst.
+        // One PointerBoundary::Enter can emit `burst` Tick actions and one
+        // RequestFocus. That delegated focus command shares the original root.
+        // RunenUI conservatively accounts for the same WidgetProducerPhase::Event
+        // bound in one ordinary route and four deferred focus invocations for
+        // this one-owner tree (routed/admission.rs). The parent also reserves
+        // the initial pointer callback once, then four potential default
+        // outputs and one cursor-service result. Charging only a fixed four
+        // focus outputs underdeclares a 130-action callback and poisons its
+        // otherwise valid queued focus command.
         let Some(outputs) = state
             .burst
             .checked_add(1)
-            .and_then(|n| n.checked_add(4))
+            .and_then(|per_event| per_event.checked_mul(6))
             .and_then(|n| n.checked_add(4))
             .and_then(|n| n.checked_add(1))
         else {
