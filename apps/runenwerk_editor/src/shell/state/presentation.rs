@@ -123,12 +123,28 @@ impl RunenwerkEditorShellState {
         })
     }
 
+    fn binding_is_claimed_by_another_editor_window(
+        &self,
+        editor_window_id: EditorWindowId,
+        binding: EditorWindowPresentationBinding,
+    ) -> bool {
+        self.editor_window_bindings
+            .iter()
+            .any(|(other_window_id, existing)| {
+                *other_window_id != editor_window_id
+                    && (existing.native_window_id == binding.native_window_id
+                        || existing.render_surface_id == binding.render_surface_id)
+            })
+    }
+
     pub fn bind_editor_window_presentation(
         &mut self,
         editor_window_id: EditorWindowId,
         binding: EditorWindowPresentationBinding,
     ) -> bool {
-        if self.editor_windows.record(editor_window_id).is_none() {
+        if self.editor_windows.record(editor_window_id).is_none()
+            || self.binding_is_claimed_by_another_editor_window(editor_window_id, binding)
+        {
             return false;
         }
         self.editor_window_bindings
@@ -161,6 +177,7 @@ impl RunenwerkEditorShellState {
                 .targets()
                 .iter()
                 .all(|target| target.id != target_id)
+            || self.binding_is_claimed_by_another_editor_window(editor_window_id, binding)
         {
             return false;
         }

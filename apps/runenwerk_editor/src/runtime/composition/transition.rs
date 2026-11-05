@@ -1049,6 +1049,134 @@ mod tests {
     }
 
     #[test]
+    fn editor_window_physical_binding_admission_rejects_aliases_before_mutation() {
+        let mut host = EditorHostResource::default();
+        let mut transitions = EditorCompositionTransitionRuntimeResource::default();
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Runenwerk", (1280, 720), 1.0, true);
+        let mut surfaces = RenderSurfaceRegistryResource::default();
+        let primary_native = NativeWindowId::primary();
+        let primary_surface =
+            surfaces.reserve_surface_for_native_window(primary_native, (1280, 720));
+        surfaces
+            .confirm_surface_attachment(primary_surface, primary_native, (1280, 720))
+            .expect("primary surface attaches");
+
+        let primary_target = host.shell_state.primary_composition_target_id();
+        let primary_window = host.shell_state.editor_windows().primary_window_id();
+        let primary_binding = EditorWindowPresentationBinding::primary();
+        let unit = unit_from_multi_unit_stack(&host);
+        let (secondary_target, secondary_binding) = create_secondary_target_for_unit(
+            &mut host,
+            &mut transitions,
+            &mut windows,
+            &mut surfaces,
+            unit,
+        );
+        let secondary_window = host
+            .shell_state
+            .editor_window_for_binding(secondary_binding)
+            .expect("created secondary window has an owner");
+        assert_ne!(primary_window, secondary_window);
+        assert_ne!(primary_binding, secondary_binding);
+
+        // A native ID or render surface ID may not be claimed by a
+        // different live Editor window, even if the other field differs.
+        let native_collision = EditorWindowPresentationBinding {
+            native_window_id: secondary_binding.native_window_id,
+            render_surface_id: primary_binding.render_surface_id,
+        };
+        let render_collision = EditorWindowPresentationBinding {
+            native_window_id: primary_binding.native_window_id,
+            render_surface_id: secondary_binding.render_surface_id,
+        };
+        for attempted in [secondary_binding, native_collision, render_collision] {
+            assert!(
+                !host
+                    .shell_state
+                    .bind_editor_window_presentation(primary_window, attempted)
+            );
+            assert_eq!(
+                host.shell_state.editor_window_binding(primary_window),
+                Some(primary_binding),
+            );
+            assert_eq!(
+                host.shell_state.editor_window_binding(secondary_window),
+                Some(secondary_binding),
+            );
+            assert_eq!(
+                host.shell_state.composition_target_binding(primary_target),
+                Some(primary_binding),
+            );
+            assert_eq!(
+                host.shell_state
+                    .composition_target_binding(secondary_target),
+                Some(secondary_binding),
+            );
+            assert_eq!(
+                host.shell_state
+                    .editor_window_for_binding(secondary_binding),
+                Some(secondary_window),
+            );
+        }
+
+        assert!(
+            !host
+                .shell_state
+                .bind_editor_window_presentation(secondary_window, primary_binding)
+        );
+        assert_eq!(
+            host.shell_state.editor_window_binding(secondary_window),
+            Some(secondary_binding),
+        );
+
+        // The alternate public Editor writer must also reject aliases
+        // without changing either the logical or structural registry.
+        assert!(!host.shell_state.bind_composition_target_presentation(
+            secondary_target,
+            secondary_window,
+            primary_binding,
+        ));
+        assert!(!host.shell_state.bind_composition_target_presentation(
+            secondary_target,
+            primary_window,
+            secondary_binding,
+        ));
+        assert_eq!(
+            host.shell_state.editor_window_binding(primary_window),
+            Some(primary_binding),
+        );
+        assert_eq!(
+            host.shell_state.editor_window_binding(secondary_window),
+            Some(secondary_binding),
+        );
+        assert_eq!(
+            host.shell_state.composition_target_binding(primary_target),
+            Some(primary_binding),
+        );
+        assert_eq!(
+            host.shell_state
+                .composition_target_binding(secondary_target),
+            Some(secondary_binding),
+        );
+        assert_eq!(
+            host.shell_state
+                .editor_window_for_binding(secondary_binding),
+            Some(secondary_window),
+        );
+
+        // Re-affirming a window's own already-owned binding remains valid.
+        assert!(host
+            .shell_state
+            .bind_editor_window_presentation(secondary_window, secondary_binding));
+        assert!(host.shell_state.bind_composition_target_presentation(
+            secondary_target,
+            secondary_window,
+            secondary_binding,
+        ));
+    }
+
+    #[test]
     fn target_creation_commits_only_after_native_window_is_created() {
         let mut host = EditorHostResource::default();
         let mut transitions = EditorCompositionTransitionRuntimeResource::default();
