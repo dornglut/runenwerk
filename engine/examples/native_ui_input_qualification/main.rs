@@ -795,8 +795,14 @@ mod diagnostics_tests {
     #[test]
     fn diagnostic_policy_is_explicit_and_preserves_trace_by_default() {
         assert_eq!(Diagnostics::parse(None).unwrap(), Diagnostics::Trace);
-        assert_eq!(Diagnostics::parse(Some("trace")).unwrap(), Diagnostics::Trace);
-        assert_eq!(Diagnostics::parse(Some("summary")).unwrap(), Diagnostics::Summary);
+        assert_eq!(
+            Diagnostics::parse(Some("trace")).unwrap(),
+            Diagnostics::Trace
+        );
+        assert_eq!(
+            Diagnostics::parse(Some("summary")).unwrap(),
+            Diagnostics::Summary
+        );
         assert_eq!(Diagnostics::parse(Some("off")).unwrap(), Diagnostics::Off);
         assert!(Diagnostics::parse(Some("unknown")).is_err());
     }
