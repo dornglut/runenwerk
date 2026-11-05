@@ -174,6 +174,11 @@ struct NativeUiKeyboardTranslator {
     /// Observed native hardware identities only; pressed-key state remains
     /// exclusively inside the device-qualified RunenUI keyboard translator.
     devices: HashSet<UiInputDeviceId>,
+    /// Genuine original Ups admitted only to the neutral reducer while M13
+    /// was pending. A device marker requests source-local canonical Cancels
+    /// when the original slot settles; this is not another pressed-key store
+    /// or a queue of replayable input events.
+    unrouted_release_devices: HashSet<UiInputDeviceId>,
     binding_epoch: u64,
     /// Last actual M13 revision observed for this exact native UI keyboard
     /// lifetime. This is only a continuity witness, never copied focus,
@@ -1043,6 +1048,7 @@ impl WinitRunner {
                     recipient: slot,
                     source,
                     devices: HashSet::new(),
+                    unrouted_release_devices: HashSet::new(),
                     binding_epoch,
                     last_observed_revision: None,
                     keyboard: KeyboardInputState::default(),
@@ -1926,10 +1932,128 @@ impl WinitRunner {
         Ok(())
     }
 
-    /// Retire the actually disconnected keyboard device without destroying
-    /// other keys in the same window/slot/source lifetime. The translator owns
-    /// its pressed keys; this host tracks only observed hardware membership.
-    #[cfg(test)]
+    /// A genuine original key release may arrive while the selected M13
+    /// runtime has bounded follow-up work and cannot accept another event.
+    /// Record only the checked device belonging to the *existing* original
+    /// window/source translator. The physical Up has already entered the
+    /// neutral reducer, so this marker cannot impersonate another source.
+    fn record_unrouted_native_keyboard_release(
+        &mut self,
+        window: NativeWindowId,
+        context: InputContext,
+    ) -> Result<()> {
+        let device = Self::native_ui_device(context)?;
+        if let Some(lifetime) = self.native_ui_keyboards.get_mut(&window)
+            && lifetime.source == context.source
+            && lifetime.devices.contains(&device)
+        {
+            lifetime.unrouted_release_devices.insert(device);
+            // Winit modifier snapshots have no per-device attribution.
+            // A missed terminal event cannot leave stale modifier authority.
+            self.native_ui_modifiers.remove(&window);
+        }
+        Ok(())
+    }
+
+    /// Complete selective keyboard retirement only after the actual selected
+    /// RunenUI slot is quiescent. This deliberately uses the accepted pinned
+    /// translator's cancel_device over its original pressed-key lifetimes,
+    /// not a second key ledger or a synthetic physical Up. B survives A's
+    /// missed release; terminal/stale owners never receive an invented Cancel.
+    fn reconcile_unrouted_native_keyboard_releases(&mut self) -> Result<()> {
+        let pending = self
+            .native_ui_keyboards
+            .iter()
+            .flat_map(|(window, lifetime)| {
+                lifetime.unrouted_release_devices.iter().map(|device| {
+                    (
+                        *window,
+                        *device,
+                        lifetime.recipient,
+                        lifetime.binding_epoch,
+                        lifetime.source,
+                    )
+                })
+            })
+            .collect::<Vec<_>>();
+        for (window, device, slot, epoch, source) in pending {
+            let bound = self
+                .state
+                .world
+                .resource::<UiNativeInputRecipientsResource>()
+                .ok()
+                .and_then(|recipients| recipients.selected_slot_binding(slot));
+            let authentic_source = self
+                .native_input()
+                .window_source_context(window)
+                .is_some_and(|context| context.source == source);
+            let Some((bound_window, bound_epoch, bound_scope)) = bound else {
+                // An old retired binding cannot deliver into its successor.
+                self.native_ui_keyboards.remove(&window);
+                self.native_ui_modifiers.remove(&window);
+                self.revoke_native_game_keyboard_source(source)?;
+                continue;
+            };
+            if !authentic_source || bound_window != window || bound_epoch != epoch {
+                self.native_ui_keyboards.remove(&window);
+                self.native_ui_modifiers.remove(&window);
+                self.revoke_native_game_keyboard_source(source)?;
+                continue;
+            }
+            let observed = self
+                .state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()?
+                .input_ownership(slot);
+            match observed {
+                Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {
+                    self.revoke_native_game_keyboard_source(source)?;
+                }
+                Ok(snapshot)
+                    if snapshot.scope() == &bound_scope
+                        && snapshot.status() == runenui_runtime::RuntimeStatus::Running =>
+                {
+                    // Even the same current scope can have switched focus and
+                    // returned during the pending application backlog. A
+                    // Cancel may never be retargeted to a successor focus.
+                    // This original translator's M13 revision is the only
+                    // witnessed lifetime; missing/gapped history fails closed.
+                    let exact_revision = self
+                        .native_ui_keyboards
+                        .get(&window)
+                        .is_some_and(|lifetime| {
+                            lifetime.source == source
+                                && lifetime.recipient == slot
+                                && lifetime.binding_epoch == epoch
+                                && lifetime.last_observed_revision
+                                    == Some(snapshot.revision().get())
+                        });
+                    if !exact_revision {
+                        self.revoke_native_game_keyboard_source(source)?;
+                        return Err(anyhow!(
+                            "unrouted keyboard release cannot certify original M13 focus lifetime across revision gap"
+                        ));
+                    }
+                    self.cancel_native_ui_keyboard_device(window, device)?;
+                    if let Some(lifetime) = self.native_ui_keyboards.get_mut(&window) {
+                        lifetime.unrouted_release_devices.remove(&device);
+                    }
+                    self.revoke_native_game_keyboard_source(source)?;
+                }
+                other => {
+                    self.revoke_native_game_keyboard_source(source)?;
+                    return Err(anyhow!(
+                        "unrouted original keyboard release has no safe selected M13 Cancel owner: {other:?}"
+                    ));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Retire an authenticated device's framework key state while keeping
+    /// independent devices live. Called for source-qualified native release
+    /// recovery and for the deterministic selective-device qualification.
     fn cancel_native_ui_keyboard_device(
         &mut self,
         window: NativeWindowId,
@@ -3379,6 +3503,10 @@ impl WinitRunner {
                 .resource_mut::<UiRuntimeSlotsResource>()?
                 .settle_native_slots()?;
         }
+        // An original physical Up can have been neutral-only while a prior
+        // bounded M13 pump was still in progress. Reconcile its translator
+        // lifetime before any game projection in the next ordinary frame.
+        self.reconcile_unrouted_native_keyboard_releases()?;
         self.reconcile_native_ui_keyboard_before_frame()?;
         run_runtime_frame(&mut self.state.world, &mut self.state.scheduler)?;
         if render_native_host::has_gpu_context(&self.state.world) {
@@ -4153,6 +4281,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 event,
                 is_synthetic,
             } => {
+                // A previous neutral-only physical Up may have left a
+                // framework-owned pressed key. Reconcile its exact original
+                // device before translating this new keyboard transition.
+                self.reconcile_unrouted_native_keyboard_releases()?;
                 // Even a stale/missing recipient must not suppress original
                 // physical truth. Admit it before reporting the UI route error,
                 // and fail gameplay closed for that exact lifetime.
@@ -4221,6 +4353,16 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             self.deny_native_keyboard_lifetime(context, &physical_key)?;
                         }
                         if native_m13_waiting_for_settlement(&error) {
+                            if matches!(event.state, winit::event::ElementState::Released) {
+                                // The original neutral Up has been journalled.
+                                // Only the same existing window/source/device
+                                // translator can later receive a conservative
+                                // M13 Cancel after bounded work settles.
+                                self.record_unrouted_native_keyboard_release(
+                                    native_window_id,
+                                    context,
+                                )?;
+                            }
                             // Original physical Down/Up is already journalled;
                             // no M13 claim is fabricated and the individual
                             // Down was denied above. Revoke any other held
@@ -5892,6 +6034,7 @@ mod tests {
                 recipient: slot,
                 source: first.source,
                 devices: HashSet::new(),
+                unrouted_release_devices: HashSet::new(),
                 binding_epoch: epoch,
                 last_observed_revision: Some(u64::MAX),
                 keyboard: KeyboardInputState::default(),
@@ -7738,6 +7881,89 @@ mod tests {
             !runner.native_ui_modifiers.contains_key(&secondary),
             "A removal invalidates the unattributed window modifier snapshot"
         );
+        // A genuine original Up can be neutral-only while M13 has work
+        // pending. Record ONLY that checked device, never another source or
+        // another keyboard's pressed-key state. After quiescence, the same
+        // canonical M13 slot owns selective cancellation.
+        let physical_context = runner
+            .native_input_mut()
+            .window_context(secondary, winit::event::DeviceId::dummy())
+            .expect("original bound window-device source");
+        let recovering = WinitRunner::native_ui_device(physical_context).unwrap();
+        runner.native_ui_keyboard_translator(
+            secondary,
+            slot,
+            physical_context.source,
+            recovering,
+            bound_epoch,
+        );
+        runner
+            .record_unrouted_native_keyboard_release(
+                secondary,
+                InputContext::new(InputSourceId::new(93), physical_context.device),
+            )
+            .expect("foreign source is never a recovery permit");
+        assert!(
+            !runner
+                .native_ui_keyboards
+                .get(&secondary)
+                .unwrap()
+                .unrouted_release_devices
+                .contains(&recovering)
+        );
+        let checked_revision = runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("same selected M13 runtime")
+            .input_ownership(slot)
+            .expect("quiescent original input owner")
+            .revision()
+            .get();
+        runner
+            .native_ui_keyboards
+            .get_mut(&secondary)
+            .expect("same checked original translator")
+            .last_observed_revision = Some(checked_revision ^ 1);
+        runner
+            .record_unrouted_native_keyboard_release(secondary, physical_context)
+            .expect("the original device-only release is marked");
+        assert!(
+            runner.reconcile_unrouted_native_keyboard_releases().is_err(),
+            "a missing original M13 revision witness must not issue a Cancel to a successor focus"
+        );
+        assert!(
+            runner
+                .native_ui_keyboards
+                .get(&secondary)
+                .unwrap()
+                .unrouted_release_devices
+                .contains(&recovering),
+            "an unresolved original Up stays pending, not silently claimed terminal"
+        );
+        runner
+            .native_ui_keyboards
+            .get_mut(&secondary)
+            .expect("same checked original translator")
+            .last_observed_revision = Some(checked_revision);
+        assert!(
+            runner
+                .native_ui_keyboards
+                .get(&secondary)
+                .unwrap()
+                .unrouted_release_devices
+                .contains(&recovering)
+        );
+        runner
+            .reconcile_unrouted_native_keyboard_releases()
+            .expect("source-qualified ordinary M13 Cancel recovery");
+        let live = runner
+            .native_ui_keyboards
+            .get(&secondary)
+            .expect("independent keyboard B survives selective recovery");
+        assert!(!live.devices.contains(&recovering));
+        assert!(live.devices.contains(&device_b));
+        assert!(live.unrouted_release_devices.is_empty());
         // A device-free namespace change is still a hard translator
         // lifetime boundary; no previous UI pressed keys or modifiers survive.
         let source_a = InputSourceId::new(91);
