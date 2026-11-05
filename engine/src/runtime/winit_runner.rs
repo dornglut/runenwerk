@@ -144,10 +144,7 @@ fn native_ui_blocks_preframe_keyboard_gameplay(
 /// M13 receipt terminality is narrower than the readiness needed to grant
 /// gameplay. Any unfinished unrelated work can subsequently change focus or
 /// exclusivity, so only a globally settled slot may authorize this Down.
-fn native_keyboard_game_eligible(
-    globally_settled: bool,
-    conflict: UiInputConflict,
-) -> bool {
+fn native_keyboard_game_eligible(globally_settled: bool, conflict: UiInputConflict) -> bool {
     globally_settled
         && matches!(
             conflict,
