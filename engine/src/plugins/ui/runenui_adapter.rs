@@ -3238,7 +3238,14 @@ mod tests {
             }
 
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(1, 0)
+                // Accepted RunenUI Winit text/touch profile: the pointer submission
+                // retains an Up/cancel continuation and cursor-service response even
+                // though this one-node fixture emits no widget or app action.
+                runenui_core::ProducerBudget::new(6, 2)
+                    .with_application_outputs(0)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
             }
 
             type State = ();

@@ -716,7 +716,14 @@ mod native_publication_tests {
         }
 
         fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-            runenui_core::ProducerBudget::new(1, 0)
+            // Accepted RunenUI Winit text/touch profile: the pointer submission
+            // retains an Up/cancel continuation and cursor-service response even
+            // though this one-node fixture emits no widget or app action.
+            runenui_core::ProducerBudget::new(6, 2)
+                .with_application_outputs(0)
+                .with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
         }
 
         type State = ();
@@ -866,22 +873,32 @@ mod native_publication_tests {
     // The custom focusable widget emits exactly `burst` Tick actions and one
     // RequestFocus command on target Enter; there is never an unbounded app
     // callback or another mounted owner in this fixture.
-    fn callback_profile(
-        state: &CallbackState,
-        include_callback: bool,
-    ) -> runenui_core::ProducerBudget {
-        let outputs = if include_callback {
-            state.burst.checked_add(1)
-        } else {
-            Some(0)
-        };
-        let Some(outputs) = outputs else {
+    fn callback_profile(state: &CallbackState) -> runenui_core::ProducerBudget {
+        // The custom routed Event emits 'burst' Tick actions and one focus
+        // command. Budget four additional focus notices, four pointer
+        // activation/scroll/default outputs and one cursor-service result.
+        // These are the same bounded M4 admission classes as the accepted
+        // RunenUI Counter application, scaled by the actual test burst.
+        let Some(outputs) = state
+            .burst
+            .checked_add(1)
+            .and_then(|n| n.checked_add(4))
+            .and_then(|n| n.checked_add(4))
+            .and_then(|n| n.checked_add(1))
+        else {
             return runenui_core::ProducerBudget::new(0, 0);
         };
-        let Some(credits) = 2_usize.checked_add(outputs) else {
+        let Some(credits) = 1_usize
+            .checked_add(1)
+            .and_then(|n| n.checked_add(outputs))
+            .and_then(|n| n.checked_add(3))
+        else {
             return runenui_core::ProducerBudget::new(0, 0);
         };
-        runenui_core::ProducerBudget::new(credits, outputs).with_reconciliation(1, 1, 1)
+        runenui_core::ProducerBudget::new(credits, outputs)
+            .with_reconciliation(1, 1, 1)
+            .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+            .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
     }
 
     impl UiApp for CallbackApp {
@@ -895,11 +912,11 @@ mod native_publication_tests {
             _action: &Self::Action,
         ) -> runenui_core::ProducerBudget {
             // A queued Reveal may replace the Column by the focusable widget.
-            callback_profile(state, true)
+            callback_profile(state)
         }
 
         fn interaction_producer_budget(state: &Self::State) -> runenui_core::ProducerBudget {
-            callback_profile(state, true)
+            callback_profile(state)
         }
         type State = CallbackState;
         type Action = CallbackAction;

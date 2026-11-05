@@ -32,8 +32,10 @@ use engine::runtime::{
 };
 use runen_ecs::World;
 use runenui_core::{
-    Effects, FontFamilyName, GenericFontFamily, NoHostProtocol, StyleEnvironment, UiApp, View,
-    button, column, text,
+    EditIntent, EditResolution, Effects, FontFamilyName, GenericFontFamily, NoHostProtocol,
+    SemanticEditableMode, StyleEnvironment, TextAffinity, TextDocumentId, TextDocumentRevision,
+    TextDocumentSnapshot, TextPosition, TextSelection, UiApp, UpdateOutput, View, button, column,
+    text, text_field,
 };
 use winit::event::{DeviceEvent, Ime, WindowEvent};
 use winit::window::Window;
@@ -48,29 +50,39 @@ struct QualificationUi;
 struct UiState {
     activations: Arc<AtomicUsize>,
     text_generation: u64,
+    // Application-owned editable state: original native text/IME must actually
+    // settle through RunenUI before this value or its revision may change.
+    entered_text: String,
+    edit_revision: u64,
 }
 
 enum QualificationAction {
     Activate,
     ChangeText(u64),
+    Edit(Box<EditIntent>),
 }
 
 impl UiApp for QualificationUi {
     fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
         // Fixed authored topology and its initial owner reconciliation.
-        runenui_core::ProducerBudget::new(5, 0).with_reconciliation(4, 0, 4)
+        runenui_core::ProducerBudget::new(6, 0).with_reconciliation(5, 0, 5)
     }
 
     fn action_producer_budget(
         _state: &Self::State,
         _action: &Self::Action,
     ) -> runenui_core::ProducerBudget {
-        runenui_core::ProducerBudget::new(5, 0).with_reconciliation(4, 4, 4)
+        // One accepted edit resolution can be emitted by the application;
+        // all five owners are conservatively eligible for reconciliation.
+        runenui_core::ProducerBudget::new(7, 1).with_reconciliation(5, 5, 5)
     }
 
     fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-        runenui_core::ProducerBudget::new(16, 9)
-            .with_reconciliation(4, 4, 4)
+        // Five fixed owners, including two interactive leaves (text field
+        // and button). One native interaction may admit focus and action
+        // outputs and one cursor-service generation; no local task or timer.
+        runenui_core::ProducerBudget::new(22, 13)
+            .with_reconciliation(5, 5, 5)
             .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
             .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
     }
@@ -80,6 +92,26 @@ impl UiApp for QualificationUi {
     type HostProtocol = NoHostProtocol;
 
     fn root(state: &UiState) -> impl View<QualificationAction> {
+        let document = TextDocumentSnapshot::new(
+            TextDocumentId::new(1276),
+            TextDocumentRevision::new(state.edit_revision),
+        );
+        let caret = TextPosition::new(
+            document,
+            &state.entered_text,
+            state.entered_text.len(),
+            TextAffinity::Downstream,
+        )
+        .expect("the authored UTF-8 text ends at a valid scalar boundary");
+        let editable = text_field(
+            document,
+            state.entered_text.clone(),
+            TextSelection::collapsed(caret),
+            SemanticEditableMode::SingleLine,
+            |intent| QualificationAction::Edit(Box::new(intent)),
+        )
+        .expect("the native qualification text source is well formed")
+        .id("u9c.qualify.editable");
         column(vec![
             text(if state.text_generation == 0 {
                 "RunenUI native input qualification".to_owned()
@@ -87,7 +119,9 @@ impl UiApp for QualificationUi {
                 format!("RunenUI changing text {:08}", state.text_generation)
             })
             .into_element(),
-            text("Click the button to focus it, then try W, Space and Tab.").into_element(),
+            text("Click the text field, type Unicode, then Tab to the button; test W and Space.")
+                .into_element(),
+            editable.into_element(),
             button("Focus / activate this button")
                 .id("u9c.qualify.button")
                 .key("u9c.qualify.button")
@@ -104,10 +138,28 @@ impl UiApp for QualificationUi {
         match action {
             QualificationAction::Activate => {
                 state.activations.fetch_add(1, Ordering::Relaxed);
+                UpdateOutput::effects(Effects::none())
             }
-            QualificationAction::ChangeText(generation) => state.text_generation = generation,
+            QualificationAction::ChangeText(generation) => {
+                state.text_generation = generation;
+                UpdateOutput::effects(Effects::none())
+            }
+            QualificationAction::Edit(intent) => {
+                let range = intent.replacement();
+                state
+                    .entered_text
+                    .replace_range(range.start()..range.end(), intent.replacement_text());
+                state.edit_revision = state
+                    .edit_revision
+                    .checked_add(1)
+                    .expect("the native typed text revision must not wrap");
+                let document = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(state.edit_revision),
+                );
+                UpdateOutput::edit(EditResolution::accepted(intent.request().clone(), document))
+            }
         }
-        Effects::none()
     }
 }
 
@@ -327,6 +379,8 @@ fn main() -> Result<()> {
             UiState {
                 activations: Arc::clone(&clicks),
                 text_generation: 0,
+                entered_text: String::new(),
+                edit_revision: 0,
             },
             &fonts,
         )
@@ -382,7 +436,9 @@ fn main() -> Result<()> {
         std::process::id(),
         std::env::var("RUNENWERK_SOURCE_REVISION").ok()
     );
-    println!("U9C_GUIDANCE click UI button, try W/Space/Tab, Alt+Tab and refocus; close via X");
+    println!(
+        "U9C_GUIDANCE click text field, type Unicode text, Tab to button, click and hold W; Alt+Tab, resize, refocus, then close via X"
+    );
     app.run()?;
     if options.is_some() {
         let report = report
@@ -496,6 +552,15 @@ impl QualificationHook {
             ),
             Err(error) => format!("unavailable={error:?}"),
         };
+        let (edit_revision, edit_chars) = world
+            .resource::<UiRuntimeSlotsResource>()?
+            .observe_app::<QualificationUi, _>(self.slot, |runtime| {
+                (
+                    runtime.state().edit_revision,
+                    runtime.state().entered_text.chars().count(),
+                )
+            })
+            .map_err(|error| anyhow::anyhow!("native typed text state unavailable: {error:?}"))?;
         let actions = world.resource::<ActionState>()?;
         let w = actions.action_down(action::WORLD_MOVE_UP);
         let a = actions.action_down(action::WORLD_MOVE_LEFT);
@@ -503,13 +568,13 @@ impl QualificationHook {
         let d = actions.action_down(action::WORLD_MOVE_RIGHT);
         let activations = self.activations.load(Ordering::Relaxed);
         let observation = format!(
-            "frame={} native_focused={} selected_epoch={selected:?} paint_intake={paint_intake:?} completed_present={} M13=[{owner}] game_down=[W:{w},A:{a},S:{s},D:{d}] ui_activations={activations}",
+            "frame={} native_focused={} selected_epoch={selected:?} paint_intake={paint_intake:?} completed_present={} M13=[{owner}] game_down=[W:{w},A:{a},S:{s},D:{d}] ui_activations={activations} typed_edit_revision={edit_revision} typed_chars={edit_chars}",
             self.frames, window_focused, displayed
         );
         // Only semantic changes are logged; frame counter stays in the output
         // but must not cause one trace line for every continuously paced frame.
         let stable = format!(
-            "focused={window_focused} selected={selected:?} paint={paint_intake:?} present={displayed} {owner} game={w}{a}{s}{d} activations={activations}"
+            "focused={window_focused} selected={selected:?} paint={paint_intake:?} present={displayed} {owner} game={w}{a}{s}{d} activations={activations} edit_revision={edit_revision} edit_chars={edit_chars}"
         );
         if self.last_observation.as_deref() != Some(stable.as_str()) {
             println!("U9C_FRAME {observation}");
@@ -519,7 +584,7 @@ impl QualificationHook {
                 .record_mut(NativeWindowId::primary())
                 .context("primary native window disappeared")?
                 .set_title(format!(
-                    "U9-C Native UI | present={displayed} | focus={window_focused} | game W={w} | UI clicks={activations}"
+                    "U9-C Native UI | present={displayed} | focus={window_focused} | game W={w} | text chars={edit_chars} | UI clicks={activations}"
                 ));
         }
         if close_intent {
