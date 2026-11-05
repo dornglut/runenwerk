@@ -6,6 +6,10 @@
 //!
 //! Run with: cargo run -p engine --example native_ui_input_qualification --locked -- --interactive
 //! Close with the operating system's window close button.
+//! `RUNENWERK_U9C_DIAGNOSTICS=trace` (default) retains detailed evidence.
+//! `summary` keeps frame observations but omits per-event output and title updates.
+//! `off` also skips optional per-frame diagnostic snapshots.
+//! The reduced modes are for profiling, not acceptance evidence.
 mod lifetime;
 
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -46,6 +50,38 @@ const FONT: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../assets/fonts/JetBrainsMono-Regular.ttf"
 ));
+
+/// Example-only diagnostic cost policy. No mode changes original event
+/// routing, source-specific gameplay admission, or Render submission.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum Diagnostics {
+    Off,
+    Summary,
+    Trace,
+}
+
+impl Diagnostics {
+    fn parse(value: Option<&str>) -> Result<Self> {
+        match value {
+            None | Some("trace") => Ok(Self::Trace),
+            Some("summary") => Ok(Self::Summary),
+            Some("off") => Ok(Self::Off),
+            Some(value) => anyhow::bail!(
+                "invalid RUNENWERK_U9C_DIAGNOSTICS={value:?}; expected off, summary, or trace"
+            ),
+        }
+    }
+
+    fn from_environment() -> Result<Self> {
+        match std::env::var("RUNENWERK_U9C_DIAGNOSTICS") {
+            Ok(value) => Self::parse(Some(&value)),
+            Err(std::env::VarError::NotPresent) => Self::parse(None),
+            Err(error) => Err(anyhow::anyhow!(
+                "invalid RUNENWERK_U9C_DIAGNOSTICS: {error}"
+            )),
+        }
+    }
+}
 
 struct QualificationUi;
 
@@ -266,6 +302,7 @@ struct QualificationHook {
     touch_events: u64,
     ime_events: u64,
     raw_motion: u64,
+    diagnostics: Diagnostics,
     last_observation: Option<String>,
     lifetime: Option<lifetime::Probe>,
     flow: RenderFlowId,
@@ -278,7 +315,9 @@ impl NativeWindowHook for QualificationHook {
 
     fn attach(&mut self, window: &Window, _: &mut World) -> Result<()> {
         window.set_visible(true);
-        println!("U9C_ATTACH window={:?} visible=true", window.id());
+        if self.diagnostics == Diagnostics::Trace {
+            println!("U9C_ATTACH window={:?} visible=true", window.id());
+        }
         Ok(())
     }
 
@@ -286,6 +325,19 @@ impl NativeWindowHook for QualificationHook {
         // This callback observes the *original Winit event before Host routing*.
         // Post-routing facts are observed separately through owner-owned
         // ActionState, RunenUI input_ownership and completed-Present association.
+        // Non-trace runs retain bounded counters without synchronous console
+        // output; no original event is changed or consumed by this hook.
+        if self.diagnostics != Diagnostics::Trace {
+            match event {
+                WindowEvent::KeyboardInput { .. } => self.keyboard_events += 1,
+                WindowEvent::MouseInput { .. } => self.pointer_buttons += 1,
+                WindowEvent::CursorMoved { .. } => self.cursor_moves += 1,
+                WindowEvent::Touch(_) => self.touch_events += 1,
+                WindowEvent::Ime(Ime::Preedit(..) | Ime::Commit(..)) => self.ime_events += 1,
+                _ => {}
+            }
+            return Ok(());
+        }
         match event {
             WindowEvent::Focused(focused) => {
                 println!("U9C_OS window={:?} focus={focused}", window.id());
@@ -384,6 +436,12 @@ impl NativeWindowHook for QualificationHook {
     }
 
     fn device_event(&mut self, event: &DeviceEvent, _: &mut World) -> Result<()> {
+        if self.diagnostics != Diagnostics::Trace {
+            if matches!(event, DeviceEvent::MouseMotion { .. }) {
+                self.raw_motion += 1;
+            }
+            return Ok(());
+        }
         match event {
             DeviceEvent::MouseMotion { .. } => {
                 self.raw_motion += 1;
@@ -436,16 +494,18 @@ impl NativeWindowHook for QualificationHook {
                 }
             }
         }
-        println!(
-            "U9C_DETACH frames={} keyboard={} mouse_buttons={} cursor={} touch={} ime={} raw_motion={}",
-            self.frames,
-            self.keyboard_events,
-            self.pointer_buttons,
-            self.cursor_moves,
-            self.touch_events,
-            self.ime_events,
-            self.raw_motion,
-        );
+        if self.diagnostics != Diagnostics::Off {
+            println!(
+                "U9C_DETACH frames={} keyboard={} mouse_buttons={} cursor={} touch={} ime={} raw_motion={}",
+                self.frames,
+                self.keyboard_events,
+                self.pointer_buttons,
+                self.cursor_moves,
+                self.touch_events,
+                self.ime_events,
+                self.raw_motion,
+            );
+        }
         Ok(())
     }
 }
@@ -460,6 +520,11 @@ fn main() -> Result<()> {
             .map_err(|error| anyhow::anyhow!("native qualification tracing failed: {error}"))?;
     }
     let options = lifetime::parse(&std::env::args().skip(1).collect::<Vec<_>>())?;
+    let diagnostics = Diagnostics::from_environment()?;
+    anyhow::ensure!(
+        options.is_none() || diagnostics == Diagnostics::Trace,
+        "reduced diagnostics are only supported with --interactive; lifetime proofs require trace"
+    );
     let report = Arc::new(Mutex::new(lifetime::Report::default()));
 
     let clicks = Arc::new(AtomicUsize::new(0));
@@ -529,13 +594,14 @@ fn main() -> Result<()> {
             touch_events: 0,
             ime_events: 0,
             raw_motion: 0,
+            diagnostics,
             last_observation: None,
             lifetime: options.map(|options| lifetime::Probe::new(options, Arc::clone(&report))),
             flow: flow_id,
         });
 
     println!(
-        "U9C_START options={options:?} pacing={} input=real_os mounted_ui=true render=true pid={} source_claim={:?}",
+        "U9C_START options={options:?} pacing={} input=real_os mounted_ui=true render=true pid={} source_claim={:?} diagnostics={diagnostics:?}",
         if options.is_some() {
             "continuous_30"
         } else {
@@ -620,6 +686,18 @@ impl QualificationHook {
                 .context("primary native window missing")?;
             (record.focused, record.close_intent_pending)
         };
+        if self.diagnostics == Diagnostics::Off {
+            // Closing via the real OS button must still be approved, even when
+            // detailed per-frame M13/presentation observations are disabled.
+            if close_intent {
+                world
+                    .resource_mut::<WindowStateRegistryResource>()?
+                    .record_mut(NativeWindowId::primary())
+                    .context("primary native window disappeared at close")?
+                    .approve_close();
+            }
+            return Ok(());
+        }
         let selected = world
             .resource::<UiNativeInputRecipientsResource>()?
             .binding_epoch_for_window(NativeWindowId::primary());
@@ -685,15 +763,17 @@ impl QualificationHook {
             "focused={window_focused} selected={selected:?} paint={paint_intake:?} present={displayed} {owner} game={w}{a}{s}{d} activations={activations} edit_revision={edit_revision} edit_chars={edit_chars}"
         );
         if self.last_observation.as_deref() != Some(stable.as_str()) {
-            println!("U9C_FRAME {observation}");
+            if self.diagnostics == Diagnostics::Trace {
+                println!("U9C_FRAME {observation}");
+                world
+                    .resource_mut::<WindowStateRegistryResource>()?
+                    .record_mut(NativeWindowId::primary())
+                    .context("primary native window disappeared")?
+                    .set_title(format!(
+                        "U9-C Native UI | present={displayed} | focus={window_focused} | game W={w} | text chars={edit_chars} | UI clicks={activations}"
+                    ));
+            }
             self.last_observation = Some(stable);
-            world
-                .resource_mut::<WindowStateRegistryResource>()?
-                .record_mut(NativeWindowId::primary())
-                .context("primary native window disappeared")?
-                .set_title(format!(
-                    "U9-C Native UI | present={displayed} | focus={window_focused} | game W={w} | text chars={edit_chars} | UI clicks={activations}"
-                ));
         }
         if close_intent {
             // Physical close remains an original Host event. This is only
@@ -705,5 +785,19 @@ impl QualificationHook {
                 .approve_close();
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod diagnostics_tests {
+    use super::Diagnostics;
+
+    #[test]
+    fn diagnostic_policy_is_explicit_and_preserves_trace_by_default() {
+        assert_eq!(Diagnostics::parse(None).unwrap(), Diagnostics::Trace);
+        assert_eq!(Diagnostics::parse(Some("trace")).unwrap(), Diagnostics::Trace);
+        assert_eq!(Diagnostics::parse(Some("summary")).unwrap(), Diagnostics::Summary);
+        assert_eq!(Diagnostics::parse(Some("off")).unwrap(), Diagnostics::Off);
+        assert!(Diagnostics::parse(Some("unknown")).is_err());
     }
 }
