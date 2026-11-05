@@ -60,8 +60,6 @@ use winit::window::{Window, WindowId};
 // Retire the deadline after drain; no implicit frame or Present.
 const NATIVE_GPU_PROGRESS_INTERVAL: Duration = Duration::from_millis(8);
 
-
-
 /// Use the same native winit modifier normalization as the pinned adapter's
 /// reference host; the modifier callback does not synthesize a physical Down.
 fn translate_native_ui_modifiers(state: winit::keyboard::ModifiersState) -> KeyModifiers {
@@ -355,7 +353,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         ordinary_frames: 0,
         fatal_error: None,
         frame_requested: false,
-            frame_in_progress: false,
+        frame_in_progress: false,
         owned_redraws: HashSet::new(),
         shutdown_done: false,
     };
@@ -3832,20 +3830,9 @@ impl WinitRunner {
         Ok(())
     }
 
-
-
-
-
-
-
-
-
     // Keep the native scheduling decision independent of Render realization.
     // Tests can drive owner snapshots through the actual runner without
     // fabricating GPU status handles or adding a runtime override resource.
-
-
-
 
     /// Project the selected native slot's *current* M13 text capability to
     /// Winit's per-window OS IME switch. Absent/legacy/unfocused recipients
@@ -4517,12 +4504,6 @@ mod tests {
     };
     use crate::runtime::schedules::{FixedUpdate, PreUpdate};
     use crate::runtime::{CoreSet, Res, ResMut, SystemConfigExt};
-
-    #[test]
-
-
-    #[test]
-
 
     #[derive(Debug, Default, runen_ecs::Component, runen_ecs::Resource)]
     struct FixedTickLog(Vec<u64>);

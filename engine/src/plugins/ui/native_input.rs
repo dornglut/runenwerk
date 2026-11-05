@@ -517,9 +517,9 @@ impl UiNativeInputRecipientsResource {
         };
         binding.recipient == NativeInputRecipient::RunenUiSlot(slot)
             && binding.epoch == epoch
-            && binding.safe_keyboard_revisions.is_some_and(|(start, end)| {
-                start <= previous && current <= end
-            })
+            && binding
+                .safe_keyboard_revisions
+                .is_some_and(|(start, end)| start <= previous && current <= end)
     }
 
     /// Read after authoritative `resolve` in the same invoker-thread callback.
@@ -903,36 +903,37 @@ mod tests {
         let e = d.checked_add(1).unwrap();
 
         assert!(!recipients.safe_keyboard_revision_continuity(first, slot, epoch, a, b));
-        assert!(!recipients.record_safe_keyboard_publication(
-            first, slot, epoch, &scope, a, c
-        ), "a skipped M13 revision cannot be forged as one direct publication");
-        assert!(!recipients.record_safe_keyboard_publication(
-            second, slot, epoch, &scope, a, b
-        ), "an unbound window cannot borrow this proof");
-        assert!(!recipients.record_safe_keyboard_publication(
-            first, slot, epoch + 1, &scope, a, b
-        ), "another binding epoch cannot reuse the old proof");
+        assert!(
+            !recipients.record_safe_keyboard_publication(first, slot, epoch, &scope, a, c),
+            "a skipped M13 revision cannot be forged as one direct publication"
+        );
+        assert!(
+            !recipients.record_safe_keyboard_publication(second, slot, epoch, &scope, a, b),
+            "an unbound window cannot borrow this proof"
+        );
+        assert!(
+            !recipients.record_safe_keyboard_publication(first, slot, epoch + 1, &scope, a, b),
+            "another binding epoch cannot reuse the old proof"
+        );
 
-        assert!(recipients.record_safe_keyboard_publication(
-            first, slot, epoch, &scope, a, b
-        ));
-        assert!(recipients.record_safe_keyboard_publication(
-            first, slot, epoch, &scope, b, c
-        ));
+        assert!(recipients.record_safe_keyboard_publication(first, slot, epoch, &scope, a, b));
+        assert!(recipients.record_safe_keyboard_publication(first, slot, epoch, &scope, b, c));
         assert!(recipients.safe_keyboard_revision_continuity(first, slot, epoch, a, c));
         assert!(recipients.safe_keyboard_revision_continuity(first, slot, epoch, b, c));
         assert!(!recipients.safe_keyboard_revision_continuity(first, slot, epoch, a, d));
         assert!(!recipients.safe_keyboard_revision_continuity(second, slot, epoch, a, c));
         assert!(!recipients.safe_keyboard_revision_continuity(first, slot, epoch + 1, a, c));
 
-        assert!(recipients.record_safe_keyboard_publication(
-            first, slot, epoch, &scope, d, e
-        ));
-        assert!(!recipients.safe_keyboard_revision_continuity(first, slot, epoch, a, e),
-            "the absent c-to-d step must invalidate older held-key continuity");
+        assert!(recipients.record_safe_keyboard_publication(first, slot, epoch, &scope, d, e));
+        assert!(
+            !recipients.safe_keyboard_revision_continuity(first, slot, epoch, a, e),
+            "the absent c-to-d step must invalidate older held-key continuity"
+        );
         assert!(recipients.safe_keyboard_revision_continuity(first, slot, epoch, d, e));
-        assert!(!recipients.safe_keyboard_revision_continuity(first, slot, epoch, e, d),
-            "the witness never runs backward");
+        assert!(
+            !recipients.safe_keyboard_revision_continuity(first, slot, epoch, e, d),
+            "the witness never runs backward"
+        );
     }
 
     #[test]

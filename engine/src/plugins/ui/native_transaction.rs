@@ -7,7 +7,9 @@
 
 use anyhow::{Result, anyhow};
 use runen_ecs::World;
-use runenui_runtime::{InputOwnershipSnapshot, InputShutdownBatch, RuntimeStatus, SurfacePublication};
+use runenui_runtime::{
+    InputOwnershipSnapshot, InputShutdownBatch, RuntimeStatus, SurfacePublication,
+};
 
 use crate::plugins::input::{ActionState, InputState};
 use crate::runtime::winit_input::WinitInputAdapter;
@@ -284,16 +286,25 @@ pub(crate) fn transact_ui_surface_publication(
     slot: UiRuntimeSlotId,
     operation: impl FnOnce(
         &mut UiRuntimeSlotsResource,
-    ) -> std::result::Result<SurfacePublication, UiRuntimeSlotOperationFailure>,
+    )
+        -> std::result::Result<SurfacePublication, UiRuntimeSlotOperationFailure>,
 ) -> Result<SurfacePublication> {
-    transact_ui_slot_inner(world, slot, false, operation, |publication, before, after| {
-        publication.input_ownership_transition().is_some_and(|transition| {
-            transition.before_revision() == before.revision()
-                && transition.after() == after
-                && native_game_keyboard_nonexclusive(before)
-                && native_game_keyboard_nonexclusive(after)
-        })
-    })
+    transact_ui_slot_inner(
+        world,
+        slot,
+        false,
+        operation,
+        |publication, before, after| {
+            publication
+                .input_ownership_transition()
+                .is_some_and(|transition| {
+                    transition.before_revision() == before.revision()
+                        && transition.after() == after
+                        && native_game_keyboard_nonexclusive(before)
+                        && native_game_keyboard_nonexclusive(after)
+                })
+        },
+    )
 }
 
 /// Mount a new typed RunenUI app while a native World is running.
@@ -414,7 +425,13 @@ fn reconcile_game_after_native_mount(
 /// the exact source *before* attempting bounded framework-owned settlement,
 /// then validate the current binding/scope again before success.
 pub fn settle_native_ui_slot(world: &mut World, slot: UiRuntimeSlotId) -> Result<()> {
-    transact_ui_slot_inner(world, slot, true, |slots| slots.settle_slot(slot), |_, _, _| false)
+    transact_ui_slot_inner(
+        world,
+        slot,
+        true,
+        |slots| slots.settle_slot(slot),
+        |_, _, _| false,
+    )
 }
 
 fn transact_ui_slot_inner<T>(
