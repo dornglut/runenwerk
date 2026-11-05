@@ -1120,6 +1120,30 @@ impl WinitRunner {
         Ok(())
     }
 
+    /// One checked callback-level ordering boundary used by Winit and by
+    /// its deterministic source-loss regression. Physical keyboard/text
+    /// evidence must be journalled before any old-key M13 recovery can fail;
+    /// recovery is limited to the current native window's original source.
+    fn admit_native_ui_keyboard_with_release_recovery(
+        &mut self,
+        window: NativeWindowId,
+        slot: UiRuntimeSlotId,
+        binding_epoch: u64,
+        context: InputContext,
+        input: runen_input::KeyboardInput,
+        native_text: Option<String>,
+    ) -> Result<()> {
+        self.admit_native_ui_keyboard_for_recipient(
+            window,
+            slot,
+            binding_epoch,
+            context,
+            input,
+            native_text,
+        )?;
+        self.reconcile_unrouted_native_keyboard_releases(Some(window))
+    }
+
     /// Reconcile an older M13 ownership interval before admitting the next
     /// genuine physical Down. Otherwise a source-wide revision-gap withdrawal
     /// would also revoke that newly admitted, independently settled generation.
@@ -4330,7 +4354,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             .keyboard_down_generation_in(context, &physical_key);
                         // The exact same admission order is exercised by
                         // the source-level regression; M13 finality follows.
-                        self.admit_native_ui_keyboard_for_recipient(
+                        self.admit_native_ui_keyboard_with_release_recovery(
                             native_window_id,
                             slot,
                             epoch,
@@ -4338,11 +4362,6 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                             input,
                             text_input(&event, is_synthetic),
                         )?;
-                        // Only after journaling the original input can a
-                        // pending old-key cleanup safely run. Limit recovery
-                        // to this exact window; another window's unresolved
-                        // native source cannot block this occurrence.
-                        self.reconcile_unrouted_native_keyboard_releases(Some(native_window_id))?;
                         self.route_ui_keyboard(
                             native_window_id,
                             slot,
@@ -7942,6 +7961,60 @@ mod tests {
         runner
             .record_unrouted_native_keyboard_release(secondary, physical_context)
             .expect("the original device-only release is marked");
+        // An actual Winit callback must journal its next original keyboard
+        // Down before a previous missing-Up cleanup can fail. Call the same
+        // combined helper as production; do not manually stage a fake pair.
+        let subsequent_key = PhysicalKeyIdentity::code("KeyZ");
+        let journal_before = runner
+            .state
+            .world
+            .resource::<PlatformWindowEventQueueResource>()
+            .expect("one native input journal")
+            .events()
+            .len();
+        assert!(
+            runner
+                .admit_native_ui_keyboard_with_release_recovery(
+                    secondary,
+                    slot,
+                    bound_epoch,
+                    physical_context,
+                    runen_input::KeyboardInput {
+                        physical_key: subsequent_key.clone(),
+                        logical_key: runen_input::LogicalKey::Native(
+                            runen_input::NativeLogicalKey::Unidentified,
+                        ),
+                        location: runen_input::KeyLocation::Standard,
+                        state: runen_input::DigitalState::Pressed,
+                        repeat: false,
+                        origin: runen_input::ObservationOrigin::SourceReport,
+                    },
+                    None,
+                )
+                .is_err(),
+            "a stale old M13 focus must fail before granting new semantic input"
+        );
+        assert_eq!(
+            runner
+                .state
+                .world
+                .resource::<PlatformWindowEventQueueResource>()
+                .expect("unchanged original journal")
+                .events()
+                .len(),
+            journal_before + 1,
+            "recovery failure cannot discard the new genuine original occurrence"
+        );
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("original physical source owner")
+                .keyboard_down_generation_in(physical_context, &subsequent_key)
+                .is_some(),
+            "the exact new source's physical Down must survive failed M13 recovery"
+        );
         assert!(
             runner
                 .reconcile_unrouted_native_keyboard_releases(None)
