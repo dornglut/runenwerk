@@ -918,8 +918,9 @@ mod native_publication_tests {
                 // Tick changes no state, starts no work and emits nothing.
                 // Its one retained update cannot require another full burst
                 // reservation inside the already admitted causal root.
-                CallbackAction::Tick => runenui_core::ProducerBudget::new(2, 0)
-                    .with_reconciliation(0, 1, 0),
+                CallbackAction::Tick => {
+                    runenui_core::ProducerBudget::new(2, 0).with_reconciliation(0, 1, 0)
+                }
             }
         }
 
