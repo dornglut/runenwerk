@@ -189,9 +189,15 @@ pub fn native_keyboard_finality(
     status: &Result<(), UiRuntimeSlotOperationFailure>,
 ) -> Result<UiInputFinality, UiRuntimeNativeKeyboardEvidenceFailure> {
     use UiRuntimeNativeKeyboardEvidenceFailure as Failure;
-    if status.is_err()
+    let bounded_pending = matches!(
+        (status, batch.report().outcome()),
+        (
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        )
+    );
+    if (!bounded_pending && (status.is_err() || !batch.report().is_quiescent()))
         || batch.pause_reason().is_some()
-        || !batch.report().is_quiescent()
         || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
     {
         return Err(Failure::Unsettled);
@@ -352,9 +358,15 @@ pub(crate) fn native_composition_finality(
     status: &Result<(), UiRuntimeSlotOperationFailure>,
 ) -> Result<UiInputFinality, UiRuntimeNativeCompositionEvidenceFailure> {
     use UiRuntimeNativeCompositionEvidenceFailure as Failure;
-    if status.is_err()
+    let bounded_pending = matches!(
+        (status, batch.report().outcome()),
+        (
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        )
+    );
+    if (!bounded_pending && (status.is_err() || !batch.report().is_quiescent()))
         || batch.pause_reason().is_some()
-        || !batch.report().is_quiescent()
         || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
     {
         return Err(Failure::Unsettled);
@@ -4684,6 +4696,51 @@ mod tests {
             slots.input_ownership(slot),
             Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
             "a reached receipt cannot make the selected slot globally ready"
+        );
+        let terminal = partial_batch
+            .ordered_records()
+            .iter()
+            .find_map(|record| match record {
+                InputArbitrationRecord::InputSettled(value)
+                    if value.sequence() == backlog_receipt.sequence() =>
+                {
+                    Some(value)
+                }
+                _ => None,
+            })
+            .expect("original native keyboard terminal receipt exists in partial batch");
+        assert_eq!(
+            native_keyboard_finality(
+                focused.scope(),
+                native_device,
+                backlog_receipt,
+                &partial_batch,
+                &partial_status,
+            ),
+            Ok(terminal.finality().clone()),
+            "bounded unrelated application work does not erase the exact keyboard receipt"
+        );
+        assert_eq!(
+            native_keyboard_finality(
+                focused.scope(),
+                another_device,
+                backlog_receipt,
+                &partial_batch,
+                &partial_status,
+            ),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongDevice),
+            "a foreign physical device cannot borrow a reached receipt"
+        );
+        assert_eq!(
+            native_keyboard_finality(
+                focused.scope(),
+                native_device,
+                backlog_receipt,
+                &partial_batch,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::Unsettled),
+            "unrelated terminal failures must never pass as normal bounded work"
         );
         for _ in 0..4 {
             if slots.settle_slot(slot).is_ok() {

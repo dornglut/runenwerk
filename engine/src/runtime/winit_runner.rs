@@ -141,6 +141,20 @@ fn native_ui_blocks_preframe_keyboard_gameplay(
     !crate::plugins::ui::native_input::native_game_keyboard_nonexclusive(ownership)
 }
 
+/// M13 receipt terminality is narrower than the readiness needed to grant
+/// gameplay. Any unfinished unrelated work can subsequently change focus or
+/// exclusivity, so only a globally settled slot may authorize this Down.
+fn native_keyboard_game_eligible(
+    globally_settled: bool,
+    conflict: UiInputConflict,
+) -> bool {
+    globally_settled
+        && matches!(
+            conflict,
+            UiInputConflict::Unclaimed | UiInputConflict::ObservedNonexclusive
+        )
+}
+
 /// A passive OS-effect projection may observe M13 while work is pending.
 /// The real recipient resolver reports this before any secondary ownership
 /// lookup can run. Deny OS IME temporarily; ordinary input admission still
@@ -1283,6 +1297,7 @@ impl WinitRunner {
         // Only a successful exact M13 keyboard settlement may authorize
         // a separate source-correlated text submission in that same turn.
         let mut committed_keyboard_text = None;
+        let mut pending_keyboard_text = None;
         // A genuine repeat retains its prior physical lifetime. This never
         // grants a new game Down, restores a revoked held action, or manufactures
         // an M13 sequence; ActionState remains the only gameplay permission owner.
@@ -1349,11 +1364,25 @@ impl WinitRunner {
                                         );
                                         match &evidence {
                                             Ok(UiInputFinality::Committed(facts)) => {
-                                                committed_keyboard_text = text_candidate;
-                                                matches!(
+                                                // A terminal original receipt can precede
+                                                // unrelated queued work. Never grant game
+                                                // permission before the full ownership
+                                                // checkpoint; the source-local ActionState
+                                                // remains denied until a new real Down.
+                                                if status.is_ok() {
+                                                    committed_keyboard_text = text_candidate;
+                                                } else {
+                                                    // The original text belongs to this
+                                                    // same native key and cannot be silently
+                                                    // lost or retargeted to a later focus.
+                                                    // Give the already-selected canonical
+                                                    // World transaction one bounded recovery
+                                                    // opportunity before forwarding it.
+                                                    pending_keyboard_text = text_candidate;
+                                                }
+                                                native_keyboard_game_eligible(
+                                                    status.is_ok(),
                                                     facts.conflict(),
-                                                    UiInputConflict::Unclaimed
-                                                        | UiInputConflict::ObservedNonexclusive
                                                 )
                                             }
                                             _ => {
@@ -1499,6 +1528,23 @@ impl WinitRunner {
                 false
             }
         };
+        if m13_failure.is_none()
+            && let Some(text) = pending_keyboard_text
+        {
+            // Do not abandon this original text after a reached keyboard
+            // receipt just because unrelated canonical work remained. One
+            // bounded World-owned continuation retains the original source
+            // revocation and validates the exact binding/scope. If still
+            // pending, fail explicitly rather than silently losing text.
+            match crate::plugins::ui::settle_native_ui_slot(&mut self.state.world, slot) {
+                Ok(()) => committed_keyboard_text = Some(text),
+                Err(error) => {
+                    m13_failure = Some(error.context(
+                        "original keyboard text could not complete bounded selected-slot continuation",
+                    ));
+                }
+            }
+        }
         if preserve_prior_held_permission {
             // A suppressed repeat (even with an exact framework nonclaim)
             // can preserve only previously eligible, source-qualified physical
@@ -4582,6 +4628,23 @@ mod tests {
             assert!(
                 !native_ime_payload_allowed_for_window(focused, applied),
                 "stale IME payload must not enter RunenUI after native lifetime loss"
+            );
+        }
+    }
+
+    #[test]
+    fn exact_keyboard_finality_never_grants_gameplay_before_global_settlement() {
+        for conflict in [
+            UiInputConflict::Unclaimed,
+            UiInputConflict::ObservedNonexclusive,
+        ] {
+            assert!(
+                !native_keyboard_game_eligible(false, conflict),
+                "a terminal keyboard receipt with pending application work must deny game input"
+            );
+            assert!(
+                native_keyboard_game_eligible(true, conflict),
+                "a settled nonexclusive original receipt can be eligible"
             );
         }
     }
