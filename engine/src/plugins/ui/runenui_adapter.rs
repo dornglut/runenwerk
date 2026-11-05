@@ -266,9 +266,19 @@ pub(crate) fn native_text_finality(
     status: &Result<(), UiRuntimeSlotOperationFailure>,
 ) -> Result<UiInputFinality, UiRuntimeNativeTextEvidenceFailure> {
     use UiRuntimeNativeTextEvidenceFailure as Failure;
-    if status.is_err()
+    // M13's exact committed text receipt remains terminal when an ordinary
+    // bounded pump leaves independent application work. Unlike a keyboard
+    // conflict this evidence never grants gameplay permission. Keep the slot
+    // unsettled for any further native input and reject all other failures.
+    let bounded_pending = matches!(
+        (status, batch.report().outcome()),
+        (
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        )
+    );
+    if (!bounded_pending && (status.is_err() || !batch.report().is_quiescent()))
         || batch.pause_reason().is_some()
-        || !batch.report().is_quiescent()
         || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
     {
         return Err(Failure::Unsettled);
@@ -2872,6 +2882,7 @@ mod tests {
         }
         enum TextAction {
             Edit(Box<EditIntent>),
+            Idle,
         }
         struct NativeTextApp;
         impl UiApp for NativeTextApp {
@@ -2924,18 +2935,25 @@ mod tests {
                 state: &mut Self::State,
                 action: Self::Action,
             ) -> impl IntoUpdateOutput<Self::Action, Self::HostProtocol> {
-                let TextAction::Edit(intent) = action;
-                let replacement = intent.replacement();
-                state.text.replace_range(
-                    replacement.start()..replacement.end(),
-                    intent.replacement_text(),
-                );
-                state.revision += 1;
-                let snapshot = TextDocumentSnapshot::new(
-                    TextDocumentId::new(1276),
-                    TextDocumentRevision::new(state.revision),
-                );
-                UpdateOutput::edit(EditResolution::accepted(intent.request().clone(), snapshot))
+                match action {
+                    TextAction::Edit(intent) => {
+                        let replacement = intent.replacement();
+                        state.text.replace_range(
+                            replacement.start()..replacement.end(),
+                            intent.replacement_text(),
+                        );
+                        state.revision += 1;
+                        let snapshot = TextDocumentSnapshot::new(
+                            TextDocumentId::new(1276),
+                            TextDocumentRevision::new(state.revision),
+                        );
+                        UpdateOutput::edit(EditResolution::accepted(
+                            intent.request().clone(),
+                            snapshot,
+                        ))
+                    }
+                    TextAction::Idle => UpdateOutput::effects(Effects::none()),
+                }
             }
         }
 
@@ -3283,6 +3301,130 @@ mod tests {
         assert_eq!(
             edited, "漢字éΩx",
             "one keyboard text input, one inserted character"
+        );
+
+        // REV-001: the original IME Commit is terminal in the real canonical
+        // M13 input FIFO even when later unrelated application work exhausts
+        // this pump's bounded work budget. No gameplay permission follows from
+        // the receipt, and a second pump may not replay the same text.
+        let before_backlog = slots.input_ownership(slot).expect("settled IME owner");
+        let backlog_commit = slots
+            .submit_native_text(
+                slot,
+                CommittedTextEvent::new("§", None).expect("original Unicode IME Commit"),
+            )
+            .expect("focused editor admits original IME text before unrelated work");
+        {
+            let runtime = slots
+                .slot_mut(slot)
+                .expect("same mounted UI slot")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("same typed editor");
+            for _ in 0..(RUNTIME_PUMP_WORK_LIMIT + 2) {
+                runtime
+                    .submit_action(TextAction::Idle)
+                    .expect("independent application work remains legally queued");
+            }
+        }
+        let (partial, pending_status) = slots
+            .pump_native_input_records(slot)
+            .expect("real text records remain observable under bounded work");
+        assert_eq!(
+            partial.report().outcome(),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        );
+        assert_eq!(
+            pending_status,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        let original_settlement = partial
+            .ordered_records()
+            .iter()
+            .find_map(|record| match record {
+                InputArbitrationRecord::InputSettled(settlement)
+                    if settlement.sequence() == backlog_commit.sequence() =>
+                {
+                    Some(settlement)
+                }
+                _ => None,
+            })
+            .expect("exact original IME text was terminal in the partial batch");
+        assert!(matches!(
+            original_settlement.finality(),
+            UiInputFinality::Committed(_)
+        ));
+        assert_eq!(
+            native_text_finality(
+                before_backlog.scope(),
+                None,
+                backlog_commit,
+                &partial,
+                &pending_status,
+            ),
+            Ok(original_settlement.finality().clone()),
+            "unrelated pending application work cannot erase a reached IME receipt"
+        );
+        assert_eq!(
+            native_text_finality(
+                before_backlog.scope(),
+                Some(key_device),
+                backlog_commit,
+                &partial,
+                &pending_status,
+            ),
+            Err(UiRuntimeNativeTextEvidenceFailure::WrongDevice),
+            "an IME device-free commit cannot borrow physical keyboard identity"
+        );
+        assert_eq!(
+            native_text_finality(
+                before_backlog.scope(),
+                None,
+                backlog_commit,
+                &partial,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativeTextEvidenceFailure::Unsettled),
+            "a real slot failure cannot be misclassified as bounded pending work"
+        );
+        assert_eq!(
+            slots.input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        for _ in 0..4 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        let resumed = slots
+            .input_ownership(slot)
+            .expect("ordinary bounded runtime continuation reaches quiescence");
+        assert_eq!(resumed.scope(), before_backlog.scope());
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("typed editor survived continuation")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("the same real editor")
+                .state()
+                .text,
+            "漢字éΩx§",
+            "exact original text is applied once after bounded continuation"
+        );
+        assert!(
+            !slots
+                .pump_native_input_records(slot)
+                .expect("later checkpoint remains observable")
+                .0
+                .ordered_records()
+                .iter()
+                .any(|record| matches!(
+                    record,
+                    InputArbitrationRecord::InputSettled(settlement)
+                        if settlement.sequence() == backlog_commit.sequence()
+                )),
+            "the exact original IME text receipt is not replayed"
         );
     }
 
