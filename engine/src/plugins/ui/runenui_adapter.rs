@@ -4525,14 +4525,19 @@ mod tests {
                 .processed_through()
                 .is_some_and(|through| through >= backlog_receipt.sequence())
         );
-        assert!(partial_batch.ordered_records().iter().any(|record| matches!(
-            record,
-            InputArbitrationRecord::InputSettled(settlement)
-                if settlement.sequence() == backlog_receipt.sequence()
-                    && settlement.scope() == focused.scope()
-                    && settlement.device_id() == Some(native_device)
-                    && matches!(settlement.finality(), UiInputFinality::Committed(_))
-        )));
+        assert!(
+            partial_batch
+                .ordered_records()
+                .iter()
+                .any(|record| matches!(
+                    record,
+                    InputArbitrationRecord::InputSettled(settlement)
+                        if settlement.sequence() == backlog_receipt.sequence()
+                            && settlement.scope() == focused.scope()
+                            && settlement.device_id() == Some(native_device)
+                            && matches!(settlement.finality(), UiInputFinality::Committed(_))
+                ))
+        );
         assert_eq!(
             slots.input_ownership(slot),
             Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
