@@ -141,7 +141,8 @@ impl RunenwerkEditorShellState {
                 .targets()
                 .first()
             {
-                self.composition_target_bindings.bind(primary_target.id, binding);
+                self.composition_target_bindings
+                    .bind(primary_target.id, binding);
             }
         }
         true

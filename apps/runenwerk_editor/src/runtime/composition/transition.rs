@@ -972,7 +972,8 @@ mod tests {
             Some(original_primary),
         );
         assert_eq!(
-            host.shell_state.composition_target_binding(secondary_target),
+            host.shell_state
+                .composition_target_binding(secondary_target),
             Some(secondary_binding),
         );
 
@@ -983,7 +984,8 @@ mod tests {
                 .bind_editor_window_presentation(primary_window, original_primary)
         );
         assert_eq!(
-            host.shell_state.composition_target_binding(secondary_target),
+            host.shell_state
+                .composition_target_binding(secondary_target),
             Some(secondary_binding),
         );
 
@@ -1015,7 +1017,8 @@ mod tests {
             Some(changed_primary),
         );
         assert_eq!(
-            host.shell_state.composition_target_binding(secondary_target),
+            host.shell_state
+                .composition_target_binding(secondary_target),
             Some(secondary_binding),
         );
         assert_eq!(
@@ -1023,18 +1026,24 @@ mod tests {
             Some(secondary_binding),
         );
         assert_eq!(
-            host.shell_state.editor_window_for_binding(secondary_binding),
+            host.shell_state
+                .editor_window_for_binding(secondary_binding),
             Some(secondary_window),
         );
 
         let unknown = EditorWindowId::try_from_raw(9_999).expect("valid unknown window ID");
-        assert!(!host.shell_state.bind_editor_window_presentation(unknown, changed_primary));
+        assert!(
+            !host
+                .shell_state
+                .bind_editor_window_presentation(unknown, changed_primary)
+        );
         assert_eq!(
             host.shell_state.composition_target_binding(primary_target),
             Some(changed_primary),
         );
         assert_eq!(
-            host.shell_state.composition_target_binding(secondary_target),
+            host.shell_state
+                .composition_target_binding(secondary_target),
             Some(secondary_binding),
         );
     }
