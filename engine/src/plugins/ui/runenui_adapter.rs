@@ -3331,7 +3331,8 @@ mod tests {
                     .expect("empty authored text has valid caret");
                 column(vec![
                     text("RunenUI native input qualification").into_element(),
-                    text("Click the text field, type Unicode, then Tab to the button.").into_element(),
+                    text("Click the text field, type Unicode, then Tab to the button.")
+                        .into_element(),
                     text_field(
                         document,
                         "",
