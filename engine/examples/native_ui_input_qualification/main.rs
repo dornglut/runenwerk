@@ -78,12 +78,14 @@ impl UiApp for QualificationUi {
     }
 
     fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
-        // Five fixed owners, including two interactive leaves (text field
-        // and button). One native interaction may admit focus and action
-        // outputs and one cursor-service generation; no local task or timer.
-        runenui_core::ProducerBudget::new(22, 13)
+        // The pinned M11 text-field reference admits *two* framework-service
+        // starts (clipboard/IME), their terminal credits and the text-field
+        // output allowance. Budget the additional button activation and all
+        // five reconciliation owners without silently narrowing the field's
+        // framework-service frontier to one start.
+        runenui_core::ProducerBudget::new(24, 13)
             .with_reconciliation(5, 5, 5)
-            .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+            .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 2))
             .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
     }
 
@@ -331,7 +333,21 @@ impl NativeWindowHook for QualificationHook {
         result
     }
 
-    fn detach(&mut self, _: &mut World) -> Result<()> {
+    fn detach(&mut self, world: &mut World) -> Result<()> {
+        // Preserve the framework's original causal integrity trace on a native
+        // debug-build failure. A terminal pump report alone cannot identify
+        // the producer contract that failed; never manufacture a receipt.
+        #[cfg(debug_assertions)]
+        if let Ok(slots) = world.resource::<UiRuntimeSlotsResource>() {
+            let tail = slots.debug_native_trace_tail::<QualificationUi>(self.slot, 96);
+            if tail.iter().any(|line| {
+                line.contains("RuntimeTerminal") || line.contains("RoutedIntegrityFailed")
+            }) {
+                for line in tail {
+                    println!("U9C_M13_TRACE {line}");
+                }
+            }
+        }
         println!(
             "U9C_DETACH frames={} keyboard={} mouse_buttons={} cursor={} touch={} ime={} raw_motion={}",
             self.frames,

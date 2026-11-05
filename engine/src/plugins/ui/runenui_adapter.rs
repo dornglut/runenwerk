@@ -1646,6 +1646,33 @@ impl UiRuntimeSlotsResource {
         self.slots.iter().map(|slot| slot.id)
     }
 
+    /// Returns a bounded trace tail for a developer-operated native debug
+    /// qualification. Reads the original M13 runtime, including terminal
+    /// integrity diagnostics, without pumping or modifying its input state.
+    #[cfg(debug_assertions)]
+    pub fn debug_native_trace_tail<A: UiApp + 'static>(
+        &self,
+        slot_id: UiRuntimeSlotId,
+        limit: usize,
+    ) -> Vec<String> {
+        let Some(runtime) = self
+            .slot(slot_id)
+            .and_then(|slot| slot.runtime.typed::<A>())
+        else {
+            return Vec::new();
+        };
+        runtime
+            .trace()
+            .records()
+            .map(|record| format!("{record:?}"))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .take(limit)
+            .rev()
+            .collect()
+    }
+
     /// Test-only bounded transcript for an exact typed runtime failure.
     /// Reads the original RunenUI trace without mutating or replaying input.
     #[cfg(test)]
@@ -3256,6 +3283,213 @@ mod tests {
         assert_eq!(
             edited, "漢字éΩx",
             "one keyboard text input, one inserted character"
+        );
+    }
+
+    #[test]
+    fn native_qualifier_text_field_survives_repeated_cursor_click_and_publication_rehit() {
+        use runenui_core::{
+            LogicalPoint, NoHostProtocol, PointerButton, PointerButtons, PointerDeviceKind,
+            PointerPhase, SemanticEditableMode, TextAffinity, TextDocumentId, TextDocumentRevision,
+            TextDocumentSnapshot, TextPosition, TextSelection, WorkResidencyBudget,
+            WorkStartBudget, text_field,
+        };
+
+        struct QualificationClickProbe;
+        impl UiApp for QualificationClickProbe {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(6, 0).with_reconciliation(5, 0, 5)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(7, 1).with_reconciliation(5, 5, 5)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                // Must match the real Windows qualification app: the public M11
+                // text field needs two framework-service starts, even when
+                // no actual clipboard/IME request is issued in this scenario.
+                runenui_core::ProducerBudget::new(24, 13)
+                    .with_reconciliation(5, 5, 5)
+                    .with_work_starts(WorkStartBudget::new(0, 0, 0, 0, 2))
+                    .with_work_residency(WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &()) -> impl View<Self::Action> {
+                let document = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(0),
+                );
+                let caret = TextPosition::new(document, "", 0, TextAffinity::Downstream)
+                    .expect("empty authored text has valid caret");
+                column(vec![
+                    text("RunenUI native input qualification").into_element(),
+                    text("Click the text field, type Unicode, then Tab to the button.").into_element(),
+                    text_field(
+                        document,
+                        "",
+                        TextSelection::collapsed(caret),
+                        SemanticEditableMode::SingleLine,
+                        |_| (),
+                    )
+                    .expect("valid checked native text field")
+                    .placeholder("CLICK HERE - type Unicode text")
+                    .id("u9c.qualify.editable")
+                    .into_element(),
+                    button("Focus / activate this button")
+                        .id("u9c.qualify.button")
+                        .key("u9c.qualify.button")
+                        .on_activate(|| ())
+                        .into_element(),
+                ])
+                .id("u9c.qualify.root")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").expect("controlled font family")],
+            );
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<QualificationClickProbe>(
+                UiTypedScreenId::new("native.qualification.click.rehit"),
+                (),
+                &fonts,
+            )
+            .slot_id()
+            .expect("same real five-owner RunenUI app as the Windows qualification");
+        let style = StyleEnvironment::default();
+        let build = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(LogicalLength::from(1280_u16), LogicalLength::from(720_u16)),
+        );
+        let mut publication = slots
+            .publish_surface_for_slot(slot, &build)
+            .expect("actual native-sized displayed input context");
+        let field_id = ElementId::new("u9c.qualify.editable").expect("authored field ID");
+        let field_bounds = publication
+            .frame()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&field_id))
+            .expect("editable has a published paint node")
+            .bounds();
+        assert!(
+            field_bounds.width() > 2.0 && field_bounds.height() > 2.0,
+            "empty field must retain a real hit target through its visible placeholder"
+        );
+        let point = LogicalPoint::new(field_bounds.x() + 1.0, field_bounds.y() + 1.0)
+            .expect("published field point is finite");
+        let target = slots
+            .slot_mut(slot)
+            .expect("mounted typed slot")
+            .runtime
+            .typed_mut::<QualificationClickProbe>()
+            .expect("original typed runtime")
+            .index()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&field_id))
+            .expect("same mounted field owner")
+            .id()
+            .clone();
+        assert_eq!(
+            publication.hit_test_scene().target_at(point),
+            Some(&target),
+            "the actual published placeholder must be hit-testable, not just painted"
+        );
+        let device = InputDeviceId::new(7).expect("original native device");
+        let pointer = PointerId::new(1).expect("original mouse stream");
+        let mut clicked = false;
+
+        for index in 0..315 {
+            // Reproduce the source mix observed on Windows: many physical
+            // cursor moves interleaved with native Down/Up pairs and successive
+            // publications that can cause framework stationary re-hits.
+            let events = if index >= 190 && index % 17 == 0 {
+                vec![PointerPhase::Move, PointerPhase::Down, PointerPhase::Up]
+            } else {
+                vec![PointerPhase::Move]
+            };
+            for phase in events {
+                let before = slots
+                    .input_ownership(slot)
+                    .expect("previous M13 work must settle without a phantom claim");
+                let mut event = PointerEvent::new(
+                    pointer,
+                    PointerDeviceKind::Mouse,
+                    phase,
+                    point,
+                    publication.input_context().clone(),
+                )
+                .with_device_id(device);
+                if phase == PointerPhase::Down {
+                    event = event
+                        .with_buttons(PointerButtons::new([PointerButton::Primary]))
+                        .with_changed_button(PointerButton::Primary);
+                } else if phase == PointerPhase::Up {
+                    event = event.with_changed_button(PointerButton::Primary);
+                }
+                let submission = slots
+                    .submit_native_pointer(slot, event)
+                    .expect("original mouse occurrence admitted by real pinned M13");
+                let (batch, status) = slots
+                    .pump_native_input_records(slot)
+                    .expect("canonical bounded M13 owner returned exact records");
+                let finality = native_pointer_finality(
+                    before.scope(),
+                    device,
+                    pointer,
+                    publication.input_context().surface_id(),
+                    submission,
+                    &batch,
+                    &status,
+                );
+                assert!(
+                    matches!(&finality, Ok(UiInputFinality::Committed(_))),
+                    "native cursor/click terminal receipt lost at {index} {phase:?}: {finality:?}, {status:?}, {:?}; trace={:?}",
+                    batch.report(),
+                    slots.test_trace_tail::<QualificationClickProbe>(slot, 20),
+                );
+                if phase == PointerPhase::Up {
+                    clicked = true;
+                }
+            }
+            if slots
+                .has_pending_redraw(slot)
+                .expect("settled owner supplies redraw intent")
+            {
+                publication = slots
+                    .publish_surface_for_slot(slot, &build)
+                    .expect("actual framework publication and stationary rehit");
+                slots
+                    .settle_slot(slot)
+                    .expect("publication's derived pointer work remains valid");
+            }
+        }
+        assert!(clicked, "real native-style click pairs were exercised");
+        let final_ownership = slots
+            .input_ownership(slot)
+            .expect("UI remains Running and settled after cursor/click storm");
+        assert_eq!(
+            final_ownership.keyboard().focused_node(),
+            Some(&target),
+            "clicking the actual displayed editable target must establish its M13 keyboard focus"
         );
     }
 
