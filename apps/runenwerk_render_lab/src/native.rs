@@ -7,6 +7,7 @@ use engine::prelude::FrameEnd;
 use std::path::{Path, PathBuf};
 
 mod comparison_evidence;
+mod performance_report;
 mod temporal_quality;
 
 use comparison_evidence::RenderLabComparisonEvidenceState;
@@ -43,6 +44,7 @@ enum RenderLabTemporalQualityScenario {
 #[derive(Debug, Clone, Default, runen_ecs::Resource)]
 struct RenderLabMeasurementConfig {
     output_path: Option<PathBuf>,
+    performance_report_path: Option<PathBuf>,
     submitted_frame_limit: Option<usize>,
     primary_window_size_px: Option<(u32, u32)>,
     radiance_target_size_px: Option<(u32, u32)>,
@@ -109,6 +111,27 @@ struct RenderLabComparisonCompletionResources<'w> {
     evidence_state: ResMut<'w, RenderLabComparisonEvidenceState>,
     presentation: Res<'w, engine::PrimaryPresentationMetricsResource>,
     comparison: Res<'w, RenderLabComparisonState>,
+}
+
+/// One read-only ECS handoff for normal Render Lab close-time evidence.
+#[derive(runen_ecs::SystemParam)]
+struct RenderLabCloseObservationResources<'w> {
+    history: Res<'w, RenderFrameHistoryState>,
+    pacing_policy: Res<'w, FramePacingPolicyResource>,
+    observation_policy: Res<'w, RenderFrameObservationPolicyResource>,
+    quality_execution: Res<'w, RenderLabTemporalQualityExecutionState>,
+    debug_report: Res<'w, RenderDebugFrameReportState>,
+    gfx: Res<'w, engine::plugins::render::Gfx>,
+}
+
+/// Close-time facts are scoped together; this is not a new collector or authority.
+struct RenderLabMeasurementCompletionEvidence<'a> {
+    history: &'a RenderFrameHistoryState,
+    pacing_policy: FramePacingPolicyResource,
+    observation_policy: RenderFrameObservationPolicyResource,
+    quality_execution: &'a RenderLabTemporalQualityExecutionState,
+    debug_report: &'a RenderDebugFrameReportState,
+    gfx: Option<&'a engine::plugins::render::Gfx>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, runen_ecs::SystemSet)]
@@ -195,11 +218,55 @@ pub fn run_native_measurement(
     primary_window_size_px: Option<(u32, u32)>,
     radiance_target_size_px: Option<(u32, u32)>,
 ) -> Result<()> {
+    run_native_measurement_with_report(
+        output_path.into(),
+        None,
+        submitted_frame_limit,
+        primary_window_size_px,
+        radiance_target_size_px,
+    )
+}
+
+/// NP1 opt-in output; preserves the ordinary RL2 measurement artifact unchanged.
+pub fn run_native_performance_measurement(
+    output_path: impl Into<PathBuf>,
+    performance_report_path: impl Into<PathBuf>,
+    submitted_frame_limit: Option<usize>,
+    primary_window_size_px: Option<(u32, u32)>,
+    radiance_target_size_px: Option<(u32, u32)>,
+) -> Result<()> {
+    run_native_measurement_with_report(
+        output_path.into(),
+        Some(performance_report_path.into()),
+        submitted_frame_limit,
+        primary_window_size_px,
+        radiance_target_size_px,
+    )
+}
+
+fn run_native_measurement_with_report(
+    output_path: PathBuf,
+    performance_report_path: Option<PathBuf>,
+    submitted_frame_limit: Option<usize>,
+    primary_window_size_px: Option<(u32, u32)>,
+    radiance_target_size_px: Option<(u32, u32)>,
+) -> Result<()> {
     let submitted_frame_limit = validate_measurement_frame_limit(submitted_frame_limit)?;
     let primary_window_size_px = validate_measurement_window_size(primary_window_size_px)?;
     let radiance_target_size_px = validate_measurement_radiance_size(radiance_target_size_px)?;
+    if let Some(path) = performance_report_path.as_ref() {
+        if path.as_os_str().is_empty() || *path == output_path {
+            bail!(
+                "performance report requires a nonempty path distinct from RL2 measurement output"
+            );
+        }
+        if std::fs::symlink_metadata(path).is_ok() {
+            bail!("performance report path already exists: {}", path.display());
+        }
+    }
     run_native_with_measurement(Some(RenderLabMeasurementConfig {
-        output_path: Some(output_path.into()),
+        output_path: Some(output_path),
+        performance_report_path,
         submitted_frame_limit,
         primary_window_size_px,
         radiance_target_size_px,
@@ -269,6 +336,7 @@ fn run_native_temporal_quality_scenario(
     let output_root = output_root.into();
     run_native_with_measurement(Some(RenderLabMeasurementConfig {
         output_path: Some(output_root.join("timing.json")),
+        performance_report_path: None,
         submitted_frame_limit,
         primary_window_size_px: Some(primary_window_size_px),
         radiance_target_size_px: Some(internal_size_px),
@@ -578,11 +646,16 @@ fn temporal_quality_capture_target_frame(
 fn complete_render_lab_measurement_if_requested(
     windows: &mut WindowStateRegistryResource,
     measurement: &mut RenderLabMeasurementConfig,
-    history: &RenderFrameHistoryState,
-    quality_execution: &RenderLabTemporalQualityExecutionState,
-    debug_report: &RenderDebugFrameReportState,
-    gfx: Option<&engine::plugins::render::Gfx>,
+    evidence: RenderLabMeasurementCompletionEvidence<'_>,
 ) -> Result<()> {
+    let RenderLabMeasurementCompletionEvidence {
+        history,
+        pacing_policy,
+        observation_policy,
+        quality_execution,
+        debug_report,
+        gfx,
+    } = evidence;
     let Some(primary_window_id) = windows.primary_window_id() else {
         return Ok(());
     };
@@ -622,6 +695,17 @@ fn complete_render_lab_measurement_if_requested(
     if !measurement.completed {
         if let Some(output_path) = measurement.output_path.as_deref() {
             write_measurement_artifact(output_path, history, measurement)?;
+        }
+        if let Some(path) = measurement.performance_report_path.as_deref() {
+            let report = performance_report::build_report(
+                history,
+                measurement.radiance_target_size_px,
+                pacing_policy.mode,
+                observation_policy,
+                gfx.map(|gfx| gfx.adapter_facts()),
+            );
+            performance_report::write_report(path, &report)?;
+            eprintln!("{}", performance_report::terminal_summary(&report));
         }
         if let Some(capture) = quality_capture {
             let gfx = gfx.ok_or_else(|| {
@@ -805,24 +889,21 @@ fn approve_render_lab_close_system(
     mut windows: ResMut<WindowStateRegistryResource>,
     mut measurement: ResMut<RenderLabMeasurementConfig>,
     mut comparison_resources: RenderLabComparisonCompletionResources<'_>,
-    history: Res<RenderFrameHistoryState>,
-    quality_execution: Res<RenderLabTemporalQualityExecutionState>,
-    debug_report: Res<RenderDebugFrameReportState>,
-    gfx: Res<engine::plugins::render::Gfx>,
+    observation: RenderLabCloseObservationResources<'_>,
 ) -> Result<()> {
     if comparison_resources.evidence.is_active() {
         comparison_resources
             .evidence_state
-            .observe_available(&history, &gfx);
+            .observe_available(&observation.history, &observation.gfx);
     }
     if complete_render_lab_comparison_evidence_if_requested(
         &mut windows,
         &mut comparison_resources.evidence,
         RenderLabComparisonCompletionInputs {
-            history: &history,
+            history: &observation.history,
             evidence_state: &comparison_resources.evidence_state,
-            debug_report: &debug_report,
-            gfx: &gfx,
+            debug_report: &observation.debug_report,
+            gfx: &observation.gfx,
             output_size_px: comparison_resources.presentation.size_px(),
             candidate_size_px: comparison_resources.comparison.candidate_size_px(),
         },
@@ -832,10 +913,14 @@ fn approve_render_lab_close_system(
     complete_render_lab_measurement_if_requested(
         &mut windows,
         &mut measurement,
-        &history,
-        &quality_execution,
-        &debug_report,
-        Some(&gfx),
+        RenderLabMeasurementCompletionEvidence {
+            history: &observation.history,
+            pacing_policy: *observation.pacing_policy,
+            observation_policy: *observation.observation_policy,
+            quality_execution: &observation.quality_execution,
+            debug_report: &observation.debug_report,
+            gfx: Some(&observation.gfx),
+        },
     )
 }
 
@@ -1269,6 +1354,30 @@ mod tests {
     }
 
     #[test]
+    fn performance_report_rejects_existing_output_before_native_start() {
+        let directory = std::env::temp_dir().join(format!(
+            "runenwerk_np1_reject_existing_{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&directory).unwrap();
+        let old_report = directory.join("old-report.json");
+        std::fs::write(&old_report, b"previous evidence").unwrap();
+        let result = run_native_performance_measurement(
+            directory.join("gpu-v2.json"),
+            &old_report,
+            Some(1),
+            None,
+            None,
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            std::fs::read(&old_report).unwrap(),
+            b"previous evidence".to_vec()
+        );
+        std::fs::remove_dir_all(&directory).unwrap();
+    }
+
+    #[test]
     fn measurement_frame_limit_must_be_positive_and_retainable() {
         assert_eq!(validate_measurement_frame_limit(None).unwrap(), None);
         assert_eq!(validate_measurement_frame_limit(Some(1)).unwrap(), Some(1));
@@ -1399,6 +1508,7 @@ mod tests {
         let mut history = RenderFrameHistoryState::default();
         let mut measurement = RenderLabMeasurementConfig {
             output_path: None,
+            performance_report_path: None,
             submitted_frame_limit: Some(2),
             primary_window_size_px: None,
             radiance_target_size_px: None,
@@ -1447,8 +1557,13 @@ mod tests {
             &[],
             RenderGpuTimingCapability::Unsupported,
         );
+        let artifact_dir =
+            std::env::temp_dir().join(format!("runenwerk_np1_close_{}", std::process::id()));
+        let gpu_output = artifact_dir.join("gpu-v2.json");
+        let performance_output = artifact_dir.join("performance-v1.json");
         let mut measurement = RenderLabMeasurementConfig {
-            output_path: None,
+            output_path: Some(gpu_output.clone()),
+            performance_report_path: Some(performance_output.clone()),
             submitted_frame_limit: Some(1),
             primary_window_size_px: None,
             radiance_target_size_px: None,
@@ -1464,14 +1579,35 @@ mod tests {
         complete_render_lab_measurement_if_requested(
             &mut windows,
             &mut measurement,
-            &history,
-            &quality_execution,
-            &debug_report,
-            None,
+            RenderLabMeasurementCompletionEvidence {
+                history: &history,
+                pacing_policy: FramePacingPolicyResource::continuous_capped(60),
+                observation_policy: rl2_measurement_policy(),
+                quality_execution: &quality_execution,
+                debug_report: &debug_report,
+                gfx: None,
+            },
         )
         .unwrap();
 
         assert!(measurement.completed);
+        let gpu_json: serde_json::Value =
+            serde_json::from_slice(&fs::read(&gpu_output).unwrap()).unwrap();
+        let performance_bytes = fs::read(&performance_output).unwrap();
+        let performance_json: serde_json::Value =
+            serde_json::from_slice(&performance_bytes).unwrap();
+        assert_eq!(gpu_json["schema_version"], 2);
+        assert!(gpu_json.get("per_surface_extent").is_none());
+        assert_eq!(performance_json["schema_version"], 1);
+        assert_eq!(performance_json["retained_frame_count"], 1);
+        assert_eq!(
+            performance_json["configuration"]["host_pacing_target_fps_at_close"],
+            60
+        );
+        assert_eq!(
+            performance_json["per_surface_extent"][0]["composed_gpu"]["eligible_count"],
+            0
+        );
         let primary_record = windows.record(primary).expect("primary window");
         assert!(primary_record.close_requested);
         assert!(!primary_record.close_intent_pending);
@@ -1480,19 +1616,25 @@ mod tests {
         complete_render_lab_measurement_if_requested(
             &mut windows,
             &mut measurement,
-            &history,
-            &quality_execution,
-            &debug_report,
-            None,
+            RenderLabMeasurementCompletionEvidence {
+                history: &history,
+                pacing_policy: FramePacingPolicyResource::continuous_capped(60),
+                observation_policy: rl2_measurement_policy(),
+                quality_execution: &quality_execution,
+                debug_report: &debug_report,
+                gfx: None,
+            },
         )
         .unwrap();
         assert!(measurement.completed);
+        assert_eq!(fs::read(&performance_output).unwrap(), performance_bytes);
         assert!(
             windows
                 .record(primary)
                 .expect("primary window")
                 .close_requested
         );
+        fs::remove_dir_all(&artifact_dir).unwrap();
     }
 
     #[test]
