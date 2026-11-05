@@ -205,6 +205,38 @@ wake must fail rather than be helped by an application timer.
 This autonomous probe rejects external raw mouse motion as contaminated evidence;
 run it on a quiet native display.
 
+## Native U9-C original-input integration
+
+U9-C native input qualification uses the original Winit host and installed
+RunenUI/RunenInput/ActionState/Render owners. The native qualifier is not a
+synthetic keyboard, pointer, IME or GPU-completion simulator:
+
+```text
+cargo test -p engine --example native_ui_input_qualification --locked
+cargo build -p engine --example native_ui_input_qualification --locked
+cargo run -p engine --example native_ui_input_qualification --locked -- --interactive
+```
+
+Run the **interactive** application on one available supported native desktop
+OS. Record the exact source SHA, OS and backend, adapter, commands, process exit,
+and which original input operations actually occurred. Exercise real keyboard
+Down/Up, held W before/after a nonexclusive UI publication, button click,
+Tab/focus, text and IME when available, resize, close and restart. Verify actual
+RunenUI M13 receipts/source identity and completed-Present pointer targeting;
+an accepted publication or queued GPU submission alone never proves display.
+Retain explicit game-only Arena and Editor input regression coverage. A physical
+operation not performed is **not** a passing test.
+
+The issue's source/device/focus/window, M13 capacity/finality, stale
+publication, revocation/no-resurrection, shutdown and raw-motion negative tests
+remain applicable through the owning focused unit/integration suites. Run
+`cargo validate`, `git diff --check`, exact-head CI and critical review.
+Additional OS/device-specific tests are required only for an actual affected
+platform contract or demonstrated defect: no blanket Windows-first, Windows+
+Linux, or macOS/Windows/Linux hardware test matrix is imposed by #1276.
+The independent Runen Lab Todo application has its own consumer acceptance and
+is not an Engine input substitute.
+
 ## Native OnDemand GPU progress
 
 The source-neutral `native_gpu_progress` example uses the ordinary App/Render/UI

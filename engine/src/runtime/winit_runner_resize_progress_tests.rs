@@ -230,7 +230,10 @@ fn focus_continuity_and_multiwindow_occurrences_remain_ordered_through_frame_end
         .request_window("second", (640, 480))
         .native_window_id;
     runner
-        .input_adapter
+        .state
+        .world
+        .resource_mut::<WinitInputAdapter>()
+        .expect("one canonical native source allocator")
         .window_context(primary, winit::event::DeviceId::dummy())
         .unwrap();
     runner.apply_window_focus_event(primary, false).unwrap();
