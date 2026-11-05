@@ -3121,10 +3121,35 @@ mod tests {
         let start = slots
             .start_native_composition(slot)
             .expect("real focused TextField accepts original OS composition start");
+        // The actual native composition input can reach its own M13 terminal
+        // receipt while later independent application work remains queued.
+        // Do not promote global quiescence to receipt terminality or invent a
+        // second IME composition generation during continuation.
+        {
+            let runtime = slots
+                .slot_mut(slot)
+                .expect("same focused native text slot")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("original text runtime still mounted");
+            for _ in 0..(RUNTIME_PUMP_WORK_LIMIT + 2) {
+                runtime
+                    .submit_action(TextAction::Idle)
+                    .expect("independent bounded application work admitted");
+            }
+        }
         let (start_batch, start_status) = slots
             .pump_native_input_records(slot)
             .expect("M13 composition start returns ordered evidence");
-        assert_eq!(start_status, Ok(()));
+        assert_eq!(
+            start_status,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            "later work is not the same as unprocessed original composition"
+        );
+        assert_eq!(
+            start_batch.report().outcome(),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        );
         assert!(matches!(
             native_composition_finality(
                 before_start.scope(),
@@ -3134,6 +3159,25 @@ mod tests {
             ),
             Ok(UiInputFinality::Committed(_))
         ));
+        assert_eq!(
+            native_composition_finality(
+                before_start.scope(),
+                start.sequence(),
+                &start_batch,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativeCompositionEvidenceFailure::Unsettled),
+            "a genuinely missing slot cannot masquerade as ordinary pending work"
+        );
+        assert_eq!(
+            slots.input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        for _ in 0..4 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
         let started = slots
             .input_ownership(slot)
             .expect("M13 composition generation is observable");
