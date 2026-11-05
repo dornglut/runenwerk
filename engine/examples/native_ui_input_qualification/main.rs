@@ -37,7 +37,7 @@ use engine::runtime::{
 use runen_ecs::World;
 use runenui_core::{
     Color, EdgeInsets, EditIntent, EditResolution, Effects, FlexContainerStyle, FlexDirection,
-    FontFamily, FontFamilyName, GenericFontFamily, ItemAlignment, LayoutBound, LayoutContainer,
+    FontFamily, GenericFontFamily, ItemAlignment, LayoutBound, LayoutContainer,
     LayoutDimension, LayoutFactor, LayoutStyle, LogicalLength, MainAxisAlignment, NoHostProtocol,
     SemanticEditableMode, StyleEnvironment, TextAffinity, TextDocumentId, TextDocumentRevision,
     TextDocumentSnapshot, TextPosition, TextSelection, Typography, UiApp, UpdateOutput, View,
@@ -212,7 +212,7 @@ impl UiApp for QualificationUi {
                 .foreground(Color::rgb(180, 192, 211))
                 .typography(qualifier_font(14))
                 .into_element(),
-            text("2   Unicode tippen, Tab + Space und Button testen.")
+            text("2   日本語: あいうえお   |   Tab + Space und Button testen.")
                 .foreground(Color::rgb(180, 192, 211))
                 .typography(qualifier_font(14))
                 .into_element(),
@@ -528,10 +528,12 @@ fn main() -> Result<()> {
     let report = Arc::new(Mutex::new(lifetime::Report::default()));
 
     let clicks = Arc::new(AtomicUsize::new(0));
-    let fonts = UiRuntimeFontConfiguration::new(vec![FONT.to_vec()]).with_generic_mapping(
-        GenericFontFamily::SansSerif,
-        vec![FontFamilyName::new("JetBrains Mono").expect("bundled font family")],
-    );
+    // This real-OS qualification host needs glyph coverage for Japanese IME
+    // text. A JetBrains-Mono-only SansSerif mapping artificially suppresses
+    // normal platform fallback. Keep the bundled Latin face available, but
+    // let RunenUI discover host fonts and choose its native generic fallback.
+    // Deterministic headless tests retain BundledOnly font profiles.
+    let fonts = UiRuntimeFontConfiguration::new(vec![FONT.to_vec()]).with_system_fonts();
 
     let mut app = App::new();
     app.set_title("U9-C Native UI qualification");
