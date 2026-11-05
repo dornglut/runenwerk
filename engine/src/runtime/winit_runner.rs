@@ -2234,7 +2234,13 @@ impl WinitRunner {
                     runenui_runtime::UiInputProcessingRejection::MissingDisplayedSnapshot,
                 )) => stale_display_rejected = true,
                 other => {
-                    anyhow::bail!("native UI cursor lacked exact M13 pointer settlement: {other:?}")
+                    anyhow::bail!(
+                        "native UI cursor lacked exact M13 pointer settlement: {other:?}; pump_status={status:?}; pump_report={:?}; pause={:?}; processed_through={:?}; ordered_records={}",
+                        batch.report(),
+                        batch.pause_reason(),
+                        batch.processed_through(),
+                        batch.ordered_records().len(),
+                    )
                 }
             }
             Ok(())

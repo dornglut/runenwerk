@@ -412,6 +412,13 @@ pub enum UiRuntimeNativePointerEvidenceFailure {
 
 /// Check original native stream identity against the exact framework receipt,
 /// not a coalesced UI-consumed flag or a generic quiescent pump.
+///
+/// An exact terminal pointer receipt can be reached while other bounded
+/// framework work remains. A budget-exhausted pump is not a pointer rejection:
+/// only an unpaused, running M13 batch with the exact source-qualified receipt
+/// can qualify that pointer. Other unfinished work still blocks the slot's
+/// next input admission through its canonical readiness state. This function
+/// never grants game input, and does not relax keyboard/text finality.
 pub fn native_pointer_finality(
     scope: &InputArbitrationScope,
     expected_device: InputDeviceId,
@@ -422,9 +429,20 @@ pub fn native_pointer_finality(
     status: &Result<(), UiRuntimeSlotOperationFailure>,
 ) -> Result<UiInputFinality, UiRuntimeNativePointerEvidenceFailure> {
     use UiRuntimeNativePointerEvidenceFailure as Failure;
-    if status.is_err()
+    // RunenUI reports BudgetExhausted whenever an ordinary bounded pump
+    // leaves immediately serviceable *other* work. The pointer's own terminal
+    // InputSettled receipt remains valid once reached; treating global
+    // nonquiescence as a fatal pointer failure incorrectly shuts down a
+    // functioning real native window on cursor motion.
+    let bounded_pending = matches!(
+        (status, batch.report().outcome()),
+        (
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        )
+    );
+    if (!bounded_pending && (status.is_err() || !batch.report().is_quiescent()))
         || batch.pause_reason().is_some()
-        || !batch.report().is_quiescent()
         || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
     {
         return Err(Failure::Unsettled);
@@ -3375,6 +3393,116 @@ mod tests {
             ),
             Ok(settlement.finality().clone()),
             "exact pointer finality must come from the framework's receipt"
+        );
+        // A second genuine runtime produces an exact cursor receipt, but the
+        // next separately admitted application action is still queued after a
+        // one-envelope bounded pump. The exact pointer receipt remains usable;
+        // the slot itself must remain unsettled for subsequent native input.
+        let delayed_slot = slots
+            .mount_app::<NativePointerApp>(
+                UiTypedScreenId::new("native.pointer.bounded.pending"),
+                (),
+                &fonts,
+            )
+            .slot_id()
+            .expect("independent admitted native pointer slot");
+        let delayed_publication = slots
+            .publish_surface_for_slot(delayed_slot, &build)
+            .expect("framework-owned surface input context");
+        let delayed_before = slots
+            .input_ownership(delayed_slot)
+            .expect("exact scope before deferred pointer");
+        let delayed_submission = slots
+            .submit_native_pointer(
+                delayed_slot,
+                PointerEvent::new(
+                    pointer,
+                    PointerDeviceKind::Mouse,
+                    PointerPhase::Move,
+                    LogicalPoint::new(12.0, 8.0).expect("finite pointer point"),
+                    delayed_publication.input_context().clone(),
+                )
+                .with_device_id(device),
+            )
+            .expect("real pointer precedes independently admitted application action");
+        let delayed_batch = {
+            let runtime = slots
+                .slot_mut(delayed_slot)
+                .expect("mounted test slot")
+                .runtime
+                .typed_mut::<NativePointerApp>()
+                .expect("real typed runtime");
+            runtime
+                .submit_action(())
+                .expect("independent action stays queued behind pointer");
+            runtime
+                .pump(runenui_runtime::PumpBudget::new(1, 0, 0, 0))
+                .expect("one-envelope canonical M13 pump")
+        };
+        let delayed_status = slots
+            .slot_mut(delayed_slot)
+            .expect("mounted test slot")
+            .observe_batch_report(&delayed_batch);
+        assert_eq!(
+            delayed_batch.report().outcome(),
+            runenui_runtime::PumpOutcome::BudgetExhausted,
+            "a real bounded pump must leave independent application work"
+        );
+        assert_eq!(
+            delayed_status,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            "other queued work still prevents future original input admission"
+        );
+        let delayed_settlement = delayed_batch
+            .ordered_records()
+            .iter()
+            .find_map(|record| match record {
+                InputArbitrationRecord::InputSettled(value)
+                    if value.sequence() == delayed_submission.sequence() =>
+                {
+                    Some(value)
+                }
+                _ => None,
+            })
+            .expect("the original pointer reached its own exact M13 terminal receipt");
+        assert_eq!(
+            native_pointer_finality(
+                delayed_before.scope(),
+                device,
+                pointer,
+                delayed_publication.input_context().surface_id(),
+                delayed_submission,
+                &delayed_batch,
+                &delayed_status,
+            ),
+            Ok(delayed_settlement.finality().clone()),
+            "globally pending unrelated work must not undo an exact terminal cursor receipt"
+        );
+        assert_eq!(
+            native_pointer_finality(
+                delayed_before.scope(),
+                other_device,
+                pointer,
+                delayed_publication.input_context().surface_id(),
+                delayed_submission,
+                &delayed_batch,
+                &delayed_status,
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::WrongDevice),
+            "bounded-pump handling must still reject foreign physical devices"
+        );
+        assert_eq!(
+            native_pointer_finality(
+                delayed_before.scope(),
+                device,
+                pointer,
+                delayed_publication.input_context().surface_id(),
+                delayed_submission,
+                &delayed_batch,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::Unsettled),
+            "an actual owner failure cannot qualify a reached pointer receipt"
         );
         assert_eq!(
             native_pointer_finality(

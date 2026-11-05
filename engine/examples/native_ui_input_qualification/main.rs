@@ -111,6 +111,9 @@ impl UiApp for QualificationUi {
             |intent| QualificationAction::Edit(Box::new(intent)),
         )
         .expect("the native qualification text source is well formed")
+        // An empty source without a visual placeholder measures to zero width
+        // and leaves the required native click target effectively invisible.
+        .placeholder("CLICK HERE - type Unicode text")
         .id("u9c.qualify.editable");
         column(vec![
             text(if state.text_generation == 0 {
