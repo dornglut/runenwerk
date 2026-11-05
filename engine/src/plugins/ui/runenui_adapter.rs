@@ -733,7 +733,79 @@ impl HostProtocol for RunenwerkUiHostProtocol {
 
 struct RunenwerkProgramUiApp;
 
+// The validated projector supports Columns, Labels, and leaf button Controls.
+// Each creates exactly one mounted owner. No input may fabricate a source node.
+fn program_ui_owner_counts(node: &UiNodeDefinition) -> Option<(usize, usize)> {
+    match node {
+        UiNodeDefinition::Column { children, .. } => {
+            let mut mounted = 1_usize;
+            let mut buttons = 0_usize;
+            for child in children {
+                let (child_mounted, child_buttons) = program_ui_owner_counts(child)?;
+                mounted = mounted.checked_add(child_mounted)?;
+                buttons = buttons.checked_add(child_buttons)?;
+            }
+            Some((mounted, buttons))
+        }
+        UiNodeDefinition::Control { .. } => Some((1, 1)),
+        UiNodeDefinition::Label { .. } => Some((1, 0)),
+        _ => None,
+    }
+}
+
+// Use the actual accepted authored topology instead of a guessed universal
+// budget. Overflows fail initial admission, never silently wrap capacity.
+fn program_ui_producer_budget(
+    state: &RunenwerkProgramUiState,
+    host_request: bool,
+    interaction: bool,
+) -> runenui_core::ProducerBudget {
+    let Some((owners, buttons)) = program_ui_owner_counts(state.source.root()) else {
+        return runenui_core::ProducerBudget::new(0, 0);
+    };
+    // The single routed interaction can produce focus/out and activation
+    // notifications for currently mounted controls. One ActivateRoute action
+    // starts at most one host request with one terminal reply.
+    let host_starts = usize::from(host_request);
+    let Some(outputs) = (if interaction { buttons } else { 0 })
+        .checked_mul(4)
+        .and_then(|n| n.checked_add(if interaction && buttons != 0 { 4 } else { 0 }))
+        .and_then(|n| n.checked_add(host_starts))
+    else {
+        return runenui_core::ProducerBudget::new(0, 0);
+    };
+    let Some(credits) = 1_usize
+        .checked_add(owners)
+        .and_then(|n| n.checked_add(outputs))
+        .and_then(|n| n.checked_add(host_starts.checked_mul(3)?))
+    else {
+        return runenui_core::ProducerBudget::new(0, 0);
+    };
+    runenui_core::ProducerBudget::new(credits, outputs)
+        .with_reconciliation(owners, owners, owners)
+        .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, host_starts, 0))
+        .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, host_starts, 0))
+}
+
 impl UiApp for RunenwerkProgramUiApp {
+    fn initial_producer_budget(state: &Self::State) -> runenui_core::ProducerBudget {
+        program_ui_producer_budget(state, false, false)
+    }
+
+    fn action_producer_budget(
+        state: &Self::State,
+        action: &Self::Action,
+    ) -> runenui_core::ProducerBudget {
+        let starts_host = matches!(action, RunenwerkProgramUiAction::ActivateRoute(_));
+        program_ui_producer_budget(state, starts_host, false)
+    }
+
+    fn interaction_producer_budget(state: &Self::State) -> runenui_core::ProducerBudget {
+        let has_buttons = program_ui_owner_counts(state.source.root())
+            .is_some_and(|(_, buttons)| buttons > 0);
+        program_ui_producer_budget(state, has_buttons, has_buttons)
+    }
+
     type State = RunenwerkProgramUiState;
     type Action = RunenwerkProgramUiAction;
     type HostProtocol = RunenwerkUiHostProtocol;
@@ -1236,12 +1308,26 @@ impl UiRuntimeSlotsResource {
             );
         }
 
-        let mut runtime = AppRuntime::<RunenwerkProgramUiApp>::mount(RunenwerkProgramUiState {
-            source,
-            artifact,
-            resolved_state,
-            registry: registry.clone(),
-        });
+        let mut runtime = match AppRuntime::<RunenwerkProgramUiApp>::mount(
+            RunenwerkProgramUiState {
+                source,
+                artifact,
+                resolved_state,
+                registry: registry.clone(),
+            },
+        ) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                tracing::warn!(
+                    kind = ?error.kind(),
+                    "RunenUI program mount refused initial producer admission"
+                );
+                return UiRuntimeSlotMountReport::rejected(
+                    screen_id,
+                    UiRuntimeSlotMountFailure::RuntimeInitialization,
+                );
+            }
+        };
         if let Some(clock) = &self.native_clock {
             runtime.set_monotonic_clock(clock.clone());
         }
@@ -1328,10 +1414,22 @@ impl UiRuntimeSlotsResource {
                 UiRuntimeSlotMountFailure::SlotCapacityExhausted,
             );
         }
-        let mut runtime = AppRuntime::<A>::mount_with_config(
+        let mut runtime = match AppRuntime::<A>::mount_with_config(
             state,
             RuntimeConfig::default().with_text_font_source_policy(fonts.source_policy()),
-        );
+        ) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                tracing::warn!(
+                    kind = ?error.kind(),
+                    "RunenUI typed app mount refused initial producer admission"
+                );
+                return UiRuntimeSlotMountReport::rejected(
+                    screen_id,
+                    UiRuntimeSlotMountFailure::RuntimeInitialization,
+                );
+            }
+        };
         if let Some(clock) = &self.native_clock {
             runtime.set_monotonic_clock(clock.clone());
         }
@@ -2612,6 +2710,23 @@ mod tests {
     }
 
     impl UiApp for InitialTimerApp {
+        fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(6, 2).with_reconciliation(1, 1, 1)
+            .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 1, 0, 0))
+            .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 1, 0, 0, 0))
+        }
+
+        fn action_producer_budget(
+            _state: &Self::State,
+            _action: &Self::Action,
+        ) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+        }
+
+        fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0)
+        }
+
         type State = usize;
         type Action = bool;
         type HostProtocol = runenui_core::NoHostProtocol;
@@ -2682,6 +2797,23 @@ mod tests {
         }
         struct NativeTextApp;
         impl UiApp for NativeTextApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(3, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9).with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = TextState;
             type Action = TextAction;
             type HostProtocol = NoHostProtocol;
@@ -3086,6 +3218,21 @@ mod tests {
 
         struct NativePointerApp;
         impl UiApp for NativePointerApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -3409,6 +3556,23 @@ mod tests {
 
         struct NativeKeyboardApp;
         impl UiApp for NativeKeyboardApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9).with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -4663,6 +4827,23 @@ mod tests {
         struct ClippedEditableApp;
 
         impl UiApp for ClippedEditableApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(4, 0).with_reconciliation(3, 0, 3)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(4, 0).with_reconciliation(3, 3, 3)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(15, 9).with_reconciliation(3, 3, 3)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = ();
             type Action = Box<EditIntent>;
             type HostProtocol = NoHostProtocol;
@@ -4773,6 +4954,23 @@ mod tests {
         struct TodoLikePlaceholderApp;
 
         impl UiApp for TodoLikePlaceholderApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9).with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = ();
             type Action = Box<EditIntent>;
             type HostProtocol = NoHostProtocol;
@@ -5061,6 +5259,21 @@ mod tests {
 
         struct IncrementApp;
         impl UiApp for IncrementApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = i32;
             type Action = i32;
             type HostProtocol = NoHostProtocol;
@@ -5109,6 +5322,23 @@ mod tests {
             Completed,
         }
         impl UiApp for ApprovalApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(6, 2).with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 1, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 1, 0))
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = bool;
             type Action = ApprovalAction;
             type HostProtocol = ApprovalProtocol;
@@ -5322,6 +5552,21 @@ mod tests {
 
         struct ChainedApp;
         impl UiApp for ChainedApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
             type State = usize;
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -5411,6 +5656,23 @@ mod tests {
 
         struct ResponseApp;
         impl UiApp for ResponseApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(6, 2).with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 1, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 1, 0))
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = usize;
             type Action = ResponseAction;
             type HostProtocol = ResponseProtocol;
@@ -5491,6 +5753,21 @@ mod tests {
 
         struct InitialApp;
         impl UiApp for InitialApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = usize;
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -5538,6 +5815,21 @@ mod tests {
 
         struct InitialChainApp;
         impl UiApp for InitialChainApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = usize;
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -5605,6 +5897,21 @@ mod tests {
 
         struct EmptyApp;
         impl UiApp for EmptyApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -5902,6 +6209,21 @@ mod tests {
 
         struct EmptyApp;
         impl UiApp for EmptyApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -5998,6 +6320,21 @@ mod tests {
         };
         struct MotionApp;
         impl UiApp for MotionApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -6079,6 +6416,23 @@ mod tests {
         };
         struct SearchApp;
         impl UiApp for SearchApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(4, 0).with_reconciliation(3, 0, 3)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(4, 0).with_reconciliation(3, 3, 3)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(19, 13).with_reconciliation(3, 3, 3)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;

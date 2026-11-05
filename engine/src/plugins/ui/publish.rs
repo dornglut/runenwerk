@@ -588,6 +588,22 @@ mod exact_raster_extent_tests {
         use runenui_runtime::{LogicalSize, SurfaceBuildContext};
         struct Label;
         impl UiApp for Label {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                // Fixed authored topology and its initial owner reconciliation.
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+        
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+        
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -687,6 +703,22 @@ mod native_publication_tests {
 
     struct StationaryApp;
     impl UiApp for StationaryApp {
+        fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            // Fixed authored topology and its initial owner reconciliation.
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+        }
+    
+        fn action_producer_budget(
+            _state: &Self::State,
+            _action: &Self::Action,
+        ) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+        }
+    
+        fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0)
+        }
+
         type State = ();
         type Action = ();
         type HostProtocol = NoHostProtocol;
@@ -830,7 +862,39 @@ mod native_publication_tests {
         Tick,
     }
     struct CallbackApp;
+
+    // The custom focusable widget emits exactly `burst` Tick actions and one
+    // RequestFocus command on target Enter; there is never an unbounded app
+    // callback or another mounted owner in this fixture.
+    fn callback_profile(state: &CallbackState, include_callback: bool) -> runenui_core::ProducerBudget {
+        let outputs = if include_callback {
+            state.burst.checked_add(1)
+        } else {
+            Some(0)
+        };
+        let Some(outputs) = outputs else {
+            return runenui_core::ProducerBudget::new(0, 0);
+        };
+        let Some(credits) = 2_usize.checked_add(outputs) else {
+            return runenui_core::ProducerBudget::new(0, 0);
+        };
+        runenui_core::ProducerBudget::new(credits, outputs).with_reconciliation(1, 1, 1)
+    }
+
     impl UiApp for CallbackApp {
+        fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            // Initial view is the empty one-owner Column, before Reveal.
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+        }
+
+        fn action_producer_budget(state: &Self::State, _action: &Self::Action) -> runenui_core::ProducerBudget {
+            // A queued Reveal may replace the Column by the focusable widget.
+            callback_profile(state, true)
+        }
+
+        fn interaction_producer_budget(state: &Self::State) -> runenui_core::ProducerBudget {
+            callback_profile(state, true)
+        }
         type State = CallbackState;
         type Action = CallbackAction;
         type HostProtocol = NoHostProtocol;

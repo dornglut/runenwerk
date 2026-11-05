@@ -56,6 +56,24 @@ enum QualificationAction {
 }
 
 impl UiApp for QualificationUi {
+    fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        // Fixed authored topology and its initial owner reconciliation.
+        runenui_core::ProducerBudget::new(5, 0).with_reconciliation(4, 0, 4)
+    }
+
+    fn action_producer_budget(
+        _state: &Self::State,
+        _action: &Self::Action,
+    ) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(5, 0).with_reconciliation(4, 4, 4)
+    }
+
+    fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(16, 9).with_reconciliation(4, 4, 4)
+        .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+        .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+    }
+
     type State = UiState;
     type Action = QualificationAction;
     type HostProtocol = NoHostProtocol;

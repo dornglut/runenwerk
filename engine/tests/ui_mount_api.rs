@@ -223,6 +223,22 @@ fn ui_mount_unmount_shuts_down_and_removes_engine_slot() {
 struct DiagnosticTypedApp;
 
 impl runenui_core::UiApp for DiagnosticTypedApp {
+    fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        // Fixed authored topology and its initial owner reconciliation.
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+    }
+
+    fn action_producer_budget(
+        _state: &Self::State,
+        _action: &Self::Action,
+    ) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+    }
+
+    fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0)
+    }
+
     type State = ();
     type Action = ();
     type HostProtocol = runenui_core::NoHostProtocol;
@@ -284,6 +300,22 @@ fn typed_app_mount_rejection_records_the_same_engine_diagnostic_as_counter() {
 struct SecondaryTypedApp;
 
 impl runenui_core::UiApp for SecondaryTypedApp {
+    fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        // Fixed authored topology and its initial owner reconciliation.
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+    }
+
+    fn action_producer_budget(
+        _state: &Self::State,
+        _action: &Self::Action,
+    ) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+    }
+
+    fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0)
+    }
+
     type State = usize;
     type Action = bool;
     type HostProtocol = runenui_core::NoHostProtocol;
