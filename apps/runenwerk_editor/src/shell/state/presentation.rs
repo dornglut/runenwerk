@@ -133,17 +133,16 @@ impl RunenwerkEditorShellState {
         }
         self.editor_window_bindings
             .insert(editor_window_id, binding);
-        if editor_window_id == self.editor_windows.primary_window_id() {
-            if let Some(primary_target) = self
+        if editor_window_id == self.editor_windows.primary_window_id()
+            && let Some(primary_target) = self
                 .composition_runtime
                 .composition()
                 .definition()
                 .targets()
                 .first()
-            {
-                self.composition_target_bindings
-                    .bind(primary_target.id, binding);
-            }
+        {
+            self.composition_target_bindings
+                .bind(primary_target.id, binding);
         }
         true
     }
