@@ -909,10 +909,18 @@ mod native_publication_tests {
 
         fn action_producer_budget(
             state: &Self::State,
-            _action: &Self::Action,
+            action: &Self::Action,
         ) -> runenui_core::ProducerBudget {
-            // A queued Reveal may replace the Column by the focusable widget.
-            callback_profile(state)
+            match action {
+                // Reveal replaces the Column by a new focusable widget; a
+                // pointer re-hit may emit the whole authored callback burst.
+                CallbackAction::Reveal => callback_profile(state),
+                // Tick changes no state, starts no work and emits nothing.
+                // Its one retained update cannot require another full burst
+                // reservation inside the already admitted causal root.
+                CallbackAction::Tick => runenui_core::ProducerBudget::new(2, 0)
+                    .with_reconciliation(0, 1, 0),
+            }
         }
 
         fn interaction_producer_budget(state: &Self::State) -> runenui_core::ProducerBudget {
