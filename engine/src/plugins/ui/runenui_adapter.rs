@@ -3358,7 +3358,7 @@ mod tests {
                     LogicalLength::from(14_u16),
                     LogicalLength::from(12_u16),
                 ))
-                .radius(LogicalLength::from(10_u16))
+                .radius(runenui_core::Radius::all(LogicalLength::from(10_u16)))
                 .typography(font(16));
                 let panel = column(vec![
                     text("RUNENWERK  /  U9-C INPUT TEST")
@@ -3389,7 +3389,7 @@ mod tests {
                             LogicalLength::from(16_u16),
                             LogicalLength::from(14_u16),
                         ))
-                        .radius(LogicalLength::from(10_u16))
+                        .radius(runenui_core::Radius::all(LogicalLength::from(10_u16)))
                         .typography(font(16))
                         .into_element(),
                     text("UI-Klicks: 0     Textzeichen: 0")
@@ -3413,7 +3413,7 @@ mod tests {
                 )
                 .background(Color::rgb(24, 33, 49))
                 .padding(EdgeInsets::all(LogicalLength::from(28_u16)))
-                .radius(LogicalLength::from(18_u16));
+                .radius(runenui_core::Radius::all(LogicalLength::from(18_u16)));
                 column(vec![panel.into_element()])
                     .id("u9c.qualify.root")
                     .with_layout(

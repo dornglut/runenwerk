@@ -159,7 +159,7 @@ impl UiApp for QualificationUi {
             LogicalLength::from(14_u16),
             LogicalLength::from(12_u16),
         ))
-        .radius(LogicalLength::from(10_u16))
+        .radius(runenui_core::Radius::all(LogicalLength::from(10_u16)))
         .typography(qualifier_font(16));
 
         // Styling never substitutes for native Winit input or exact M13 focus.
@@ -196,7 +196,7 @@ impl UiApp for QualificationUi {
                     LogicalLength::from(16_u16),
                     LogicalLength::from(14_u16),
                 ))
-                .radius(LogicalLength::from(10_u16))
+                .radius(runenui_core::Radius::all(LogicalLength::from(10_u16)))
                 .typography(qualifier_font(16))
                 .into_element(),
             text(format!(
@@ -212,7 +212,7 @@ impl UiApp for QualificationUi {
         .with_layout(qualifier_panel_layout())
         .background(Color::rgb(24, 33, 49))
         .padding(EdgeInsets::all(LogicalLength::from(28_u16)))
-        .radius(LogicalLength::from(18_u16));
+        .radius(runenui_core::Radius::all(LogicalLength::from(18_u16)));
 
         column(vec![panel.into_element()])
             .id("u9c.qualify.root")
