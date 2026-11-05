@@ -1166,9 +1166,10 @@ mod tests {
         );
 
         // Re-affirming a window's own already-owned binding remains valid.
-        assert!(host
-            .shell_state
-            .bind_editor_window_presentation(secondary_window, secondary_binding));
+        assert!(
+            host.shell_state
+                .bind_editor_window_presentation(secondary_window, secondary_binding)
+        );
         assert!(host.shell_state.bind_composition_target_presentation(
             secondary_target,
             secondary_window,
