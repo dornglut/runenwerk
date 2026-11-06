@@ -4023,10 +4023,12 @@ mod tests {
                 Err(other) => panic!("native IME pending M13 failed: {other:?}"),
             }
         }
-        assert!(drained_ime, "finite canonical pending IME work must complete");
+        assert!(
+            drained_ime,
+            "finite canonical pending IME work must complete"
+        );
         assert_eq!(
-            delivered,
-            expected,
+            delivered, expected,
             "exact original Preedit/End/Commit receipts must remain ordered and once-only"
         );
         assert_eq!(

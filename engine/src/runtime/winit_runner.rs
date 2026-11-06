@@ -1187,15 +1187,15 @@ impl WinitRunner {
         // neutrally, then route its semantic keyboard/text once through the
         // already selected M13 native callback. A selected World application
         // mutation would fail its quiescence gate before that semantic step.
-        let pending = self
-            .state
-            .world
-            .resource_mut::<UiRuntimeSlotsResource>()
-            .and_then(|slots| {
-                slots.native_input_is_pending(slot).map_err(|error| {
+        let pending = (|| -> Result<bool> {
+            self.state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()?
+                .native_input_is_pending(slot)
+                .map_err(|error| {
                     anyhow!("native keyboard journal pending state unavailable: {error:?}")
                 })
-            });
+        })();
         let pending = match pending {
             Ok(pending) => pending,
             Err(error) => {
