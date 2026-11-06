@@ -534,18 +534,6 @@ pub enum UiRuntimeNativeKeyboardTextAdmissionError {
     Framework(SubmitKeyboardWithTextError),
 }
 
-impl UiRuntimeNativeKeyboardTextAdmissionError {
-    /// No refused original is lost or duplicated: the owner may inspect both
-    /// without ever logging committed Unicode text.
-    #[must_use]
-    pub fn into_events(self) -> (KeyboardEvent, CommittedTextEvent) {
-        match self {
-            Self::Slot { events, .. } => *events,
-            Self::Framework(error) => error.into_events(),
-        }
-    }
-}
-
 impl std::fmt::Debug for UiRuntimeNativeKeyboardTextAdmissionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

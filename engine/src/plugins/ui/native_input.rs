@@ -406,17 +406,6 @@ impl UiNativeInputRecipientsResource {
         self.resolve_with_close_policy(window, windows, slots, false, true)
     }
 
-    /// Cancellation during an approved close retains the original binding,
-    /// epoch and RunenUI scope without reopening ordinary input admission.
-    pub(crate) fn resolve_for_cancellation(
-        &self,
-        window: NativeWindowId,
-        windows: &WindowStateRegistryResource,
-        slots: &mut UiRuntimeSlotsResource,
-    ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
-        self.resolve_with_close_policy(window, windows, slots, true, false)
-    }
-
     /// A selected native device's cancellation preserves the exact original
     /// binding/scope even if the M13 FIFO has unrelated pending work.
     pub(crate) fn resolve_for_native_cancellation(
