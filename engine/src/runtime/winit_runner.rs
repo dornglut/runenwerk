@@ -5468,13 +5468,7 @@ mod tests {
             .expect("exact binding epoch");
         runner.state.world.insert_resource(slots);
         runner.state.world.insert_resource(recipients);
-        runner.native_ui_keyboard_translator(
-            window,
-            slot,
-            physical.source,
-            device,
-            binding_epoch,
-        );
+        runner.native_ui_keyboard_translator(window, slot, physical.source, device, binding_epoch);
         runner
             .native_ui_keyboards
             .get_mut(&window)
