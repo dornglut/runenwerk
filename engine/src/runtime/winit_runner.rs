@@ -6034,9 +6034,7 @@ mod tests {
                     break;
                 }
                 Err(error)
-                    if error.is::<
-                        crate::plugins::ui::native_transaction::NativeUiMutationNeedsSettlement,
-                    >() => {}
+                    if error.is::<crate::plugins::ui::native_transaction::NativeUiMutationNeedsSettlement>() => {}
                 Err(error) => panic!("M13 native IME World continuation failed: {error:?}"),
             }
         }
