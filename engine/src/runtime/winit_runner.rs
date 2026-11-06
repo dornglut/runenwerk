@@ -5871,6 +5871,191 @@ mod tests {
     }
 
     #[test]
+    fn selected_native_ime_preedit_end_and_commit_survive_390_prior_actions() {
+        use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+        use runenui_core::{
+            CommandOrigin, EditIntent, EditResolution, Effects, IntoUpdateOutput, NoHostProtocol,
+            SemanticCommand, SemanticEditableMode, TextAffinity, TextDocumentId,
+            TextDocumentRevision, TextDocumentSnapshot, TextPosition, TextSelection, UiApp,
+            UpdateOutput, View,
+        };
+
+        #[derive(Clone)]
+        struct ImeState {
+            text: String,
+            revision: u64,
+        }
+        enum ImeAction {
+            Edit(Box<EditIntent>),
+            Idle,
+        }
+        struct ImeApp;
+        impl UiApp for ImeApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                match action {
+                    ImeAction::Edit(_) => {
+                        runenui_core::ProducerBudget::new(3, 1).with_reconciliation(1, 1, 1)
+                    }
+                    ImeAction::Idle => {
+                        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+                    }
+                }
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
+            type State = ImeState;
+            type Action = ImeAction;
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                let snapshot = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(state.revision),
+                );
+                let position = TextPosition::new(
+                    snapshot,
+                    &state.text,
+                    state.text.len(),
+                    TextAffinity::Downstream,
+                )
+                .expect("original UTF-8 ends at a scalar boundary");
+                runenui_core::text_field(
+                    snapshot,
+                    state.text.clone(),
+                    TextSelection::collapsed(position),
+                    SemanticEditableMode::SingleLine,
+                    |intent| ImeAction::Edit(Box::new(intent)),
+                )
+                .expect("real native composition text field")
+                .id("winit.ime.pending")
+            }
+
+            fn update(
+                state: &mut Self::State,
+                action: Self::Action,
+            ) -> impl IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                match action {
+                    ImeAction::Edit(intent) => {
+                        let replacement = intent.replacement();
+                        state.text.replace_range(
+                            replacement.start()..replacement.end(),
+                            intent.replacement_text(),
+                        );
+                        state.revision += 1;
+                        let snapshot = TextDocumentSnapshot::new(
+                            TextDocumentId::new(1276),
+                            TextDocumentRevision::new(state.revision),
+                        );
+                        UpdateOutput::edit(EditResolution::accepted(
+                            intent.request().clone(),
+                            snapshot,
+                        ))
+                    }
+                    ImeAction::Idle => UpdateOutput::effects(Effects::none()),
+                }
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        let window = NativeWindowId::primary();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<ImeApp>(
+                UiTypedScreenId::new("winit.native.ime.pending"),
+                ImeState {
+                    text: String::new(),
+                    revision: 0,
+                },
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("real M13 typed editor");
+        slots
+            .test_request_first_typed_focus::<ImeApp>(slot)
+            .expect("canonical M13 focus settles before native selection");
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                window,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .expect("created native primary window"),
+                &mut slots,
+            )
+            .expect("real native recipient scope is pinned");
+        slots
+            .test_queue_unpumped_typed_actions::<ImeApp>(slot, 390, || ImeAction::Idle)
+            .expect("390 preceding legal M13 application actions");
+        slots
+            .test_mark_native_pending(slot)
+            .expect("selected native IME has an unsettled M13 predecessor");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+
+        runner
+            .route_ui_ime_preedit(slot, String::from("あ"), None)
+            .expect("Winit native Preedit remains admitted under canonical backlog");
+        runner
+            .route_ui_ime_finish(slot, false)
+            .expect("Winit original End retains runtime composition generation");
+        runner
+            .route_ui_committed_text(slot, String::from("あ"), None)
+            .expect("device-free original IME Commit cannot be dropped under backlog");
+
+        let mut finished = false;
+        for _ in 0..32 {
+            let status = runner
+                .state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .expect("same original M13 slot")
+                .settle_slot(slot);
+            match status {
+                Ok(()) => {
+                    finished = true;
+                    break;
+                }
+                Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {}
+                Err(error) => panic!("M13 native IME continuation failed: {error:?}"),
+            }
+        }
+        assert!(finished, "bounded canonical M13 IME backlog eventually drains");
+        let slots = runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("selected native UI slot remains mounted");
+        let text = &slots
+            .slot_mut(slot)
+            .expect("same focused editor survives")
+            .runtime
+            .typed_mut::<ImeApp>()
+            .expect("original typed M13 editor")
+            .state()
+            .text;
+        assert_eq!(
+            text, "あ",
+            "Winit original device-free IME text must edit exactly once"
+        );
+    }
+
+    #[test]
     fn selected_native_pending_m13_is_settled_before_original_event_routing() {
         use crate::plugins::input::domain::action;
         use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
