@@ -178,8 +178,10 @@ fn native_m13_original_deferred(
     batch: &runenui_runtime::InputPumpBatch,
     status: &Result<(), crate::plugins::ui::UiRuntimeSlotOperationFailure>,
 ) -> bool {
-    *status == Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
-        && batch.report().outcome() == runenui_runtime::PumpOutcome::BudgetExhausted
+    matches!(
+        status,
+        Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+    ) && batch.report().outcome() == runenui_runtime::PumpOutcome::BudgetExhausted
         && batch.pause_reason().is_none()
         && batch.final_ownership().scope() == scope
         && batch.final_ownership().status() == runenui_runtime::RuntimeStatus::Running
