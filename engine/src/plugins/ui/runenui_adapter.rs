@@ -2928,9 +2928,16 @@ mod tests {
 
             fn action_producer_budget(
                 _state: &Self::State,
-                _action: &Self::Action,
+                action: &Self::Action,
             ) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(3, 1).with_reconciliation(1, 1, 1)
+                match action {
+                    TextAction::Edit(_) => {
+                        runenui_core::ProducerBudget::new(3, 1).with_reconciliation(1, 1, 1)
+                    }
+                    TextAction::Idle => {
+                        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+                    }
+                }
             }
 
             fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
@@ -3505,6 +3512,134 @@ mod tests {
                         if settlement.sequence() == backlog_commit.sequence()
                 )),
             "the exact original IME text receipt is not replayed"
+        );
+
+        // REV-001 / RunenUI #549: reproduce the public API boundary faced by
+        // a *single* native KeyEvent carrying both a physical keyboard Down
+        // and associated text. The keyboard is terminal while >256 later
+        // legitimate M13 actions remain; the original text cannot enter the
+        // independently gated M13 FIFO during that pending interval. This is
+        // a characterized BLOCKER, not a simulated successful host replay.
+        let key_owner = slots.input_ownership(slot).expect("actual focused owner");
+        let source_key = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Down,
+                    PhysicalKey::Code(String::from("KeyV")),
+                    LogicalKey::Character(String::from("v")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(key_device),
+                ),
+            )
+            .expect("real focused M13 keyboard original can queue");
+        slots
+            .test_queue_unpumped_typed_actions::<NativeTextApp>(
+                slot,
+                RUNTIME_PUMP_WORK_LIMIT * 3 + 6,
+                || TextAction::Idle,
+            )
+            .expect("390 legal independent canonical application actions");
+        let (keyboard_batch, keyboard_status) = slots
+            .pump_native_input_records(slot)
+            .expect("exact original keyboard input pump is observable");
+        assert_eq!(
+            keyboard_status,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        assert!(matches!(
+            native_keyboard_finality(
+                key_owner.scope(),
+                key_device,
+                source_key,
+                &keyboard_batch,
+                &keyboard_status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert!(matches!(
+            slots.submit_native_text(
+                slot,
+                CommittedTextEvent::new("v", Some(key_device))
+                    .expect("paired original KeyEvent.text"),
+            ),
+            Err(UiRuntimeNativeTextAdmissionError::Slot {
+                failure: UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce,
+                ..
+            })
+        ), "exact keyboard terminality does not grant a second canonical text admission");
+        assert_eq!(
+            slots.settle_slot(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            "one additional bounded World settlement cannot drain 390 queued actions"
+        );
+        assert!(matches!(
+            slots.submit_native_text(
+                slot,
+                CommittedTextEvent::new("v", Some(key_device)).expect("same original text"),
+            ),
+            Err(UiRuntimeNativeTextAdmissionError::Slot {
+                failure: UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce,
+                ..
+            })
+        ), "host cannot legally retry original paired text during the remaining backlog");
+        let mut finished = false;
+        for _ in 0..32 {
+            if slots.settle_slot(slot).is_ok() {
+                finished = true;
+                break;
+            }
+        }
+        assert!(finished, "finite M13 application backlog eventually drains");
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("same selected typed text slot")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("same text app owner")
+                .state()
+                .text,
+            "漢字éΩx§",
+            "the currently available public contract has not delivered KeyEvent.text"
+        );
+        // A local test *can* still own its original payload and submit it
+        // after settlement; the real Winit callback must not be assumed to
+        // retain it across native turns or to preserve its focus lifetime.
+        let delayed = slots
+            .submit_native_text(
+                slot,
+                CommittedTextEvent::new("v", Some(key_device))
+                    .expect("explicit locally retained original candidate"),
+            )
+            .expect("submission becomes possible only after all 390 actions settle");
+        let (delayed_batch, delayed_status) = slots
+            .pump_native_input_records(slot)
+            .expect("post-backlog text has a distinct terminal M13 receipt");
+        assert_eq!(delayed_status, Ok(()));
+        assert!(matches!(
+            native_text_finality(
+                key_owner.scope(),
+                Some(key_device),
+                delayed,
+                &delayed_batch,
+                &delayed_status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("same typed slot")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("same text owner")
+                .state()
+                .text,
+            "漢字éΩx§v"
         );
     }
 
