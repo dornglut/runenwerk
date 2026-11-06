@@ -998,9 +998,9 @@ impl WinitRunner {
                     .resource::<WindowStateRegistryResource>()
                     .context("missing native window registry")?;
                 let recipient = if allow_approved_close {
-                    recipients.resolve_for_cancellation(window, windows, &mut slots)?
+                    recipients.resolve_for_native_cancellation(window, windows, &mut slots)?
                 } else {
-                    recipients.resolve(window, windows, &mut slots)?
+                    recipients.resolve_for_native_input(window, windows, &mut slots)?
                 };
                 let epoch = recipients.binding_epoch_for_window(window);
                 if matches!(recipient, NativeInputRecipient::RunenUiSlot(_)) && epoch.is_none() {

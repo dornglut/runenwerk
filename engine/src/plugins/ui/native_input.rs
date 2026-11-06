@@ -390,7 +390,20 @@ impl UiNativeInputRecipientsResource {
         windows: &WindowStateRegistryResource,
         slots: &mut UiRuntimeSlotsResource,
     ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
-        self.resolve_with_close_policy(window, windows, slots, false)
+        self.resolve_with_close_policy(window, windows, slots, false, false)
+    }
+
+    /// Winit's already bound native producer must keep addressing the same
+    /// existing RunenUI scope while ordinary M13 application work is pending.
+    /// This read-only recipient proof grants no legacy/game input fallback and
+    /// does not create a second focus or source ownership cache.
+    pub(crate) fn resolve_for_native_input(
+        &self,
+        window: NativeWindowId,
+        windows: &WindowStateRegistryResource,
+        slots: &mut UiRuntimeSlotsResource,
+    ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
+        self.resolve_with_close_policy(window, windows, slots, false, true)
     }
 
     /// Cancellation during an approved close retains the original binding,
@@ -401,7 +414,18 @@ impl UiNativeInputRecipientsResource {
         windows: &WindowStateRegistryResource,
         slots: &mut UiRuntimeSlotsResource,
     ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
-        self.resolve_with_close_policy(window, windows, slots, true)
+        self.resolve_with_close_policy(window, windows, slots, true, false)
+    }
+
+    /// A selected native device's cancellation preserves the exact original
+    /// binding/scope even if the M13 FIFO has unrelated pending work.
+    pub(crate) fn resolve_for_native_cancellation(
+        &self,
+        window: NativeWindowId,
+        windows: &WindowStateRegistryResource,
+        slots: &mut UiRuntimeSlotsResource,
+    ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
+        self.resolve_with_close_policy(window, windows, slots, true, true)
     }
 
     fn resolve_with_close_policy(
@@ -410,6 +434,7 @@ impl UiNativeInputRecipientsResource {
         windows: &WindowStateRegistryResource,
         slots: &mut UiRuntimeSlotsResource,
         allow_approved_close: bool,
+        allow_selected_pending: bool,
     ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
         let record = windows
             .record(window)
@@ -430,7 +455,11 @@ impl UiNativeInputRecipientsResource {
             None => return Err(NativeInputRecipientError::MissingRecipient),
         };
         if let NativeInputRecipient::RunenUiSlot(slot) = binding.recipient {
-            let ownership = Self::running_ownership(slots, slot)?;
+            let ownership = if allow_selected_pending {
+                Self::running_selected_native_ownership(slots, slot)?
+            } else {
+                Self::running_ownership(slots, slot)?
+            };
             if binding.scope.as_ref() != Some(ownership.scope()) {
                 return Err(NativeInputRecipientError::StaleSlot);
             }
@@ -817,6 +846,19 @@ impl UiNativeInputRecipientsResource {
     ) -> Result<InputOwnershipSnapshot, NativeInputRecipientError> {
         let ownership = slots
             .input_ownership(slot)
+            .map_err(NativeInputRecipientError::OwnershipUnavailable)?;
+        if ownership.status() != RuntimeStatus::Running {
+            return Err(NativeInputRecipientError::RuntimeNotRunning);
+        }
+        Ok(ownership)
+    }
+
+    fn running_selected_native_ownership(
+        slots: &mut UiRuntimeSlotsResource,
+        slot: UiRuntimeSlotId,
+    ) -> Result<InputOwnershipSnapshot, NativeInputRecipientError> {
+        let ownership = slots
+            .native_input_ownership(slot)
             .map_err(NativeInputRecipientError::OwnershipUnavailable)?;
         if ownership.status() != RuntimeStatus::Running {
             return Err(NativeInputRecipientError::RuntimeNotRunning);
