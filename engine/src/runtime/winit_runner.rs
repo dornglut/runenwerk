@@ -3,7 +3,8 @@ use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
     UiNativeInputRecipientsResource, UiNativePointerHostRead, UiRuntimeDisplayedPresentation,
-    UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeTextAdmissionError,
+    UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeKeyboardAdmissionError,
+    UiRuntimeNativeKeyboardTextAdmissionError, UiRuntimeNativeTextAdmissionError,
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
     native_composition_finality, native_keyboard_finality,
     native_no_focused_keyboard_claim_witness, native_original_keyboard_release_nonclaim,
@@ -194,6 +195,16 @@ struct NativeUiKeyboardOriginal<'a> {
     event: &'a winit::event::KeyEvent,
     is_synthetic: bool,
     previous_down_generation: Option<u64>,
+}
+
+/// One ephemeral same-callback result, never a second input queue or owner.
+enum NativeUiKeyboardM13Admission {
+    Queued {
+        keyboard: runenui_runtime::KeyboardSubmission,
+        text: Option<runenui_runtime::TextSubmission>,
+    },
+    KeyboardRejected(UiRuntimeNativeKeyboardAdmissionError),
+    PairedRejected(UiRuntimeNativeKeyboardTextAdmissionError),
 }
 
 /// Native mouse translation is transient. It never owns pointer gameplay
@@ -1184,7 +1195,7 @@ impl WinitRunner {
         source: InputSourceId,
     ) -> Result<()> {
         let observed = match self.state.world.resource_mut::<UiRuntimeSlotsResource>() {
-            Ok(slots) => slots.input_ownership(slot).map_err(|error| {
+            Ok(slots) => slots.native_input_ownership(slot).map_err(|error| {
                 anyhow!("native pre-ingress M13 ownership unavailable: {error:?}")
             }),
             Err(error) => Err(anyhow!(
@@ -1200,6 +1211,17 @@ impl WinitRunner {
                 return Err(error);
             }
         };
+        let pending = self
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .native_input_is_pending(slot)
+            .map_err(|error| anyhow!("native pre-ingress pending state unavailable: {error:?}"))?;
+        if pending {
+            // Earlier canonical UI work may still establish exclusive focus.
+            // It cannot preserve an old game-held action while unresolved.
+            self.revoke_native_game_keyboard_source(source)?;
+        }
         self.reconcile_native_ui_keyboard_revision(window, slot, binding_epoch, source, revision)
     }
 
@@ -1297,7 +1319,7 @@ impl WinitRunner {
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("selected native UI runtime vanished before input observation")?
-            .input_ownership(slot);
+            .native_input_ownership(slot);
         let before = match observed {
             Ok(snapshot) => snapshot,
             Err(error) => {
@@ -1315,6 +1337,14 @@ impl WinitRunner {
                 ));
             }
         };
+        // The snapshot is authoritative for UI admission, but a pending M13
+        // slot cannot establish gameplay eligibility for the native source.
+        let pending_at_admission = self
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .native_input_is_pending(slot)
+            .map_err(|error| anyhow!("native M13 pending observation failed: {error:?}"))?;
         let composition = native_keyboard_composition(&before);
         // A semantic/host mutation since this original keyboard lifetime's
         // last observed M13 revision may have crossed an exclusive owner and
@@ -1466,7 +1496,7 @@ impl WinitRunner {
                             .context(
                                 "selected UI runtime vanished before rejected-input observation",
                             )?
-                            .input_ownership(slot);
+                            .native_input_ownership(slot);
                         match after {
                             Ok(after)
                                 if !is_synthetic
@@ -1630,7 +1660,7 @@ impl WinitRunner {
                 .world
                 .resource_mut::<UiRuntimeSlotsResource>()
                 .context("original keyboard text lost its canonical UI slot")?
-                .input_ownership(slot);
+                .native_input_ownership(slot);
             match latest {
                 Ok(after) if native_keyboard_text_owner_unchanged(&before, &after) => {
                     if let Err(error) = self.route_ui_committed_text(slot, text, Some(device)) {
