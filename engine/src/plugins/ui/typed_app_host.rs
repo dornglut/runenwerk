@@ -12,8 +12,7 @@ use runenui_runtime::{
     InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch, KeyboardSubmission,
     PointerSubmission, PumpBudget, SubmitCompositionError, SubmitCompositionStartError,
     SubmitKeyboardError, SubmitKeyboardWithTextError, SubmitPointerError, SubmitTextError,
-    SurfaceBuildContext,
-    SurfacePublication, TextSubmission,
+    SurfaceBuildContext, SurfacePublication, TextSubmission,
 };
 
 /// Typed application observations without access to host clock or wake wiring.

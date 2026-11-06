@@ -13,9 +13,8 @@ use runenui_runtime::{
     InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch, KeyboardSubmission,
     PointerSubmission, PumpBudget, RuntimeConfig, SubmitCompositionError,
     SubmitCompositionStartError, SubmitKeyboardError, SubmitKeyboardErrorKind,
-    SubmitKeyboardWithTextError, SubmitPointerError,
-    SubmitTextError, SurfaceBuildContext, SurfacePublication, TextSubmission, UiInputFamily,
-    UiInputFinality,
+    SubmitKeyboardWithTextError, SubmitPointerError, SubmitTextError, SurfaceBuildContext,
+    SurfacePublication, TextSubmission, UiInputFamily, UiInputFinality,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -1807,10 +1806,8 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         keyboard: KeyboardEvent,
         text: CommittedTextEvent,
-    ) -> Result<
-        (KeyboardSubmission, TextSubmission),
-        UiRuntimeNativeKeyboardTextAdmissionError,
-    > {
+    ) -> Result<(KeyboardSubmission, TextSubmission), UiRuntimeNativeKeyboardTextAdmissionError>
+    {
         let slot = match self.slot_mut(slot_id) {
             Ok(slot) => slot,
             Err(failure) => {
@@ -3812,7 +3809,10 @@ mod tests {
                 Err(error) => panic!("unexpected native M13 failure during finite work: {error:?}"),
             }
         }
-        assert!(finished_pair, "selected native 390-action backlog is finite");
+        assert!(
+            finished_pair,
+            "selected native 390-action backlog is finite"
+        );
         assert_eq!(
             seen,
             [
@@ -7158,7 +7158,8 @@ mod tests {
                 &mut self,
                 keyboard: KeyboardEvent,
                 text: CommittedTextEvent,
-            ) -> Result<(KeyboardSubmission, TextSubmission), SubmitKeyboardWithTextError> {
+            ) -> Result<(KeyboardSubmission, TextSubmission), SubmitKeyboardWithTextError>
+            {
                 self.runtime.submit_keyboard_with_text(keyboard, text)
             }
 
