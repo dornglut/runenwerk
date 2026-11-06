@@ -140,6 +140,8 @@ impl UiRuntimeSlotMountFailure {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiRuntimeSlotOperationFailure {
+    NativeCancellationCapacity,
+    NativeCancellationEvidence,
     MissingSlot,
     EvaluationDiagnostics,
     UnsupportedProjection,
@@ -1104,6 +1106,56 @@ impl UiRuntimeSlotKind {
     }
 }
 
+/// Immutable expectations for already admitted M13 cancellations. This stores
+/// no input payload, pressed state or routing decision. Every slot pump consumes
+/// the owner's actual ordered receipts, including pumps outside the Winit callback.
+struct NativeCancellationReceipt {
+    scope: InputArbitrationScope,
+    sequence: runenui_runtime::WorkSequence,
+    family: UiInputFamily,
+    device: Option<InputDeviceId>,
+    pointer: Option<PointerId>,
+    surface: Option<SurfaceId>,
+}
+
+impl NativeCancellationReceipt {
+    fn observe(&self, batch: &InputPumpBatch) -> Result<bool, UiRuntimeSlotOperationFailure> {
+        if batch.final_ownership().scope() != &self.scope {
+            return Err(UiRuntimeSlotOperationFailure::NativeCancellationEvidence);
+        }
+        if !batch
+            .processed_through()
+            .is_some_and(|end| end >= self.sequence)
+        {
+            return Ok(false);
+        }
+        let mut records = batch
+            .ordered_records()
+            .iter()
+            .filter_map(|record| match record {
+                InputArbitrationRecord::InputSettled(settled)
+                    if settled.sequence() == self.sequence =>
+                {
+                    Some(settled)
+                }
+                _ => None,
+            });
+        let valid = records.next().is_some_and(|settled| {
+            settled.scope() == &self.scope
+                && settled.family() == self.family
+                && settled.device_id() == self.device
+                && settled.pointer_id() == self.pointer
+                && settled.surface_id() == self.surface.as_ref()
+                && settled.ownership_revision() <= batch.final_ownership().revision()
+                && matches!(settled.finality(), UiInputFinality::Committed(_))
+        }) && records.next().is_none();
+        if !valid {
+            return Err(UiRuntimeSlotOperationFailure::NativeCancellationEvidence);
+        }
+        Ok(true)
+    }
+}
+
 struct UiRuntimeSlot {
     id: UiRuntimeSlotId,
     screen_id: UiTypedScreenId,
@@ -1121,6 +1173,7 @@ struct UiRuntimeSlot {
     /// A capability latch, not another recipient map. Once selected for
     /// native input, raw app mutations must use the World transaction.
     native_input_selected: bool,
+    native_cancellations: Vec<NativeCancellationReceipt>,
 }
 
 impl UiRuntimeSlot {
@@ -1183,6 +1236,14 @@ impl UiRuntimeSlot {
         batch: &InputPumpBatch,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
         self.requires_settlement = true;
+        let mut index = 0;
+        while index < self.native_cancellations.len() {
+            if self.native_cancellations[index].observe(batch)? {
+                self.native_cancellations.remove(index);
+            } else {
+                index += 1;
+            }
+        }
         if let Err(error @ UiRuntimeSlotOperationFailure::RuntimeStopped(_)) =
             settlement_result(batch)
         {
@@ -1461,6 +1522,7 @@ impl UiRuntimeSlotsResource {
             native_clock: self.native_clock.clone(),
             deadline_observed_at: None,
             native_input_selected: false,
+            native_cancellations: Vec::new(),
         };
         if self.native_clock.is_some() {
             match slot.settle_pending() {
@@ -1584,6 +1646,7 @@ impl UiRuntimeSlotsResource {
             native_clock: self.native_clock.clone(),
             deadline_observed_at,
             native_input_selected: false,
+            native_cancellations: Vec::new(),
         });
         UiRuntimeSlotMountReport::accepted(screen_id, id)
     }
@@ -1754,6 +1817,18 @@ impl UiRuntimeSlotsResource {
         Ok(slot.requires_settlement)
     }
 
+    /// Queue admission is not completed cancellation. Native retirement may
+    /// release its old binding only after these exact M13 receipts are observed.
+    pub(crate) fn native_cancellations_pending(
+        &self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<bool, UiRuntimeSlotOperationFailure> {
+        let slot = self
+            .slot(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        Ok(!slot.native_cancellations.is_empty())
+    }
+
     #[must_use]
     pub fn contains(&self, slot_id: UiRuntimeSlotId) -> bool {
         self.slots.iter().any(|slot| slot.id == slot_id)
@@ -1856,10 +1931,41 @@ impl UiRuntimeSlotsResource {
                 return Err(UiRuntimeNativeKeyboardAdmissionError::Slot { failure, event });
             }
         };
+        let cancellation = if event.phase() == KeyboardPhase::Cancel {
+            let reserve = slot.native_cancellations.try_reserve(1);
+            if reserve.is_err() {
+                return Err(UiRuntimeNativeKeyboardAdmissionError::Slot {
+                    failure: UiRuntimeSlotOperationFailure::NativeCancellationCapacity,
+                    event,
+                });
+            }
+            let snapshot = match slot.runtime.input_ownership() {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    return Err(UiRuntimeNativeKeyboardAdmissionError::Slot {
+                        failure: UiRuntimeSlotOperationFailure::InputObservation(error),
+                        event,
+                    });
+                }
+            };
+            Some((snapshot.scope().clone(), event.device_id()))
+        } else {
+            None
+        };
         let receipt = slot
             .runtime
             .submit_keyboard(event)
             .map_err(UiRuntimeNativeKeyboardAdmissionError::Framework)?;
+        if let Some((scope, device)) = cancellation {
+            slot.native_cancellations.push(NativeCancellationReceipt {
+                scope,
+                device,
+                sequence: receipt.sequence(),
+                family: UiInputFamily::Keyboard,
+                pointer: None,
+                surface: None,
+            });
+        }
         slot.ingress_epoch = next;
         slot.requires_settlement = true;
         Ok(receipt)
@@ -1934,10 +2040,45 @@ impl UiRuntimeSlotsResource {
                 });
             }
         };
+        let cancellation = if event.phase() == runenui_core::PointerPhase::Cancel {
+            if slot.native_cancellations.try_reserve(1).is_err() {
+                return Err(UiRuntimeNativePointerAdmissionError::Slot {
+                    failure: UiRuntimeSlotOperationFailure::NativeCancellationCapacity,
+                    event: Box::new(event),
+                });
+            }
+            let snapshot = match slot.runtime.input_ownership() {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    return Err(UiRuntimeNativePointerAdmissionError::Slot {
+                        failure: UiRuntimeSlotOperationFailure::InputObservation(error),
+                        event: Box::new(event),
+                    });
+                }
+            };
+            Some((
+                snapshot.scope().clone(),
+                event.device_id(),
+                event.pointer_id(),
+                event.surface_context().surface_id().clone(),
+            ))
+        } else {
+            None
+        };
         let receipt = slot
             .runtime
             .submit_pointer(event)
             .map_err(UiRuntimeNativePointerAdmissionError::Framework)?;
+        if let Some((scope, device, pointer, surface)) = cancellation {
+            slot.native_cancellations.push(NativeCancellationReceipt {
+                scope,
+                device,
+                sequence: receipt.sequence(),
+                family: UiInputFamily::Pointer,
+                pointer: Some(pointer),
+                surface: Some(surface),
+            });
+        }
         slot.ingress_epoch = next;
         slot.requires_settlement = true;
         Ok(receipt)
@@ -2035,11 +2176,41 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         generation: CompositionGeneration,
     ) -> Result<CompositionSubmission, UiRuntimeNativeCompositionAdmissionError> {
-        self.admit_native_composition(slot_id, |runtime| {
+        let slot = self
+            .slot_mut(slot_id)
+            .map_err(UiRuntimeNativeCompositionAdmissionError::Slot)?;
+        slot.native_cancellations.try_reserve(1).map_err(|_| {
+            UiRuntimeNativeCompositionAdmissionError::Slot(
+                UiRuntimeSlotOperationFailure::NativeCancellationCapacity,
+            )
+        })?;
+        let scope = slot
+            .runtime
+            .input_ownership()
+            .map_err(|error| {
+                UiRuntimeNativeCompositionAdmissionError::Slot(
+                    UiRuntimeSlotOperationFailure::InputObservation(error),
+                )
+            })?
+            .scope()
+            .clone();
+        let receipt = self.admit_native_composition(slot_id, |runtime| {
             runtime
                 .cancel_composition(generation)
                 .map_err(UiRuntimeNativeCompositionAdmissionError::Event)
-        })
+        })?;
+        self.slot_mut(slot_id)
+            .expect("synchronous native cancellation retains its admitted slot")
+            .native_cancellations
+            .push(NativeCancellationReceipt {
+                scope,
+                sequence: receipt.sequence(),
+                family: UiInputFamily::Composition,
+                device: None,
+                pointer: None,
+                surface: None,
+            });
+        Ok(receipt)
     }
 
     /// Return one actual canonical pump result with ALL ordered M13 records.
@@ -2286,6 +2457,16 @@ impl UiRuntimeSlotsResource {
         index: usize,
     ) -> Result<Option<InputShutdownBatch>, UiRuntimeSlotOperationFailure> {
         let retirement = self.slots[index].runtime.shutdown()?;
+        // Closing the actual framework scope terminates queued originals; it
+        // is distinct from claiming their Cancel was processed successfully.
+        if self.slots[index].native_cancellations.iter().any(|expected| {
+            retirement.final_ownership().scope() != &expected.scope
+                || retirement.final_ownership().status() != runenui_runtime::RuntimeStatus::Closed
+                || !retirement.ordered_records().iter().any(|record| matches!(record,
+                    InputArbitrationRecord::ScopeRetired(retired) if retired.scope() == &expected.scope))
+        }) {
+            return Err(UiRuntimeSlotOperationFailure::NativeCancellationEvidence);
+        }
         self.slots.remove(index);
         Ok(Some(retirement))
     }
@@ -7478,6 +7659,7 @@ mod tests {
             native_clock: None,
             deadline_observed_at: None,
             native_input_selected: false,
+            native_cancellations: Vec::new(),
         });
         slots.next_slot_id = 2;
 
@@ -7565,6 +7747,7 @@ mod tests {
             native_clock: None,
             deadline_observed_at: None,
             native_input_selected: false,
+            native_cancellations: Vec::new(),
         });
         managed_slots.next_slot_id = 2;
         let mut app = App::headless();

@@ -85,6 +85,9 @@ enum WindowRecipientBinding {
     Retired {
         previous: Binding,
         input_settled: bool,
+        /// Only original Host cancellation can await its exact M13 receipts.
+        /// World-only retirement still requires actual framework shutdown.
+        host_cancellation_pending: bool,
     },
 }
 
@@ -299,6 +302,7 @@ impl UiNativeInputRecipientsResource {
                             ..
                         },
                         input_settled: false,
+                        ..
                     } if *retired_slot == slot
                 )
             })
@@ -663,6 +667,74 @@ impl UiNativeInputRecipientsResource {
         self.retire_window_inner(window, presentations, true)
     }
 
+    pub(crate) fn retire_window_with_pending_input(
+        &mut self,
+        window: NativeWindowId,
+        presentations: &mut UiRuntimePresentationAssociationsResource,
+    ) -> bool {
+        let retired = self.retire_window_inner(window, presentations, false);
+        if retired
+            && let Some(WindowRecipientBinding::Retired {
+                host_cancellation_pending,
+                ..
+            }) = self.bindings.get_mut(&window)
+        {
+            *host_cancellation_pending = true;
+        }
+        retired
+    }
+
+    pub(crate) fn host_cancellation_pending(&self, window: NativeWindowId) -> bool {
+        matches!(
+            self.bindings.get(&window),
+            Some(WindowRecipientBinding::Retired {
+                host_cancellation_pending: true,
+                ..
+            })
+        )
+    }
+
+    /// Discharge only an original Host retirement after the slot's common pump
+    /// observer has matched all cancellation receipts in the same M13 scope.
+    /// This cannot release a World-only retirement or an unrelated slot/window.
+    pub(crate) fn reconcile_host_cancellations(
+        &mut self,
+        slots: &mut UiRuntimeSlotsResource,
+    ) -> Result<(), NativeInputRecipientError> {
+        for binding in self.bindings.values_mut() {
+            let WindowRecipientBinding::Retired {
+                previous,
+                input_settled,
+                host_cancellation_pending: true,
+            } = binding
+            else {
+                continue;
+            };
+            let NativeInputRecipient::RunenUiSlot(slot) = previous.recipient else {
+                continue;
+            };
+            if slots
+                .native_cancellations_pending(slot)
+                .map_err(NativeInputRecipientError::OwnershipUnavailable)?
+            {
+                continue;
+            }
+            let snapshot = Self::running_selected_native_ownership(slots, slot)?;
+            if previous.scope.as_ref() != Some(snapshot.scope()) {
+                return Err(NativeInputRecipientError::StaleSlot);
+            }
+            *input_settled = true;
+            if let WindowRecipientBinding::Retired {
+                host_cancellation_pending,
+                ..
+            } = binding
+            {
+                *host_cancellation_pending = false;
+            }
+        }
+        Ok(())
+    }
+
     fn retire_window_inner(
         &mut self,
         window: NativeWindowId,
@@ -682,6 +754,7 @@ impl UiNativeInputRecipientsResource {
             previous: previous.clone(),
             input_settled: host_settled
                 || previous.recipient == NativeInputRecipient::LegacyNativeConsumer,
+            host_cancellation_pending: false,
         };
         if window == NativeWindowId::primary() {
             self.requested_primary = None;
@@ -717,6 +790,7 @@ impl UiNativeInputRecipientsResource {
                         ..
                     },
                 input_settled: false,
+                ..
             } = binding
                 && *retired == slot
                 && scope != final_ownership.scope()
@@ -733,11 +807,13 @@ impl UiNativeInputRecipientsResource {
                         ..
                     },
                 input_settled,
+                host_cancellation_pending,
             } = binding
                 && *retired == slot
                 && scope == final_ownership.scope()
             {
                 *input_settled = true;
+                *host_cancellation_pending = false;
             }
         }
         Ok(())
@@ -767,6 +843,7 @@ impl UiNativeInputRecipientsResource {
                 *binding = WindowRecipientBinding::Retired {
                     previous: previous.clone(),
                     input_settled: false,
+                    host_cancellation_pending: false,
                 };
                 retired += 1;
             }

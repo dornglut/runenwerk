@@ -919,6 +919,15 @@ impl WinitRunner {
                 }
             }
         }
+        let cancellation_pending = match selected_slot {
+            Some(slot) => self
+                .state
+                .world
+                .resource::<UiRuntimeSlotsResource>()?
+                .native_cancellations_pending(slot)
+                .map_err(|error| anyhow!("native cancellation evidence unavailable: {error:?}"))?,
+            None => false,
+        };
         let world = &mut self.state.world;
         if !world.has_resource::<UiNativeInputRecipientsResource>() {
             return match cancellation_failure {
@@ -941,7 +950,11 @@ impl WinitRunner {
             .resource_mut::<UiRuntimePresentationAssociationsResource>()
             .map(|presentations| {
                 if cancellation_failure.is_none() {
-                    recipients.retire_window_with_settled_input(window, presentations)
+                    if cancellation_pending {
+                        recipients.retire_window_with_pending_input(window, presentations)
+                    } else {
+                        recipients.retire_window_with_settled_input(window, presentations)
+                    }
                 } else {
                     recipients.retire_window(window, presentations)
                 }
@@ -983,6 +996,26 @@ impl WinitRunner {
                     .map_err(anyhow::Error::from)
             });
         world.insert_resource(recipients);
+        result
+    }
+
+    fn reconcile_native_cancellation_retirements(&mut self) -> Result<()> {
+        let world = &mut self.state.world;
+        if !world.has_resource::<UiNativeInputRecipientsResource>() {
+            return Ok(());
+        }
+        let mut slots = world
+            .remove_resource::<UiRuntimeSlotsResource>()
+            .context("native cancellation retirement lost its slot authority")?;
+        let result = world
+            .resource_mut::<UiNativeInputRecipientsResource>()
+            .map_err(anyhow::Error::from)
+            .and_then(|recipients| {
+                recipients
+                    .reconcile_host_cancellations(&mut slots)
+                    .map_err(anyhow::Error::from)
+            });
+        world.insert_resource(slots);
         result
     }
 
@@ -2149,7 +2182,7 @@ impl WinitRunner {
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("UI slot authority missing during native keyboard cancellation")?;
-        let before = slots.input_ownership(slot).map_err(|reason| {
+        let before = slots.native_input_ownership(slot).map_err(|reason| {
             anyhow!("native keyboard cancellation lacked M13 pre-state: {reason:?}")
         })?;
         let cancelled = lifetime
@@ -2173,7 +2206,9 @@ impl WinitRunner {
             let evidence =
                 native_keyboard_finality(before.scope(), device, submission, &batch, &status);
             anyhow::ensure!(
-                matches!(evidence, Ok(UiInputFinality::Committed(_))),
+                matches!(evidence, Ok(UiInputFinality::Committed(_)))
+                    || (matches!(evidence, Err(crate::plugins::ui::UiRuntimeNativeKeyboardEvidenceFailure::NotProcessed))
+                        && native_m13_original_deferred(before.scope(), &batch, &status)),
                 "native keyboard Cancel lacked committed M13 settlement: {evidence:?}"
             );
         }
@@ -2344,7 +2379,7 @@ impl WinitRunner {
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("device-specific keyboard cancellation lost its pinned slot")?;
-        let before = slots.input_ownership(recipient).map_err(|error| {
+        let before = slots.native_input_ownership(recipient).map_err(|error| {
             anyhow!("native keyboard device-loss M13 ownership unavailable: {error:?}")
         })?;
         let events = {
@@ -2380,7 +2415,9 @@ impl WinitRunner {
             let evidence =
                 native_keyboard_finality(before.scope(), device, submission, &batch, &status);
             anyhow::ensure!(
-                matches!(evidence, Ok(UiInputFinality::Committed(_))),
+                matches!(evidence, Ok(UiInputFinality::Committed(_)))
+                    || (matches!(evidence, Err(crate::plugins::ui::UiRuntimeNativeKeyboardEvidenceFailure::NotProcessed))
+                        && native_m13_original_deferred(before.scope(), &batch, &status)),
                 "native keyboard device-loss Cancel lacked exact M13 settlement: {evidence:?}"
             );
         }
@@ -2451,7 +2488,7 @@ impl WinitRunner {
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("native mouse Cancel lost its pinned framework runtime")?;
         let before = slots
-            .input_ownership(lifetime.recipient)
+            .native_input_ownership(lifetime.recipient)
             .map_err(|error| anyhow!("native mouse Cancel M13 pre-state unavailable: {error:?}"))?;
         if before.scope() != &lifetime.scope {
             // A stale stream must not be submitted to a replacement scope.
@@ -2496,7 +2533,11 @@ impl WinitRunner {
             &status,
         );
         anyhow::ensure!(
-            matches!(evidence, Ok(UiInputFinality::Committed(_))),
+            matches!(evidence, Ok(UiInputFinality::Committed(_)))
+                || (matches!(
+                    evidence,
+                    Err(crate::plugins::ui::UiRuntimeNativePointerEvidenceFailure::NotProcessed)
+                ) && native_m13_original_deferred(before.scope(), &batch, &status)),
             "native mouse Cancel lacked committed M13 settlement: {evidence:?}"
         );
         Ok(())
@@ -2526,7 +2567,7 @@ impl WinitRunner {
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("native touch Cancel lost its pinned framework runtime")?;
         let before = slots
-            .input_ownership(lifetime.recipient)
+            .native_input_ownership(lifetime.recipient)
             .map_err(|error| anyhow!("native touch Cancel M13 pre-state unavailable: {error:?}"))?;
         if before.scope() != &lifetime.scope {
             // A retired generation must not cancel a newly mounted UI owner.
@@ -2556,7 +2597,13 @@ impl WinitRunner {
                 &status,
             );
             anyhow::ensure!(
-                matches!(evidence, Ok(UiInputFinality::Committed(_))),
+                matches!(evidence, Ok(UiInputFinality::Committed(_)))
+                    || (matches!(
+                        evidence,
+                        Err(
+                            crate::plugins::ui::UiRuntimeNativePointerEvidenceFailure::NotProcessed
+                        )
+                    ) && native_m13_original_deferred(before.scope(), &batch, &status)),
                 "native touch Cancel lacked committed M13 settlement: {evidence:?}"
             );
         }
@@ -3783,6 +3830,7 @@ impl WinitRunner {
                 .resource_mut::<UiRuntimeSlotsResource>()?
                 .settle_native_slots()?;
         }
+        self.reconcile_native_cancellation_retirements()?;
         // An original physical Up can have been neutral-only while a prior
         // bounded M13 pump was still in progress. Reconcile its translator
         // lifetime before any game projection in the next ordinary frame.
@@ -3956,6 +4004,7 @@ impl WinitRunner {
 
     fn apply_window_effects(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         self.drain_pending_window_requests(event_loop)?;
+        self.reconcile_native_cancellation_retirements()?;
 
         let windows = self.window_realizer.realized_windows();
         for (window_id, native_window_id, window) in windows {
@@ -3973,15 +4022,33 @@ impl WinitRunner {
 
             if record.close_requested {
                 if native_window_id != NativeWindowId::primary() {
-                    // Once Render accepts retirement, a failed M13 Cancel still
-                    // cannot prevent mandatory neutral continuity and revocation.
+                    // Preserve Render's accepted refusal boundary before input
+                    // recipient/source retirement. Re-entry after a successful
+                    // detach remains the existing idempotent Render operation.
                     self.authorize_secondary_close(native_window_id)?;
+                } else {
+                    self.preflight_native_source_retirement(native_window_id)?;
                 }
                 // A failed framework Cancel may stop this host, but must not
                 // prevent the original neutral source and gameplay contributors
                 // from retiring. Invoke both existing owners before propagating
                 // either failure; never promote cleanup to an input authority.
                 let recipient_retirement = self.retire_native_input_recipient(native_window_id);
+                if recipient_retirement.is_ok()
+                    && self
+                        .state
+                        .world
+                        .resource::<UiNativeInputRecipientsResource>()
+                        .is_ok_and(|recipients| {
+                            recipients.host_cancellation_pending(native_window_id)
+                        })
+                {
+                    // The original recipient and display are already quarantined.
+                    // Continue through the ordinary bounded slot pump; no physical
+                    // detach or settled-retirement claim precedes its receipts.
+                    self.request_ordinary_frame("pending native input cancellation");
+                    continue;
+                }
                 let source_retirement = self.retire_window_input_source(native_window_id);
                 if native_window_id == NativeWindowId::primary() {
                     self.gpu_progress_deadline = None;
@@ -4520,7 +4587,16 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 | WindowEvent::ModifiersChanged(..)
                 | WindowEvent::CursorLeft { .. }
         );
-        if pending_neutral_lane && self.has_exact_pending_close(native_window_id) {
+        let approved_close = self
+            .state
+            .world
+            .resource::<WindowStateRegistryResource>()
+            .ok()
+            .and_then(|windows| windows.record(native_window_id))
+            .is_some_and(|record| record.close_requested);
+        if pending_neutral_lane
+            && (self.has_exact_pending_close(native_window_id) || approved_close)
+        {
             let result = self
                 .apply_pending_close_window_event(native_window_id, event)
                 .and_then(|_| self.apply_window_effects(event_loop));

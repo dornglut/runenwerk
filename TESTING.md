@@ -148,6 +148,20 @@ before claiming exact-revision evidence.
 
 ## Native host readiness
 
+Native input lifecycle regressions exercise the actual focus-loss/cancellation
+handlers and the mounted RunenUI M13 queue with prolonged legal application work:
+
+```text
+cargo test -p engine --lib runtime::winit_runner::retirement_tests --locked
+```
+
+They distinguish cancellation admission from the later exact terminal receipt,
+verify held Space and touch cleanup across bounded pumps, and keep a retired
+recipient quarantined until its original scope's cancellation evidence arrives.
+Missing scopes cannot certify retirement; World-only retirement still requires
+actual framework shutdown. These deterministic integration proofs supplement
+the real native OS input qualification; they are not hardware touch evidence.
+
 The existing process-isolated `native_host_smoke` executable exercises the native
 host with ordinary App-configured, thread-affine RunenUI applications. Select one
 `RUNENWERK_NATIVE_UI_READINESS_SMOKE` mode per process:
