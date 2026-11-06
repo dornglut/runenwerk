@@ -1129,7 +1129,22 @@ impl WinitRunner {
         // text for focus/capability/composition reasons. Reserve the full
         // original group before admitting either neutral observation.
         // UI-directed text is never dispatched to the legacy Editor.
-        let recipient = Some(NativeInputRecipient::RunenUiSlot(slot));
+        // The canonical physical journal is not a second pending UI queue.
+        // If previous M13 work remains, journal the immutable original group
+        // neutrally, then route its semantic keyboard/text once through the
+        // already selected M13 native callback. A selected World application
+        // mutation would fail its quiescence gate before that semantic step.
+        let pending = self
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()?
+            .native_input_is_pending(slot)
+            .map_err(|error| anyhow!("native keyboard journal pending state unavailable: {error:?}"))?;
+        let recipient = if pending {
+            None
+        } else {
+            Some(NativeInputRecipient::RunenUiSlot(slot))
+        };
         match native_text {
             Some(text) => self.apply_event_group_for_recipient(
                 window,
@@ -2980,6 +2995,27 @@ impl WinitRunner {
     ) -> Result<()> {
         let selection = self.native_input_recipient(window);
         match selection {
+            Ok((NativeInputRecipient::RunenUiSlot(slot), _)) => {
+                let pending = self
+                    .state
+                    .world
+                    .resource_mut::<UiRuntimeSlotsResource>()?
+                    .native_input_is_pending(slot)
+                    .map_err(|error| anyhow!("native original journal pending state unavailable: {error:?}"))?;
+                if pending {
+                    self.apply_event_group_for_recipient(window, [event], None)?;
+                    if let Some(context) = self.native_input().window_source_context(window) {
+                        self.revoke_native_game_keyboard_source(context.source)?;
+                    }
+                    Ok(())
+                } else {
+                    self.apply_event_group_for_recipient(
+                        window,
+                        [event],
+                        Some(NativeInputRecipient::RunenUiSlot(slot)),
+                    )
+                }
+            }
             Ok((recipient, _)) => {
                 self.apply_event_group_for_recipient(window, [event], Some(recipient))
             }
