@@ -526,13 +526,40 @@ pub enum UiRuntimeNativeKeyboardAdmissionError {
 /// Exact original native keyboard and same-callback committed text are one
 /// framework-owned M13 admission transaction. Any refused slot returns BOTH
 /// unchanged original payloads for source-local fail-closed handling.
-#[derive(Debug)]
 pub enum UiRuntimeNativeKeyboardTextAdmissionError {
     Slot {
         failure: UiRuntimeSlotOperationFailure,
         events: Box<(KeyboardEvent, CommittedTextEvent)>,
     },
     Framework(SubmitKeyboardWithTextError),
+}
+
+impl UiRuntimeNativeKeyboardTextAdmissionError {
+    /// No refused original is lost or duplicated: the owner may inspect both
+    /// without ever logging committed Unicode text.
+    #[must_use]
+    pub fn into_events(self) -> (KeyboardEvent, CommittedTextEvent) {
+        match self {
+            Self::Slot { events, .. } => *events,
+            Self::Framework(error) => error.into_events(),
+        }
+    }
+}
+
+impl std::fmt::Debug for UiRuntimeNativeKeyboardTextAdmissionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Slot { failure, events } => f
+                .debug_struct("NativePairedInputSlotRefusal")
+                .field("failure", failure)
+                .field("text_bytes", &events.1.text().len())
+                .finish_non_exhaustive(),
+            Self::Framework(error) => f
+                .debug_tuple("NativePairedInputFrameworkRefusal")
+                .field(&error.kind())
+                .finish(),
+        }
+    }
 }
 
 /// One canonical existing M13 no-focus observation predicate. The caller
@@ -3010,6 +3037,41 @@ mod tests {
             }
             other => panic!("unexpected M13 native text admission result: {other:?}"),
         }
+    }
+
+    #[test]
+    fn native_paired_refusal_retains_both_originals_without_logging_unicode() {
+        use runenui_core::{
+            KeyboardCompositionState, KeyLocation, KeyModifiers, LogicalKey, PhysicalKey,
+        };
+        let mut slots = UiRuntimeSlotsResource::default();
+        let device = InputDeviceId::new(31).expect("nonzero original device");
+        let error = slots
+            .submit_native_keyboard_with_text(
+                UiRuntimeSlotId(u64::MAX),
+                KeyboardEvent::new(
+                    KeyboardPhase::Down,
+                    PhysicalKey::Code(String::from("KeyX")),
+                    LogicalKey::Character(String::from("x")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(device),
+                ),
+                CommittedTextEvent::new("private Ω", Some(device))
+                    .expect("nonempty genuine Unicode original"),
+            )
+            .expect_err("an unknown slot rejects both original members");
+        let diagnostic = format!("{error:?}");
+        assert!(
+            !diagnostic.contains("private Ω"),
+            "native admission errors must never log original secret text"
+        );
+        let (keyboard, text) = error.into_events();
+        assert_eq!(keyboard.device_id(), Some(device));
+        assert_eq!(text.device_id(), Some(device));
+        assert_eq!(text.text(), "private Ω");
     }
 
     #[test]
