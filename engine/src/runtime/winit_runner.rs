@@ -942,6 +942,30 @@ impl WinitRunner {
         allow_approved_close: bool,
     ) -> Result<(NativeInputRecipient, Option<u64>)> {
         let observed = self.native_input_recipient_once(window, allow_approved_close);
+        // A selected M13 slot may be legitimately backlogged yet still be
+        // the exact native input recipient. Before routing another original,
+        // the existing World transaction revokes that source's game actions
+        // and gives M13 ONE bounded progress checkpoint. If still pending,
+        // route the original to its canonical FIFO rather than dropping it.
+        if let Ok((NativeInputRecipient::RunenUiSlot(slot), _)) = &observed {
+            let pending = self
+                .state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()?
+                .native_input_is_pending(*slot)
+                .map_err(|error| anyhow!("selected M13 readiness unavailable: {error:?}"))?;
+            if pending {
+                let settlement =
+                    crate::plugins::ui::settle_native_ui_slot(&mut self.state.world, *slot);
+                if let Err(error) = settlement
+                    && !native_m13_waiting_for_settlement(&error)
+                {
+                    return Err(error);
+                }
+                return self.native_input_recipient_once(window, allow_approved_close);
+            }
+            return observed;
+        }
         if !observed
             .as_ref()
             .is_err_and(native_m13_waiting_for_settlement)
