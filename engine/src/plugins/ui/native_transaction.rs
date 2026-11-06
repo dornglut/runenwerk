@@ -499,9 +499,7 @@ fn transact_ui_slot_inner<T>(
             .map_err(|err| anyhow!("native RunenUI slots unavailable: {err}"))?
             .transact_native_app(&NativeAppMutationPermit { _sealed: () }, slot, operation)
             .map_err(|err| match err {
-                UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
-                    if allow_pending_settlement =>
-                {
+                UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce if allow_pending_settlement => {
                     NativeUiMutationNeedsSettlement.into()
                 }
                 other => anyhow!("native RunenUI app mutation failed: {other:?}"),
