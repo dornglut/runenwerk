@@ -109,6 +109,19 @@ fn native_ime_allowed_for_m13(
         && (capability.accepts_committed_text() || capability.accepts_composition())
 }
 
+/// Preserve only an ALREADY granted native OS IME capability while one
+/// selected M13 runtime is legitimately processing earlier canonical work.
+/// The current M13 owner must still be focused and text/composition-capable;
+/// this never grants a newly enabled OS IME, a new focus or text permission.
+/// Pending M13 ingress remains bound to its own original focus session.
+fn retain_existing_native_ime_during_m13_backlog(
+    window_focused: bool,
+    previously_applied: bool,
+    current: &runenui_runtime::InputOwnershipSnapshot,
+) -> bool {
+    previously_applied && native_ime_allowed_for_m13(window_focused, current)
+}
+
 /// Original native IME text requires both live window focus and the host's
 /// applied OS IME permission. A delayed OS payload after either lifetime
 /// retires is not authority to submit new RunenUI text or composition work.
@@ -4244,10 +4257,13 @@ impl WinitRunner {
     // Tests can drive owner snapshots through the actual runner without
     // fabricating GPU status handles or adding a runtime override resource.
 
-    /// Project the selected native slot's *current* M13 text capability to
-    /// Winit's per-window OS IME switch. Absent/legacy/unfocused recipients
-    /// are disabled; a temporarily unsettled framework is never granted.
-    /// This runs after original input callbacks and UI frame settlement.
+    /// Project only the selected native slot's M13 text capability to
+    /// Winit's OS IME switch. An unsettled M13 runtime NEVER grants a fresh
+    /// OS permission, but an already applied capability may stay enabled
+    /// while its exact selected scope retains real text/composition focus.
+    /// This avoids fabricating Ime::Disabled during ordinary long backlogs;
+    /// later accepted owner retirement or physical window focus loss revokes
+    /// the OS capability. No Engine-owned focus/IME generation is cached.
     fn project_native_ime(&mut self) -> Result<()> {
         for (_window_id, native_window_id, window) in self.window_realizer.realized_windows() {
             let enabled = if !window.has_focus() {
@@ -4263,9 +4279,14 @@ impl WinitRunner {
                         match slots.input_ownership(slot) {
                             Ok(snapshot) => native_ime_allowed_for_m13(true, &snapshot),
                             Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {
-                                // Re-evaluate on the runtime's next genuine
-                                // wake/pump, never reuse an earlier focus.
-                                false
+                                let current = slots.native_input_ownership(slot).map_err(|error| {
+                                    anyhow!("native pending OS IME lacks selected M13 owner: {error:?}")
+                                })?;
+                                retain_existing_native_ime_during_m13_backlog(
+                                    window.has_focus(),
+                                    self.native_ime_applied.contains(&native_window_id),
+                                    &current,
+                                )
                             }
                             Err(error) => {
                                 return Err(anyhow!(
@@ -5194,6 +5215,23 @@ mod tests {
             native_ime_allowed_for_m13(true, &before),
             "a text-capable focused M13 owner enables its selected native window's OS IME"
         );
+        assert!(
+            !retain_existing_native_ime_during_m13_backlog(true, false, &before),
+            "legal pending M13 work must never enable a NEW native OS IME permission"
+        );
+        assert!(
+            retain_existing_native_ime_during_m13_backlog(true, true, &before),
+            "an already enabled original native IME survives independent M13 pending work"
+        );
+        assert!(
+            !retain_existing_native_ime_during_m13_backlog(true, true, &initially_unfocused),
+            "a lost original text focus cannot retain OS IME permission"
+        );
+        assert!(
+            !retain_existing_native_ime_during_m13_backlog(false, true, &before),
+            "physical native focus loss revokes OS IME even if M13 remains focused"
+        );
+
         assert!(
             native_ui_blocks_preframe_keyboard_gameplay(&before),
             "real M13 text focus must revoke old source-local gameplay holds"
