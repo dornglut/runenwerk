@@ -5,6 +5,7 @@ use crate::plugins::ui::{
     UiNativeInputRecipientsResource, UiNativePointerHostRead, UiRuntimeDisplayedPresentation,
     UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeKeyboardAdmissionError,
     UiRuntimeNativeKeyboardTextAdmissionError, UiRuntimeNativeTextAdmissionError,
+    UiRuntimeNativeTextEvidenceFailure,
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
     native_composition_finality, native_keyboard_finality,
     native_no_focused_keyboard_claim_witness, native_original_keyboard_release_nonclaim,
