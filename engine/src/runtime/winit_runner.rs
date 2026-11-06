@@ -200,6 +200,27 @@ fn native_m13_original_deferred(
         && batch.final_ownership().status() == runenui_runtime::RuntimeStatus::Running
 }
 
+/// A reached M13 receipt can reject a text/composition original after its
+/// focused recipient retires. That is a terminal fail-closed input disposition,
+/// not a native host crash or a reason to replay Unicode to another owner.
+/// Integrity and capacity failures are deliberately NOT classified as benign.
+fn native_ime_retired_processing_rejection(
+    finality: &UiInputFinality,
+    composition: bool,
+) -> bool {
+    use runenui_runtime::UiInputProcessingRejection as Rejection;
+    match finality {
+        UiInputFinality::ProcessingRejected(
+            Rejection::FocusBindingInvalidated
+            | Rejection::CommittedTextRecipientUnavailable
+            | Rejection::MissingTarget
+            | Rejection::StaleTarget,
+        ) => true,
+        UiInputFinality::ProcessingRejected(Rejection::StaleCompositionGeneration) => composition,
+        _ => false,
+    }
+}
+
 /// A source-bound native IME composition input is owned by M13 once admitted.
 /// Exact finality may be reached now, or M13 can hold its original sequence
 /// behind earlier work. Never fabricate an InputSettled or accept other errors.
@@ -212,6 +233,14 @@ fn observe_native_ime_composition(
     let evidence = native_composition_finality(scope, sequence, batch, status);
     match evidence {
         Ok(UiInputFinality::Committed(_)) => Ok(()),
+        Ok(finality) if native_ime_retired_processing_rejection(&finality, true) => {
+            tracing::trace!(
+                target: "engine.runtime.input",
+                ?finality,
+                "original native composition settled against retired focus, not delivered"
+            );
+            Ok(())
+        }
         Err(UiRuntimeNativeCompositionEvidenceFailure::NotProcessed)
             if native_m13_original_deferred(scope, batch, status) =>
         {
@@ -2032,6 +2061,14 @@ impl WinitRunner {
         let evidence = native_text_finality(before.scope(), device, submission, &batch, &status);
         match evidence {
             Ok(UiInputFinality::Committed(_)) => Ok(()),
+            Ok(finality) if native_ime_retired_processing_rejection(&finality, false) => {
+                tracing::trace!(
+                    target: "engine.runtime.input",
+                    ?finality,
+                    "original native Unicode settled against retired focus, not replayed"
+                );
+                Ok(())
+            }
             Err(UiRuntimeNativeTextEvidenceFailure::NotProcessed)
                 if native_m13_original_deferred(before.scope(), &batch, &status) =>
             {
@@ -5013,6 +5050,37 @@ mod tests {
             .is_err(),
             "nonfinite wheel must not enter M13"
         );
+    }
+
+    #[test]
+    fn exact_native_ime_focus_retirement_is_nonfatal_but_integrity_failure_is_not() {
+        use runenui_runtime::{UiInputAbortReason, UiInputProcessingRejection as Rejection};
+
+        for reason in [
+            Rejection::FocusBindingInvalidated,
+            Rejection::CommittedTextRecipientUnavailable,
+            Rejection::MissingTarget,
+            Rejection::StaleTarget,
+        ] {
+            let outcome = UiInputFinality::ProcessingRejected(reason);
+            assert!(native_ime_retired_processing_rejection(&outcome, false));
+            assert!(native_ime_retired_processing_rejection(&outcome, true));
+        }
+        let stale_generation =
+            UiInputFinality::ProcessingRejected(Rejection::StaleCompositionGeneration);
+        assert!(native_ime_retired_processing_rejection(&stale_generation, true));
+        assert!(!native_ime_retired_processing_rejection(&stale_generation, false));
+        for outcome in [
+            UiInputFinality::ProcessingRejected(Rejection::InsufficientTransactionCapacity),
+            UiInputFinality::ProcessingRejected(Rejection::ForeignTarget),
+            UiInputFinality::Aborted(UiInputAbortReason::RuntimeIntegrity),
+        ] {
+            assert!(
+                !native_ime_retired_processing_rejection(&outcome, false)
+                    && !native_ime_retired_processing_rejection(&outcome, true),
+                "M13 capacity/integrity failure is not an ordinary focus retirement"
+            );
+        }
     }
 
     #[test]
