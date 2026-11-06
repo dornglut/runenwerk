@@ -2384,6 +2384,21 @@ impl UiRuntimeSlotsResource {
         Ok(())
     }
 
+    /// Test-only state inspection of an already mounted real typed UiApp.
+    /// This does not synthesize M13 receipts, alter focus or bypass native
+    /// production input ownership.
+    #[cfg(test)]
+    pub(crate) fn test_typed_state<A: UiApp + 'static>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Option<&A::State> {
+        self.slot_mut(slot_id)
+            .ok()?
+            .runtime
+            .typed_mut::<A>()
+            .map(|runtime| runtime.state())
+    }
+
     /// A test-only pending-pump fixture. The real native transaction still
     /// invokes RunenUI's ordinary settlement and requires a fresh final M13
     /// observation; this only establishes the unavailable *prestate*.

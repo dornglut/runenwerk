@@ -5874,10 +5874,9 @@ mod tests {
     fn selected_native_ime_preedit_end_and_commit_survive_390_prior_actions() {
         use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
         use runenui_core::{
-            CommandOrigin, EditIntent, EditResolution, Effects, IntoUpdateOutput, NoHostProtocol,
-            SemanticCommand, SemanticEditableMode, TextAffinity, TextDocumentId,
-            TextDocumentRevision, TextDocumentSnapshot, TextPosition, TextSelection, UiApp,
-            UpdateOutput, View,
+            EditIntent, EditResolution, Effects, IntoUpdateOutput, NoHostProtocol,
+            SemanticEditableMode, TextAffinity, TextDocumentId, TextDocumentRevision,
+            TextDocumentSnapshot, TextPosition, TextSelection, UiApp, UpdateOutput, View,
         };
 
         #[derive(Clone)]
@@ -6035,22 +6034,20 @@ mod tests {
                 Err(error) => panic!("M13 native IME continuation failed: {error:?}"),
             }
         }
-        assert!(finished, "bounded canonical M13 IME backlog eventually drains");
+        assert!(
+            finished,
+            "bounded canonical M13 IME backlog eventually drains"
+        );
         let slots = runner
             .state
             .world
             .resource_mut::<UiRuntimeSlotsResource>()
             .expect("selected native UI slot remains mounted");
-        let text = &slots
-            .slot_mut(slot)
-            .expect("same focused editor survives")
-            .runtime
-            .typed_mut::<ImeApp>()
-            .expect("original typed M13 editor")
-            .state()
-            .text;
+        let state = slots
+            .test_typed_state::<ImeApp>(slot)
+            .expect("original focused typed state survives M13");
         assert_eq!(
-            text, "あ",
+            state.text, "あ",
             "Winit original device-free IME text must edit exactly once"
         );
     }
