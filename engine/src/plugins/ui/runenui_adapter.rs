@@ -12,7 +12,8 @@ use runenui_runtime::{
     HostRequestToken, InputArbitrationRecord, InputArbitrationScope, InputObservationError,
     InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch, KeyboardSubmission,
     PointerSubmission, PumpBudget, RuntimeConfig, SubmitCompositionError,
-    SubmitCompositionStartError, SubmitKeyboardError, SubmitKeyboardErrorKind, SubmitPointerError,
+    SubmitCompositionStartError, SubmitKeyboardError, SubmitKeyboardErrorKind,
+    SubmitKeyboardWithTextError, SubmitPointerError,
     SubmitTextError, SurfaceBuildContext, SurfacePublication, TextSubmission, UiInputFamily,
     UiInputFinality,
 };
@@ -523,6 +524,18 @@ pub enum UiRuntimeNativeKeyboardAdmissionError {
     Framework(SubmitKeyboardError),
 }
 
+/// Exact original native keyboard and same-callback committed text are one
+/// framework-owned M13 admission transaction. Any refused slot returns BOTH
+/// unchanged original payloads for source-local fail-closed handling.
+#[derive(Debug)]
+pub enum UiRuntimeNativeKeyboardTextAdmissionError {
+    Slot {
+        failure: UiRuntimeSlotOperationFailure,
+        events: Box<(KeyboardEvent, CommittedTextEvent)>,
+    },
+    Framework(SubmitKeyboardWithTextError),
+}
+
 /// One canonical existing M13 no-focus observation predicate. The caller
 /// selects the exact *original* keyboard phase and its separate game policy.
 fn native_unfocused_keyboard_rejection_witness(
@@ -972,6 +985,17 @@ impl UiRuntimeSlotKind {
         match self {
             Self::Counter(runtime) => runtime.submit_keyboard(event),
             Self::Typed(runtime) => runtime.submit_keyboard(event),
+        }
+    }
+
+    fn submit_keyboard_with_text(
+        &mut self,
+        keyboard: KeyboardEvent,
+        text: CommittedTextEvent,
+    ) -> Result<(KeyboardSubmission, TextSubmission), SubmitKeyboardWithTextError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_keyboard_with_text(keyboard, text),
+            Self::Typed(runtime) => runtime.submit_keyboard_with_text(keyboard, text),
         }
     }
 
@@ -1768,6 +1792,57 @@ impl UiRuntimeSlotsResource {
         slot.ingress_epoch = next;
         slot.requires_settlement = true;
         Ok(receipt)
+    }
+
+    /// Admit one genuine original keyboard Down and its associated Unicode
+    /// KeyEvent.text atomically to RunenUI's single M13 FIFO. A selected native
+    /// slot may have earlier legal work pending: that condition revokes game
+    /// permission but does NOT revoke its existing canonical ingress owner.
+    /// Only the already-accepted native binding grants this bounded exemption;
+    /// ordinary application mutations retain the settled-epoch gate.
+    ///
+    /// No terminal receipt or gameplay right is inferred from this admission.
+    pub(crate) fn submit_native_keyboard_with_text(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        keyboard: KeyboardEvent,
+        text: CommittedTextEvent,
+    ) -> Result<
+        (KeyboardSubmission, TextSubmission),
+        UiRuntimeNativeKeyboardTextAdmissionError,
+    > {
+        let slot = match self.slot_mut(slot_id) {
+            Ok(slot) => slot,
+            Err(failure) => {
+                return Err(UiRuntimeNativeKeyboardTextAdmissionError::Slot {
+                    failure,
+                    events: Box::new((keyboard, text)),
+                });
+            }
+        };
+        let next = if slot.native_input_selected {
+            slot.ingress_epoch
+                .checked_add(1)
+                .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)
+        } else {
+            slot.next_ingress_epoch()
+        };
+        let next = match next {
+            Ok(next) => next,
+            Err(failure) => {
+                return Err(UiRuntimeNativeKeyboardTextAdmissionError::Slot {
+                    failure,
+                    events: Box::new((keyboard, text)),
+                });
+            }
+        };
+        let receipts = slot
+            .runtime
+            .submit_keyboard_with_text(keyboard, text)
+            .map_err(UiRuntimeNativeKeyboardTextAdmissionError::Framework)?;
+        slot.ingress_epoch = next;
+        slot.requires_settlement = true;
+        Ok(receipts)
     }
 
     /// Admit exactly one native pointer observation to the pinned runtime.
@@ -6966,6 +7041,14 @@ mod tests {
                 event: KeyboardEvent,
             ) -> Result<KeyboardSubmission, SubmitKeyboardError> {
                 self.runtime.submit_keyboard(event)
+            }
+
+            fn submit_keyboard_with_text(
+                &mut self,
+                keyboard: KeyboardEvent,
+                text: CommittedTextEvent,
+            ) -> Result<(KeyboardSubmission, TextSubmission), SubmitKeyboardWithTextError> {
+                self.runtime.submit_keyboard_with_text(keyboard, text)
             }
 
             fn submit_pointer(

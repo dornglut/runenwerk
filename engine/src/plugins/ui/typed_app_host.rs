@@ -11,7 +11,8 @@ use runenui_runtime::{
     AppRuntime, CompositionStartSubmission, CompositionSubmission, InputObservationError,
     InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch, KeyboardSubmission,
     PointerSubmission, PumpBudget, SubmitCompositionError, SubmitCompositionStartError,
-    SubmitKeyboardError, SubmitPointerError, SubmitTextError, SurfaceBuildContext,
+    SubmitKeyboardError, SubmitKeyboardWithTextError, SubmitPointerError, SubmitTextError,
+    SurfaceBuildContext,
     SurfacePublication, TextSubmission,
 };
 
@@ -61,6 +62,11 @@ pub(super) trait TypedRuntimeOps {
         &mut self,
         event: KeyboardEvent,
     ) -> Result<KeyboardSubmission, SubmitKeyboardError>;
+    fn submit_keyboard_with_text(
+        &mut self,
+        keyboard: KeyboardEvent,
+        text: CommittedTextEvent,
+    ) -> Result<(KeyboardSubmission, TextSubmission), SubmitKeyboardWithTextError>;
     fn submit_pointer(
         &mut self,
         event: PointerEvent,
@@ -118,6 +124,14 @@ impl<A: UiApp + 'static> TypedRuntimeOps for TypedRuntime<A> {
         event: KeyboardEvent,
     ) -> Result<KeyboardSubmission, SubmitKeyboardError> {
         self.runtime.submit_keyboard(event)
+    }
+
+    fn submit_keyboard_with_text(
+        &mut self,
+        keyboard: KeyboardEvent,
+        text: CommittedTextEvent,
+    ) -> Result<(KeyboardSubmission, TextSubmission), SubmitKeyboardWithTextError> {
+        self.runtime.submit_keyboard_with_text(keyboard, text)
     }
 
     fn submit_pointer(
