@@ -3,7 +3,8 @@ use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
     UiNativeInputRecipientsResource, UiNativePointerHostRead, UiRuntimeDisplayedPresentation,
-    UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeKeyboardAdmissionError,
+    UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeCompositionEvidenceFailure,
+    UiRuntimeNativeKeyboardAdmissionError,
     UiRuntimeNativeKeyboardTextAdmissionError, UiRuntimeNativeTextAdmissionError,
     UiRuntimeNativeTextEvidenceFailure, UiRuntimePresentationAssociationsResource, UiRuntimeSlotId,
     UiRuntimeSlotsResource, native_composition_finality, native_keyboard_finality,
@@ -166,6 +167,45 @@ fn native_m13_waiting_for_settlement(error: &anyhow::Error) -> bool {
                 crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
             ))
         )
+}
+
+/// A genuine RunenUI canonical FIFO admission can remain unprocessed after
+/// one bounded native callback while 390 or more earlier legal producers run.
+/// This checks *only* continued M13 ownership/liveness, not a terminal receipt
+/// or permission to send the original input to gameplay/another focus owner.
+fn native_m13_original_deferred(
+    scope: &runenui_runtime::InputArbitrationScope,
+    batch: &runenui_runtime::InputPumpBatch,
+    status: &Result<(), crate::plugins::ui::UiRuntimeSlotOperationFailure>,
+) -> bool {
+    *status == Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        && batch.report().outcome() == runenui_runtime::PumpOutcome::BudgetExhausted
+        && batch.pause_reason().is_none()
+        && batch.final_ownership().scope() == scope
+        && batch.final_ownership().status() == runenui_runtime::RuntimeStatus::Running
+}
+
+/// A source-bound native IME composition input is owned by M13 once admitted.
+/// Exact finality may be reached now, or M13 can hold its original sequence
+/// behind earlier work. Never fabricate an InputSettled or accept other errors.
+fn observe_native_ime_composition(
+    scope: &runenui_runtime::InputArbitrationScope,
+    sequence: runenui_runtime::WorkSequence,
+    batch: &runenui_runtime::InputPumpBatch,
+    status: &Result<(), crate::plugins::ui::UiRuntimeSlotOperationFailure>,
+) -> Result<()> {
+    let evidence = native_composition_finality(scope, sequence, batch, status);
+    match evidence {
+        Ok(UiInputFinality::Committed(_)) => Ok(()),
+        Err(UiRuntimeNativeCompositionEvidenceFailure::NotProcessed)
+            if native_m13_original_deferred(scope, batch, status) =>
+        {
+            // No completion asserted: RunenUI's one FIFO retains the event,
+            // generation, and exact terminal observation for later pumps.
+            Ok(())
+        }
+        other => Err(anyhow!("original native IME composition lacks M13 finality: {other:?}")),
+    }
 }
 
 /// A pinned winit translator must NEVER cross its native window, physical
@@ -1809,8 +1849,8 @@ impl WinitRunner {
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("selected native IME preedit lacks pinned UI slot")?;
         let mut before = slots
-            .input_ownership(slot)
-            .map_err(|error| anyhow!("native preedit has no settled M13 owner: {error:?}"))?;
+            .native_input_ownership(slot)
+            .map_err(|error| anyhow!("native preedit has no selected M13 owner: {error:?}"))?;
         let generation = if let Some(generation) = before.keyboard().composition_generation() {
             generation.clone()
         } else {
@@ -1833,15 +1873,10 @@ impl WinitRunner {
             let (batch, status) = slots
                 .pump_native_input_records(slot)
                 .map_err(|e| anyhow!("native composition start pump rejected: {e:?}"))?;
-            let finality =
-                native_composition_finality(before.scope(), start.sequence(), &batch, &status);
-            anyhow::ensure!(
-                matches!(finality, Ok(UiInputFinality::Committed(_))),
-                "native composition start lacks exact M13 settlement: {finality:?}"
-            );
+            observe_native_ime_composition(before.scope(), start.sequence(), &batch, &status)?;
             before = slots
-                .input_ownership(slot)
-                .map_err(|e| anyhow!("composition start left M13 ownership unsettled: {e:?}"))?;
+                .native_input_ownership(slot)
+                .map_err(|e| anyhow!("composition start lost its selected M13 owner: {e:?}"))?;
             anyhow::ensure!(
                 before.keyboard().composition_generation() == Some(start.generation()),
                 "composition generation changed before original preedit update"
@@ -1870,13 +1905,8 @@ impl WinitRunner {
         let (batch, status) = slots
             .pump_native_input_records(slot)
             .map_err(|e| anyhow!("native preedit M13 pump rejected: {e:?}"))?;
-        let finality =
-            native_composition_finality(before.scope(), submitted.sequence(), &batch, &status);
-        anyhow::ensure!(
-            matches!(finality, Ok(UiInputFinality::Committed(_))),
-            "native preedit lacked exact M13 composition settlement: {finality:?}"
-        );
-        Ok(())
+        observe_native_ime_composition(before.scope(), submitted.sequence(), &batch, &status)
+            .context("original native IME Preedit")
     }
 
     /// An original IME commit ends the framework's active generation before
@@ -1889,8 +1919,8 @@ impl WinitRunner {
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("native IME finish lost pinned UI slot")?;
         let before = slots
-            .input_ownership(slot)
-            .map_err(|error| anyhow!("native IME finish has no M13 owner: {error:?}"))?;
+            .native_input_ownership(slot)
+            .map_err(|error| anyhow!("native IME finish lost its selected M13 owner: {error:?}"))?;
         let Some(generation) = before.keyboard().composition_generation().cloned() else {
             return Ok(());
         };
@@ -1918,13 +1948,8 @@ impl WinitRunner {
         let (batch, status) = slots
             .pump_native_input_records(slot)
             .map_err(|e| anyhow!("native IME finish pump rejected: {e:?}"))?;
-        let finality =
-            native_composition_finality(before.scope(), submission.sequence(), &batch, &status);
-        anyhow::ensure!(
-            matches!(finality, Ok(UiInputFinality::Committed(_))),
-            "native IME finish lacked exact M13 settlement: {finality:?}"
-        );
-        Ok(())
+        observe_native_ime_composition(before.scope(), submission.sequence(), &batch, &status)
+            .context("original native IME End/Cancel")
     }
 
     /// Route one original OS-committed IME text occurrence to the selected
@@ -1952,8 +1977,8 @@ impl WinitRunner {
             .resource_mut::<UiRuntimeSlotsResource>()
             .context("native IME recipient has no pinned runtime slot")?;
         let before = slots
-            .input_ownership(slot)
-            .map_err(|error| anyhow!("native IME M13 text ownership unavailable: {error:?}"))?;
+            .native_input_ownership(slot)
+            .map_err(|error| anyhow!("native IME M13 text owner unavailable: {error:?}"))?;
         let submission = match slots.submit_native_text(slot, event) {
             Ok(receipt) => receipt,
             Err(UiRuntimeNativeTextAdmissionError::Slot { failure, event }) => {
@@ -1988,11 +2013,19 @@ impl WinitRunner {
             .pump_native_input_records(slot)
             .map_err(|error| anyhow!("native IME M13 pump unavailable: {error:?}"))?;
         let evidence = native_text_finality(before.scope(), device, submission, &batch, &status);
-        anyhow::ensure!(
-            matches!(evidence, Ok(UiInputFinality::Committed(_))),
-            "native IME text lacked exact committed M13 settlement: {evidence:?}"
-        );
-        Ok(())
+        match evidence {
+            Ok(UiInputFinality::Committed(_)) => Ok(()),
+            Err(UiRuntimeNativeTextEvidenceFailure::NotProcessed)
+                if native_m13_original_deferred(before.scope(), &batch, &status) =>
+            {
+                // Original Unicode remains inside the single canonical FIFO,
+                // never re-admitted or silently retargeted on a future turn.
+                Ok(())
+            }
+            other => Err(anyhow!(
+                "native IME text lacked exact M13 finality: {other:?}"
+            )),
+        }
     }
 
     /// Withdraw precisely one native source's game eligibility when an actual

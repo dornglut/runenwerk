@@ -52,8 +52,9 @@ pub use runenui_adapter::{
     native_keyboard_finality, native_no_focused_keyboard_claim_witness, native_pointer_finality,
 };
 pub(crate) use runenui_adapter::{
-    UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeKeyboardTextAdmissionError,
-    UiRuntimeNativeTextAdmissionError, UiRuntimeNativeTextEvidenceFailure,
+    UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeCompositionEvidenceFailure,
+    UiRuntimeNativeKeyboardTextAdmissionError, UiRuntimeNativeTextAdmissionError,
+    UiRuntimeNativeTextEvidenceFailure,
     native_composition_finality, native_original_keyboard_release_nonclaim,
     native_original_keyboard_repeat_nonclaim, native_text_finality,
     native_unfocused_game_keyboard_snapshot,
