@@ -3560,32 +3560,38 @@ mod tests {
             ),
             Ok(UiInputFinality::Committed(_))
         ));
-        assert!(matches!(
-            slots.submit_native_text(
-                slot,
-                CommittedTextEvent::new("v", Some(key_device))
-                    .expect("paired original KeyEvent.text"),
+        assert!(
+            matches!(
+                slots.submit_native_text(
+                    slot,
+                    CommittedTextEvent::new("v", Some(key_device))
+                        .expect("paired original KeyEvent.text"),
+                ),
+                Err(UiRuntimeNativeTextAdmissionError::Slot {
+                    failure: UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce,
+                    ..
+                })
             ),
-            Err(UiRuntimeNativeTextAdmissionError::Slot {
-                failure: UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce,
-                ..
-            })
-        ), "exact keyboard terminality does not grant a second canonical text admission");
+            "exact keyboard terminality does not grant a second canonical text admission"
+        );
         assert_eq!(
             slots.settle_slot(slot),
             Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
             "one additional bounded World settlement cannot drain 390 queued actions"
         );
-        assert!(matches!(
-            slots.submit_native_text(
-                slot,
-                CommittedTextEvent::new("v", Some(key_device)).expect("same original text"),
+        assert!(
+            matches!(
+                slots.submit_native_text(
+                    slot,
+                    CommittedTextEvent::new("v", Some(key_device)).expect("same original text"),
+                ),
+                Err(UiRuntimeNativeTextAdmissionError::Slot {
+                    failure: UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce,
+                    ..
+                })
             ),
-            Err(UiRuntimeNativeTextAdmissionError::Slot {
-                failure: UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce,
-                ..
-            })
-        ), "host cannot legally retry original paired text during the remaining backlog");
+            "host cannot legally retry original paired text during the remaining backlog"
+        );
         let mut finished = false;
         for _ in 0..32 {
             if slots.settle_slot(slot).is_ok() {
