@@ -1105,6 +1105,20 @@ impl UiRuntimeSlot {
             .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)
     }
 
+    /// The selected native event producer uses the original M13 FIFO even
+    /// when earlier canonical application work has not fully settled. Only
+    /// an accepted native binding may bypass the World mutation/readiness
+    /// checkpoint; runtime ingress still performs all its own capacity,
+    /// focus-session, terminal and typed event validation.
+    fn next_native_ingress_epoch(&self) -> Result<u64, UiRuntimeSlotOperationFailure> {
+        if !self.native_input_selected {
+            return self.next_ingress_epoch();
+        }
+        self.ingress_epoch
+            .checked_add(1)
+            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)
+    }
+
     fn accepted_ingress(&mut self, next: u64) -> Result<(), UiRuntimeSlotOperationFailure> {
         self.ingress_epoch = next;
         self.requires_settlement = true;
@@ -1682,6 +1696,36 @@ impl UiRuntimeSlotsResource {
             .map_err(UiRuntimeSlotOperationFailure::InputObservation)
     }
 
+    /// Observe the authoritative RunenUI snapshot for an already selected
+    /// native input binding while unrelated M13 work is pending. This is
+    /// deliberately NOT a gameplay permission or publication checkpoint:
+    /// the ordinary input_ownership() API still refuses pending work.
+    pub(crate) fn native_input_ownership(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<InputOwnershipSnapshot, UiRuntimeSlotOperationFailure> {
+        let slot = self.slot_mut(slot_id)?;
+        if !slot.native_input_selected {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        slot.runtime
+            .input_ownership()
+            .map_err(UiRuntimeSlotOperationFailure::InputObservation)
+    }
+
+    /// True only for an already selected native slot with outstanding M13
+    /// work. No caller may infer a gameplay permission from this flag.
+    pub(crate) fn native_input_is_pending(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<bool, UiRuntimeSlotOperationFailure> {
+        let slot = self.slot_mut(slot_id)?;
+        if !slot.native_input_selected {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        Ok(slot.requires_settlement)
+    }
+
     #[must_use]
     pub fn contains(&self, slot_id: UiRuntimeSlotId) -> bool {
         self.slots.iter().any(|slot| slot.id == slot_id)
@@ -1778,7 +1822,7 @@ impl UiRuntimeSlotsResource {
                 return Err(UiRuntimeNativeKeyboardAdmissionError::Slot { failure, event });
             }
         };
-        let next = match slot.next_ingress_epoch() {
+        let next = match slot.next_native_ingress_epoch() {
             Ok(next) => next,
             Err(failure) => {
                 return Err(UiRuntimeNativeKeyboardAdmissionError::Slot { failure, event });
@@ -1817,13 +1861,7 @@ impl UiRuntimeSlotsResource {
                 });
             }
         };
-        let next = if slot.native_input_selected {
-            slot.ingress_epoch
-                .checked_add(1)
-                .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)
-        } else {
-            slot.next_ingress_epoch()
-        };
+        let next = slot.next_native_ingress_epoch();
         let next = match next {
             Ok(next) => next,
             Err(failure) => {
@@ -1859,7 +1897,7 @@ impl UiRuntimeSlotsResource {
                 });
             }
         };
-        let next = match slot.next_ingress_epoch() {
+        let next = match slot.next_native_ingress_epoch() {
             Ok(next) => next,
             Err(failure) => {
                 return Err(UiRuntimeNativePointerAdmissionError::Slot {
@@ -1890,7 +1928,7 @@ impl UiRuntimeSlotsResource {
                 return Err(UiRuntimeNativeTextAdmissionError::Slot { failure, event });
             }
         };
-        let next = match slot.next_ingress_epoch() {
+        let next = match slot.next_native_ingress_epoch() {
             Ok(next) => next,
             Err(failure) => {
                 return Err(UiRuntimeNativeTextAdmissionError::Slot { failure, event });
@@ -1919,7 +1957,7 @@ impl UiRuntimeSlotsResource {
             .slot_mut(slot_id)
             .map_err(UiRuntimeNativeCompositionAdmissionError::Slot)?;
         let next = slot
-            .next_ingress_epoch()
+            .next_native_ingress_epoch()
             .map_err(UiRuntimeNativeCompositionAdmissionError::Slot)?;
         let receipt = submit(&mut slot.runtime)?;
         slot.ingress_epoch = next;
