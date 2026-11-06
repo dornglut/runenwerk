@@ -3933,6 +3933,114 @@ mod tests {
             "漢字éΩx§vb",
             "original text is delivered once, without host-side replay"
         );
+
+        // Device-free IME Preedit -> End -> Commit can follow 390 already
+        // queued canonical actions without adding any host-owned generation
+        // or replay queue. RunenUI allocates the original generation itself
+        // at ingress, and every subsequent event stays inside that FIFO.
+        let ime_owner = slots
+            .native_input_ownership(slot)
+            .expect("selected live M13 IME owner");
+        assert!(ime_owner.keyboard().composition_generation().is_none());
+        slots
+            .test_queue_unpumped_typed_actions::<NativeTextApp>(
+                slot,
+                RUNTIME_PUMP_WORK_LIMIT * 3 + 6,
+                || TextAction::Idle,
+            )
+            .expect("390 preceding canonical IME-independent actions");
+        slots
+            .test_mark_native_pending(slot)
+            .expect("selected IME slot is genuinely pending");
+        let start = slots
+            .start_native_composition(slot)
+            .expect("M13 must admit original native IME Start behind legal backlog");
+        let generation = start.generation().clone();
+        assert_eq!(
+            slots
+                .native_input_ownership(slot)
+                .expect("pending composition uses runtime-owned generation")
+                .keyboard()
+                .composition_generation(),
+            Some(&generation),
+            "M13 owns the pending generation before its Start is pumped"
+        );
+        let preedit = slots
+            .update_native_composition(slot, generation.clone(), String::from("あ"), None)
+            .expect("original IME Preedit remains source-bound behind backlog");
+        let end = slots
+            .end_native_composition(slot, generation)
+            .expect("original IME End queues after its Start/Preedit");
+        let committed = slots
+            .submit_native_text(
+                slot,
+                CommittedTextEvent::new("あ", None)
+                    .expect("IME Commit never inherits a physical keyboard device"),
+            )
+            .expect("original device-free IME Commit queues after composition End");
+
+        let expected = [
+            (start.sequence(), UiInputFamily::Composition),
+            (preedit.sequence(), UiInputFamily::Composition),
+            (end.sequence(), UiInputFamily::Composition),
+            (committed.sequence(), UiInputFamily::CommittedText),
+        ];
+        let mut delivered = Vec::new();
+        let mut drained_ime = false;
+        for turn in 0..32 {
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .expect("existing M13 FIFO handles original IME backlog");
+            for record in batch.ordered_records() {
+                let InputArbitrationRecord::InputSettled(receipt) = record else {
+                    continue;
+                };
+                if expected
+                    .iter()
+                    .any(|(sequence, _)| *sequence == receipt.sequence())
+                {
+                    assert_eq!(receipt.scope(), ime_owner.scope());
+                    assert_eq!(receipt.device_id(), None);
+                    assert!(
+                        matches!(receipt.finality(), UiInputFinality::Committed(_)),
+                        "original IME callbacks require truthful terminal receipts"
+                    );
+                    delivered.push((receipt.sequence(), receipt.family()));
+                }
+            }
+            if turn == 0 {
+                assert!(
+                    delivered.is_empty(),
+                    "390 earlier real actions must not be mistaken for terminal IME receipts"
+                );
+            }
+            match status {
+                Ok(()) => {
+                    drained_ime = true;
+                    break;
+                }
+                Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {}
+                Err(other) => panic!("native IME pending M13 failed: {other:?}"),
+            }
+        }
+        assert!(drained_ime, "finite canonical pending IME work must complete");
+        assert_eq!(
+            delivered,
+            expected,
+            "exact original Preedit/End/Commit receipts must remain ordered and once-only"
+        );
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("focused slot survives IME")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("original typed document")
+                .state()
+                .text,
+            "漢字éΩx§vbあ",
+            "original IME Commit edits once without synthetic keyboard text"
+        );
     }
 
     #[test]
