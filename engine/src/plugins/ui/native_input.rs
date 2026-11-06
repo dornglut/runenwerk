@@ -1049,12 +1049,15 @@ mod tests {
         slots
             .test_mark_native_pending(slot)
             .expect("original M13 slot has legitimate unfinished work");
-        assert!(matches!(
-            recipients.resolve(primary, &windows, &mut slots),
-            Err(NativeInputRecipientError::OwnershipUnavailable(
-                UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
-            ))
-        ), "ordinary settled-only recipient selection stays fail-closed");
+        assert!(
+            matches!(
+                recipients.resolve(primary, &windows, &mut slots),
+                Err(NativeInputRecipientError::OwnershipUnavailable(
+                    UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
+                ))
+            ),
+            "ordinary settled-only recipient selection stays fail-closed"
+        );
         assert_eq!(
             recipients.resolve_for_native_cancellation(primary, &windows, &mut slots),
             Ok(NativeInputRecipient::RunenUiSlot(slot)),
