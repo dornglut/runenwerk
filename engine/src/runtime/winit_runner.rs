@@ -1120,6 +1120,34 @@ impl WinitRunner {
         Ok(())
     }
 
+    /// Preserve an original native KeyboardInput and its associated text
+    /// atomically even when no semantic recipient is available. This is the
+    /// existing canonical native journal, not an alternate deferred input
+    /// queue: neither member is authorized for legacy Editor or UI delivery.
+    fn admit_unrouted_native_keyboard(
+        &mut self,
+        window: NativeWindowId,
+        context: InputContext,
+        input: runen_input::KeyboardInput,
+        native_text: Option<String>,
+    ) -> Result<()> {
+        match native_text {
+            Some(text) => self.apply_event_group_for_recipient(
+                window,
+                [
+                    PlatformEvent::KeyboardInput { context, input },
+                    PlatformEvent::TextInput { text },
+                ],
+                None,
+            ),
+            None => self.apply_event_group_for_recipient(
+                window,
+                [PlatformEvent::KeyboardInput { context, input }],
+                None,
+            ),
+        }
+    }
+
     /// One checked callback-level ordering boundary used by Winit and by
     /// its deterministic source-loss regression. Physical keyboard/text
     /// evidence must be journalled before any old-key M13 recovery can fail;
@@ -4377,10 +4405,11 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                     Err(error) => {
                         // Preserve neutral physical truth but select NO semantic
                         // recipient. No implicit Editor/game fallback is possible.
-                        self.apply_event_group_for_recipient(
+                        self.admit_unrouted_native_keyboard(
                             native_window_id,
-                            [PlatformEvent::KeyboardInput { context, input }],
-                            None,
+                            context,
+                            input,
+                            text_input(&event, is_synthetic),
                         )?;
                         if matches!(event.state, winit::event::ElementState::Pressed) {
                             self.deny_native_keyboard_lifetime(context, &physical_key)?;
@@ -7766,6 +7795,81 @@ mod tests {
         assert!(
             runner.state.world.has_resource::<UiRuntimeSlotsResource>(),
             "failed recipient selection must restore the exact live slot owner"
+        );
+
+        // No selected M13 input owner may lose the original KeyEvent.text
+        // half of a real native callback or leak it to the legacy Editor.
+        // Verify the exact helper called by Winit's unassigned/pending route.
+        let pending_context = runner
+            .native_input_mut()
+            .window_context(secondary, winit::event::DeviceId::dummy())
+            .expect("authentic native window keyboard source");
+        let pending_key = runen_input::KeyboardInput {
+            physical_key: runen_input::PhysicalKeyIdentity::code("KeyK"),
+            logical_key: runen_input::LogicalKey::Character(String::from("k")),
+            location: runen_input::KeyLocation::Standard,
+            state: runen_input::DigitalState::Pressed,
+            repeat: false,
+            origin: runen_input::ObservationOrigin::SourceReport,
+        };
+        let journal_before = runner
+            .state
+            .world
+            .resource::<PlatformWindowEventQueueResource>()
+            .expect("original journal")
+            .events()
+            .len();
+        runner
+            .admit_unrouted_native_keyboard(
+                secondary,
+                pending_context,
+                pending_key.clone(),
+                Some(String::from("漢字")),
+            )
+            .expect("original source keyboard and Unicode text must be admitted together");
+        let journal = runner
+            .state
+            .world
+            .resource::<PlatformWindowEventQueueResource>()
+            .expect("original journal");
+        let entries = &journal.events()[journal_before..];
+        assert_eq!(entries.len(), 2);
+        assert!(matches!(
+            &entries[0].event,
+            PlatformEvent::KeyboardInput { context, input }
+                if *context == pending_context
+                    && input.physical_key == pending_key.physical_key
+        ));
+        assert!(matches!(
+            &entries[1].event,
+            PlatformEvent::TextInput { text } if text == "漢字"
+        ));
+        assert!(entries.iter().all(|event| {
+            event.native_window_id == secondary && !event.authorized_for_legacy_editor()
+        }));
+        runner
+            .admit_unrouted_native_keyboard(
+                secondary,
+                pending_context,
+                runen_input::KeyboardInput {
+                    state: runen_input::DigitalState::Released,
+                    ..pending_key
+                },
+                None,
+            )
+            .expect("original physical Up remains independent of semantic recipient");
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .expect("neutral physical input")
+                .keyboard_down_generation_in(
+                    pending_context,
+                    &runen_input::PhysicalKeyIdentity::code("KeyK")
+                )
+                .is_none(),
+            "original neutral-only key release cannot strand a held physical generation"
         );
 
         let mut slots = runner
