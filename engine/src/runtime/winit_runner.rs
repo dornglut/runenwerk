@@ -119,6 +119,7 @@ fn native_ime_payload_allowed_for_window(focused: bool, ime_permission_applied: 
 /// corresponding native keyboard event, not a successor selected by that
 /// keyboard's own M13 processing. The public revision catches A-B-A changes
 /// even when the same node has focus again; Engine stores no focus session.
+#[cfg(test)]
 fn native_keyboard_text_owner_unchanged(
     before: &runenui_runtime::InputOwnershipSnapshot,
     after: &runenui_runtime::InputOwnershipSnapshot,
@@ -1466,32 +1467,65 @@ impl WinitRunner {
                                             &batch,
                                             &status,
                                         );
-                                        match &evidence {
+                                        let bounded_pending = status
+                                            == Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+                                            && batch.report().outcome()
+                                                == runenui_runtime::PumpOutcome::BudgetExhausted
+                                            && batch.pause_reason().is_none()
+                                            && batch.final_ownership().scope() == before.scope()
+                                            && batch.final_ownership().status()
+                                                == runenui_runtime::RuntimeStatus::Running;
+                                        match evidence {
                                             Ok(UiInputFinality::Committed(facts)) => {
-                                                // A terminal original receipt can precede
-                                                // unrelated queued work. Never grant game
-                                                // permission before the full ownership
-                                                // checkpoint; the source-local ActionState
-                                                // remains denied until a new real Down.
-                                                if status.is_ok() {
-                                                    committed_keyboard_text = text_candidate;
-                                                } else {
-                                                    // The original text belongs to this
-                                                    // same native key and cannot be silently
-                                                    // lost or retargeted to a later focus.
-                                                    // Give the already-selected canonical
-                                                    // World transaction one bounded recovery
-                                                    // opportunity before forwarding it.
-                                                    pending_keyboard_text = text_candidate;
+                                                let is_paired = paired_text.is_some();
+                                                if let Some(text) = paired_text {
+                                                    // This is one accepted native occurrence.
+                                                    // The text is ALREADY enqueued immediately
+                                                    // after its keyboard inside RunenUI. It
+                                                    // never requires later host re-admission.
+                                                    let text_evidence = native_text_finality(
+                                                        before.scope(),
+                                                        Some(device),
+                                                        text,
+                                                        &batch,
+                                                        &status,
+                                                    );
+                                                    match text_evidence {
+                                                        Ok(UiInputFinality::Committed(_))
+                                                        | Ok(UiInputFinality::ProcessingRejected(_)) => {}
+                                                        Err(
+                                                            UiRuntimeNativeTextEvidenceFailure::NotProcessed
+                                                        ) if bounded_pending => {}
+                                                        other => {
+                                                            m13_failure = Some(anyhow!(
+                                                                "original paired text lacked exact M13 evidence: {other:?}"
+                                                            ));
+                                                        }
+                                                    }
                                                 }
-                                                native_keyboard_game_eligible(
-                                                    status.is_ok(),
-                                                    facts.conflict(),
-                                                )
+                                                // Original text is exclusively UI-directed;
+                                                // an earlier unsettled UI owner may have
+                                                // claimed gameplay before this original.
+                                                !is_paired
+                                                    && !pending_at_admission
+                                                    && native_keyboard_game_eligible(
+                                                        status.is_ok(),
+                                                        facts.conflict(),
+                                                    )
                                             }
-                                            _ => {
+                                            Ok(UiInputFinality::ProcessingRejected(_)) => false,
+                                            Err(
+                                                crate::plugins::ui::UiRuntimeNativeKeyboardEvidenceFailure::NotProcessed
+                                            ) if bounded_pending => {
+                                                // Accepted native input stays in ONE canonical
+                                                // M13 FIFO. Do not invent a terminal receipt
+                                                // or gameplay permission while prior work
+                                                // remains ahead of this original.
+                                                false
+                                            }
+                                            other => {
                                                 m13_failure = Some(anyhow!(
-                                                    "native keyboard lacked exact committed M13 settlement: {evidence:?}"
+                                                    "native keyboard lacked exact M13 settlement: {other:?}"
                                                 ));
                                                 false
                                             }
@@ -1538,7 +1572,8 @@ impl WinitRunner {
                             .native_input_ownership(slot);
                         match after {
                             Ok(after)
-                                if !is_synthetic
+                                if !pending_at_admission
+                                    && !is_synthetic
                                     && !original.repeat
                                     && matches!(
                                         original.state,
@@ -1569,7 +1604,8 @@ impl WinitRunner {
                                 }
                             }
                             Ok(after)
-                                if !is_synthetic
+                                if !pending_at_admission
+                                    && !is_synthetic
                                     && original.repeat
                                     && matches!(
                                         original.state,
@@ -1616,7 +1652,8 @@ impl WinitRunner {
                 }
             }
             KeyboardInputOutcome::Suppressed(diagnostic)
-                if !is_synthetic
+                if !pending_at_admission
+                    && !is_synthetic
                     && matches!(original.state, winit::event::ElementState::Pressed)
                     && matches!(
                         (diagnostic, original.repeat),
@@ -1652,24 +1689,7 @@ impl WinitRunner {
                 false
             }
         };
-        if m13_failure.is_none()
-            && let Some(text) = pending_keyboard_text
-        {
-            // Do not abandon this original text after a reached keyboard
-            // receipt just because unrelated canonical work remained. One
-            // bounded World-owned continuation retains the original source
-            // revocation and validates the exact binding/scope. If still
-            // pending, fail explicitly rather than silently losing text.
-            match crate::plugins::ui::settle_native_ui_slot(&mut self.state.world, slot) {
-                Ok(()) => committed_keyboard_text = Some(text),
-                Err(error) => {
-                    m13_failure = Some(error.context(
-                        "original keyboard text could not complete bounded selected-slot continuation",
-                    ));
-                }
-            }
-        }
-        if preserve_prior_held_permission {
+        if preserve_prior_held_permission && !pending_at_admission {
             // A suppressed repeat (even with an exact framework nonclaim)
             // can preserve only previously eligible, source-qualified physical
             // Down. Reuse the same one ActionState predicate as duplicate Down.
@@ -1688,38 +1708,6 @@ impl WinitRunner {
             };
         }
 
-        if m13_failure.is_none()
-            && let Some(text) = committed_keyboard_text
-        {
-            // M13 keyboard callbacks can change the focused recipient before
-            // this original key's committed text is enqueued. Never retarget
-            // that text to a successor, including A-B-A within one pump.
-            let latest = self
-                .state
-                .world
-                .resource_mut::<UiRuntimeSlotsResource>()
-                .context("original keyboard text lost its canonical UI slot")?
-                .native_input_ownership(slot);
-            match latest {
-                Ok(after) if native_keyboard_text_owner_unchanged(&before, &after) => {
-                    if let Err(error) = self.route_ui_committed_text(slot, text, Some(device)) {
-                        m13_failure = Some(error);
-                    }
-                }
-                Ok(_) => {
-                    tracing::trace!(
-                        target: "engine.runtime.input",
-                        ?window,
-                        "original keyboard text skipped after canonical focus or composition transition"
-                    );
-                }
-                Err(error) => {
-                    m13_failure = Some(anyhow!(
-                        "original keyboard text could not verify M13 focus lifetime: {error:?}"
-                    ));
-                }
-            }
-        }
         // Missing or ambiguous M13 evidence, runtime failure, UI exclusivity,
         // and translator suppression NEVER produce positive gameplay evidence.
         // Revocation happens before PreUpdate/CoreSet::Input.

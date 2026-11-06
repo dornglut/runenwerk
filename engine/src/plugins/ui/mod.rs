@@ -53,7 +53,7 @@ pub use runenui_adapter::{
 };
 pub(crate) use runenui_adapter::{
     UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeKeyboardTextAdmissionError,
-    UiRuntimeNativeTextAdmissionError,
+    UiRuntimeNativeTextAdmissionError, UiRuntimeNativeTextEvidenceFailure,
     native_composition_finality, native_original_keyboard_release_nonclaim,
     native_original_keyboard_repeat_nonclaim, native_text_finality,
     native_unfocused_game_keyboard_snapshot,
