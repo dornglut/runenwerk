@@ -406,19 +406,6 @@ impl UiNativeInputRecipientsResource {
         self.resolve_with_close_policy(window, windows, slots, false, true)
     }
 
-    /// Strict settled-only close-policy witness preserved for the original
-    /// negative tests. Production native cancellation uses the pending-aware
-    /// resolver and does not silently drop authentic late device releases.
-    #[cfg(test)]
-    pub(crate) fn resolve_for_cancellation(
-        &self,
-        window: NativeWindowId,
-        windows: &WindowStateRegistryResource,
-        slots: &mut UiRuntimeSlotsResource,
-    ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
-        self.resolve_with_close_policy(window, windows, slots, true, false)
-    }
-
     /// A selected native device's cancellation preserves the exact original
     /// binding/scope even if the M13 FIFO has unrelated pending work.
     pub(crate) fn resolve_for_native_cancellation(
@@ -1059,6 +1046,20 @@ mod tests {
         let original_epoch = recipients
             .binding_epoch_for_window(primary)
             .expect("original binding epoch");
+        slots
+            .test_mark_native_pending(slot)
+            .expect("original M13 slot has legitimate unfinished work");
+        assert!(matches!(
+            recipients.resolve(primary, &windows, &mut slots),
+            Err(NativeInputRecipientError::OwnershipUnavailable(
+                UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
+            ))
+        ), "ordinary settled-only recipient selection stays fail-closed");
+        assert_eq!(
+            recipients.resolve_for_native_cancellation(primary, &windows, &mut slots),
+            Ok(NativeInputRecipient::RunenUiSlot(slot)),
+            "production cancellation still reaches the SAME native scope during M13 backlog"
+        );
         windows
             .record_mut(primary)
             .expect("created window")
@@ -1069,7 +1070,7 @@ mod tests {
             "approved close must deny normal input"
         );
         assert_eq!(
-            recipients.resolve_for_cancellation(primary, &windows, &mut slots),
+            recipients.resolve_for_native_cancellation(primary, &windows, &mut slots),
             Ok(NativeInputRecipient::RunenUiSlot(slot)),
             "original M13 scope remains available for terminal cancellation"
         );
@@ -1078,7 +1079,7 @@ mod tests {
             Some(original_epoch)
         );
         assert_eq!(
-            recipients.resolve_for_cancellation(secondary, &windows, &mut slots),
+            recipients.resolve_for_native_cancellation(secondary, &windows, &mut slots),
             Err(NativeInputRecipientError::MissingRecipient),
             "a foreign window cannot borrow the closing recipient"
         );
@@ -1087,7 +1088,7 @@ mod tests {
             .expect("closing window")
             .receive_close_intent();
         assert_eq!(
-            recipients.resolve_for_cancellation(primary, &windows, &mut slots),
+            recipients.resolve_for_native_cancellation(primary, &windows, &mut slots),
             Err(NativeInputRecipientError::InactiveWindow),
             "unapproved close intent cannot widen cancellation"
         );
@@ -1099,7 +1100,7 @@ mod tests {
             .test_inject_external_scope_loss(slot)
             .expect("inject loss of original framework scope");
         assert!(matches!(
-            recipients.resolve_for_cancellation(primary, &windows, &mut slots),
+            recipients.resolve_for_native_cancellation(primary, &windows, &mut slots),
             Err(NativeInputRecipientError::OwnershipUnavailable(
                 UiRuntimeSlotOperationFailure::MissingSlot
             ))
