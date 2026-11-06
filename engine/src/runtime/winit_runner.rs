@@ -1378,11 +1378,9 @@ impl WinitRunner {
         // missing finality is not merely a gameplay nonclaim: continuing the
         // host could preserve an unresolved framework keyboard lifetime.
         let mut m13_failure: Option<anyhow::Error> = None;
-        // The same original Winit key may carry ordinary committed text.
-        // Only a successful exact M13 keyboard settlement may authorize
-        // a separate source-correlated text submission in that same turn.
-        let mut committed_keyboard_text = None;
-        let mut pending_keyboard_text = None;
+        // A genuine KeyEvent.text belongs to the SAME original native
+        // keyboard callback. The accepted M13 paired API admits both or
+        // neither, without delayed host-side text forwarding.
         // A genuine repeat retains its prior physical lifetime. This never
         // grants a new game Down, restores a revoked held action, or manufactures
         // an M13 sequence; ActionState remains the only gameplay permission owner.
@@ -1406,14 +1404,35 @@ impl WinitRunner {
                     original.text.as_deref(),
                 )
                 .map(str::to_owned);
-                let submission = self
+                let slots = self
                     .state
                     .world
                     .resource_mut::<UiRuntimeSlotsResource>()
-                    .context("selected UI runtime vanished from native host")?
-                    .submit_native_keyboard(slot, event);
-                match submission {
-                    Ok(submission) => {
+                    .context("selected UI runtime vanished from native host")?;
+                let admission = if let Some(text) = text_candidate {
+                    let text = CommittedTextEvent::new(text, Some(device))
+                        .context("validated original KeyEvent.text candidate")?;
+                    match slots.submit_native_keyboard_with_text(slot, event, text) {
+                        Ok((keyboard, text)) => NativeUiKeyboardM13Admission::Queued {
+                            keyboard,
+                            text: Some(text),
+                        },
+                        Err(error) => NativeUiKeyboardM13Admission::PairedRejected(error),
+                    }
+                } else {
+                    match slots.submit_native_keyboard(slot, event) {
+                        Ok(keyboard) => NativeUiKeyboardM13Admission::Queued {
+                            keyboard,
+                            text: None,
+                        },
+                        Err(error) => NativeUiKeyboardM13Admission::KeyboardRejected(error),
+                    }
+                };
+                match admission {
+                    NativeUiKeyboardM13Admission::Queued {
+                        keyboard: submission,
+                        text: paired_text,
+                    } => {
                         // Runtime queue admission is distinct from M13 settlement.
                         // A queued original Down must be acknowledged BEFORE
                         // pumping so a later failure cannot mislabel it rejected.
@@ -1488,7 +1507,27 @@ impl WinitRunner {
                             }
                         }
                     }
-                    Err(error) => {
+                    NativeUiKeyboardM13Admission::PairedRejected(error) => {
+                        // The accepted atomic API returned both originals
+                        // without enqueueing either. The native down token is
+                        // therefore a real pre-queue refusal, not a queued key.
+                        if let Some(token) = down_admission
+                            && let Err(reason) = self.resolve_native_ui_down_admission(
+                                window,
+                                token,
+                                KeyboardDownDecision::RejectedBeforeQueue,
+                            )
+                        {
+                            m13_failure = Some(reason);
+                        }
+                        if m13_failure.is_none() {
+                            m13_failure = Some(anyhow!(
+                                "original paired keyboard/text rejected by M13: {error:?}"
+                            ));
+                        }
+                        false
+                    }
+                    NativeUiKeyboardM13Admission::KeyboardRejected(error) => {
                         let after = self
                             .state
                             .world
