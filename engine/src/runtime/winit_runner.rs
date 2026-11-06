@@ -1139,7 +1139,9 @@ impl WinitRunner {
             .world
             .resource_mut::<UiRuntimeSlotsResource>()?
             .native_input_is_pending(slot)
-            .map_err(|error| anyhow!("native keyboard journal pending state unavailable: {error:?}"))?;
+            .map_err(|error| {
+                anyhow!("native keyboard journal pending state unavailable: {error:?}")
+            })?;
         let recipient = if pending {
             None
         } else {
@@ -3001,7 +3003,9 @@ impl WinitRunner {
                     .world
                     .resource_mut::<UiRuntimeSlotsResource>()?
                     .native_input_is_pending(slot)
-                    .map_err(|error| anyhow!("native original journal pending state unavailable: {error:?}"))?;
+                    .map_err(|error| {
+                        anyhow!("native original journal pending state unavailable: {error:?}")
+                    })?;
                 if pending {
                     self.apply_event_group_for_recipient(window, [event], None)?;
                     if let Some(context) = self.native_input().window_source_context(window) {

@@ -3042,7 +3042,7 @@ mod tests {
     #[test]
     fn native_paired_refusal_retains_both_originals_without_logging_unicode() {
         use runenui_core::{
-            KeyboardCompositionState, KeyLocation, KeyModifiers, LogicalKey, PhysicalKey,
+            KeyLocation, KeyModifiers, KeyboardCompositionState, LogicalKey, PhysicalKey,
         };
         let mut slots = UiRuntimeSlotsResource::default();
         let device = InputDeviceId::new(31).expect("nonzero original device");
