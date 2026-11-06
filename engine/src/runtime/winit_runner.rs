@@ -204,10 +204,7 @@ fn native_m13_original_deferred(
 /// focused recipient retires. That is a terminal fail-closed input disposition,
 /// not a native host crash or a reason to replay Unicode to another owner.
 /// Integrity and capacity failures are deliberately NOT classified as benign.
-fn native_ime_retired_processing_rejection(
-    finality: &UiInputFinality,
-    composition: bool,
-) -> bool {
+fn native_ime_retired_processing_rejection(finality: &UiInputFinality, composition: bool) -> bool {
     use runenui_runtime::UiInputProcessingRejection as Rejection;
     match finality {
         UiInputFinality::ProcessingRejected(
@@ -5068,8 +5065,14 @@ mod tests {
         }
         let stale_generation =
             UiInputFinality::ProcessingRejected(Rejection::StaleCompositionGeneration);
-        assert!(native_ime_retired_processing_rejection(&stale_generation, true));
-        assert!(!native_ime_retired_processing_rejection(&stale_generation, false));
+        assert!(native_ime_retired_processing_rejection(
+            &stale_generation,
+            true
+        ));
+        assert!(!native_ime_retired_processing_rejection(
+            &stale_generation,
+            false
+        ));
         for outcome in [
             UiInputFinality::ProcessingRejected(Rejection::InsufficientTransactionCapacity),
             UiInputFinality::ProcessingRejected(Rejection::ForeignTarget),
