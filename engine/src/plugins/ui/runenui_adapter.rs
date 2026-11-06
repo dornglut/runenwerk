@@ -3722,6 +3722,117 @@ mod tests {
                 .text,
             "漢字éΩx§v"
         );
+
+        // The accepted paired M13 API preserves BOTH originals behind already
+        // queued work. Unlike the earlier characterization, this is an actual
+        // Engine native-selected slot entry, not a delayed host-local replay.
+        // The selected slot is pending after the original 390 legitimate
+        // actions: admission must not require global M13 quiescence.
+        let paired_owner = slots
+            .input_ownership(slot)
+            .expect("same focused M13 text-session owner");
+        slots.enroll_native_input(slot);
+        slots
+            .test_queue_unpumped_typed_actions::<NativeTextApp>(
+                slot,
+                RUNTIME_PUMP_WORK_LIMIT * 3 + 6,
+                || TextAction::Idle,
+            )
+            .expect("390 earlier canonical typed actions fit their own budgets");
+        slots
+            .test_mark_native_pending(slot)
+            .expect("selected native slot has prior legitimate work");
+        assert_eq!(
+            slots.input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            "gameplay-visible ownership observation remains pending and fail-closed"
+        );
+        let previous_epoch = slots.ingress_epoch(slot).expect("prior slot epoch");
+        let (paired_key, paired_text) = slots
+            .submit_native_keyboard_with_text(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Down,
+                    PhysicalKey::Code(String::from("KeyB")),
+                    LogicalKey::Character(String::from("b")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(key_device),
+                ),
+                CommittedTextEvent::new("b", Some(key_device))
+                    .expect("actual original native KeyEvent.text"),
+            )
+            .expect("selected native admission binds two originals despite pending M13 work");
+        assert!(paired_key.sequence() < paired_text.sequence());
+        assert_eq!(
+            slots.ingress_epoch(slot),
+            previous_epoch.checked_add(1),
+            "one original native keyboard/text occurrence is one ingress epoch"
+        );
+
+        let mut seen = Vec::new();
+        let mut finished_pair = false;
+        for turn in 0..32 {
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .expect("actual bounded M13 input pump");
+            for record in batch.ordered_records() {
+                let InputArbitrationRecord::InputSettled(settled) = record else {
+                    continue;
+                };
+                let family = if settled.sequence() == paired_key.sequence() {
+                    Some(UiInputFamily::Keyboard)
+                } else if settled.sequence() == paired_text.sequence() {
+                    Some(UiInputFamily::CommittedText)
+                } else {
+                    None
+                };
+                if let Some(family) = family {
+                    assert_eq!(settled.family(), family);
+                    assert_eq!(settled.scope(), paired_owner.scope());
+                    assert_eq!(settled.device_id(), Some(key_device));
+                    assert!(matches!(settled.finality(), UiInputFinality::Committed(_)));
+                    seen.push((settled.sequence(), family));
+                }
+            }
+            if turn == 0 {
+                assert!(
+                    seen.is_empty(),
+                    "390 already queued actions cannot be mistaken for terminal original receipts"
+                );
+            }
+            match status {
+                Ok(()) => {
+                    finished_pair = true;
+                    break;
+                }
+                Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {}
+                Err(error) => panic!("unexpected native M13 failure during finite work: {error:?}"),
+            }
+        }
+        assert!(finished_pair, "selected native 390-action backlog is finite");
+        assert_eq!(
+            seen,
+            [
+                (paired_key.sequence(), UiInputFamily::Keyboard),
+                (paired_text.sequence(), UiInputFamily::CommittedText)
+            ],
+            "both source-owned originals settle exactly once, in M13 FIFO order"
+        );
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("same selected text slot survives")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("same focused editor")
+                .state()
+                .text,
+            "漢字éΩx§vb",
+            "original text is delivered once, without host-side replay"
+        );
     }
 
     #[test]
