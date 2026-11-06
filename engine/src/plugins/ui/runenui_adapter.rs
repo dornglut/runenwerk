@@ -2223,6 +2223,30 @@ impl UiRuntimeSlotsResource {
         self.unmount_slot(index).map(|_| ())
     }
 
+    /// Queue real typed RunenUI application actions without an intermediate pump.
+    /// This test-only fixture builds a genuine bounded backlog behind a selected
+    /// native recipient; it does not create an Engine-owned input queue or alter
+    /// production ingress, ownership, or cancellation rules.
+    #[cfg(test)]
+    pub(crate) fn test_queue_unpumped_typed_actions<A: UiApp + 'static>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        count: usize,
+        mut action: impl FnMut() -> A::Action,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        let runtime = self
+            .slot_mut(slot_id)?
+            .runtime
+            .typed_mut::<A>()
+            .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
+        for _ in 0..count {
+            runtime
+                .submit_action(action())
+                .map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
+        }
+        Ok(())
+    }
+
     /// A test-only pending-pump fixture. The real native transaction still
     /// invokes RunenUI's ordinary settlement and requires a fresh final M13
     /// observation; this only establishes the unavailable *prestate*.

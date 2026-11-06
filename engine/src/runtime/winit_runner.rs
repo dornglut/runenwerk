@@ -5382,6 +5382,233 @@ mod tests {
         assert!(runner.retire_window_input_source(window).unwrap());
     }
 
+    #[test]
+    fn real_selected_m13_backlog_keeps_original_keyboard_neutral_and_recovers_release() {
+        use crate::plugins::action;
+        use crate::plugins::ui::{
+            NativeInputRecipient, UiRuntimeFontConfiguration, UiRuntimeSlotOperationFailure,
+            UiRuntimeSlotsResource, UiTypedScreenId,
+        };
+        use runen_input::{
+            DigitalState, KeyLocation, KeyboardInput, LogicalKey, NativeLogicalKey,
+            ObservationOrigin, PhysicalKeyIdentity,
+        };
+
+        struct BacklogApp;
+        impl runenui_core::UiApp for BacklogApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
+            type State = ();
+            type Action = ();
+            type HostProtocol = runenui_core::NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+                runenui_core::text("backlog input recipient")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        let window = NativeWindowId::primary();
+        let physical = runner
+            .native_input_mut()
+            .window_context(window, winit::event::DeviceId::dummy())
+            .expect("authentic window-local device identity");
+        let device = WinitRunner::native_ui_device(physical).expect("checked native device");
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<BacklogApp>(
+                UiTypedScreenId::new("native.real.backlog"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("real typed M13 application");
+        let revision = slots
+            .input_ownership(slot)
+            .expect("initial settled RunenUI ownership")
+            .revision()
+            .get();
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                window,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .expect("created primary native window"),
+                &mut slots,
+            )
+            .expect("selected original recipient");
+        let binding_epoch = recipients
+            .binding_epoch_for_window(window)
+            .expect("exact binding epoch");
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+        runner.native_ui_keyboard_translator(
+            window,
+            slot,
+            physical.source,
+            device,
+            binding_epoch,
+        );
+        runner
+            .native_ui_keyboards
+            .get_mut(&window)
+            .expect("source-local translator")
+            .last_observed_revision = Some(revision);
+
+        runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .expect("selected M13 runtime")
+            .test_queue_unpumped_typed_actions::<BacklogApp>(slot, 390, || ())
+            .expect("real independent application work queued");
+        assert!(
+            crate::plugins::ui::settle_native_ui_slot(&mut runner.state.world, slot).is_err(),
+            "the real native World checkpoint must expose bounded pending work"
+        );
+        assert_eq!(
+            runner
+                .state
+                .world
+                .resource_mut::<UiRuntimeSlotsResource>()
+                .unwrap()
+                .input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+
+        let key = PhysicalKeyIdentity::code("KeyW");
+        let original = |state| PlatformEvent::KeyboardInput {
+            context: physical,
+            input: KeyboardInput {
+                physical_key: key.clone(),
+                logical_key: LogicalKey::Native(NativeLogicalKey::Unidentified),
+                location: KeyLocation::Standard,
+                state,
+                repeat: false,
+                origin: ObservationOrigin::SourceReport,
+            },
+        };
+        let before = runner
+            .state
+            .world
+            .resource::<PlatformWindowEventQueueResource>()
+            .expect("single native input journal")
+            .events()
+            .len();
+        runner
+            .apply_semantic_native_input(window, original(DigitalState::Pressed))
+            .expect("pending M13 must keep genuine Down as neutral physical truth");
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(physical, &key)
+                .is_some(),
+            "pending UI cannot erase the physical Down"
+        );
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "pending M13 never grants game-held W"
+        );
+        runner
+            .apply_semantic_native_input(window, original(DigitalState::Released))
+            .expect("pending M13 must preserve the genuine physical Up");
+        assert!(
+            runner
+                .state
+                .world
+                .resource::<InputState>()
+                .unwrap()
+                .keyboard_down_generation_in(physical, &key)
+                .is_none(),
+            "the exact physical Up must retire its original held generation"
+        );
+        assert_eq!(
+            runner
+                .state
+                .world
+                .resource::<PlatformWindowEventQueueResource>()
+                .unwrap()
+                .events()
+                .len(),
+            before + 2,
+            "both original observations are journalled once without Editor permission"
+        );
+        runner
+            .record_unrouted_native_keyboard_release(window, physical)
+            .expect("Winit's pending-release branch records its exact device");
+        assert!(
+            runner
+                .native_ui_keyboards
+                .get(&window)
+                .unwrap()
+                .unrouted_release_devices
+                .contains_key(&device)
+        );
+        let mut settled = false;
+        for _ in 0..16 {
+            if crate::plugins::ui::settle_native_ui_slot(&mut runner.state.world, slot).is_ok() {
+                settled = true;
+                break;
+            }
+        }
+        assert!(settled, "finite genuine M13 backlog must eventually drain");
+        runner
+            .reconcile_unrouted_native_keyboard_releases(Some(window))
+            .expect("same ownership revision permits selective release recovery");
+        assert!(
+            runner
+                .native_ui_keyboards
+                .get(&window)
+                .unwrap()
+                .unrouted_release_devices
+                .is_empty(),
+            "the exact old release marker must not remain pending after recovery"
+        );
+        assert!(
+            !runner
+                .state
+                .world
+                .resource::<ActionState>()
+                .unwrap()
+                .action_down(action::WORLD_MOVE_UP),
+            "completed UI work cannot resurrect the earlier released W"
+        );
+    }
+
     pub(super) fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {
         let mut app = App::new();
         app.with_frame_pacing(policy);
