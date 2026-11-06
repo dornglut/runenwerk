@@ -5970,6 +5970,12 @@ mod tests {
 
         let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
         let window = NativeWindowId::primary();
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        runner
+            .native_input_mut()
+            .window_context(window, winit::event::DeviceId::dummy())
+            .expect("original native window source is registered for World settlement");
         let mut slots = UiRuntimeSlotsResource::default();
         let slot = slots
             .mount_app::<ImeApp>(
@@ -6019,19 +6025,19 @@ mod tests {
 
         let mut finished = false;
         for _ in 0..32 {
-            let status = runner
-                .state
-                .world
-                .resource_mut::<UiRuntimeSlotsResource>()
-                .expect("same original M13 slot")
-                .settle_slot(slot);
-            match status {
+            // Selected slots may settle only through the World transaction,
+            // which revokes source-local gameplay permission before pumping
+            // and validates the original native window/scope afterwards.
+            match crate::plugins::ui::settle_native_ui_slot(&mut runner.state.world, slot) {
                 Ok(()) => {
                     finished = true;
                     break;
                 }
-                Err(crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {}
-                Err(error) => panic!("M13 native IME continuation failed: {error:?}"),
+                Err(error)
+                    if error.is::<
+                        crate::plugins::ui::native_transaction::NativeUiMutationNeedsSettlement,
+                    >() => {}
+                Err(error) => panic!("M13 native IME World continuation failed: {error:?}"),
             }
         }
         assert!(
