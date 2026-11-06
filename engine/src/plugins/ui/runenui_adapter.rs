@@ -534,6 +534,19 @@ pub enum UiRuntimeNativeKeyboardTextAdmissionError {
     Framework(SubmitKeyboardWithTextError),
 }
 
+#[cfg(test)]
+impl UiRuntimeNativeKeyboardTextAdmissionError {
+    /// The bounded negative test verifies both exact rejected original events
+    /// are recoverable without rendering the text in normal error diagnostics.
+    #[must_use]
+    pub fn into_events(self) -> (KeyboardEvent, CommittedTextEvent) {
+        match self {
+            Self::Slot { events, .. } => *events,
+            Self::Framework(error) => error.into_events(),
+        }
+    }
+}
+
 impl std::fmt::Debug for UiRuntimeNativeKeyboardTextAdmissionError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {

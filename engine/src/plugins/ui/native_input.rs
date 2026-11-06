@@ -406,6 +406,19 @@ impl UiNativeInputRecipientsResource {
         self.resolve_with_close_policy(window, windows, slots, false, true)
     }
 
+    /// Strict settled-only close-policy witness preserved for the original
+    /// negative tests. Production native cancellation uses the pending-aware
+    /// resolver and does not silently drop authentic late device releases.
+    #[cfg(test)]
+    pub(crate) fn resolve_for_cancellation(
+        &self,
+        window: NativeWindowId,
+        windows: &WindowStateRegistryResource,
+        slots: &mut UiRuntimeSlotsResource,
+    ) -> Result<NativeInputRecipient, NativeInputRecipientError> {
+        self.resolve_with_close_policy(window, windows, slots, true, false)
+    }
+
     /// A selected native device's cancellation preserves the exact original
     /// binding/scope even if the M13 FIFO has unrelated pending work.
     pub(crate) fn resolve_for_native_cancellation(
