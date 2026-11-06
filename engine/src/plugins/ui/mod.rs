@@ -54,10 +54,9 @@ pub use runenui_adapter::{
 pub(crate) use runenui_adapter::{
     UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeCompositionEvidenceFailure,
     UiRuntimeNativeKeyboardTextAdmissionError, UiRuntimeNativeTextAdmissionError,
-    UiRuntimeNativeTextEvidenceFailure,
-    native_composition_finality, native_original_keyboard_release_nonclaim,
-    native_original_keyboard_repeat_nonclaim, native_text_finality,
-    native_unfocused_game_keyboard_snapshot,
+    UiRuntimeNativeTextEvidenceFailure, native_composition_finality,
+    native_original_keyboard_release_nonclaim, native_original_keyboard_repeat_nonclaim,
+    native_text_finality, native_unfocused_game_keyboard_snapshot,
 };
 pub use schedule::*;
 pub use screen::*;
