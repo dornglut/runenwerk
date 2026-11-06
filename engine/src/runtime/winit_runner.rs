@@ -159,12 +159,13 @@ fn native_keyboard_game_eligible(globally_settled: bool, conflict: UiInputConfli
 /// lookup can run. Deny OS IME temporarily; ordinary input admission still
 /// fails closed on an unsettled runtime.
 fn native_m13_waiting_for_settlement(error: &anyhow::Error) -> bool {
-    matches!(
-        error.downcast_ref::<NativeInputRecipientError>(),
-        Some(NativeInputRecipientError::OwnershipUnavailable(
-            crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
-        ))
-    )
+    error.is::<crate::plugins::ui::native_transaction::NativeUiMutationNeedsSettlement>()
+        || matches!(
+            error.downcast_ref::<NativeInputRecipientError>(),
+            Some(NativeInputRecipientError::OwnershipUnavailable(
+                crate::plugins::ui::UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
+            ))
+        )
 }
 
 /// A pinned winit translator must NEVER cross its native window, physical
@@ -1124,6 +1125,16 @@ impl WinitRunner {
             binding_epoch,
             context.source,
         );
+        // Even a failed/stale recipient observation must never discard the
+        // original physical Down and Unicode text before journaling. Preserve
+        // both with NO semantic recipient, then revoke precisely this source.
+        if let Err(error) = preflight {
+            self.admit_unrouted_native_keyboard(window, context, input, native_text)?;
+            if pressed {
+                self.deny_native_keyboard_lifetime(context, &physical_key)?;
+            }
+            return Err(error);
+        }
         // Original KeyEvent.text belongs to this SAME Winit callback as its
         // physical keyboard observation, even though M13 may later reject
         // text for focus/capability/composition reasons. Reserve the full
@@ -1137,11 +1148,22 @@ impl WinitRunner {
         let pending = self
             .state
             .world
-            .resource_mut::<UiRuntimeSlotsResource>()?
-            .native_input_is_pending(slot)
-            .map_err(|error| {
-                anyhow!("native keyboard journal pending state unavailable: {error:?}")
-            })?;
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .and_then(|slots| {
+                slots.native_input_is_pending(slot).map_err(|error| {
+                    anyhow!("native keyboard journal pending state unavailable: {error:?}")
+                })
+            });
+        let pending = match pending {
+            Ok(pending) => pending,
+            Err(error) => {
+                self.admit_unrouted_native_keyboard(window, context, input, native_text)?;
+                if pressed {
+                    self.deny_native_keyboard_lifetime(context, &physical_key)?;
+                }
+                return Err(error);
+            }
+        };
         let recipient = if pending {
             None
         } else {
@@ -1161,14 +1183,6 @@ impl WinitRunner {
                 [PlatformEvent::KeyboardInput { context, input }],
                 recipient,
             )?,
-        }
-        if let Err(error) = preflight {
-            // Failed pre-observation cannot suppress the original neutral
-            // Down or permit it as a game-held action.
-            if pressed {
-                self.deny_native_keyboard_lifetime(context, &physical_key)?;
-            }
-            return Err(error);
         }
         Ok(())
     }

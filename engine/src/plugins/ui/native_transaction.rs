@@ -498,7 +498,14 @@ fn transact_ui_slot_inner<T>(
             .resource_mut::<UiRuntimeSlotsResource>()
             .map_err(|err| anyhow!("native RunenUI slots unavailable: {err}"))?
             .transact_native_app(&NativeAppMutationPermit { _sealed: () }, slot, operation)
-            .map_err(|err| anyhow!("native RunenUI app mutation failed: {err:?}"))
+            .map_err(|err| match err {
+                UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce
+                    if allow_pending_settlement =>
+                {
+                    NativeUiMutationNeedsSettlement.into()
+                }
+                other => anyhow!("native RunenUI app mutation failed: {other:?}"),
+            })
     }));
     // Preserve the owning slot's *typed* pending/unsettled observation.
     // Stringifying every failure here would make a truly pending M13 scope
@@ -583,6 +590,17 @@ fn transact_ui_slot_inner<T>(
         Ok(Ok(_)) => Err(anyhow!(
             "native RunenUI app mutation lost its binding or final M13 ownership observation"
         )),
+        // Only the exact selected scope and still-pending original M13 work
+        // may retain the typed retryable result. A stale/retired recipient
+        // must never inherit this permission from a former selected slot.
+        Ok(Err(error))
+            if error.is::<NativeUiMutationNeedsSettlement>()
+                && !(same_binding && pending_after) =>
+        {
+            Err(anyhow!(
+                "native RunenUI settlement no longer has the original running binding"
+            ))
+        }
         Ok(Err(error)) => Err(error),
         Err(panic) => std::panic::resume_unwind(panic),
     }
