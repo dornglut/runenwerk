@@ -989,7 +989,10 @@ fn native_app_shutdown_during_startup_cancels_legacy_registry_request() -> Resul
         shutdown: shutdown.clone(),
         starts: Arc::clone(&starts),
     });
-    app.add_systems(Startup, stop_with_pending_registry_window.on_invoker_thread());
+    app.add_systems(
+        Startup,
+        stop_with_pending_registry_window.on_invoker_thread(),
+    );
     app.admit_composition()?;
     app.prepare_lifecycle_for_execution()?;
     app.prepare_native_ui_host()?;
@@ -1036,13 +1039,17 @@ fn native_app_shutdown_during_startup_cancels_legacy_registry_request() -> Resul
         .resource::<WindowStateRegistryResource>()?;
     ensure!(registry.pending_creation_requests().is_empty());
     ensure!(
-        registry.records().filter(|record| {
-            record.lifecycle_state == NativeWindowLifecycleState::CreationFailed
-                && record
-                    .failure_reason
-                    .as_ref()
-                    .is_some_and(|reason| reason.contains("shutdown cancelled"))
-        }).count() == 1,
+        registry
+            .records()
+            .filter(|record| {
+                record.lifecycle_state == NativeWindowLifecycleState::CreationFailed
+                    && record
+                        .failure_reason
+                        .as_ref()
+                        .is_some_and(|reason| reason.contains("shutdown cancelled"))
+            })
+            .count()
+            == 1,
         "accepted ECS creation request was not terminally cancelled"
     );
     println!(
@@ -1127,7 +1134,10 @@ fn native_app_shutdown_primary_os_proof() -> Result<()> {
         starts: Arc::clone(&starts),
         sender,
     });
-    app.add_systems(Startup, signal_native_primary_shutdown_startup.on_invoker_thread());
+    app.add_systems(
+        Startup,
+        signal_native_primary_shutdown_startup.on_invoker_thread(),
+    );
     app.admit_composition()?;
     app.prepare_lifecycle_for_execution()?;
     app.prepare_native_ui_host()?;

@@ -3933,7 +3933,11 @@ impl WinitRunner {
         // The legacy ECS registry's queued creations have no typed tickets.
         // When stopping before their Winit drain, publish their existing
         // explicit failure records; never retain falsely Requested windows.
-        if let Ok(registry) = self.state.world.resource_mut::<WindowStateRegistryResource>() {
+        if let Ok(registry) = self
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+        {
             for request in registry.take_pending_creation_requests() {
                 if let Some(record) = registry.record_mut(request.native_window_id) {
                     record.mark_creation_failed(
@@ -4085,9 +4089,7 @@ impl WinitRunner {
                     .resource_mut::<WindowStateRegistryResource>()?
                     .record_mut(request.native_window_id)
                     .context("stopping Native window request has no registry record")?
-                    .mark_creation_failed(
-                        "native App shutdown cancelled pending window creation",
-                    );
+                    .mark_creation_failed("native App shutdown cancelled pending window creation");
                 continue;
             }
             self.create_window_for_request(event_loop, request)?;
