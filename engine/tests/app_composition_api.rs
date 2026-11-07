@@ -5,7 +5,7 @@
 //! The admission point lowers deferred typed declarations into one real App.
 //! It tests a viable ownership/error pattern, not acceptance of fluent syntax.
 
-use std::{cell::Cell, rc::Rc};
+use std::{cell::Cell, marker::PhantomData, rc::Rc};
 
 use anyhow::{Result, anyhow};
 use engine::plugins::render::{Gfx, RenderFlowRegistryResource};
@@ -16,6 +16,26 @@ use engine::prelude::{App, AppRenderExt, AppUiExt};
 use runenui_core::{Effects, NoHostProtocol, ProducerBudget, UiApp, View, text};
 
 type PendingMount = Box<dyn FnOnce(&mut App, bool) -> Result<UiRuntimeSlotId>>;
+
+/// Test-local typed intent for the candidate `.ui(A::new(state))` spelling.
+/// It stages, but neither mounts a RunenUI runtime nor creates a second owner.
+struct UiIntent<A: UiApp> {
+    state: A::State,
+    _app: PhantomData<fn() -> A>,
+}
+
+/// A blanket constructor keeps typed UiApp state separate from the zero-sized
+/// application type; the public naming/import collision still needs review.
+trait UiConstruct: UiApp + Sized {
+    fn new(state: Self::State) -> UiIntent<Self> {
+        UiIntent {
+            state,
+            _app: PhantomData,
+        }
+    }
+}
+
+impl<A: UiApp> UiConstruct for A {}
 
 /// Ephemeral declarations are consumed at admission; no parallel runtime remains.
 #[derive(Default)]
@@ -34,12 +54,24 @@ impl CompositionProbe {
         self
     }
 
-    fn ui<A>(self, screen_id: UiTypedScreenId) -> Self
+    fn ui_default<A>(self, screen_id: UiTypedScreenId) -> Self
     where
         A: UiApp + 'static,
         A::State: Default + 'static,
     {
         self.ui_with_state::<A>(screen_id, A::State::default())
+    }
+
+    /// Test-only intent registration. Runtime slot identity is allocated by the
+    /// existing Engine owner on admission; this provisional screen ID is
+    /// for the local proof and is not a durable or cross-session identity.
+    fn ui<A>(self, intent: UiIntent<A>) -> Self
+    where
+        A: UiApp + 'static,
+        A::State: 'static,
+    {
+        let screen_id = UiTypedScreenId::new(format!("proof.intent.{}", self.mounts.len()));
+        self.ui_with_state::<A>(screen_id, intent.state)
     }
 
     fn ui_with_state<A>(mut self, screen_id: UiTypedScreenId, state: A::State) -> Self
@@ -182,10 +214,10 @@ fn default_typed_ui_declares_in_either_native_order_without_second_flow_or_gpu()
         let probe = if window_first {
             probe
                 .native_window()
-                .ui::<DefaultUi>(UiTypedScreenId::new("proof.default"))
+                .ui_default::<DefaultUi>(UiTypedScreenId::new("proof.default"))
         } else {
             probe
-                .ui::<DefaultUi>(UiTypedScreenId::new("proof.default"))
+                .ui_default::<DefaultUi>(UiTypedScreenId::new("proof.default"))
                 .native_window()
         };
         let app = accepted(probe);
@@ -232,8 +264,8 @@ fn explicit_nondefault_nonsend_state_mounts_headlessly_without_present_or_gpu() 
 #[test]
 fn ambiguous_native_multiple_ui_is_rejected_before_owner_mounting() {
     let probe = CompositionProbe::new()
-        .ui::<DefaultUi>(UiTypedScreenId::new("proof.first"))
-        .ui::<DefaultUi>(UiTypedScreenId::new("proof.second"))
+        .ui_default::<DefaultUi>(UiTypedScreenId::new("proof.first"))
+        .ui_default::<DefaultUi>(UiTypedScreenId::new("proof.second"))
         .native_window();
     let (app, error) = match probe.admit() {
         Err(failure) => failure,
@@ -245,6 +277,47 @@ fn ambiguous_native_multiple_ui_is_rejected_before_owner_mounting() {
         app.world()
             .resource::<RenderFlowRegistryResource>()
             .is_err()
+    );
+    assert!(!app.world().has_resource::<Gfx>());
+}
+
+#[test]
+fn constructor_style_ui_intent_preserves_nondefault_nonsend_typed_state() {
+    let state = PersistedState(Rc::new(Cell::new(37)));
+    let app = accepted(CompositionProbe::new().ui(PersistedUi::new(state)));
+
+    assert_eq!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert!(
+        app.world()
+            .resource::<RenderFlowRegistryResource>()
+            .is_err()
+    );
+    assert!(!app.world().has_resource::<Gfx>());
+}
+
+#[test]
+fn constructor_style_ui_intent_lowers_into_existing_native_ui_only_owner() {
+    let app = accepted(CompositionProbe::new().ui(DefaultUi::new(())).native_window());
+
+    assert_eq!(
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .len(),
+        1
+    );
+    assert_eq!(
+        app.world()
+            .resource::<RenderFlowRegistryResource>()
+            .unwrap()
+            .flow_count(),
+        1
     );
     assert!(!app.world().has_resource::<Gfx>());
 }
