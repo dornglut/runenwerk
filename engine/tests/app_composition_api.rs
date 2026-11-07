@@ -72,7 +72,7 @@ impl CompositionProbe {
 
     /// Errors retain the actual App, including any owner-committed partial
     /// mounts, rather than dropping it behind a consuming Result<()>.
-    fn admit(self) -> std::result::Result<App, (App, anyhow::Error)> {
+    fn admit(self) -> std::result::Result<App, (Box<App>, anyhow::Error)> {
         let mut app = if self.native_window {
             App::new()
         } else {
@@ -80,7 +80,7 @@ impl CompositionProbe {
         };
         if self.native_window && self.mounts.len() > 1 {
             return Err((
-                app,
+                Box::new(app),
                 anyhow!(
                     "ordinary native-primary composition requires one UI; choose explicit placement for multiple instances"
                 ),
@@ -89,7 +89,7 @@ impl CompositionProbe {
         if !self.mounts.is_empty() {
             if self.native_window {
                 if let Err(error) = app.select_native_ui_only() {
-                    return Err((app, error));
+                    return Err((Box::new(app), error));
                 }
             } else {
                 app.add_plugin(UiPlugin);
@@ -97,7 +97,7 @@ impl CompositionProbe {
         }
         for mount in self.mounts {
             if let Err(error) = mount(&mut app, self.native_window) {
-                return Err((app, error));
+                return Err((Box::new(app), error));
             }
         }
         Ok(app)
