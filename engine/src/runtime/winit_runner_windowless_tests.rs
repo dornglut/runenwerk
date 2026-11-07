@@ -2,11 +2,9 @@
 #![cfg(target_os = "linux")]
 
 use super::*;
-use crate::app::App;
+use crate::app::{App, AppNativeHostExt};
 use crate::plugins::default_plugins;
-use crate::plugins::ui::{
-    UiRuntimeFontConfiguration, UiRuntimeSlotsResource, UiTypedScreenId,
-};
+use crate::plugins::ui::{UiRuntimeFontConfiguration, UiRuntimeSlotsResource, UiTypedScreenId};
 use crate::runtime::native_window_requests::{
     NativeWindowRequest, NativeWindowRequestOutcome, NativeWindowRequestReadiness,
     NativeWindowRequestTicket, NativeWindowRequests,
@@ -82,6 +80,11 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let frames_before_resume = self.runner.ordinary_frames;
         self.runner.resumed(event_loop);
+        if !event_loop.exiting() {
+            // Model a repeated OS resume on this same real Winit owner.
+            // Startup and earlier accepted requests must not replay.
+            self.runner.resumed(event_loop);
+        }
         assert!(!self.runner.window_realizer.has_primary_window());
         assert_eq!(
             self.runner.ordinary_frames, frames_before_resume,
@@ -177,6 +180,19 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
                 "secondary physical windows were not retired"
             );
             assert_eq!(self.runner.ordinary_frames, prior_frames);
+            self.runner
+                .apply_frame_pacing(event_loop)
+                .expect("zero-window owner must return to idle pacing");
+            assert!(
+                self.runner
+                    .state
+                    .world
+                    .resource::<FramePacingRuntimeStateResource>()
+                    .unwrap()
+                    .next_frame_delay_ms
+                    .is_none(),
+                "retiring the final secondary must not leave a frame deadline"
+            );
             self.observed = true;
             event_loop.exit();
         }
@@ -427,7 +443,10 @@ fn zero_window_native_os_registry_startup_request() -> Result<()> {
         startups: Arc::clone(&startups),
         updates: Arc::clone(&updates),
     });
-    app.add_systems(Startup, queue_registry_window_in_startup.on_invoker_thread());
+    app.add_systems(
+        Startup,
+        queue_registry_window_in_startup.on_invoker_thread(),
+    );
     app.add_systems(Update, count_registry_update);
     app.admit_composition()?;
     app.prepare_lifecycle_for_execution()?;
@@ -450,7 +469,10 @@ fn zero_window_native_os_registry_startup_request() -> Result<()> {
     };
     event_loop.run_app(&mut proof)?;
 
-    ensure!(proof.observed, "frame-independent Startup request never realized");
+    ensure!(
+        proof.observed,
+        "frame-independent Startup request never realized"
+    );
     ensure!(startups.load(Ordering::SeqCst) == 1);
     ensure!(updates.load(Ordering::SeqCst) > 0);
     ensure!(
@@ -587,6 +609,150 @@ fn zero_window_native_os_startup_rejects_unbound_ui() -> Result<()> {
     );
     println!(
         "native_zero_window_startup_ui=pass physical_x11=true no_primary=true unsupported_mount_rejected=true no_frame=true"
+    );
+    Ok(())
+}
+
+#[derive(Resource)]
+struct IdleStartupCounter(Arc<AtomicUsize>);
+
+fn count_idle_startup(mut world: WorldMut) -> Result<()> {
+    ensure!(
+        !world.has_resource::<PrimaryPresentationMetricsResource>(),
+        "idle Native Startup created presentation metrics"
+    );
+    ensure!(
+        world
+            .resource::<WindowStateRegistryResource>()?
+            .records()
+            .next()
+            .is_none(),
+        "idle Native Startup unexpectedly has a window record"
+    );
+    world
+        .resource_mut::<IdleStartupCounter>()?
+        .0
+        .fetch_add(1, Ordering::SeqCst);
+    Ok(())
+}
+
+struct ExitAfterIdleWindowless {
+    runner: WinitRunner,
+    observed: bool,
+}
+
+impl ApplicationHandler<NativeHostEvent> for ExitAfterIdleWindowless {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.runner.resumed(event_loop);
+        assert!(!self.runner.window_realizer.has_any_window());
+        assert_eq!(self.runner.ordinary_frames, 0);
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: NativeHostEvent) {
+        self.runner.user_event(event_loop, event);
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        self.runner.window_event(event_loop, id, event);
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        self.runner.about_to_wait(event_loop);
+        assert!(self.runner.fatal_error.is_none());
+        assert!(!self.runner.window_realizer.has_any_window());
+        assert!(!self.runner.frame_requested);
+        assert_eq!(self.runner.ordinary_frames, 0);
+        assert!(
+            self.runner
+                .state
+                .world
+                .resource::<FramePacingRuntimeStateResource>()
+                .unwrap()
+                .next_frame_delay_ms
+                .is_none(),
+            "an idle zero-window Host must not schedule a synthetic frame"
+        );
+        self.observed = true;
+        event_loop.exit();
+    }
+
+    fn exiting(&mut self, event_loop: &ActiveEventLoop) {
+        self.runner.exiting(event_loop);
+    }
+}
+
+#[test]
+fn zero_window_native_os_idle_modes() -> Result<()> {
+    let Some(mode) = std::env::var("RUNENWERK_NATIVE_ZERO_WINDOW_IDLE_OS_SMOKE").ok() else {
+        return Ok(());
+    };
+
+    let mut app = App::new();
+    app.enable_windowing()?;
+    app.add_plugins(default_plugins());
+    match mode.as_str() {
+        "default" => {}
+        "uncapped" => {
+            app.with_frame_pacing(FramePacingPolicyResource::continuous_uncapped());
+        }
+        "on-demand" => {
+            app.with_frame_pacing(FramePacingPolicyResource::on_demand());
+        }
+        _ => anyhow::bail!("unsupported windowless idle test mode: {mode}"),
+    }
+    let startups = Arc::new(AtomicUsize::new(0));
+    app.insert_resource(IdleStartupCounter(Arc::clone(&startups)));
+    app.add_systems(Startup, count_idle_startup.on_invoker_thread());
+    app.admit_composition()?;
+    app.prepare_lifecycle_for_execution()?;
+    app.prepare_native_ui_host()?;
+    let mut state = app.into_windowed_state();
+    let initial = state.initial_native_window;
+    install_native_window_provider_resources(&mut state.world, initial);
+
+    let mut builder = EventLoop::<NativeHostEvent>::with_user_event();
+    builder.with_any_thread(true).with_x11();
+    let event_loop = builder.build()?;
+    state
+        .world
+        .insert_resource(NativeWakeTransport::new(event_loop.create_proxy()));
+    event_loop.set_control_flow(ControlFlow::Wait);
+    let mut proof = ExitAfterIdleWindowless {
+        runner: WinitRunner::new(state),
+        observed: false,
+    };
+    event_loop.run_app(&mut proof)?;
+    ensure!(proof.observed, "idle Native Host did not reach a settled turn");
+    ensure!(startups.load(Ordering::SeqCst) == 1);
+    println!(
+        "native_zero_window_idle=pass mode={mode} physical_x11=true startup_once=true no_window=true no_frames=true no_deadline=true"
+    );
+    Ok(())
+}
+
+#[test]
+fn windowless_native_device_redraw_does_not_infer_primary() -> Result<()> {
+    let mut app = App::new();
+    app.enable_windowing()?;
+    let mut state = app.into_windowed_state();
+    let initial = state.initial_native_window;
+    install_native_window_provider_resources(&mut state.world, initial);
+    let mut runner = WinitRunner::new(state);
+    runner.request_redraw_for_native_window(NativeWindowId::primary());
+    ensure!(!runner.frame_requested);
+    ensure!(
+        runner
+            .state
+            .world
+            .resource::<WindowStateRegistryResource>()?
+            .primary_window_id()
+            .is_none()
+    );
+    ensure!(
+        !runner
+            .state
+            .world
+            .has_resource::<PrimaryPresentationMetricsResource>()
     );
     Ok(())
 }

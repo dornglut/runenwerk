@@ -4507,7 +4507,7 @@ impl WinitRunner {
         {
             self.request_native_redraw(NativeWindowId::primary(), &window);
         }
-        let capped_deadline = if self.frame_requested && !self.frame_is_ready(now) {
+        let capped_deadline = if any_window && self.frame_requested && !self.frame_is_ready(now) {
             self.last_primary_redraw_at
                 .zip(policy.target_frame_interval())
                 .and_then(|(last, interval)| last.checked_add(interval))
