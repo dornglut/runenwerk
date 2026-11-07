@@ -1006,6 +1006,15 @@ fn native_app_shutdown_during_startup_cancels_legacy_registry_request() -> Resul
         .world
         .resource::<AppShutdownOwner>()?
         .attach_wake(move || proxy.send_event(NativeHostEvent::AppShutdown).is_ok())?;
+    let windows_proxy = event_loop.create_proxy();
+    state
+        .world
+        .resource::<NativeWindowRequestOwner>()?
+        .attach_wake(move || {
+            windows_proxy
+                .send_event(NativeHostEvent::NativeWindowRequests)
+                .is_ok()
+        })?;
     state
         .world
         .insert_resource(NativeWakeTransport::new(event_loop.create_proxy()));
@@ -1038,6 +1047,145 @@ fn native_app_shutdown_during_startup_cancels_legacy_registry_request() -> Resul
     );
     println!(
         "native_app_shutdown_startup=pass physical_x11=true cancelled_registry=true no_window=true no_frame=true"
+    );
+    Ok(())
+}
+
+#[derive(Resource)]
+struct NativePrimaryShutdownSignal {
+    shutdown: crate::runtime::app_shutdown::AppShutdownHandle,
+    starts: Arc<AtomicUsize>,
+    sender: mpsc::Sender<()>,
+}
+
+fn signal_native_primary_shutdown_startup(mut world: WorldMut) -> Result<()> {
+    ensure!(
+        world.has_resource::<PrimaryPresentationMetricsResource>(),
+        "required primary metrics absent before primary Native Startup"
+    );
+    let control = world.resource::<NativePrimaryShutdownSignal>()?;
+    ensure!(
+        control.shutdown.readiness()? == AppShutdownReadiness::NotReady,
+        "primary-first shutdown gate advertised Ready before mandatory Startup"
+    );
+    control.starts.fetch_add(1, Ordering::SeqCst);
+    control
+        .sender
+        .send(())
+        .map_err(|_| anyhow!("primary Native Startup shutdown observer disconnected"))?;
+    Ok(())
+}
+
+struct ExitPrimaryThroughAppShutdown {
+    runner: WinitRunner,
+}
+
+impl ApplicationHandler<NativeHostEvent> for ExitPrimaryThroughAppShutdown {
+    fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.runner.resumed(event_loop);
+        assert!(self.runner.window_realizer.has_primary_window());
+    }
+
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: NativeHostEvent) {
+        let frames_before = self.runner.ordinary_frames;
+        self.runner.user_event(event_loop, event);
+        if matches!(event, NativeHostEvent::AppShutdown) {
+            assert_eq!(
+                self.runner.ordinary_frames, frames_before,
+                "App shutdown wake executed an ordinary frame"
+            );
+        }
+    }
+
+    fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        self.runner.about_to_wait(event_loop);
+    }
+
+    fn window_event(&mut self, event_loop: &ActiveEventLoop, id: WindowId, event: WindowEvent) {
+        self.runner.window_event(event_loop, id, event);
+    }
+
+    fn exiting(&mut self, event_loop: &ActiveEventLoop) {
+        self.runner.exiting(event_loop);
+    }
+}
+
+#[test]
+fn native_app_shutdown_primary_os_proof() -> Result<()> {
+    if std::env::var_os("RUNENWERK_NATIVE_APP_SHUTDOWN_PRIMARY_OS_SMOKE").is_none() {
+        return Ok(());
+    }
+
+    let mut app = App::new();
+    app.with_frame_pacing(FramePacingPolicyResource::on_demand());
+    app.add_plugins(default_plugins());
+    let shutdown = app.shutdown_handle()?;
+    let (sender, receiver) = mpsc::channel();
+    let starts = Arc::new(AtomicUsize::new(0));
+    app.insert_resource(NativePrimaryShutdownSignal {
+        shutdown: shutdown.clone(),
+        starts: Arc::clone(&starts),
+        sender,
+    });
+    app.add_systems(Startup, signal_native_primary_shutdown_startup.on_invoker_thread());
+    app.admit_composition()?;
+    app.prepare_lifecycle_for_execution()?;
+    app.prepare_native_ui_host()?;
+    let mut state = app.into_windowed_state();
+    let initial = state.initial_native_window;
+    install_native_window_provider_resources(&mut state.world, initial);
+
+    let mut builder = EventLoop::<NativeHostEvent>::with_user_event();
+    builder.with_any_thread(true).with_x11();
+    let event_loop = builder.build()?;
+    event_loop.set_control_flow(ControlFlow::Wait);
+    let proxy = event_loop.create_proxy();
+    state
+        .world
+        .resource::<AppShutdownOwner>()?
+        .attach_wake(move || proxy.send_event(NativeHostEvent::AppShutdown).is_ok())?;
+    let windows_proxy = event_loop.create_proxy();
+    state
+        .world
+        .resource::<NativeWindowRequestOwner>()?
+        .attach_wake(move || {
+            windows_proxy
+                .send_event(NativeHostEvent::NativeWindowRequests)
+                .is_ok()
+        })?;
+    state
+        .world
+        .insert_resource(NativeWakeTransport::new(event_loop.create_proxy()));
+
+    let worker_shutdown = shutdown.clone();
+    let worker = thread::spawn(move || -> Result<()> {
+        receiver.recv_timeout(std::time::Duration::from_secs(15))?;
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        while worker_shutdown.readiness()? != AppShutdownReadiness::Ready {
+            ensure!(
+                std::time::Instant::now() < until,
+                "mandatory native primary never became shutdown-ready"
+            );
+            thread::sleep(std::time::Duration::from_millis(5));
+        }
+        ensure!(worker_shutdown.request_shutdown()? == AppShutdownRequestOutcome::Accepted);
+        Ok(())
+    });
+
+    let mut proof = ExitPrimaryThroughAppShutdown {
+        runner: WinitRunner::new(state),
+    };
+    event_loop.run_app(&mut proof)?;
+    worker
+        .join()
+        .map_err(|_| anyhow!("primary native shutdown worker panicked"))??;
+    ensure!(proof.runner.fatal_error.is_none());
+    ensure!(proof.runner.shutdown_done);
+    ensure!(proof.runner.window_realizer.has_primary_window());
+    ensure!(starts.load(Ordering::SeqCst) == 1);
+    ensure!(shutdown.readiness()? == AppShutdownReadiness::Closed);
+    println!(
+        "native_app_shutdown_primary=pass physical_x11=true startup_once=true primary_realized=true no_shutdown_frame=true closed=true"
     );
     Ok(())
 }
