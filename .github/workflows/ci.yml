@@ -157,6 +157,18 @@ jobs:
           grep -F "native_window_requests_os=pass" "$log"
           rm -f "$log"
 
+          race_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE=close-race \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --test native_window_requests_os --locked >"$race_log" 2>&1; then
+            cat "$race_log"
+            rm -f "$race_log"
+            exit 1
+          fi
+          cat "$race_log"
+          grep -F "native_window_request_close_race=pass accepted=1 cancelled=1 physical_x11=true" "$race_log"
+          rm -f "$race_log"
+
       - name: Prove physical X11 primary close approval and veto
         env:
           RUNENWERK_NATIVE_CLOSE_OS_SMOKE: '1'

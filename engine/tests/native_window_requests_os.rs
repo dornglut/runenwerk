@@ -14,7 +14,7 @@ mod linux {
     };
     use std::{
         sync::{
-            Arc,
+            Arc, mpsc,
             atomic::{AtomicBool, AtomicUsize, Ordering},
         },
         thread,
@@ -55,6 +55,107 @@ mod linux {
             }
             Ok(())
         }
+    }
+
+    /// Trigger a real Native close while a worker has an already-accepted
+    /// external window request. Winit cannot drain the command while the
+    /// original invoker executes this frame callback.
+    struct CloseRaceHook {
+        notified: bool,
+        frame_entered: mpsc::Sender<()>,
+        request_accepted: mpsc::Receiver<()>,
+    }
+
+    impl NativeWindowHook for CloseRaceHook {
+        fn name(&self) -> &'static str {
+            "native_request_vs_primary_close"
+        }
+
+        fn frame(&mut self, _window: &Window, world: &mut runen_ecs::World) -> Result<()> {
+            if self.notified {
+                return Ok(());
+            }
+            self.notified = true;
+            let signalled = self.frame_entered.send(()).is_ok();
+            let admitted = self
+                .request_accepted
+                .recv_timeout(Duration::from_secs(10))
+                .is_ok();
+
+            // Always make shutdown bounded, even on a failed handoff;
+            // the worker's own result and missing marker then fail the test.
+            world
+                .resource_mut::<WindowStateRegistryResource>()?
+                .record_mut(NativeWindowId::primary())
+                .context("primary missing before native close/request race")?
+                .request_close();
+            ensure!(
+                signalled && admitted,
+                "external Native request was not accepted during the held frame"
+            );
+            Ok(())
+        }
+    }
+
+    pub(super) fn close_race() -> Result<()> {
+        let (frame_entered, enter_receiver) = mpsc::channel();
+        let (accepted_sender, request_accepted) = mpsc::channel();
+        let mut app = App::new();
+        app.add_plugins(default_plugins());
+        app.init_resource::<NativeWindowHookRegistryResource>();
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()?
+            .register_hook(CloseRaceHook {
+                notified: false,
+                frame_entered,
+                request_accepted,
+            });
+
+        let windows = app.native_window_requests()?;
+        let worker = thread::spawn(move || -> Result<()> {
+            enter_receiver
+                .recv_timeout(Duration::from_secs(10))
+                .context("no actual native frame callback reached the race barrier")?;
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Ready,
+                "Native command channel not ready during active frame"
+            );
+            let ticket = windows.request(NativeWindowRequest::new(
+                "Accepted request interrupted by primary close",
+                (500, 340),
+            ))?;
+            accepted_sender
+                .send(())
+                .context("native frame callback dropped the acceptance barrier")?;
+            let terminal = ticket.recv_timeout(Duration::from_secs(10))?;
+            ensure!(
+                terminal == NativeWindowRequestOutcome::Cancelled,
+                "request accepted before final close was not terminally cancelled: {terminal:?}"
+            );
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Closed,
+                "Native request channel not closed after primary retired"
+            );
+            ensure!(
+                matches!(
+                    windows.request(NativeWindowRequest::new("too late", (480, 320))),
+                    Err(engine::runtime::NativeWindowRequestError::Closed)
+                ),
+                "Native owner accepted a request after shutdown"
+            );
+            ensure!(
+                ticket.try_recv() == Err(std::sync::mpsc::TryRecvError::Disconnected),
+                "cancelled ticket unexpectedly emitted a second terminal result"
+            );
+            Ok(())
+        });
+
+        app.run()?;
+        worker
+            .join()
+            .expect("Native request/close worker thread must not panic")?;
+        println!("native_window_request_close_race=pass accepted=1 cancelled=1 physical_x11=true");
+        Ok(())
     }
 
     pub(super) fn run() -> Result<()> {
@@ -147,7 +248,13 @@ mod linux {
 
 fn main() {
     #[cfg(target_os = "linux")]
-    if std::env::var_os("RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE").is_some() {
-        linux::run().expect("real Native window request and receipt proof must pass");
+    if let Some(mode) = std::env::var_os("RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE") {
+        match mode.to_str() {
+            Some("1") => linux::run().expect("real Native window request proof must pass"),
+            Some("close-race") => {
+                linux::close_race().expect("real Native close/request race proof must pass")
+            }
+            _ => panic!("unexpected native window-request proof mode"),
+        }
     }
 }
