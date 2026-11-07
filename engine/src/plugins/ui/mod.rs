@@ -54,7 +54,8 @@ pub use runenui_adapter::{
 pub(crate) use runenui_adapter::{
     UiRuntimeNativeCompositionAdmissionError, UiRuntimeNativeCompositionEvidenceFailure,
     UiRuntimeNativeKeyboardTextAdmissionError, UiRuntimeNativeTextAdmissionError,
-    UiRuntimeNativeTextEvidenceFailure, native_composition_finality,
+    UiRuntimeNativeTextEvidenceFailure, native_cancellation_finality_is_terminal,
+    native_composition_finality, native_keyboard_cancel_definite_nonclaim,
     native_original_keyboard_release_nonclaim, native_original_keyboard_repeat_nonclaim,
     native_text_finality, native_unfocused_game_keyboard_snapshot,
 };

@@ -115,6 +115,140 @@ fn pending_native_work_does_not_make_focus_loss_fatal() {
     );
 }
 
+#[test]
+fn original_preedit_is_not_replayed_when_earlier_work_retires_its_editable() {
+    use crate::plugins::ui::{UiRuntimeFontConfiguration, UiTypedScreenId};
+    use runenui_core::{
+        TextAffinity, TextDocumentId, TextDocumentRevision, TextDocumentSnapshot, TextPosition,
+        TextSelection, View,
+    };
+
+    struct RetiringIme;
+    impl runenui_core::UiApp for RetiringIme {
+        type State = bool;
+        type Action = bool;
+        type HostProtocol = runenui_core::NoHostProtocol;
+        fn initial_producer_budget(_: &bool) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+        }
+        fn action_producer_budget(_: &bool, _: &bool) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+        }
+        fn interaction_producer_budget(_: &bool) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(13, 9)
+                .with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+        }
+        fn root(visible: &bool) -> impl View<bool> {
+            if *visible {
+                let document = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(0),
+                );
+                let caret = TextPosition::new(document, "", 0, TextAffinity::Downstream).unwrap();
+                runenui_core::text_field(
+                    document,
+                    String::new(),
+                    TextSelection::collapsed(caret),
+                    runenui_core::SemanticEditableMode::SingleLine,
+                    |_| true,
+                )
+                .unwrap()
+                .into_element()
+            } else {
+                runenui_core::text("original editable retired").into_element()
+            }
+        }
+        fn update(
+            state: &mut bool,
+            visible: bool,
+        ) -> impl runenui_core::IntoUpdateOutput<bool, Self::HostProtocol> {
+            *state = visible;
+        }
+    }
+
+    for backlog in [1, 391] {
+        let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+        let window = NativeWindowId::primary();
+        runner.state.world.insert_resource(InputState::new());
+        runner.state.world.insert_resource(ActionState::new());
+        runner
+            .native_input_mut()
+            .window_context(window, winit::event::DeviceId::dummy())
+            .unwrap();
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<RetiringIme>(
+                UiTypedScreenId::new("native.ime.retirement"),
+                true,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        slots
+            .test_request_first_typed_focus::<RetiringIme>(slot)
+            .unwrap();
+        let mut recipients = UiNativeInputRecipientsResource::default();
+        recipients
+            .bind(
+                window,
+                NativeInputRecipient::RunenUiSlot(slot),
+                runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap(),
+                &mut slots,
+            )
+            .unwrap();
+        let scope = slots.native_input_ownership(slot).unwrap().scope().clone();
+        slots
+            .test_queue_unpumped_typed_actions::<RetiringIme>(slot, backlog, || false)
+            .unwrap();
+        slots.test_mark_native_pending(slot).unwrap();
+        runner.state.world.insert_resource(slots);
+        runner.state.world.insert_resource(recipients);
+        runner
+            .route_ui_ime_preedit(slot, "あ".to_owned(), None)
+            .expect("exact rejected Start after original target retirement is nonfatal");
+        let slots = runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .unwrap();
+        let after = slots.native_input_ownership(slot).unwrap();
+        assert_eq!(after.scope(), &scope);
+        assert!(after.keyboard().composition_generation().is_none());
+        assert!(after.keyboard().focused_node().is_none());
+        assert_eq!(slots.test_typed_state::<RetiringIme>(slot), Some(&false));
+        assert_eq!(slots.native_input_is_pending(slot).unwrap(), backlog > 1);
+        let mut settled = false;
+        for _ in 0..32 {
+            match crate::plugins::ui::settle_native_ui_slot(&mut runner.state.world, slot) {
+            Ok(()) => { settled = true; break; }
+            Err(error) if error.is::<crate::plugins::ui::native_transaction::NativeUiMutationNeedsSettlement>() => {}
+            Err(error) => panic!("retired original Start failed ordinary settlement: {error:?}"),
+        }
+        }
+        assert!(settled);
+        let slots = runner
+            .state
+            .world
+            .resource_mut::<UiRuntimeSlotsResource>()
+            .unwrap();
+        assert!(
+            slots
+                .native_input_ownership(slot)
+                .unwrap()
+                .keyboard()
+                .composition_generation()
+                .is_none()
+        );
+        assert_eq!(slots.test_typed_state::<RetiringIme>(slot), Some(&false));
+    }
+}
+
 fn admit_lifecycle_touch(
     runner: &mut WinitRunner,
     slot: UiRuntimeSlotId,
@@ -415,6 +549,121 @@ fn retired_pending_cancel_cannot_be_certified_after_its_scope_is_lost() {
     ));
     assert!(recipients.host_cancellation_pending(window));
     runner.state.world.insert_resource(recipients);
+}
+
+#[test]
+fn close_neutral_keyboard_journals_original_unicode_atomically_without_editor_or_game_permission() {
+    use runen_input::{DigitalState, KeyLocation, KeyboardInput, LogicalKey, ObservationOrigin};
+    let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
+    runner.state.world.insert_resource(InputState::new());
+    runner.state.world.insert_resource(ActionState::new());
+    let window = NativeWindowId::primary();
+    let context = runner
+        .native_input_mut()
+        .window_context(window, winit::event::DeviceId::dummy())
+        .unwrap();
+    let input = KeyboardInput {
+        physical_key: PhysicalKeyIdentity::code("KeyW"),
+        logical_key: LogicalKey::Character("漢".to_owned()),
+        location: KeyLocation::Standard,
+        state: DigitalState::Pressed,
+        repeat: false,
+        origin: ObservationOrigin::SourceReport,
+    };
+    runner
+        .apply_pending_close_keyboard_observation(
+            window,
+            context,
+            input.clone(),
+            Some("漢".to_owned()),
+        )
+        .unwrap();
+    let journal = runner
+        .state
+        .world
+        .resource::<PlatformWindowEventQueueResource>()
+        .unwrap();
+    assert_eq!(journal.events().len(), 2);
+    assert!(
+        matches!(&journal.events()[1].event, PlatformEvent::TextInput { text } if text == "漢")
+    );
+    assert!(
+        journal
+            .events()
+            .iter()
+            .all(|entry| !entry.authorized_for_legacy_editor())
+    );
+    assert!(
+        !runner
+            .state
+            .world
+            .resource::<ActionState>()
+            .unwrap()
+            .action_down(crate::plugins::action::WORLD_MOVE_UP)
+    );
+    runner
+        .apply_pending_close_keyboard_observation(
+            window,
+            context,
+            KeyboardInput {
+                state: DigitalState::Released,
+                ..input.clone()
+            },
+            None,
+        )
+        .unwrap();
+    assert!(
+        runner
+            .state
+            .world
+            .resource::<InputState>()
+            .unwrap()
+            .keyboard_down_generation_in(context, &input.physical_key)
+            .is_none()
+    );
+    let journal = runner
+        .state
+        .world
+        .resource_mut::<PlatformWindowEventQueueResource>()
+        .unwrap();
+    journal.retire_frame();
+    for _ in 0..4095 {
+        journal
+            .publish(PlatformWindowEvent::new(
+                window,
+                PlatformEvent::RedrawRequested,
+            ))
+            .unwrap();
+    }
+    assert!(
+        runner
+            .apply_pending_close_keyboard_observation(
+                window,
+                context,
+                input.clone(),
+                Some("漢".to_owned())
+            )
+            .is_err()
+    );
+    assert!(
+        runner
+            .state
+            .world
+            .resource::<InputState>()
+            .unwrap()
+            .keyboard_down_generation_in(context, &input.physical_key)
+            .is_none()
+    );
+    assert_eq!(
+        runner
+            .state
+            .world
+            .resource::<PlatformWindowEventQueueResource>()
+            .unwrap()
+            .events()
+            .len(),
+        4095
+    );
 }
 
 #[test]

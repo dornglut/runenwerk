@@ -674,6 +674,57 @@ pub(crate) fn native_original_keyboard_release_nonclaim(
     )
 }
 
+/// A Cancel refused before sequence reservation can finish its translator
+/// lifetime only when the same fresh M13 owner proves no keyboard target or
+/// Space owner remains. This never fabricates a receipt or gameplay permission.
+pub(crate) fn native_keyboard_cancel_definite_nonclaim(
+    device: InputDeviceId,
+    before: &InputOwnershipSnapshot,
+    after: &InputOwnershipSnapshot,
+    error: &UiRuntimeNativeKeyboardAdmissionError,
+) -> bool {
+    let UiRuntimeNativeKeyboardAdmissionError::Framework(error) = error else {
+        return false;
+    };
+    error.kind() == SubmitKeyboardErrorKind::NoFocusedTarget
+        && error.event().phase() == KeyboardPhase::Cancel
+        && !error.event().is_repeat()
+        && error.event().device_id() == Some(device)
+        && before == after
+        && after.status() == runenui_runtime::RuntimeStatus::Running
+        && after.keyboard().focused_node().is_none()
+        && after.keyboard().space_activation_owner().is_none()
+        && after.keyboard().space_activation_device_id().is_none()
+}
+
+/// These exact rejected originals have lost their original framework recipient
+/// or composition generation. They are terminal non-delivery, not successful
+/// cancellation or permission to replay into a successor. Capacity, foreign
+/// identity, pointer/display rejection and aborted processing remain failures.
+pub(crate) fn native_cancellation_finality_is_terminal(
+    family: UiInputFamily,
+    finality: &UiInputFinality,
+) -> bool {
+    use runenui_runtime::UiInputProcessingRejection as Rejection;
+    matches!(
+        (family, finality),
+        (
+            UiInputFamily::Keyboard | UiInputFamily::Pointer | UiInputFamily::Composition,
+            UiInputFinality::Committed(_),
+        ) | (
+            UiInputFamily::Keyboard | UiInputFamily::Composition,
+            UiInputFinality::ProcessingRejected(
+                Rejection::FocusBindingInvalidated
+                    | Rejection::MissingTarget
+                    | Rejection::StaleTarget,
+            ),
+        ) | (
+            UiInputFamily::Composition,
+            UiInputFinality::ProcessingRejected(Rejection::StaleCompositionGeneration),
+        )
+    )
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UiRuntimeSlotMountReport {
     screen_id: UiTypedScreenId,
@@ -1118,6 +1169,235 @@ struct NativeCancellationReceipt {
     surface: Option<SurfaceId>,
 }
 
+#[cfg(test)]
+mod deferred_cancellation_retirement_tests {
+    use super::*;
+    use runenui_core::{
+        SemanticEditableMode, TextAffinity, TextDocumentId, TextDocumentRevision,
+        TextDocumentSnapshot, TextPosition, TextSelection,
+    };
+
+    struct RetiringEditable;
+    impl UiApp for RetiringEditable {
+        type State = bool;
+        type Action = bool;
+        type HostProtocol = runenui_core::NoHostProtocol;
+
+        fn initial_producer_budget(_: &bool) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+        }
+        fn action_producer_budget(_: &bool, _: &bool) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+        }
+        fn interaction_producer_budget(_: &bool) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(13, 9)
+                .with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+        }
+        fn root(visible: &bool) -> impl View<bool> {
+            if *visible {
+                let document = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(0),
+                );
+                let caret = TextPosition::new(document, "", 0, TextAffinity::Downstream).unwrap();
+                runenui_core::text_field(
+                    document,
+                    String::new(),
+                    TextSelection::collapsed(caret),
+                    SemanticEditableMode::SingleLine,
+                    |_| true,
+                )
+                .unwrap()
+                .into_element()
+            } else {
+                text("retired original editable").into_element()
+            }
+        }
+        fn update(
+            state: &mut bool,
+            visible: bool,
+        ) -> impl runenui_core::IntoUpdateOutput<bool, Self::HostProtocol> {
+            *state = visible;
+        }
+    }
+
+    #[test]
+    fn queued_cancellation_accepts_only_its_exact_retired_focus_disposition() {
+        for composition in [false, true] {
+            let mut slots = UiRuntimeSlotsResource::default();
+            let slot = slots
+                .mount_app::<RetiringEditable>(
+                    UiTypedScreenId::new("retired.cancel"),
+                    true,
+                    &UiRuntimeFontConfiguration::default(),
+                )
+                .slot_id()
+                .unwrap();
+            slots
+                .test_request_first_typed_focus::<RetiringEditable>(slot)
+                .unwrap();
+            let mut windows = crate::runtime::WindowStateRegistryResource::default();
+            let window = windows.register_primary_window("retired cancel", (640, 480), 1.0, true);
+            let mut recipients = super::super::UiNativeInputRecipientsResource::default();
+            recipients
+                .bind(
+                    window,
+                    super::super::NativeInputRecipient::RunenUiSlot(slot),
+                    &windows,
+                    &mut slots,
+                )
+                .unwrap();
+            let device = InputDeviceId::new(1).unwrap();
+            let generation = if composition {
+                let start = slots.start_native_composition(slot).unwrap();
+                let (_, status) = slots.pump_native_input_records(slot).unwrap();
+                assert!(status.is_ok());
+                Some(start.generation().clone())
+            } else {
+                None
+            };
+            slots
+                .test_queue_unpumped_typed_actions::<RetiringEditable>(slot, 1, || false)
+                .unwrap();
+            let sequence = if let Some(generation) = generation {
+                slots
+                    .cancel_native_composition(slot, generation)
+                    .unwrap()
+                    .sequence()
+            } else {
+                slots
+                    .submit_native_keyboard(
+                        slot,
+                        KeyboardEvent::new(
+                            KeyboardPhase::Cancel,
+                            runenui_core::PhysicalKey::Code("KeyX".to_owned()),
+                            runenui_core::LogicalKey::Character("x".to_owned()),
+                            runenui_core::KeyModifiers::NONE,
+                            false,
+                            runenui_core::KeyLocation::Standard,
+                            runenui_core::KeyboardCompositionState::Inactive,
+                            Some(device),
+                        ),
+                    )
+                    .unwrap()
+                    .sequence()
+            };
+            let (batch, status) = slots.pump_native_input_records(slot).unwrap();
+            let settled = batch
+                .ordered_records()
+                .iter()
+                .find_map(|record| match record {
+                    InputArbitrationRecord::InputSettled(settled)
+                        if settled.sequence() == sequence =>
+                    {
+                        Some(settled)
+                    }
+                    _ => None,
+                })
+                .expect("the actual M13 owner emits the cancellation's exact terminal record");
+            assert!(
+                matches!(settled.finality(), UiInputFinality::ProcessingRejected(_)),
+                "the earlier actual target retirement must reject, not replay, the old Cancel"
+            );
+            assert!(
+                status.is_ok(),
+                "a truthful exact retired-focus cancellation is not an integrity failure: {status:?}"
+            );
+            assert!(!slots.native_cancellations_pending(slot).unwrap());
+        }
+    }
+
+    #[test]
+    fn cancel_prequeue_nonclaim_requires_fresh_original_device_and_absent_keyboard_owner() {
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<RetiringEditable>(
+                UiTypedScreenId::new("no.focus.cancel"),
+                true,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        slots
+            .test_request_first_typed_focus::<RetiringEditable>(slot)
+            .unwrap();
+        let old = slots.input_ownership(slot).unwrap();
+        slots
+            .submit_app_action::<RetiringEditable>(slot, false)
+            .unwrap();
+        let now = slots.input_ownership(slot).unwrap();
+        let device = InputDeviceId::new(1).unwrap();
+        let event = |phase| {
+            KeyboardEvent::new(
+                phase,
+                runenui_core::PhysicalKey::Code("KeyX".to_owned()),
+                runenui_core::LogicalKey::Character("x".to_owned()),
+                runenui_core::KeyModifiers::NONE,
+                false,
+                runenui_core::KeyLocation::Standard,
+                runenui_core::KeyboardCompositionState::Inactive,
+                Some(device),
+            )
+        };
+        let epoch = slots.ingress_epoch(slot);
+        let refusal = slots
+            .submit_native_keyboard(slot, event(KeyboardPhase::Cancel))
+            .unwrap_err();
+        let after = slots.input_ownership(slot).unwrap();
+        assert_eq!(
+            slots.ingress_epoch(slot),
+            epoch,
+            "no sequence or Engine ingress generation is fabricated for refusal"
+        );
+        assert!(native_keyboard_cancel_definite_nonclaim(
+            device, &now, &after, &refusal
+        ));
+        assert!(!native_keyboard_cancel_definite_nonclaim(
+            device, &old, &after, &refusal
+        ));
+        assert!(!native_keyboard_cancel_definite_nonclaim(
+            InputDeviceId::new(2).unwrap(),
+            &now,
+            &after,
+            &refusal
+        ));
+        let wrong_phase = slots
+            .submit_native_keyboard(slot, event(KeyboardPhase::Down))
+            .unwrap_err();
+        assert!(!native_keyboard_cancel_definite_nonclaim(
+            device,
+            &now,
+            &after,
+            &wrong_phase
+        ));
+        assert!(!slots.native_cancellations_pending(slot).unwrap());
+    }
+
+    #[test]
+    fn cancellation_retirement_does_not_accept_capacity_foreign_or_aborted_input() {
+        use runenui_runtime::{UiInputAbortReason, UiInputProcessingRejection as Rejection};
+        for family in [
+            UiInputFamily::Keyboard,
+            UiInputFamily::Pointer,
+            UiInputFamily::Composition,
+        ] {
+            for finality in [
+                UiInputFinality::ProcessingRejected(Rejection::InsufficientTransactionCapacity),
+                UiInputFinality::ProcessingRejected(Rejection::ForeignTarget),
+                UiInputFinality::Aborted(UiInputAbortReason::RuntimeIntegrity),
+            ] {
+                assert!(!native_cancellation_finality_is_terminal(family, &finality));
+            }
+        }
+        assert!(!native_cancellation_finality_is_terminal(
+            UiInputFamily::Pointer,
+            &UiInputFinality::ProcessingRejected(Rejection::MissingDisplayedSnapshot)
+        ));
+    }
+}
+
 impl NativeCancellationReceipt {
     fn observe(&self, batch: &InputPumpBatch) -> Result<bool, UiRuntimeSlotOperationFailure> {
         if batch.final_ownership().scope() != &self.scope {
@@ -1147,7 +1427,7 @@ impl NativeCancellationReceipt {
                 && settled.pointer_id() == self.pointer
                 && settled.surface_id() == self.surface.as_ref()
                 && settled.ownership_revision() <= batch.final_ownership().revision()
-                && matches!(settled.finality(), UiInputFinality::Committed(_))
+                && native_cancellation_finality_is_terminal(self.family, settled.finality())
         }) && records.next().is_none();
         if !valid {
             return Err(UiRuntimeSlotOperationFailure::NativeCancellationEvidence);

@@ -7,7 +7,8 @@ use crate::plugins::ui::{
     UiRuntimeNativeKeyboardAdmissionError, UiRuntimeNativeKeyboardTextAdmissionError,
     UiRuntimeNativeTextAdmissionError, UiRuntimeNativeTextEvidenceFailure,
     UiRuntimePresentationAssociationsResource, UiRuntimeSlotId, UiRuntimeSlotsResource,
-    native_composition_finality, native_keyboard_finality,
+    native_cancellation_finality_is_terminal, native_composition_finality,
+    native_keyboard_cancel_definite_nonclaim, native_keyboard_finality,
     native_no_focused_keyboard_claim_witness, native_original_keyboard_release_nonclaim,
     native_original_keyboard_repeat_nonclaim, native_pointer_finality, native_text_finality,
     native_unfocused_game_keyboard_snapshot,
@@ -1953,6 +1954,16 @@ impl WinitRunner {
             before = slots
                 .native_input_ownership(slot)
                 .map_err(|e| anyhow!("composition start lost its selected M13 owner: {e:?}"))?;
+            if &before == batch.final_ownership()
+                && before.status() == runenui_runtime::RuntimeStatus::Running
+                && before.keyboard().composition_generation().is_none()
+            {
+                // Earlier legal work retired this original generation. Start
+                // may already have rejected, or still await its own FIFO turn.
+                // There is no Update owner: do not replay preedit or assert
+                // that an unreached Start has settled.
+                return Ok(());
+            }
             anyhow::ensure!(
                 before.keyboard().composition_generation() == Some(start.generation()),
                 "composition generation changed before original preedit update"
@@ -2197,16 +2208,35 @@ impl WinitRunner {
             let device = event
                 .device_id()
                 .context("native keyboard Cancel lost its original device identity")?;
-            let submission = slots.submit_native_keyboard(slot, event).map_err(|error| {
-                anyhow!("native keyboard Cancel M13 admission rejected: {error:?}")
-            })?;
+            let admission_before = slots
+                .native_input_ownership(slot)
+                .map_err(|error| anyhow!("native Cancel ownership unavailable: {error:?}"))?;
+            let submission = match slots.submit_native_keyboard(slot, event) {
+                Ok(submission) => submission,
+                Err(error) => {
+                    let after = slots.native_input_ownership(slot).map_err(|reason| {
+                        anyhow!("native Cancel rejection ownership unavailable: {reason:?}")
+                    })?;
+                    if native_keyboard_cancel_definite_nonclaim(
+                        device,
+                        &admission_before,
+                        &after,
+                        &error,
+                    ) {
+                        continue;
+                    }
+                    return Err(anyhow!(
+                        "native keyboard Cancel M13 admission rejected: {error:?}"
+                    ));
+                }
+            };
             let (batch, status) = slots
                 .pump_native_input_records(slot)
                 .map_err(|error| anyhow!("native keyboard Cancel M13 pump failed: {error:?}"))?;
             let evidence =
                 native_keyboard_finality(before.scope(), device, submission, &batch, &status);
             anyhow::ensure!(
-                matches!(evidence, Ok(UiInputFinality::Committed(_)))
+                evidence.as_ref().is_ok_and(|finality| native_cancellation_finality_is_terminal(runenui_runtime::UiInputFamily::Keyboard, finality))
                     || (matches!(evidence, Err(crate::plugins::ui::UiRuntimeNativeKeyboardEvidenceFailure::NotProcessed))
                         && native_m13_original_deferred(before.scope(), &batch, &status)),
                 "native keyboard Cancel lacked committed M13 settlement: {evidence:?}"
@@ -2402,11 +2432,28 @@ impl WinitRunner {
         // another authentic window modifier observation arrives.
         self.native_ui_modifiers.remove(&window);
         for event in events {
-            let submission = slots
-                .submit_native_keyboard(recipient, event)
-                .map_err(|error| {
-                    anyhow!("native keyboard device-loss M13 submission rejected: {error:?}")
-                })?;
+            let admission_before = slots.native_input_ownership(recipient).map_err(|error| {
+                anyhow!("native device Cancel ownership unavailable: {error:?}")
+            })?;
+            let submission = match slots.submit_native_keyboard(recipient, event) {
+                Ok(submission) => submission,
+                Err(error) => {
+                    let after = slots.native_input_ownership(recipient).map_err(|reason| {
+                        anyhow!("native device Cancel rejection ownership unavailable: {reason:?}")
+                    })?;
+                    if native_keyboard_cancel_definite_nonclaim(
+                        device,
+                        &admission_before,
+                        &after,
+                        &error,
+                    ) {
+                        continue;
+                    }
+                    return Err(anyhow!(
+                        "native keyboard device-loss M13 submission rejected: {error:?}"
+                    ));
+                }
+            };
             let (batch, status) = slots
                 .pump_native_input_records(recipient)
                 .map_err(|error| {
@@ -2415,7 +2462,7 @@ impl WinitRunner {
             let evidence =
                 native_keyboard_finality(before.scope(), device, submission, &batch, &status);
             anyhow::ensure!(
-                matches!(evidence, Ok(UiInputFinality::Committed(_)))
+                evidence.as_ref().is_ok_and(|finality| native_cancellation_finality_is_terminal(runenui_runtime::UiInputFamily::Keyboard, finality))
                     || (matches!(evidence, Err(crate::plugins::ui::UiRuntimeNativeKeyboardEvidenceFailure::NotProcessed))
                         && native_m13_original_deferred(before.scope(), &batch, &status)),
                 "native keyboard device-loss Cancel lacked exact M13 settlement: {evidence:?}"
@@ -3293,7 +3340,12 @@ impl WinitRunner {
             } => {
                 let context = self.native_input_mut().window_context(window, device_id)?;
                 let input = keyboard_input(&event, is_synthetic);
-                self.apply_pending_close_keyboard_observation(window, context, input)
+                self.apply_pending_close_keyboard_observation(
+                    window,
+                    context,
+                    input,
+                    text_input(&event, is_synthetic),
+                )
             }
             WindowEvent::CursorMoved {
                 device_id,
@@ -3473,14 +3525,11 @@ impl WinitRunner {
         window: NativeWindowId,
         context: InputContext,
         input: runen_input::KeyboardInput,
+        native_text: Option<String>,
     ) -> Result<()> {
         let physical_key = input.physical_key.clone();
         let pressed = input.state == runen_input::DigitalState::Pressed;
-        self.apply_event_group_for_recipient(
-            window,
-            [PlatformEvent::KeyboardInput { context, input }],
-            None,
-        )?;
+        self.admit_unrouted_native_keyboard(window, context, input, native_text)?;
         if pressed {
             self.deny_native_keyboard_lifetime(context, &physical_key)?;
         }

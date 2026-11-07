@@ -898,6 +898,7 @@ fn pending_keyboard_down_and_up_preserve_neutral_truth_without_game_grant() {
             fixture.window,
             fixture.source,
             make_input(DigitalState::Pressed),
+            None,
         )
         .expect("pending Down is neutral-only and denied for gameplay");
     let mut actions = fixture
@@ -973,6 +974,7 @@ fn pending_keyboard_down_and_up_preserve_neutral_truth_without_game_grant() {
             fixture.window,
             fixture.source,
             make_input(DigitalState::Released),
+            None,
         )
         .expect("pending Up remains original neutral evidence");
     assert!(
