@@ -244,7 +244,8 @@ impl NativeWindowRequestOwner {
         Ok(())
     }
 
-    /// Called only after physical primary realization and one-shot Startup.
+    /// Called after one-shot Startup when Winit can receive requests; a physical
+    /// primary is not required in explicitly selected zero-window Native mode.
     pub(crate) fn mark_ready(&self) -> Result<(), NativeWindowRequestError> {
         let mut shared = self
             .shared

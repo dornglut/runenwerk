@@ -1,6 +1,6 @@
 use crate::app::domain::host::AppHostSelection;
 use crate::app::domain::lifecycle::AppLifecycle;
-use crate::app::domain::state::WindowedAppState;
+use crate::app::domain::state::{NativeInitialWindow, WindowedAppState};
 use crate::prelude::IntoPlugins;
 use crate::runtime::system::IntoSystemConfigs;
 use crate::*;
@@ -17,6 +17,7 @@ pub struct App {
     pub(crate) lifecycle: AppLifecycle,
     pub(crate) host_selection: AppHostSelection,
     pub(crate) title: String,
+    pub(crate) initial_native_window: NativeInitialWindow,
     composition_errors: Vec<AppCompositionError>,
 }
 
@@ -43,6 +44,7 @@ impl App {
             lifecycle: AppLifecycle::default(),
             host_selection,
             title: title.clone(),
+            initial_native_window: NativeInitialWindow::Primary,
             composition_errors: Vec::new(),
         }
     }
@@ -167,6 +169,7 @@ impl App {
             scheduler: self.scheduler,
             startup_ran: self.lifecycle,
             title: self.title,
+            initial_native_window: self.initial_native_window,
         }
     }
 

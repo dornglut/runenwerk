@@ -205,6 +205,22 @@ jobs:
           grep -F "native_window_request_render_refusal=pass physical_x11=true unsettled=true retained=true" "$refusal_log"
           rm -f "$refusal_log"
 
+      - name: Prove physical X11 zero-initial-window Startup and first late window
+        env:
+          RUNENWERK_NATIVE_ZERO_WINDOW_OS_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          if ! timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib zero_window_native_os_startup --locked -- --nocapture >"$log" 2>&1; then
+            cat "$log"
+            rm -f "$log"
+            exit 1
+          fi
+          cat "$log"
+          grep -F "native_zero_window_startup=pass" "$log"
+          rm -f "$log"
+
       - name: Prove physical X11 primary close approval and veto
         env:
           RUNENWERK_NATIVE_CLOSE_OS_SMOKE: '1'

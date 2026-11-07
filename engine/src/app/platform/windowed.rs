@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::app::domain::host::AppHostSelection;
+use crate::app::domain::state::NativeInitialWindow;
 use crate::runtime::frame_pacing::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
 use crate::runtime::native_window_requests::{
     NativeWindowRequestError, NativeWindowRequestOwner, NativeWindowRequests,
@@ -58,6 +59,10 @@ impl AppNativeHostExt for App {
             ));
         }
         ensure!(
+            self.initial_native_window == NativeInitialWindow::Primary,
+            "primary close policy requires an initially declared native primary window"
+        );
+        ensure!(
             !self.world.has_resource::<NativePrimaryClosePolicy>(),
             "primary close policy has already been selected"
         );
@@ -82,6 +87,10 @@ impl AppNativeHostExt for App {
     }
 
     fn with_primary_window_size_px(&mut self, size_px: (u32, u32)) -> &mut Self {
+        if self.initial_native_window == NativeInitialWindow::None {
+            self.record_missing_capability("with_primary_window_size_px", "initial native primary window");
+            return self;
+        }
         if matches!(self.host_selection, AppHostSelection::Headless) {
             self.record_missing_capability("with_primary_window_size_px", "native-window Host");
             return self;
@@ -94,6 +103,29 @@ impl AppNativeHostExt for App {
 }
 
 impl App {
+    /// Select the existing Native event loop with no mandatory initial window.
+    ///
+    /// App::new() retains its native-primary behavior until the separate
+    /// breaking constructor migration. No logical primary, UI, GPU or
+    /// Render surface is implicitly selected.
+    pub fn enable_windowing(&mut self) -> Result<&mut Self> {
+        ensure!(
+            self.is_native_window_host(),
+            "enable_windowing requires a Native-window Host; App::headless() is stable"
+        );
+        ensure!(
+            self.lifecycle.is_configuring(),
+            "enable_windowing must be selected before App admission"
+        );
+        ensure!(
+            !self.world.has_resource::<PrimaryWindowInitialSizePxResource>()
+                && !self.world.has_resource::<NativePrimaryClosePolicy>(),
+            "zero initial windows conflict with selected initial-primary configuration"
+        );
+        self.initial_native_window = NativeInitialWindow::None;
+        Ok(self)
+    }
+
     /// Acquire Native Host window commands before run consumes the App.
     /// The handle stays NotReady until the original Winit Host can receive
     /// requests. Queueing is not a physical creation acknowledgement.
@@ -169,6 +201,18 @@ impl App {
 
     pub(crate) fn run_windowed(mut self) -> Result<()> {
         self.admit_composition()?;
+        if self.initial_native_window == NativeInitialWindow::None {
+            ensure!(
+                !crate::plugins::render::render_integration_is_active(&self.world),
+                "zero-initial-window Native startup with RenderPlugin is not yet supported: no primary Gfx owner exists for secondary attachment"
+            );
+            if let Ok(slots) = self.world.resource::<crate::plugins::ui::UiRuntimeSlotsResource>() {
+                ensure!(
+                    slots.is_empty(),
+                    "zero-initial-window Native startup does not yet support pre-mounted UI without an explicit presentation target"
+                );
+            }
+        }
         self.prepare_lifecycle_for_execution()?;
         // Direct resource mounting is a real public ingress too. Never silently
         // run already-settled ManualClock slots through a native host.
