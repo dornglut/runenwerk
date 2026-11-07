@@ -950,3 +950,94 @@ fn native_app_shutdown_zero_window_os_proof() -> Result<()> {
     );
     Ok(())
 }
+
+#[derive(Resource)]
+struct StopWithPendingRegistryWindow {
+    shutdown: crate::runtime::app_shutdown::AppShutdownHandle,
+    starts: Arc<AtomicUsize>,
+}
+
+fn stop_with_pending_registry_window(mut world: WorldMut) -> Result<()> {
+    ensure!(
+        !world.has_resource::<PrimaryPresentationMetricsResource>(),
+        "shutdown during Startup must not fabricate primary metrics"
+    );
+    let control = world.resource::<StopWithPendingRegistryWindow>()?;
+    let shutdown = control.shutdown.clone();
+    control.starts.fetch_add(1, Ordering::SeqCst);
+    ensure!(shutdown.readiness()? == AppShutdownReadiness::Ready);
+    let request = world
+        .resource_mut::<WindowStateRegistryResource>()?
+        .request_window("must not realize after stopping", (640, 480));
+    ensure!(request.native_window_id != NativeWindowId::primary());
+    ensure!(shutdown.request_shutdown()? == AppShutdownRequestOutcome::Accepted);
+    Ok(())
+}
+
+#[test]
+fn native_app_shutdown_during_startup_cancels_legacy_registry_request() -> Result<()> {
+    if std::env::var_os("RUNENWERK_NATIVE_APP_SHUTDOWN_STARTUP_OS_SMOKE").is_none() {
+        return Ok(());
+    }
+
+    let mut app = App::new();
+    app.enable_windowing()?;
+    app.add_plugins(default_plugins());
+    let shutdown = app.shutdown_handle()?;
+    let starts = Arc::new(AtomicUsize::new(0));
+    app.insert_resource(StopWithPendingRegistryWindow {
+        shutdown: shutdown.clone(),
+        starts: Arc::clone(&starts),
+    });
+    app.add_systems(Startup, stop_with_pending_registry_window.on_invoker_thread());
+    app.admit_composition()?;
+    app.prepare_lifecycle_for_execution()?;
+    app.prepare_native_ui_host()?;
+    let mut state = app.into_windowed_state();
+    let initial = state.initial_native_window;
+    install_native_window_provider_resources(&mut state.world, initial);
+
+    let mut builder = EventLoop::<NativeHostEvent>::with_user_event();
+    builder.with_any_thread(true).with_x11();
+    let event_loop = builder.build()?;
+    event_loop.set_control_flow(ControlFlow::Wait);
+    let proxy = event_loop.create_proxy();
+    state
+        .world
+        .resource::<AppShutdownOwner>()?
+        .attach_wake(move || proxy.send_event(NativeHostEvent::AppShutdown).is_ok())?;
+    state
+        .world
+        .insert_resource(NativeWakeTransport::new(event_loop.create_proxy()));
+
+    let mut proof = ExitThroughAppShutdown {
+        runner: WinitRunner::new(state),
+    };
+    event_loop.run_app(&mut proof)?;
+    ensure!(proof.runner.fatal_error.is_none());
+    ensure!(proof.runner.shutdown_done);
+    ensure!(starts.load(Ordering::SeqCst) == 1);
+    ensure!(proof.runner.ordinary_frames == 0);
+    ensure!(proof.runner.window_realizer.realized_windows().is_empty());
+    ensure!(shutdown.readiness()? == AppShutdownReadiness::Closed);
+    let registry = proof
+        .runner
+        .state
+        .world
+        .resource::<WindowStateRegistryResource>()?;
+    ensure!(registry.pending_creation_requests().is_empty());
+    ensure!(
+        registry.records().filter(|record| {
+            record.lifecycle_state == NativeWindowLifecycleState::CreationFailed
+                && record
+                    .failure_reason
+                    .as_ref()
+                    .is_some_and(|reason| reason.contains("shutdown cancelled"))
+        }).count() == 1,
+        "accepted ECS creation request was not terminally cancelled"
+    );
+    println!(
+        "native_app_shutdown_startup=pass physical_x11=true cancelled_registry=true no_window=true no_frame=true"
+    );
+    Ok(())
+}
