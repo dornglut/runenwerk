@@ -6,6 +6,7 @@ use crate::app::App;
 use crate::plugins::default_plugins;
 use crate::runtime::native_window_requests::{
     NativeWindowRequest, NativeWindowRequestOutcome, NativeWindowRequestReadiness,
+    NativeWindowRequestTicket, NativeWindowRequests,
 };
 use crate::runtime::system::SystemMobilityExt;
 use crate::runtime::{Startup, Update, WorldMut};
@@ -15,6 +16,7 @@ use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
+use std::sync::mpsc;
 use std::thread;
 use winit::platform::x11::EventLoopBuilderExtX11;
 
@@ -22,6 +24,8 @@ use winit::platform::x11::EventLoopBuilderExtX11;
 struct WindowlessCounters {
     startups: Arc<AtomicUsize>,
     updates: Arc<AtomicUsize>,
+    requests: NativeWindowRequests,
+    startup_ticket: mpsc::Sender<NativeWindowRequestTicket>,
 }
 
 fn assert_windowless_startup(mut world: WorldMut) -> Result<()> {
@@ -38,10 +42,19 @@ fn assert_windowless_startup(mut world: WorldMut) -> Result<()> {
         !world.has_resource::<PrimaryPresentationMetricsResource>(),
         "zero-window Startup fabricated primary presentation metrics"
     );
-    world
-        .resource_mut::<WindowlessCounters>()?
-        .startups
-        .fetch_add(1, Ordering::SeqCst);
+    let counters = world.resource_mut::<WindowlessCounters>()?;
+    ensure!(
+        counters.requests.readiness()? == NativeWindowRequestReadiness::Ready,
+        "Native window command ingress is not ready inside windowless Startup"
+    );
+    counters.startups.fetch_add(1, Ordering::SeqCst);
+    let ticket = counters
+        .requests
+        .request(NativeWindowRequest::new("Startup first late window", (640, 480)))?;
+    counters
+        .startup_ticket
+        .send(ticket)
+        .context("windowless Startup ticket observer is unavailable")?;
     Ok(())
 }
 
@@ -136,17 +149,20 @@ fn zero_window_native_os_startup() -> Result<()> {
     let mut app = App::new();
     app.enable_windowing()?;
     app.add_plugins(default_plugins());
+    let windows = app.native_window_requests()?;
+    ensure!(windows.readiness()? == NativeWindowRequestReadiness::NotReady);
+    let (startup_sender, startup_receiver) = mpsc::channel();
     let startups = Arc::new(AtomicUsize::new(0));
     let updates = Arc::new(AtomicUsize::new(0));
     app.insert_resource(WindowlessCounters {
         startups: Arc::clone(&startups),
         updates: Arc::clone(&updates),
+        requests: windows.clone(),
+        startup_ticket: startup_sender,
     });
     app.add_systems(Startup, assert_windowless_startup.on_invoker_thread());
     app.add_systems(Update, count_update);
 
-    let windows = app.native_window_requests()?;
-    ensure!(windows.readiness()? == NativeWindowRequestReadiness::NotReady);
     let observer = windows.clone();
     app.admit_composition()?;
     app.prepare_lifecycle_for_execution()?;
@@ -180,7 +196,9 @@ fn zero_window_native_os_startup() -> Result<()> {
             thread::sleep(Duration::from_millis(5));
         }
         ensure!(windows.readiness()? == NativeWindowRequestReadiness::Ready);
-        let ticket = windows.request(NativeWindowRequest::new("late first window", (640, 480)))?;
+        let ticket = startup_receiver
+            .recv_timeout(Duration::from_secs(20))
+            .context("Startup did not admit the first Native window request")?;
         match ticket.recv_timeout(Duration::from_secs(20))? {
             NativeWindowRequestOutcome::Created { native_window_id } => {
                 ensure!(native_window_id != NativeWindowId::primary());

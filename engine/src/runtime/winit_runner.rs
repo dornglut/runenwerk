@@ -4670,11 +4670,9 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.state.initial_native_window == NativeInitialWindow::None {
-            // Winit wake is installed, but Startup does not require a primary.
-            if let Err(err) = self.run_startup_if_needed() {
-                self.exit_with_error(event_loop, anyhow!("runtime startup failed: {err:#}"));
-                return;
-            }
+            // Winit's wake and owner resources are established before Startup.
+            // Startup-authored requests can be accepted now; the Winit owner
+            // realizes them only after this callback returns, never reentrantly.
             let readiness = self
                 .state
                 .world
@@ -4683,6 +4681,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 .map(|owner| owner.mark_ready());
             if let Some(Err(error)) = readiness {
                 self.exit_with_error(event_loop, error.into());
+                return;
+            }
+            if let Err(err) = self.run_startup_if_needed() {
+                self.exit_with_error(event_loop, anyhow!("runtime startup failed: {err:#}"));
                 return;
             }
             self.pace_or_exit(event_loop);
