@@ -14,8 +14,9 @@ mod linux {
     };
     use std::{
         sync::{
-            Arc, mpsc,
+            Arc,
             atomic::{AtomicBool, AtomicUsize, Ordering},
+            mpsc,
         },
         thread,
         time::{Duration, Instant},
