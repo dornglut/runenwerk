@@ -367,7 +367,10 @@ mod tests {
             "external Native user-event requests must not enter the ECS frame queue"
         );
         let record = registry.record(external.native_window_id).unwrap();
-        assert_eq!(record.lifecycle_state, NativeWindowLifecycleState::Requested);
+        assert_eq!(
+            record.lifecycle_state,
+            NativeWindowLifecycleState::Requested
+        );
         assert_eq!(record.failure_reason, None);
 
         let frame_scheduled = registry.request_window("Frame-scheduled", (800, 600));
@@ -407,11 +410,17 @@ mod tests {
             "a failed physical generation must not be reused while its record is retained"
         );
         assert_eq!(
-            registry.record(later.native_window_id).unwrap().lifecycle_state,
+            registry
+                .record(later.native_window_id)
+                .unwrap()
+                .lifecycle_state,
             NativeWindowLifecycleState::Requested
         );
         assert_eq!(
-            registry.record(rejected.native_window_id).unwrap().lifecycle_state,
+            registry
+                .record(rejected.native_window_id)
+                .unwrap()
+                .lifecycle_state,
             NativeWindowLifecycleState::CreationFailed,
             "later requests must not overwrite the exact failed identity"
         );
