@@ -127,9 +127,7 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
                 assert!(windows.record(NativeWindowId::primary()).is_none());
                 windows
                     .records()
-                    .filter(|record| {
-                        record.lifecycle_state == NativeWindowLifecycleState::Created
-                    })
+                    .filter(|record| record.lifecycle_state == NativeWindowLifecycleState::Created)
                     .map(|record| record.native_window_id)
                     .collect::<Vec<_>>()
             };
@@ -248,7 +246,10 @@ fn zero_window_native_os_startup() -> Result<()> {
             other => anyhow::bail!("second late window was not created: {other:?}"),
         };
         ensure!(second != NativeWindowId::primary());
-        ensure!(second != first, "second window reused the first Native identity");
+        ensure!(
+            second != first,
+            "second window reused the first Native identity"
+        );
         Ok((first, second))
     });
 
