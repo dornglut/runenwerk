@@ -316,6 +316,110 @@ mod linux {
         Ok(())
     }
 
+    /// The existing Native fatal-exit path must terminally cancel already
+    /// accepted window work without fabricating a frame or a Created receipt.
+    /// A real primary Render/GPU owner ensures gpu_progress is called from
+    /// the accepted Native frame path on the original Winit thread.
+    struct NativeFatalRequestHook {
+        fired: bool,
+        frame_entered: mpsc::Sender<()>,
+        command_admitted: mpsc::Receiver<()>,
+    }
+
+    impl NativeWindowHook for NativeFatalRequestHook {
+        fn name(&self) -> &'static str {
+            "native_fatal_exit_with_accepted_window_request"
+        }
+
+        fn frame(&mut self, _window: &Window, _world: &mut runen_ecs::World) -> Result<()> {
+            if !self.fired {
+                self.fired = true;
+                self.frame_entered
+                    .send(())
+                    .context("native fatal-exit proof worker unavailable")?;
+                self.command_admitted
+                    .recv_timeout(Duration::from_secs(12))
+                    .context("native fatal-exit request was not accepted")?;
+            }
+            Ok(())
+        }
+
+        fn gpu_progress(&mut self, _world: &mut runen_ecs::World) -> Result<bool> {
+            anyhow::bail!("injected native fatal shutdown after accepted window request");
+        }
+    }
+
+    pub(super) fn fatal_shutdown() -> Result<()> {
+        let (frame_entered, frame_receiver) = mpsc::channel();
+        let (command_admitted, command_receiver) = mpsc::channel();
+        let mut app = App::new();
+        app.add_plugins(default_plugins());
+        app.add_plugin(RenderPlugin);
+        app.init_resource::<NativeWindowHookRegistryResource>();
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()?
+            .register_hook(NativeFatalRequestHook {
+                fired: false,
+                frame_entered,
+                command_admitted: command_receiver,
+            });
+
+        let windows = app.native_window_requests()?;
+        let worker = thread::spawn(move || -> Result<()> {
+            frame_receiver
+                .recv_timeout(Duration::from_secs(12))
+                .context("actual native Render frame did not reach fatal-exit barrier")?;
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Ready,
+                "native owner not ready during fatal-exit admission"
+            );
+            let ticket = windows.request(NativeWindowRequest::new(
+                "accepted before deliberate native fatal exit",
+                (500, 360),
+            ))?;
+            command_admitted
+                .send(())
+                .context("native Winit invoker no longer owns fatal-exit barrier")?;
+
+            ensure!(
+                ticket.recv_timeout(Duration::from_secs(12))?
+                    == NativeWindowRequestOutcome::Cancelled,
+                "accepted Native request was not terminally cancelled on fatal exit"
+            );
+            ensure!(
+                ticket.try_recv() == Err(std::sync::mpsc::TryRecvError::Disconnected),
+                "fatal-exit ticket delivered a second outcome"
+            );
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Closed,
+                "Native command queue remained open after fatal exit"
+            );
+            ensure!(
+                matches!(
+                    windows.request(NativeWindowRequest::new("after exit", (320, 240))),
+                    Err(engine::runtime::NativeWindowRequestError::Closed)
+                ),
+                "Native fatal exit accepted a late command"
+            );
+            Ok(())
+        });
+
+        let execution = app.run();
+        let worker_result = worker.join().expect("fatal-exit request worker must not panic");
+        worker_result?;
+        let err = execution.expect_err("injected Native fatal exit must terminate App");
+        ensure!(
+            format!("{err:#}").contains(
+                "injected native fatal shutdown after accepted window request"
+            ),
+            "unexpected Native exit error: {err:#}"
+        );
+        println!(
+            "native_window_request_fatal_exit=pass physical_x11=true accepted=1 cancelled=1"
+        );
+        Ok(())
+    }
+
     pub(super) fn run() -> Result<()> {
         let secondary_count = Arc::new(AtomicUsize::new(0));
         let unexpected_gpu = Arc::new(AtomicBool::new(false));
@@ -414,6 +518,9 @@ fn main() {
             }
             Some("render-failure") => {
                 linux::render_failure().expect("real Render rollback test must pass")
+            }
+            Some("fatal-exit") => {
+                linux::fatal_shutdown().expect("real Native fatal-exit request proof must pass")
             }
             _ => panic!("unexpected native window-request proof mode"),
         }
