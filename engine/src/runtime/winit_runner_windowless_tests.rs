@@ -10,7 +10,7 @@ use crate::runtime::native_window_requests::{
 };
 use crate::runtime::system::SystemMobilityExt;
 use crate::runtime::{Startup, Update, WorldMut};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 use runen_ecs::Resource;
 use std::sync::mpsc;
 use std::sync::{
@@ -56,7 +56,7 @@ fn assert_windowless_startup(mut world: WorldMut) -> Result<()> {
     counters
         .startup_ticket
         .send(ticket)
-        .context("windowless Startup ticket observer is unavailable")?;
+        .map_err(|_| anyhow!("windowless Startup ticket observer is unavailable"))?;
     if counters.fail_startup {
         anyhow::bail!("intentional windowless Startup failure after request acceptance");
     }
