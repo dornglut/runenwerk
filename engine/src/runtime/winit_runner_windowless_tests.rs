@@ -12,11 +12,11 @@ use crate::runtime::system::SystemMobilityExt;
 use crate::runtime::{Startup, Update, WorldMut};
 use anyhow::{Context, Result, ensure};
 use runen_ecs::Resource;
+use std::sync::mpsc;
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
-use std::sync::mpsc;
 use std::thread;
 use winit::platform::x11::EventLoopBuilderExtX11;
 
@@ -48,9 +48,10 @@ fn assert_windowless_startup(mut world: WorldMut) -> Result<()> {
         "Native window command ingress is not ready inside windowless Startup"
     );
     counters.startups.fetch_add(1, Ordering::SeqCst);
-    let ticket = counters
-        .requests
-        .request(NativeWindowRequest::new("Startup first late window", (640, 480)))?;
+    let ticket = counters.requests.request(NativeWindowRequest::new(
+        "Startup first late window",
+        (640, 480),
+    ))?;
     counters
         .startup_ticket
         .send(ticket)
@@ -111,18 +112,28 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         self.runner.about_to_wait(event_loop);
         if self.runner.ordinary_frames > 0 && self.runner.window_realizer.has_any_window() {
-            let windows = self
-                .runner
-                .state
-                .world
-                .resource::<WindowStateRegistryResource>()
-                .unwrap();
-            assert!(windows.primary_window_id().is_none());
-            assert!(windows.record(NativeWindowId::primary()).is_none());
-            assert!(windows.records().any(|record| {
-                record.native_window_id != NativeWindowId::primary()
-                    && record.lifecycle_state == NativeWindowLifecycleState::Created
-            }));
+            let created = {
+                let windows = self
+                    .runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap();
+                assert!(windows.primary_window_id().is_none());
+                assert!(windows.record(NativeWindowId::primary()).is_none());
+                windows
+                    .records()
+                    .filter(|record| {
+                        record.lifecycle_state == NativeWindowLifecycleState::Created
+                    })
+                    .map(|record| record.native_window_id)
+                    .collect::<Vec<_>>()
+            };
+            if created.len() < 2 {
+                return;
+            }
+            assert_eq!(created.len(), 2, "unexpected extra Native windows");
+            assert!(created.iter().all(|id| *id != NativeWindowId::primary()));
             assert!(
                 !self
                     .runner
@@ -130,6 +141,27 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
                     .world
                     .has_resource::<crate::plugins::render::Gfx>()
             );
+            // The original Native owner must retire both real secondaries
+            // without a primary role or a synthetic ordinary frame.
+            let prior_frames = self.runner.ordinary_frames;
+            for id in created {
+                self.runner
+                    .state
+                    .world
+                    .resource_mut::<WindowStateRegistryResource>()
+                    .unwrap()
+                    .record_mut(id)
+                    .unwrap()
+                    .request_close();
+            }
+            self.runner
+                .apply_window_effects(event_loop)
+                .expect("secondary Native owner retirement must succeed");
+            assert!(
+                self.runner.window_realizer.realized_windows().is_empty(),
+                "secondary physical windows were not retired"
+            );
+            assert_eq!(self.runner.ordinary_frames, prior_frames);
             self.observed = true;
             event_loop.exit();
         }
@@ -186,7 +218,7 @@ fn zero_window_native_os_startup() -> Result<()> {
         .insert_resource(NativeWakeTransport::new(event_loop.create_proxy()));
     event_loop.set_control_flow(ControlFlow::Wait);
 
-    let worker = thread::spawn(move || -> Result<NativeWindowId> {
+    let worker = thread::spawn(move || -> Result<(NativeWindowId, NativeWindowId)> {
         let deadline = Instant::now() + Duration::from_secs(20);
         while windows.readiness()? == NativeWindowRequestReadiness::NotReady {
             ensure!(
@@ -199,13 +231,20 @@ fn zero_window_native_os_startup() -> Result<()> {
         let ticket = startup_receiver
             .recv_timeout(Duration::from_secs(20))
             .context("Startup did not admit the first Native window request")?;
-        match ticket.recv_timeout(Duration::from_secs(20))? {
-            NativeWindowRequestOutcome::Created { native_window_id } => {
-                ensure!(native_window_id != NativeWindowId::primary());
-                Ok(native_window_id)
-            }
-            other => anyhow::bail!("first late window was not created: {other:?}"),
-        }
+        let first = match ticket.recv_timeout(Duration::from_secs(20))? {
+            NativeWindowRequestOutcome::Created { native_window_id } => native_window_id,
+            other => anyhow::bail!("Startup first window was not created: {other:?}"),
+        };
+        ensure!(first != NativeWindowId::primary());
+        let second_ticket =
+            windows.request(NativeWindowRequest::new("second late window", (480, 360)))?;
+        let second = match second_ticket.recv_timeout(Duration::from_secs(20))? {
+            NativeWindowRequestOutcome::Created { native_window_id } => native_window_id,
+            other => anyhow::bail!("second late window was not created: {other:?}"),
+        };
+        ensure!(second != NativeWindowId::primary());
+        ensure!(second != first, "second window reused the first Native identity");
+        Ok((first, second))
     });
 
     let mut proof = ExitAfterLateWindow {
@@ -217,7 +256,7 @@ fn zero_window_native_os_startup() -> Result<()> {
         .join()
         .expect("windowless request worker must not panic");
     execution?;
-    let native_id = result.context("worker failed to observe late window")?;
+    let (first, second) = result.context("worker failed to observe late windows")?;
     ensure!(
         proof.observed,
         "physical nonprimary window never advanced an ordinary frame"
@@ -232,8 +271,9 @@ fn zero_window_native_os_startup() -> Result<()> {
     );
     ensure!(observer.readiness()? == NativeWindowRequestReadiness::Closed);
     println!(
-        "native_zero_window_startup=pass physical_x11=true id={} startup=1 no_primary=true no_gpu=true after_window_update=true",
-        native_id.raw()
+        "native_zero_window_startup=pass physical_x11=true first={} second={} startup=1 no_primary=true no_gpu=true after_window_update=true retired=true",
+        first.raw(),
+        second.raw()
     );
     Ok(())
 }
