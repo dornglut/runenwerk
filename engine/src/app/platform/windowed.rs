@@ -1,6 +1,7 @@
 use crate::app::App;
 use crate::app::domain::host::AppHostSelection;
 use crate::app::domain::state::NativeInitialWindow;
+use crate::runtime::app_shutdown::{AppShutdownError, AppShutdownHandle, AppShutdownOwner};
 use crate::runtime::frame_pacing::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
 use crate::runtime::native_window_requests::{
     NativeWindowRequestError, NativeWindowRequestOwner, NativeWindowRequests,
@@ -129,6 +130,36 @@ impl App {
         );
         self.initial_native_window = NativeInitialWindow::None;
         Ok(self)
+    }
+
+    /// Obtain an App-owned shutdown handle before native run consumes App.
+    /// A Headless App still has only bounded execution; the future shared
+    /// long-running Headless driver is a separate delivery.
+    pub fn shutdown_handle(
+        &mut self,
+    ) -> std::result::Result<AppShutdownHandle, AppShutdownError> {
+        if !self.is_native_window_host() {
+            return Err(AppShutdownError::UnsupportedHost);
+        }
+        if !self.lifecycle.is_configuring() {
+            return Err(AppShutdownError::SealedComposition);
+        }
+        if !self.world.has_resource::<NativeWindowRequestOwner>() {
+            self.world
+                .insert_resource(NativeWindowRequestOwner::default());
+        }
+        if !self.world.has_resource::<AppShutdownOwner>() {
+            let windows = self
+                .world
+                .resource::<NativeWindowRequestOwner>()
+                .map_err(|_| AppShutdownError::MissingOwner)?
+                .handle();
+            self.world.insert_resource(AppShutdownOwner::new(windows));
+        }
+        self.world
+            .resource::<AppShutdownOwner>()
+            .map(|owner| owner.handle())
+            .map_err(|_| AppShutdownError::MissingOwner)
     }
 
     /// Acquire Native Host window commands before run consumes the App.
@@ -495,6 +526,37 @@ mod tests {
                 assert!(!record.close_intent_pending);
             }
         }
+    }
+
+    #[test]
+    fn native_shutdown_handle_is_pre_run_and_closes_when_app_is_dropped() {
+        use crate::runtime::app_shutdown::{AppShutdownError, AppShutdownReadiness};
+
+        let mut app = App::new();
+        let handle = app.shutdown_handle().unwrap();
+        assert_eq!(handle.readiness().unwrap(), AppShutdownReadiness::NotReady);
+        assert!(matches!(
+            handle.request_shutdown(),
+            Err(AppShutdownError::NotReady)
+        ));
+        drop(app);
+        assert_eq!(handle.readiness().unwrap(), AppShutdownReadiness::Closed);
+        assert!(matches!(
+            handle.request_shutdown(),
+            Err(AppShutdownError::Closed)
+        ));
+
+        let mut headless = App::headless();
+        assert!(matches!(
+            headless.shutdown_handle(),
+            Err(AppShutdownError::UnsupportedHost)
+        ));
+        let mut prepared = App::new();
+        prepared.prepare_lifecycle_for_execution().unwrap();
+        assert!(matches!(
+            prepared.shutdown_handle(),
+            Err(AppShutdownError::SealedComposition)
+        ));
     }
 
     #[test]

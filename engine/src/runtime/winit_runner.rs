@@ -1,4 +1,5 @@
 use crate::app::{NativeInitialWindow, WindowedAppState};
+use crate::runtime::app_shutdown::AppShutdownOwner;
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
@@ -456,6 +457,15 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
                 .send_event(NativeHostEvent::NativeWindowRequests)
                 .is_ok()
         })?;
+    }
+    if let Ok(owner) = state.world.resource::<AppShutdownOwner>() {
+        let proxy = event_loop.create_proxy();
+        if let Err(error) =
+            owner.attach_wake(move || proxy.send_event(NativeHostEvent::AppShutdown).is_ok())
+        {
+            let cleanup = shutdown_native_ui(&mut state.world);
+            return combine_execution_and_cleanup(Err(error.into()), cleanup);
+        }
     }
     let transport = NativeWakeTransport::new(event_loop.create_proxy());
     if state.world.has_resource::<UiRuntimeSlotsResource>() {
@@ -3920,6 +3930,9 @@ impl WinitRunner {
         if self.shutdown_done {
             return Ok(());
         }
+        if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>() {
+            owner.close();
+        }
         if let Ok(owner) = self.state.world.resource::<NativeWindowRequestOwner>() {
             owner.close();
         }
@@ -4691,10 +4704,35 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 }
                 self.pace_or_exit(event_loop);
             }
+            NativeHostEvent::AppShutdown => {
+                let stopping = self
+                    .state
+                    .world
+                    .resource::<AppShutdownOwner>()
+                    .context("native App shutdown wake has no owning resource")
+                    .and_then(|owner| owner.is_stopping().map_err(anyhow::Error::from));
+                match stopping {
+                    Ok(true) => {
+                        // Only the original Native owner may complete the
+                        // transition; this performs no ECS or visual frame.
+                        self.gpu_progress_deadline = None;
+                        event_loop.set_control_flow(ControlFlow::Poll);
+                        event_loop.exit();
+                    }
+                    Ok(false) => {} // A stale event never reopens the owner.
+                    Err(error) => self.exit_with_error(event_loop, error),
+                }
+            }
         }
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>()
+            && let Err(error) = owner.mark_ready()
+        {
+            self.exit_with_error(event_loop, error.into());
+            return;
+        }
         if self.state.initial_native_window == NativeInitialWindow::None {
             // Winit's wake and owner resources are established before Startup.
             // Startup-authored requests can be accepted now; the Winit owner

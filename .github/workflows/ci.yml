@@ -271,6 +271,18 @@ jobs:
             rm -f "$idle_log"
           done
 
+          shutdown_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_APP_SHUTDOWN_OS_SMOKE=1 \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib native_app_shutdown_zero_window_os_proof --locked -- --nocapture >"$shutdown_log" 2>&1; then
+            cat "$shutdown_log"
+            rm -f "$shutdown_log"
+            exit 1
+          fi
+          cat "$shutdown_log"
+          grep -F "native_app_shutdown=pass physical_x11=true" "$shutdown_log"
+          rm -f "$shutdown_log"
+
       - name: Prove physical X11 primary close approval and veto
         env:
           RUNENWERK_NATIVE_CLOSE_OS_SMOKE: '1'
