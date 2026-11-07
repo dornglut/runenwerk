@@ -12,6 +12,8 @@ use std::sync::{
 };
 use std::time::Duration;
 
+// Bounds pending queue admission only. Drained in-flight work and user title
+// byte lengths have separate lifetimes and are not covered by this cap.
 const MAX_PENDING_REQUESTS: usize = 64;
 type NativeWake = Arc<dyn Fn() -> bool + Send + Sync + 'static>;
 
@@ -51,6 +53,14 @@ impl NativeWindowRequestId {
 pub enum NativeWindowRequestOutcome {
     Created { native_window_id: NativeWindowId },
     CreationFailed { reason: String },
+    /// Physical realization failed while owner cleanup/rollback could not be
+    /// confirmed. The Native window was not published as Created, but this
+    /// process-local identity may still have Render-owned recovery obligations.
+    /// Caller should not infer resource retirement from the failed request.
+    CreationFailedUnsettled {
+        native_window_id: NativeWindowId,
+        reason: String,
+    },
     Cancelled,
 }
 

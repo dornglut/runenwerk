@@ -3978,7 +3978,8 @@ impl WinitRunner {
             let native_window_id = request.native_window_id;
             let result = self.create_window_for_request(event_loop, request);
             let outcome = match &result {
-                Err(error) => NativeWindowRequestOutcome::CreationFailed {
+                Err(error) => NativeWindowRequestOutcome::CreationFailedUnsettled {
+                    native_window_id,
                     reason: format!("{error:#}"),
                 },
                 Ok(()) => {
@@ -4108,15 +4109,27 @@ impl WinitRunner {
         native_window_id: NativeWindowId,
         reason: impl Into<String>,
     ) -> Result<()> {
-        render_native_host::try_rollback_secondary(&mut self.state.world, native_window_id)
-            .context("secondary creation rollback was refused")?;
+        let reason = reason.into();
+        // Render is the only physical rollback authority. A refused rollback
+        // does not erase the fact that Native could not publish this window;
+        // record a terminal Native failure while preserving the owner-specific
+        // unsettled cleanup diagnostic and original creation failure.
+        let rollback =
+            render_native_host::try_rollback_secondary(&mut self.state.world, native_window_id);
+        let diagnostic = match &rollback {
+            Ok(_) => reason.clone(),
+            Err(error) => format!("{reason}; secondary rollback refused: {error}"),
+        };
         let registry = self
             .state
             .world
             .resource_mut::<WindowStateRegistryResource>()
             .context("native Host window registry is unavailable")?;
         self.window_realizer
-            .mark_creation_failed(registry, native_window_id, reason);
+            .mark_creation_failed(registry, native_window_id, diagnostic);
+        if let Err(error) = rollback {
+            anyhow::bail!("native window creation failed: {reason}; secondary rollback refused: {error}");
+        }
         Ok(())
     }
 

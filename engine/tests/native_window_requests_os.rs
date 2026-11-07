@@ -419,6 +419,176 @@ mod linux {
         Ok(())
     }
 
+    /// Force Render's existing refusal when its logical secondary attachment
+    /// is marked Attached but its GPU authority is missing. The Native secondary
+    /// is still created by actual X11/Winit; only the Render owner state fault
+    /// is intentionally synthetic, without modifying production Render code.
+    struct RenderRefusalHook {
+        started: bool,
+        expected_id: NativeWindowId,
+        detached_verified: Arc<AtomicBool>,
+        frame_entered: mpsc::Sender<()>,
+        request_accepted: mpsc::Receiver<()>,
+    }
+
+    impl NativeWindowHook for RenderRefusalHook {
+        fn name(&self) -> &'static str {
+            "native_render_rollback_refusal"
+        }
+
+        fn frame(&mut self, _window: &Window, world: &mut runen_ecs::World) -> Result<()> {
+            if self.started {
+                return Ok(());
+            }
+            self.started = true;
+            let gfx = world
+                .remove_resource::<Gfx>()
+                .context("real Native Render primary must have GPU authority before injection")?;
+            drop(gfx);
+
+            let surfaces = world.resource_mut::<RenderSurfaceRegistryResource>()?;
+            let surface = surfaces.reserve_surface_for_native_window(self.expected_id, (500, 360));
+            surfaces.confirm_surface_attachment(surface, self.expected_id, (500, 360))?;
+
+            self.frame_entered
+                .send(())
+                .context("Native Render-refusal worker dropped its barrier")?;
+            self.request_accepted
+                .recv_timeout(Duration::from_secs(12))
+                .context("external Native request was not accepted for rollback-refusal proof")?;
+            Ok(())
+        }
+
+        fn detach(&mut self, world: &mut runen_ecs::World) -> Result<()> {
+            let record = world
+                .resource::<WindowStateRegistryResource>()?
+                .record(self.expected_id)
+                .cloned()
+                .context("Native terminal failure record is missing at retirement")?;
+            ensure!(
+                record.lifecycle_state == NativeWindowLifecycleState::CreationFailed,
+                "Native record did not preserve failed physical window identity: {record:?}"
+            );
+            ensure!(
+                record.failure_reason.as_deref().is_some_and(|reason| {
+                    reason.contains("secondary rollback refused")
+                }),
+                "Native did not retain the unsettled Render diagnostic: {record:?}"
+            );
+
+            let render = world.resource::<RenderSurfaceRegistryResource>()?;
+            let surface = render
+                .surface_for_native_window(self.expected_id)
+                .context("Render retention refused but surface correlation was discarded")?;
+            ensure!(
+                render.record(surface).is_some_and(|record| {
+                    record.lifecycle_state == RenderSurfaceLifecycleState::Attached
+                }),
+                "refused Render retirement must preserve attached owner state"
+            );
+            self.detached_verified.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    pub(super) fn render_refusal() -> Result<()> {
+        let expected_id = NativeWindowId::try_from_raw(2)
+            .context("the first secondary Native window ID must be valid")?;
+        let observed = Arc::new(AtomicBool::new(false));
+        let (frame_entered, frame_receiver) = mpsc::channel();
+        let (accepted_sender, request_accepted) = mpsc::channel();
+
+        let mut app = App::new();
+        app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(30));
+        app.add_plugins(default_plugins());
+        app.add_plugin(RenderPlugin);
+        app.init_resource::<NativeWindowHookRegistryResource>();
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()?
+            .register_hook(RenderRefusalHook {
+                started: false,
+                expected_id,
+                detached_verified: Arc::clone(&observed),
+                frame_entered,
+                request_accepted,
+            });
+
+        let windows = app.native_window_requests()?;
+        let worker = thread::spawn(move || -> Result<()> {
+            frame_receiver
+                .recv_timeout(Duration::from_secs(12))
+                .context("real Render primary never reached the refusal injection frame")?;
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Ready,
+                "Native request owner not ready when Render refusal was staged"
+            );
+            let ticket = windows.request(NativeWindowRequest::new(
+                "secondary with retained Render owner",
+                (500, 360),
+            ))?;
+            accepted_sender
+                .send(())
+                .context("Native Render refusal frame barrier exited")?;
+            let result = ticket.recv_timeout(Duration::from_secs(12))?;
+            match result {
+                NativeWindowRequestOutcome::CreationFailedUnsettled {
+                    native_window_id,
+                    reason,
+                } => {
+                    ensure!(
+                        native_window_id == expected_id,
+                        "unsettled ticket did not preserve its Native physical identity"
+                    );
+                    ensure!(
+                        reason.contains("rollback refused"),
+                        "unsettled ticket did not expose Render retirement refusal: {reason}"
+                    );
+                }
+                other => {
+                    anyhow::bail!("refused rollback returned a falsely settled outcome: {other:?}")
+                }
+            }
+            ensure!(
+                ticket.try_recv() == Err(std::sync::mpsc::TryRecvError::Disconnected),
+                "unsettled ticket received a second terminal result"
+            );
+
+            let deadline = Instant::now() + Duration::from_secs(12);
+            while windows.readiness()? != NativeWindowRequestReadiness::Closed {
+                ensure!(
+                    Instant::now() < deadline,
+                    "Native owner did not close command ingress after rollback refusal"
+                );
+                thread::sleep(Duration::from_millis(5));
+            }
+            ensure!(
+                matches!(
+                    windows.request(NativeWindowRequest::new("after refusal", (320, 240))),
+                    Err(engine::runtime::NativeWindowRequestError::Closed)
+                ),
+                "Native owner accepted a request after unrecoverable rollback refusal"
+            );
+            Ok(())
+        });
+
+        let execution = app.run();
+        let worker_result = worker
+            .join()
+            .expect("Native Render refusal worker must not panic");
+        worker_result?;
+        let err = execution.expect_err("Render rollback refusal must produce Native fatal exit");
+        ensure!(
+            format!("{err:#}").contains("rollback refused"),
+            "Native fatal error lost the original Render refusal: {err:#}"
+        );
+        ensure!(
+            observed.load(Ordering::SeqCst),
+            "Native hook did not confirm retained Render and failed Native owner records"
+        );
+        println!("native_window_request_render_refusal=pass physical_x11=true unsettled=true retained=true");
+        Ok(())
+    }
+
     pub(super) fn run() -> Result<()> {
         let secondary_count = Arc::new(AtomicUsize::new(0));
         let unexpected_gpu = Arc::new(AtomicBool::new(false));
@@ -520,6 +690,9 @@ fn main() {
             }
             Some("fatal-exit") => {
                 linux::fatal_shutdown().expect("real Native fatal-exit request proof must pass")
+            }
+            Some("render-refusal") => {
+                linux::render_refusal().expect("real Native Render rollback-refusal proof must pass")
             }
             _ => panic!("unexpected native window-request proof mode"),
         }
