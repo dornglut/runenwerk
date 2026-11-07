@@ -115,6 +115,21 @@ impl runenui_core::UiApp for NativeManagedTypedApp {
     type Action = ();
     type HostProtocol = runenui_core::NoHostProtocol;
 
+    fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+    }
+
+    fn action_producer_budget(
+        _state: &Self::State,
+        _action: &Self::Action,
+    ) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(0, 1, 1)
+    }
+
+    fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0)
+    }
+
     fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
         runenui_core::text("Native managed typed RunenUI")
     }
@@ -269,6 +284,28 @@ mod native_readiness {
         type State = State;
         type Action = Action;
         type HostProtocol = NoHostProtocol;
+
+        fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(5, 2)
+                .with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 1, 0, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 1, 0, 0, 0))
+        }
+
+        fn action_producer_budget(
+            _state: &Self::State,
+            _action: &Self::Action,
+        ) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(5, 2)
+                .with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 1, 0, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 1, 0, 0, 0))
+        }
+
+        fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0)
+        }
+
         fn root(_: &State) -> impl View<Action> {
             text("native timed application")
         }
@@ -311,6 +348,28 @@ mod native_readiness {
         type State = State;
         type Action = Action;
         type HostProtocol = NoHostProtocol;
+
+        fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(5, 2)
+                .with_reconciliation(1, 0, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(1, 0, 0, 0, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(1, 0, 0, 0, 0, 0))
+        }
+
+        fn action_producer_budget(
+            _state: &Self::State,
+            _action: &Self::Action,
+        ) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(5, 2)
+                .with_reconciliation(0, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 1, 0, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 1, 0, 0, 0))
+        }
+
+        fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0)
+        }
+
         fn root(_: &State) -> impl View<Action> {
             text("native asynchronous application")
         }

@@ -84,6 +84,9 @@ pub fn dispatch_editor_input_system(
             retained_events.push(window_event);
             continue;
         }
+        if !window_event.authorized_for_legacy_editor() {
+            continue;
+        }
         let focus_lost = matches!(
             &window_event.event,
             PlatformEvent::Focused { focused: false }

@@ -290,6 +290,22 @@ mod tests {
     struct SimplePaintApp;
 
     impl UiApp for SimplePaintApp {
+        fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            // Fixed authored topology and its initial owner reconciliation.
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+        }
+
+        fn action_producer_budget(
+            _state: &Self::State,
+            _action: &Self::Action,
+        ) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+        }
+
+        fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0)
+        }
+
         type State = ();
         type Action = ();
         type HostProtocol = NoHostProtocol;
@@ -306,7 +322,8 @@ mod tests {
     }
 
     fn paint() -> PaintPublication {
-        let mut runtime = AppRuntime::<SimplePaintApp>::mount(());
+        let mut runtime = AppRuntime::<SimplePaintApp>::mount(())
+            .expect("the one-node paint fixture must admit its initial producer");
         let registered = runtime
             .register_text_font_bytes(
                 include_bytes!(concat!(

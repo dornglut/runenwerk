@@ -1,14 +1,20 @@
 use runenui_core::{
-    Effects, Element, ElementId, FontFamilyName, GenericFontFamily, HostProtocol, SemanticCommand,
-    UiApp, View, button, column, text,
+    CommittedTextEvent, CompositionGeneration, CompositionRange, Effects, Element, ElementId,
+    FontFamilyName, GenericFontFamily, HostProtocol, InputDeviceId, KeyboardEvent, KeyboardPhase,
+    PointerEvent, PointerId, SemanticCommand, SurfaceId, UiApp, View, button, column, text,
 };
 #[cfg(test)]
 use runenui_core::{LogicalLength, LogicalRect, PaintPrimitive, StyleEnvironment};
 #[cfg(test)]
 use runenui_runtime::LogicalSize;
 use runenui_runtime::{
-    AppRuntime, FontSourcePolicy, HostRequestToken, InputObservationError, InputPumpBatch,
-    InputShutdownBatch, PumpBudget, RuntimeConfig, SurfaceBuildContext, SurfacePublication,
+    AppRuntime, CompositionStartSubmission, CompositionSubmission, FontSourcePolicy,
+    HostRequestToken, InputArbitrationRecord, InputArbitrationScope, InputObservationError,
+    InputOwnershipSnapshot, InputPumpBatch, InputShutdownBatch, KeyboardSubmission,
+    PointerSubmission, PumpBudget, RuntimeConfig, SubmitCompositionError,
+    SubmitCompositionStartError, SubmitKeyboardError, SubmitKeyboardErrorKind,
+    SubmitKeyboardWithTextError, SubmitPointerError, SubmitTextError, SurfaceBuildContext,
+    SurfacePublication, TextSubmission, UiInputFamily, UiInputFinality,
 };
 use ui_artifacts::UiRuntimeArtifact;
 use ui_controls::{BUTTON_CONTROL_KIND_ID, ControlPackageRegistrySnapshot, ControlSchemaRole};
@@ -105,6 +111,7 @@ pub enum UiRuntimeSlotMountFailure {
     SlotIdentityExhausted,
     SlotCapacityExhausted,
     IncompatibleNativeClock,
+    NativeInputTransactionRequired,
 }
 
 impl UiRuntimeSlotMountFailure {
@@ -124,12 +131,17 @@ impl UiRuntimeSlotMountFailure {
             Self::IncompatibleNativeClock => {
                 "RunenUI native clock must be configured before mounting; an existing time domain cannot be replaced"
             }
+            Self::NativeInputTransactionRequired => {
+                "live native RunenUI mounting requires the Engine World consistency transaction"
+            }
         }
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UiRuntimeSlotOperationFailure {
+    NativeCancellationCapacity,
+    NativeCancellationEvidence,
     MissingSlot,
     EvaluationDiagnostics,
     UnsupportedProjection,
@@ -144,6 +156,573 @@ pub enum UiRuntimeSlotOperationFailure {
     WrongAppKind,
     NativeHostClosed,
     RuntimeStopped(runenui_runtime::PumpOutcome),
+    /// A native-selected slot can mutate only inside the source-correlated
+    /// Engine World transaction, never from a bare ECS resource borrow.
+    NativeInputTransactionRequired,
+}
+
+/// An exact native keyboard observation is an immutable M13 fact, not a
+/// synthesized Engine gameplay grant. Missing or ambiguous evidence fails closed.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum UiRuntimeNativeKeyboardEvidenceFailure {
+    Unsettled,
+    WrongScope,
+    NotProcessed,
+    MissingReceipt,
+    DuplicateReceipt,
+    WrongFamily,
+    WrongDevice,
+    InvalidRevision,
+}
+
+/// Decode only the one framework-authored keyboard settlement identified by
+/// the accepted submission and actual mounted runtime scope. A native receipt
+/// MUST carry the checked device identity; device-less headless settlements
+/// never satisfy an original hardware occurrence. Never infer a positive
+/// result from a quiescent pump without the exact ordered receipt.
+///
+/// This function owns no queue, focus, or permission state. Returning an M13
+/// committed nonexclusive conflict does not itself authorize a game action.
+pub fn native_keyboard_finality(
+    scope: &InputArbitrationScope,
+    expected_device: InputDeviceId,
+    submission: KeyboardSubmission,
+    batch: &InputPumpBatch,
+    status: &Result<(), UiRuntimeSlotOperationFailure>,
+) -> Result<UiInputFinality, UiRuntimeNativeKeyboardEvidenceFailure> {
+    use UiRuntimeNativeKeyboardEvidenceFailure as Failure;
+    let bounded_pending = matches!(
+        (status, batch.report().outcome()),
+        (
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        )
+    );
+    if (!bounded_pending && (status.is_err() || !batch.report().is_quiescent()))
+        || batch.pause_reason().is_some()
+        || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
+    {
+        return Err(Failure::Unsettled);
+    }
+    if batch.final_ownership().scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if !batch
+        .processed_through()
+        .is_some_and(|through| through >= submission.sequence())
+    {
+        return Err(Failure::NotProcessed);
+    }
+    let mut match_for_sequence = None;
+    for record in batch.ordered_records() {
+        let InputArbitrationRecord::InputSettled(settlement) = record else {
+            continue;
+        };
+        if settlement.sequence() != submission.sequence() {
+            continue;
+        }
+        if match_for_sequence.is_some() {
+            return Err(Failure::DuplicateReceipt);
+        }
+        match_for_sequence = Some(settlement);
+    }
+    let settlement = match_for_sequence.ok_or(Failure::MissingReceipt)?;
+    if settlement.scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if settlement.family() != UiInputFamily::Keyboard {
+        return Err(Failure::WrongFamily);
+    }
+    if settlement.device_id() != Some(expected_device) {
+        return Err(Failure::WrongDevice);
+    }
+    if settlement.ownership_revision() > batch.final_ownership().revision() {
+        return Err(Failure::InvalidRevision);
+    }
+    Ok(settlement.finality().clone())
+}
+
+/// Native text rejection keeps the exact original committed payload.
+#[derive(Debug)]
+pub enum UiRuntimeNativeTextAdmissionError {
+    Slot {
+        failure: UiRuntimeSlotOperationFailure,
+        event: CommittedTextEvent,
+    },
+    Framework(SubmitTextError),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UiRuntimeNativeTextEvidenceFailure {
+    Unsettled,
+    WrongScope,
+    NotProcessed,
+    MissingReceipt,
+    DuplicateReceipt,
+    WrongFamily,
+    WrongDevice,
+    InvalidRevision,
+}
+
+/// Correlates the one M13 source-owned text receipt by scope, FIFO sequence
+/// and original device identity. This is not a UI-consumed flag.
+pub(crate) fn native_text_finality(
+    scope: &InputArbitrationScope,
+    expected_device: Option<InputDeviceId>,
+    submission: TextSubmission,
+    batch: &InputPumpBatch,
+    status: &Result<(), UiRuntimeSlotOperationFailure>,
+) -> Result<UiInputFinality, UiRuntimeNativeTextEvidenceFailure> {
+    use UiRuntimeNativeTextEvidenceFailure as Failure;
+    // M13's exact committed text receipt remains terminal when an ordinary
+    // bounded pump leaves independent application work. Unlike a keyboard
+    // conflict this evidence never grants gameplay permission. Keep the slot
+    // unsettled for any further native input and reject all other failures.
+    let bounded_pending = matches!(
+        (status, batch.report().outcome()),
+        (
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        )
+    );
+    if (!bounded_pending && (status.is_err() || !batch.report().is_quiescent()))
+        || batch.pause_reason().is_some()
+        || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
+    {
+        return Err(Failure::Unsettled);
+    }
+    if batch.final_ownership().scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if !batch
+        .processed_through()
+        .is_some_and(|through| through >= submission.sequence())
+    {
+        return Err(Failure::NotProcessed);
+    }
+    let mut found = None;
+    for record in batch.ordered_records() {
+        let InputArbitrationRecord::InputSettled(settlement) = record else {
+            continue;
+        };
+        if settlement.sequence() != submission.sequence() {
+            continue;
+        }
+        if found.is_some() {
+            return Err(Failure::DuplicateReceipt);
+        }
+        found = Some(settlement);
+    }
+    let settlement = found.ok_or(Failure::MissingReceipt)?;
+    if settlement.scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if settlement.family() != UiInputFamily::CommittedText {
+        return Err(Failure::WrongFamily);
+    }
+    if settlement.device_id() != expected_device {
+        return Err(Failure::WrongDevice);
+    }
+    if settlement.ownership_revision() > batch.final_ownership().revision() {
+        return Err(Failure::InvalidRevision);
+    }
+    Ok(settlement.finality().clone())
+}
+
+/// Structured pinned composition admission: slot authority, original
+/// start request and framework composition event failures stay distinguishable.
+#[derive(Debug)]
+pub(crate) enum UiRuntimeNativeCompositionAdmissionError {
+    Slot(UiRuntimeSlotOperationFailure),
+    Start(SubmitCompositionStartError),
+    Event(SubmitCompositionError),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum UiRuntimeNativeCompositionEvidenceFailure {
+    Unsettled,
+    WrongScope,
+    NotProcessed,
+    MissingReceipt,
+    DuplicateReceipt,
+    WrongFamily,
+    WrongDevice,
+    InvalidRevision,
+}
+
+/// Only a reached, unique composition-family M13 settlement in the original
+/// framework scope may qualify an OS preedit/end/cancel observation. No
+/// ownership, focus, generation or text payload is mirrored by this checker.
+pub(crate) fn native_composition_finality(
+    scope: &InputArbitrationScope,
+    sequence: runenui_runtime::WorkSequence,
+    batch: &InputPumpBatch,
+    status: &Result<(), UiRuntimeSlotOperationFailure>,
+) -> Result<UiInputFinality, UiRuntimeNativeCompositionEvidenceFailure> {
+    use UiRuntimeNativeCompositionEvidenceFailure as Failure;
+    let bounded_pending = matches!(
+        (status, batch.report().outcome()),
+        (
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        )
+    );
+    if (!bounded_pending && (status.is_err() || !batch.report().is_quiescent()))
+        || batch.pause_reason().is_some()
+        || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
+    {
+        return Err(Failure::Unsettled);
+    }
+    if batch.final_ownership().scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if !batch.processed_through().is_some_and(|end| end >= sequence) {
+        return Err(Failure::NotProcessed);
+    }
+    let mut found = None;
+    for record in batch.ordered_records() {
+        let InputArbitrationRecord::InputSettled(settlement) = record else {
+            continue;
+        };
+        if settlement.sequence() != sequence {
+            continue;
+        }
+        if found.is_some() {
+            return Err(Failure::DuplicateReceipt);
+        }
+        found = Some(settlement);
+    }
+    let settlement = found.ok_or(Failure::MissingReceipt)?;
+    if settlement.scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if settlement.family() != UiInputFamily::Composition {
+        return Err(Failure::WrongFamily);
+    }
+    if settlement.device_id().is_some() {
+        return Err(Failure::WrongDevice);
+    }
+    if settlement.ownership_revision() > batch.final_ownership().revision() {
+        return Err(Failure::InvalidRevision);
+    }
+    Ok(settlement.finality().clone())
+}
+
+/// A native pointer rejection retains the exact unaccepted event.
+#[derive(Debug)]
+pub enum UiRuntimeNativePointerAdmissionError {
+    Slot {
+        failure: UiRuntimeSlotOperationFailure,
+        event: Box<PointerEvent>,
+    },
+    Framework(SubmitPointerError),
+}
+
+/// Host-side verification of the one exact RunenUI M13 pointer settlement;
+/// never a game-permission grant without original host/source/lifetime proof.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UiRuntimeNativePointerEvidenceFailure {
+    Unsettled,
+    WrongScope,
+    NotProcessed,
+    MissingReceipt,
+    DuplicateReceipt,
+    WrongFamily,
+    WrongDevice,
+    WrongPointer,
+    WrongSurface,
+    InvalidRevision,
+}
+
+/// Check original native stream identity against the exact framework receipt,
+/// not a coalesced UI-consumed flag or a generic quiescent pump.
+///
+/// An exact terminal pointer receipt can be reached while other bounded
+/// framework work remains. A budget-exhausted pump is not a pointer rejection:
+/// only an unpaused, running M13 batch with the exact source-qualified receipt
+/// can qualify that pointer. Other unfinished work still blocks the slot's
+/// next input admission through its canonical readiness state. This function
+/// never grants game input, and does not relax keyboard/text finality.
+pub fn native_pointer_finality(
+    scope: &InputArbitrationScope,
+    expected_device: InputDeviceId,
+    expected_pointer: PointerId,
+    expected_surface: &SurfaceId,
+    submission: PointerSubmission,
+    batch: &InputPumpBatch,
+    status: &Result<(), UiRuntimeSlotOperationFailure>,
+) -> Result<UiInputFinality, UiRuntimeNativePointerEvidenceFailure> {
+    use UiRuntimeNativePointerEvidenceFailure as Failure;
+    // RunenUI reports BudgetExhausted whenever an ordinary bounded pump
+    // leaves immediately serviceable *other* work. The pointer's own terminal
+    // InputSettled receipt remains valid once reached; treating global
+    // nonquiescence as a fatal pointer failure incorrectly shuts down a
+    // functioning real native window on cursor motion.
+    let bounded_pending = matches!(
+        (status, batch.report().outcome()),
+        (
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        )
+    );
+    if (!bounded_pending && (status.is_err() || !batch.report().is_quiescent()))
+        || batch.pause_reason().is_some()
+        || batch.final_ownership().status() != runenui_runtime::RuntimeStatus::Running
+    {
+        return Err(Failure::Unsettled);
+    }
+    if batch.final_ownership().scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if !batch
+        .processed_through()
+        .is_some_and(|through| through >= submission.sequence())
+    {
+        return Err(Failure::NotProcessed);
+    }
+    let mut found = None;
+    for record in batch.ordered_records() {
+        let InputArbitrationRecord::InputSettled(settlement) = record else {
+            continue;
+        };
+        if settlement.sequence() != submission.sequence() {
+            continue;
+        }
+        if found.is_some() {
+            return Err(Failure::DuplicateReceipt);
+        }
+        found = Some(settlement);
+    }
+    let settlement = found.ok_or(Failure::MissingReceipt)?;
+    if settlement.scope() != scope {
+        return Err(Failure::WrongScope);
+    }
+    if settlement.family() != UiInputFamily::Pointer {
+        return Err(Failure::WrongFamily);
+    }
+    if settlement.device_id() != Some(expected_device) {
+        return Err(Failure::WrongDevice);
+    }
+    if settlement.pointer_id() != Some(expected_pointer) {
+        return Err(Failure::WrongPointer);
+    }
+    if settlement.surface_id() != Some(expected_surface) {
+        return Err(Failure::WrongSurface);
+    }
+    if settlement.ownership_revision() > batch.final_ownership().revision() {
+        return Err(Failure::InvalidRevision);
+    }
+    Ok(settlement.finality().clone())
+}
+
+/// A rejected host keyboard occurrence retains the exact unaccepted event.
+#[derive(Debug)]
+pub enum UiRuntimeNativeKeyboardAdmissionError {
+    Slot {
+        failure: UiRuntimeSlotOperationFailure,
+        event: KeyboardEvent,
+    },
+    Framework(SubmitKeyboardError),
+}
+
+/// Exact original native keyboard and same-callback committed text are one
+/// framework-owned M13 admission transaction. Any refused slot returns BOTH
+/// unchanged original payloads for source-local fail-closed handling.
+pub enum UiRuntimeNativeKeyboardTextAdmissionError {
+    Slot {
+        failure: UiRuntimeSlotOperationFailure,
+        events: Box<(KeyboardEvent, CommittedTextEvent)>,
+    },
+    Framework(SubmitKeyboardWithTextError),
+}
+
+#[cfg(test)]
+impl UiRuntimeNativeKeyboardTextAdmissionError {
+    /// The bounded negative test verifies both exact rejected original events
+    /// are recoverable without rendering the text in normal error diagnostics.
+    #[must_use]
+    pub fn into_events(self) -> (KeyboardEvent, CommittedTextEvent) {
+        match self {
+            Self::Slot { events, .. } => *events,
+            Self::Framework(error) => error.into_events(),
+        }
+    }
+}
+
+impl std::fmt::Debug for UiRuntimeNativeKeyboardTextAdmissionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Slot { failure, events } => f
+                .debug_struct("NativePairedInputSlotRefusal")
+                .field("failure", failure)
+                .field("text_bytes", &events.1.text().len())
+                .finish_non_exhaustive(),
+            Self::Framework(error) => f
+                .debug_tuple("NativePairedInputFrameworkRefusal")
+                .field(&error.kind())
+                .finish(),
+        }
+    }
+}
+
+/// One canonical existing M13 no-focus observation predicate. The caller
+/// selects the exact *original* keyboard phase and its separate game policy.
+fn native_unfocused_keyboard_rejection_witness(
+    expected_device: InputDeviceId,
+    expected_phase: KeyboardPhase,
+    expected_repeat: bool,
+    before: &InputOwnershipSnapshot,
+    after: &InputOwnershipSnapshot,
+    error: &UiRuntimeNativeKeyboardAdmissionError,
+) -> bool {
+    let UiRuntimeNativeKeyboardAdmissionError::Framework(framework) = error else {
+        return false;
+    };
+    if framework.kind() != SubmitKeyboardErrorKind::NoFocusedTarget
+        || framework.event().phase() != expected_phase
+        || framework.event().is_repeat() != expected_repeat
+        || framework.event().device_id() != Some(expected_device)
+        || before != after
+        || before.status() != runenui_runtime::RuntimeStatus::Running
+    {
+        return false;
+    }
+    native_unfocused_game_keyboard_snapshot(before)
+}
+
+/// Reuse the single authoritative no-focus M13 snapshot for both rejected
+/// original input and an already eligible suppressed duplicate. This is a
+/// read-only proof over RunenUI ownership, not an Engine focus cache.
+pub(crate) fn native_unfocused_game_keyboard_snapshot(snapshot: &InputOwnershipSnapshot) -> bool {
+    if snapshot.status() != runenui_runtime::RuntimeStatus::Running {
+        return false;
+    }
+    let keyboard = snapshot.keyboard();
+    keyboard.focused_node().is_none()
+        && keyboard.composition_generation().is_none()
+        && keyboard.composition_device_id().is_none()
+        && keyboard.space_activation_owner().is_none()
+        && keyboard.space_activation_device_id().is_none()
+        && snapshot
+            .surfaces()
+            .iter()
+            .all(|surface| surface.modal_blocker().is_none())
+        && snapshot
+            .pointers()
+            .iter()
+            .all(|pointer| pointer.capture_owner().is_none() && pointer.pressed_owner().is_none())
+}
+
+/// The exact M13 pre-sequence `NoFocusedTarget` original-Down evidence.
+/// Gameplay permission still requires source-specific ActionState eligibility.
+pub fn native_no_focused_keyboard_claim_witness(
+    expected_device: InputDeviceId,
+    before: &InputOwnershipSnapshot,
+    after: &InputOwnershipSnapshot,
+    error: &UiRuntimeNativeKeyboardAdmissionError,
+) -> bool {
+    native_unfocused_keyboard_rejection_witness(
+        expected_device,
+        KeyboardPhase::Down,
+        false,
+        before,
+        after,
+        error,
+    )
+}
+
+/// Exact *original repeat* nonclaim is not a new gameplay Down grant.
+/// The native translator has already established the prior pressed lifetime;
+/// this only avoids revoking that preexisting source-local permission when
+/// a genuine repeat is rejected before M13 sequence reservation. Revocation
+/// and permission remain authoritative in Engine ActionState.
+pub(crate) fn native_original_keyboard_repeat_nonclaim(
+    expected_device: InputDeviceId,
+    before: &InputOwnershipSnapshot,
+    after: &InputOwnershipSnapshot,
+    error: &UiRuntimeNativeKeyboardAdmissionError,
+) -> bool {
+    native_unfocused_keyboard_rejection_witness(
+        expected_device,
+        KeyboardPhase::Down,
+        true,
+        before,
+        after,
+        error,
+    )
+}
+
+/// Only an authentic original release may retire neutral physical state
+/// without M13 admission. This is NEVER positive gameplay press permission.
+pub(crate) fn native_original_keyboard_release_nonclaim(
+    expected_device: InputDeviceId,
+    before: &InputOwnershipSnapshot,
+    after: &InputOwnershipSnapshot,
+    error: &UiRuntimeNativeKeyboardAdmissionError,
+) -> bool {
+    native_unfocused_keyboard_rejection_witness(
+        expected_device,
+        KeyboardPhase::Up,
+        false,
+        before,
+        after,
+        error,
+    ) && matches!(
+        error,
+        UiRuntimeNativeKeyboardAdmissionError::Framework(framework)
+            if !framework.event().is_repeat()
+    )
+}
+
+/// A Cancel refused before sequence reservation can finish its translator
+/// lifetime only when the same fresh M13 owner proves no keyboard target or
+/// Space owner remains. This never fabricates a receipt or gameplay permission.
+pub(crate) fn native_keyboard_cancel_definite_nonclaim(
+    device: InputDeviceId,
+    before: &InputOwnershipSnapshot,
+    after: &InputOwnershipSnapshot,
+    error: &UiRuntimeNativeKeyboardAdmissionError,
+) -> bool {
+    let UiRuntimeNativeKeyboardAdmissionError::Framework(error) = error else {
+        return false;
+    };
+    error.kind() == SubmitKeyboardErrorKind::NoFocusedTarget
+        && error.event().phase() == KeyboardPhase::Cancel
+        && !error.event().is_repeat()
+        && error.event().device_id() == Some(device)
+        && before == after
+        && after.status() == runenui_runtime::RuntimeStatus::Running
+        && after.keyboard().focused_node().is_none()
+        && after.keyboard().space_activation_owner().is_none()
+        && after.keyboard().space_activation_device_id().is_none()
+}
+
+/// These exact rejected originals have lost their original framework recipient
+/// or composition generation. They are terminal non-delivery, not successful
+/// cancellation or permission to replay into a successor. Capacity, foreign
+/// identity, pointer/display rejection and aborted processing remain failures.
+pub(crate) fn native_cancellation_finality_is_terminal(
+    family: UiInputFamily,
+    finality: &UiInputFinality,
+) -> bool {
+    use runenui_runtime::UiInputProcessingRejection as Rejection;
+    matches!(
+        (family, finality),
+        (
+            UiInputFamily::Keyboard | UiInputFamily::Pointer | UiInputFamily::Composition,
+            UiInputFinality::Committed(_),
+        ) | (
+            UiInputFamily::Keyboard | UiInputFamily::Composition,
+            UiInputFinality::ProcessingRejected(
+                Rejection::FocusBindingInvalidated
+                    | Rejection::MissingTarget
+                    | Rejection::StaleTarget,
+            ),
+        ) | (
+            UiInputFamily::Composition,
+            UiInputFinality::ProcessingRejected(Rejection::StaleCompositionGeneration),
+        )
+    )
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -287,7 +866,86 @@ impl HostProtocol for RunenwerkUiHostProtocol {
 
 struct RunenwerkProgramUiApp;
 
+// The validated projector supports Columns, Labels, and leaf button Controls.
+// Each creates exactly one mounted owner. No input may fabricate a source node.
+fn program_ui_owner_counts(node: &UiNodeDefinition) -> Option<(usize, usize)> {
+    match node {
+        UiNodeDefinition::Column { children, .. } => {
+            let mut mounted = 1_usize;
+            let mut buttons = 0_usize;
+            for child in children {
+                let (child_mounted, child_buttons) = program_ui_owner_counts(child)?;
+                mounted = mounted.checked_add(child_mounted)?;
+                buttons = buttons.checked_add(child_buttons)?;
+            }
+            Some((mounted, buttons))
+        }
+        UiNodeDefinition::Control { .. } => Some((1, 1)),
+        UiNodeDefinition::Label { .. } => Some((1, 0)),
+        _ => None,
+    }
+}
+
+// Use the actual accepted authored topology instead of a guessed universal
+// budget. Overflows fail initial admission, never silently wrap capacity.
+fn program_ui_producer_budget(
+    state: &RunenwerkProgramUiState,
+    host_request: bool,
+    interaction: bool,
+) -> runenui_core::ProducerBudget {
+    let Some((owners, buttons)) = program_ui_owner_counts(state.source.root()) else {
+        return runenui_core::ProducerBudget::new(0, 0);
+    };
+    // The single routed interaction can produce focus/out and activation
+    // notifications for currently mounted controls. One ActivateRoute action
+    // starts at most one host request with one terminal reply.
+    let host_starts = usize::from(host_request);
+    let Some(outputs) = (if interaction { buttons } else { 0 })
+        .checked_mul(4)
+        .and_then(|n| n.checked_add(if interaction && buttons != 0 { 4 } else { 0 }))
+        .and_then(|n| n.checked_add(host_starts))
+    else {
+        return runenui_core::ProducerBudget::new(0, 0);
+    };
+    let Some(credits) = 1_usize
+        .checked_add(owners)
+        .and_then(|n| n.checked_add(outputs))
+        .and_then(|n| n.checked_add(host_starts.checked_mul(3)?))
+    else {
+        return runenui_core::ProducerBudget::new(0, 0);
+    };
+    runenui_core::ProducerBudget::new(credits, outputs)
+        .with_reconciliation(owners, owners, owners)
+        .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, host_starts, 0))
+        .with_work_residency(runenui_core::WorkResidencyBudget::new(
+            0,
+            0,
+            0,
+            0,
+            host_starts,
+            0,
+        ))
+}
+
 impl UiApp for RunenwerkProgramUiApp {
+    fn initial_producer_budget(state: &Self::State) -> runenui_core::ProducerBudget {
+        program_ui_producer_budget(state, false, false)
+    }
+
+    fn action_producer_budget(
+        state: &Self::State,
+        action: &Self::Action,
+    ) -> runenui_core::ProducerBudget {
+        let starts_host = matches!(action, RunenwerkProgramUiAction::ActivateRoute(_));
+        program_ui_producer_budget(state, starts_host, false)
+    }
+
+    fn interaction_producer_budget(state: &Self::State) -> runenui_core::ProducerBudget {
+        let has_buttons =
+            program_ui_owner_counts(state.source.root()).is_some_and(|(_, buttons)| buttons > 0);
+        program_ui_producer_budget(state, has_buttons, has_buttons)
+    }
+
     type State = RunenwerkProgramUiState;
     type Action = RunenwerkProgramUiAction;
     type HostProtocol = RunenwerkUiHostProtocol;
@@ -393,6 +1051,96 @@ impl UiRuntimeSlotKind {
         }
     }
 
+    fn input_ownership(&mut self) -> Result<InputOwnershipSnapshot, InputObservationError> {
+        match self {
+            Self::Counter(runtime) => runtime.input_ownership(),
+            Self::Typed(runtime) => runtime.input_ownership(),
+        }
+    }
+
+    fn submit_keyboard(
+        &mut self,
+        event: KeyboardEvent,
+    ) -> Result<KeyboardSubmission, SubmitKeyboardError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_keyboard(event),
+            Self::Typed(runtime) => runtime.submit_keyboard(event),
+        }
+    }
+
+    fn submit_keyboard_with_text(
+        &mut self,
+        keyboard: KeyboardEvent,
+        text: CommittedTextEvent,
+    ) -> Result<(KeyboardSubmission, TextSubmission), SubmitKeyboardWithTextError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_keyboard_with_text(keyboard, text),
+            Self::Typed(runtime) => runtime.submit_keyboard_with_text(keyboard, text),
+        }
+    }
+
+    fn submit_pointer(
+        &mut self,
+        event: PointerEvent,
+    ) -> Result<PointerSubmission, SubmitPointerError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_pointer(event),
+            Self::Typed(runtime) => runtime.submit_pointer(event),
+        }
+    }
+
+    fn submit_text(
+        &mut self,
+        event: CommittedTextEvent,
+    ) -> Result<TextSubmission, SubmitTextError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_text(event),
+            Self::Typed(runtime) => runtime.submit_text(event),
+        }
+    }
+
+    fn start_composition(
+        &mut self,
+        device: Option<InputDeviceId>,
+    ) -> Result<CompositionStartSubmission, SubmitCompositionStartError> {
+        match self {
+            Self::Counter(runtime) => runtime.start_composition(device),
+            Self::Typed(runtime) => runtime.start_composition(device),
+        }
+    }
+
+    fn update_composition(
+        &mut self,
+        generation: CompositionGeneration,
+        preedit: String,
+        range: Option<CompositionRange>,
+    ) -> Result<CompositionSubmission, SubmitCompositionError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_composition_update(generation, preedit, range),
+            Self::Typed(runtime) => runtime.update_composition(generation, preedit, range),
+        }
+    }
+
+    fn end_composition(
+        &mut self,
+        generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, SubmitCompositionError> {
+        match self {
+            Self::Counter(runtime) => runtime.submit_composition_end(generation),
+            Self::Typed(runtime) => runtime.end_composition(generation),
+        }
+    }
+
+    fn cancel_composition(
+        &mut self,
+        generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, SubmitCompositionError> {
+        match self {
+            Self::Counter(runtime) => runtime.cancel_composition(generation),
+            Self::Typed(runtime) => runtime.cancel_composition(generation),
+        }
+    }
+
     fn set_native_wake_transport(&self, transport: NativeWakeTransport) {
         match self {
             Self::Counter(runtime) => runtime.set_wake_transport(transport),
@@ -406,6 +1154,285 @@ impl UiRuntimeSlotKind {
             Self::Typed(runtime) => runtime.shutdown(),
         }
         .map_err(UiRuntimeSlotOperationFailure::InputObservation)
+    }
+}
+
+/// Immutable expectations for already admitted M13 cancellations. This stores
+/// no input payload, pressed state or routing decision. Every slot pump consumes
+/// the owner's actual ordered receipts, including pumps outside the Winit callback.
+struct NativeCancellationReceipt {
+    scope: InputArbitrationScope,
+    sequence: runenui_runtime::WorkSequence,
+    family: UiInputFamily,
+    device: Option<InputDeviceId>,
+    pointer: Option<PointerId>,
+    surface: Option<SurfaceId>,
+}
+
+#[cfg(test)]
+mod deferred_cancellation_retirement_tests {
+    use super::*;
+    use runenui_core::{
+        SemanticEditableMode, TextAffinity, TextDocumentId, TextDocumentRevision,
+        TextDocumentSnapshot, TextPosition, TextSelection,
+    };
+
+    struct RetiringEditable;
+    impl UiApp for RetiringEditable {
+        type State = bool;
+        type Action = bool;
+        type HostProtocol = runenui_core::NoHostProtocol;
+
+        fn initial_producer_budget(_: &bool) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+        }
+        fn action_producer_budget(_: &bool, _: &bool) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+        }
+        fn interaction_producer_budget(_: &bool) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(13, 9)
+                .with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+        }
+        fn root(visible: &bool) -> impl View<bool> {
+            if *visible {
+                let document = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(0),
+                );
+                let caret = TextPosition::new(document, "", 0, TextAffinity::Downstream).unwrap();
+                runenui_core::text_field(
+                    document,
+                    String::new(),
+                    TextSelection::collapsed(caret),
+                    SemanticEditableMode::SingleLine,
+                    |_| true,
+                )
+                .unwrap()
+                .into_element()
+            } else {
+                text("retired original editable").into_element()
+            }
+        }
+        fn update(
+            state: &mut bool,
+            visible: bool,
+        ) -> impl runenui_core::IntoUpdateOutput<bool, Self::HostProtocol> {
+            *state = visible;
+        }
+    }
+
+    #[test]
+    fn queued_cancellation_accepts_only_its_exact_retired_focus_disposition() {
+        for composition in [false, true] {
+            let mut slots = UiRuntimeSlotsResource::default();
+            let slot = slots
+                .mount_app::<RetiringEditable>(
+                    UiTypedScreenId::new("retired.cancel"),
+                    true,
+                    &UiRuntimeFontConfiguration::default(),
+                )
+                .slot_id()
+                .unwrap();
+            slots
+                .test_request_first_typed_focus::<RetiringEditable>(slot)
+                .unwrap();
+            let mut windows = crate::runtime::WindowStateRegistryResource::default();
+            let window = windows.register_primary_window("retired cancel", (640, 480), 1.0, true);
+            let mut recipients = super::super::UiNativeInputRecipientsResource::default();
+            recipients
+                .bind(
+                    window,
+                    super::super::NativeInputRecipient::RunenUiSlot(slot),
+                    &windows,
+                    &mut slots,
+                )
+                .unwrap();
+            let device = InputDeviceId::new(1).unwrap();
+            let generation = if composition {
+                let start = slots.start_native_composition(slot).unwrap();
+                let (_, status) = slots.pump_native_input_records(slot).unwrap();
+                assert!(status.is_ok());
+                Some(start.generation().clone())
+            } else {
+                None
+            };
+            slots
+                .test_queue_unpumped_typed_actions::<RetiringEditable>(slot, 1, || false)
+                .unwrap();
+            let sequence = if let Some(generation) = generation {
+                slots
+                    .cancel_native_composition(slot, generation)
+                    .unwrap()
+                    .sequence()
+            } else {
+                slots
+                    .submit_native_keyboard(
+                        slot,
+                        KeyboardEvent::new(
+                            KeyboardPhase::Cancel,
+                            runenui_core::PhysicalKey::Code("KeyX".to_owned()),
+                            runenui_core::LogicalKey::Character("x".to_owned()),
+                            runenui_core::KeyModifiers::NONE,
+                            false,
+                            runenui_core::KeyLocation::Standard,
+                            runenui_core::KeyboardCompositionState::Inactive,
+                            Some(device),
+                        ),
+                    )
+                    .unwrap()
+                    .sequence()
+            };
+            let (batch, status) = slots.pump_native_input_records(slot).unwrap();
+            let settled = batch
+                .ordered_records()
+                .iter()
+                .find_map(|record| match record {
+                    InputArbitrationRecord::InputSettled(settled)
+                        if settled.sequence() == sequence =>
+                    {
+                        Some(settled)
+                    }
+                    _ => None,
+                })
+                .expect("the actual M13 owner emits the cancellation's exact terminal record");
+            assert!(
+                matches!(settled.finality(), UiInputFinality::ProcessingRejected(_)),
+                "the earlier actual target retirement must reject, not replay, the old Cancel"
+            );
+            assert!(
+                status.is_ok(),
+                "a truthful exact retired-focus cancellation is not an integrity failure: {status:?}"
+            );
+            assert!(!slots.native_cancellations_pending(slot).unwrap());
+        }
+    }
+
+    #[test]
+    fn cancel_prequeue_nonclaim_requires_fresh_original_device_and_absent_keyboard_owner() {
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<RetiringEditable>(
+                UiTypedScreenId::new("no.focus.cancel"),
+                true,
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .unwrap();
+        slots
+            .test_request_first_typed_focus::<RetiringEditable>(slot)
+            .unwrap();
+        let old = slots.input_ownership(slot).unwrap();
+        slots
+            .submit_app_action::<RetiringEditable>(slot, false)
+            .unwrap();
+        let now = slots.input_ownership(slot).unwrap();
+        let device = InputDeviceId::new(1).unwrap();
+        let event = |phase| {
+            KeyboardEvent::new(
+                phase,
+                runenui_core::PhysicalKey::Code("KeyX".to_owned()),
+                runenui_core::LogicalKey::Character("x".to_owned()),
+                runenui_core::KeyModifiers::NONE,
+                false,
+                runenui_core::KeyLocation::Standard,
+                runenui_core::KeyboardCompositionState::Inactive,
+                Some(device),
+            )
+        };
+        let epoch = slots.ingress_epoch(slot);
+        let refusal = slots
+            .submit_native_keyboard(slot, event(KeyboardPhase::Cancel))
+            .unwrap_err();
+        let after = slots.input_ownership(slot).unwrap();
+        assert_eq!(
+            slots.ingress_epoch(slot),
+            epoch,
+            "no sequence or Engine ingress generation is fabricated for refusal"
+        );
+        assert!(native_keyboard_cancel_definite_nonclaim(
+            device, &now, &after, &refusal
+        ));
+        assert!(!native_keyboard_cancel_definite_nonclaim(
+            device, &old, &after, &refusal
+        ));
+        assert!(!native_keyboard_cancel_definite_nonclaim(
+            InputDeviceId::new(2).unwrap(),
+            &now,
+            &after,
+            &refusal
+        ));
+        let wrong_phase = slots
+            .submit_native_keyboard(slot, event(KeyboardPhase::Down))
+            .unwrap_err();
+        assert!(!native_keyboard_cancel_definite_nonclaim(
+            device,
+            &now,
+            &after,
+            &wrong_phase
+        ));
+        assert!(!slots.native_cancellations_pending(slot).unwrap());
+    }
+
+    #[test]
+    fn cancellation_retirement_does_not_accept_capacity_foreign_or_aborted_input() {
+        use runenui_runtime::{UiInputAbortReason, UiInputProcessingRejection as Rejection};
+        for family in [
+            UiInputFamily::Keyboard,
+            UiInputFamily::Pointer,
+            UiInputFamily::Composition,
+        ] {
+            for finality in [
+                UiInputFinality::ProcessingRejected(Rejection::InsufficientTransactionCapacity),
+                UiInputFinality::ProcessingRejected(Rejection::ForeignTarget),
+                UiInputFinality::Aborted(UiInputAbortReason::RuntimeIntegrity),
+            ] {
+                assert!(!native_cancellation_finality_is_terminal(family, &finality));
+            }
+        }
+        assert!(!native_cancellation_finality_is_terminal(
+            UiInputFamily::Pointer,
+            &UiInputFinality::ProcessingRejected(Rejection::MissingDisplayedSnapshot)
+        ));
+    }
+}
+
+impl NativeCancellationReceipt {
+    fn observe(&self, batch: &InputPumpBatch) -> Result<bool, UiRuntimeSlotOperationFailure> {
+        if batch.final_ownership().scope() != &self.scope {
+            return Err(UiRuntimeSlotOperationFailure::NativeCancellationEvidence);
+        }
+        if !batch
+            .processed_through()
+            .is_some_and(|end| end >= self.sequence)
+        {
+            return Ok(false);
+        }
+        let mut records = batch
+            .ordered_records()
+            .iter()
+            .filter_map(|record| match record {
+                InputArbitrationRecord::InputSettled(settled)
+                    if settled.sequence() == self.sequence =>
+                {
+                    Some(settled)
+                }
+                _ => None,
+            });
+        let valid = records.next().is_some_and(|settled| {
+            settled.scope() == &self.scope
+                && settled.family() == self.family
+                && settled.device_id() == self.device
+                && settled.pointer_id() == self.pointer
+                && settled.surface_id() == self.surface.as_ref()
+                && settled.ownership_revision() <= batch.final_ownership().revision()
+                && native_cancellation_finality_is_terminal(self.family, settled.finality())
+        }) && records.next().is_none();
+        if !valid {
+            return Err(UiRuntimeSlotOperationFailure::NativeCancellationEvidence);
+        }
+        Ok(true)
     }
 }
 
@@ -423,12 +1450,30 @@ struct UiRuntimeSlot {
     /// A deadline already covered by a quiescent checkpoint needs publication,
     /// not an endless sequence of identical pumps when no surface is bound.
     deadline_observed_at: Option<MonotonicInstant>,
+    /// A capability latch, not another recipient map. Once selected for
+    /// native input, raw app mutations must use the World transaction.
+    native_input_selected: bool,
+    native_cancellations: Vec<NativeCancellationReceipt>,
 }
 
 impl UiRuntimeSlot {
     fn next_ingress_epoch(&self) -> Result<u64, UiRuntimeSlotOperationFailure> {
         if self.requires_settlement {
             return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
+        }
+        self.ingress_epoch
+            .checked_add(1)
+            .ok_or(UiRuntimeSlotOperationFailure::PublicationRevisionExhausted)
+    }
+
+    /// The selected native event producer uses the original M13 FIFO even
+    /// when earlier canonical application work has not fully settled. Only
+    /// an accepted native binding may bypass the World mutation/readiness
+    /// checkpoint; runtime ingress still performs all its own capacity,
+    /// focus-session, terminal and typed event validation.
+    fn next_native_ingress_epoch(&self) -> Result<u64, UiRuntimeSlotOperationFailure> {
+        if !self.native_input_selected {
+            return self.next_ingress_epoch();
         }
         self.ingress_epoch
             .checked_add(1)
@@ -461,8 +1506,26 @@ impl UiRuntimeSlot {
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
         self.requires_settlement = true;
         let batch = batch.map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+        self.observe_batch_report(&batch)
+    }
+
+    /// Update the existing runtime readiness state without consuming its
+    /// ordered M13 records. Native callers own the returned batch directly.
+    fn observe_batch_report(
+        &mut self,
+        batch: &InputPumpBatch,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        self.requires_settlement = true;
+        let mut index = 0;
+        while index < self.native_cancellations.len() {
+            if self.native_cancellations[index].observe(batch)? {
+                self.native_cancellations.remove(index);
+            } else {
+                index += 1;
+            }
+        }
         if let Err(error @ UiRuntimeSlotOperationFailure::RuntimeStopped(_)) =
-            settlement_result(&batch)
+            settlement_result(batch)
         {
             self.next_deadline = None;
             return Err(error);
@@ -484,6 +1547,12 @@ pub struct UiRuntimeSlotsResource {
     native_clock: Option<NativeHostClock>,
     native_transport: Option<NativeWakeTransport>,
     native_closed: bool,
+    /// Ephemeral mutation permit scoped to exactly one selected native slot.
+    /// Actual binding, source and scope remain owned by their existing owners.
+    native_mutation_slot: Option<UiRuntimeSlotId>,
+    /// Temporary write permission for a World-owned native mount. Never an
+    /// alternative window recipient or source identity.
+    native_mount_permitted: bool,
 }
 
 impl Default for UiRuntimeSlotsResource {
@@ -494,6 +1563,8 @@ impl Default for UiRuntimeSlotsResource {
             native_clock: None,
             native_transport: None,
             native_closed: false,
+            native_mutation_slot: None,
+            native_mount_permitted: false,
         }
     }
 }
@@ -562,6 +1633,10 @@ impl UiRuntimeSlotsResource {
     }
 
     pub(crate) fn settle_native_slots(&mut self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.native_mutation_slot.is_none(),
+            "native slot-wide settlement cannot run inside one selected-slot transaction"
+        );
         self.native_readiness()?;
         if self.native_clock.is_none() || self.native_closed {
             return Ok(());
@@ -602,6 +1677,10 @@ impl UiRuntimeSlotsResource {
     }
 
     pub(crate) fn shutdown_native_slots(&mut self) -> anyhow::Result<()> {
+        anyhow::ensure!(
+            self.native_mutation_slot.is_none(),
+            "native all-slot shutdown cannot run inside one selected-slot transaction"
+        );
         self.native_closed = true;
         if let Some(transport) = &self.native_transport {
             transport.close();
@@ -643,6 +1722,15 @@ impl UiRuntimeSlotsResource {
                 UiRuntimeSlotMountFailure::RuntimeInitialization,
             );
         }
+        if (self.native_transport.is_some()
+            || self.slots.iter().any(|slot| slot.native_input_selected))
+            && !self.native_mount_permitted
+        {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::NativeInputTransactionRequired,
+            );
+        }
         let lowering = source.lower_with_registry_snapshot(registry);
         if !lowering.passed() {
             return UiRuntimeSlotMountReport::rejected(
@@ -673,12 +1761,25 @@ impl UiRuntimeSlotsResource {
             );
         }
 
-        let mut runtime = AppRuntime::<RunenwerkProgramUiApp>::mount(RunenwerkProgramUiState {
-            source,
-            artifact,
-            resolved_state,
-            registry: registry.clone(),
-        });
+        let mut runtime =
+            match AppRuntime::<RunenwerkProgramUiApp>::mount(RunenwerkProgramUiState {
+                source,
+                artifact,
+                resolved_state,
+                registry: registry.clone(),
+            }) {
+                Ok(runtime) => runtime,
+                Err(error) => {
+                    tracing::warn!(
+                        kind = ?error.kind(),
+                        "RunenUI program mount refused initial producer admission"
+                    );
+                    return UiRuntimeSlotMountReport::rejected(
+                        screen_id,
+                        UiRuntimeSlotMountFailure::RuntimeInitialization,
+                    );
+                }
+            };
         if let Some(clock) = &self.native_clock {
             runtime.set_monotonic_clock(clock.clone());
         }
@@ -700,6 +1801,8 @@ impl UiRuntimeSlotsResource {
             next_deadline: None,
             native_clock: self.native_clock.clone(),
             deadline_observed_at: None,
+            native_input_selected: false,
+            native_cancellations: Vec::new(),
         };
         if self.native_clock.is_some() {
             match slot.settle_pending() {
@@ -740,6 +1843,18 @@ impl UiRuntimeSlotsResource {
                 UiRuntimeSlotMountFailure::RuntimeInitialization,
             );
         }
+        // Adding the first UI slot can revoke implicit game-only routing for
+        // an unbound native window. A live host must atomically reconcile its
+        // existing ActionState in the World, not mount through a bare resource.
+        if (self.native_transport.is_some()
+            || self.slots.iter().any(|slot| slot.native_input_selected))
+            && !self.native_mount_permitted
+        {
+            return UiRuntimeSlotMountReport::rejected(
+                screen_id,
+                UiRuntimeSlotMountFailure::NativeInputTransactionRequired,
+            );
+        }
         let Some(next_slot_id) = self.next_slot_id.checked_add(1) else {
             return UiRuntimeSlotMountReport::rejected(
                 screen_id,
@@ -752,10 +1867,22 @@ impl UiRuntimeSlotsResource {
                 UiRuntimeSlotMountFailure::SlotCapacityExhausted,
             );
         }
-        let mut runtime = AppRuntime::<A>::mount_with_config(
+        let mut runtime = match AppRuntime::<A>::mount_with_config(
             state,
             RuntimeConfig::default().with_text_font_source_policy(fonts.source_policy()),
-        );
+        ) {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                tracing::warn!(
+                    kind = ?error.kind(),
+                    "RunenUI typed app mount refused initial producer admission"
+                );
+                return UiRuntimeSlotMountReport::rejected(
+                    screen_id,
+                    UiRuntimeSlotMountFailure::RuntimeInitialization,
+                );
+            }
+        };
         if let Some(clock) = &self.native_clock {
             runtime.set_monotonic_clock(clock.clone());
         }
@@ -798,8 +1925,60 @@ impl UiRuntimeSlotsResource {
             next_deadline,
             native_clock: self.native_clock.clone(),
             deadline_observed_at,
+            native_input_selected: false,
+            native_cancellations: Vec::new(),
         });
         UiRuntimeSlotMountReport::accepted(screen_id, id)
+    }
+
+    /// One sealed mount capability for either Engine UI representation.
+    /// Only the World transaction may reconcile route changes with game input.
+    fn transact_native_mount(
+        &mut self,
+        _permit: &super::native_transaction::NativeAppMutationPermit,
+        operation: impl FnOnce(&mut Self) -> UiRuntimeSlotMountReport,
+    ) -> Result<UiRuntimeSlotMountReport, UiRuntimeSlotMountFailure> {
+        if self.native_mount_permitted || self.native_mutation_slot.is_some() {
+            return Err(UiRuntimeSlotMountFailure::NativeInputTransactionRequired);
+        }
+        self.native_mount_permitted = true;
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| operation(self)));
+        self.native_mount_permitted = false;
+        match outcome {
+            Ok(report) => Ok(report),
+            Err(panic) => std::panic::resume_unwind(panic),
+        }
+    }
+
+    pub(crate) fn mount_native_app<A>(
+        &mut self,
+        permit: &super::native_transaction::NativeAppMutationPermit,
+        screen_id: UiTypedScreenId,
+        state: A::State,
+        fonts: &UiRuntimeFontConfiguration,
+    ) -> UiRuntimeSlotMountReport
+    where
+        A: UiApp + 'static,
+    {
+        let rejected_screen = screen_id.clone();
+        self.transact_native_mount(permit, |slots| {
+            slots.mount_app::<A>(screen_id, state, fonts)
+        })
+        .unwrap_or_else(|failure| UiRuntimeSlotMountReport::rejected(rejected_screen, failure))
+    }
+
+    pub(crate) fn mount_native_program(
+        &mut self,
+        permit: &super::native_transaction::NativeAppMutationPermit,
+        source: UiTypedSource,
+        registry: &ControlPackageRegistrySnapshot,
+        fonts: &UiRuntimeFontConfiguration,
+    ) -> UiRuntimeSlotMountReport {
+        let rejected_screen = source.screen_id().clone();
+        self.transact_native_mount(permit, |slots| {
+            slots.mount_with_fonts(source, registry, fonts)
+        })
+        .unwrap_or_else(|failure| UiRuntimeSlotMountReport::rejected(rejected_screen, failure))
     }
 
     /// Typed action ingress increments the Engine epoch immediately upon RunenUI
@@ -813,7 +1992,7 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         let next = slot.next_ingress_epoch()?;
         let runtime = slot
             .runtime
@@ -861,7 +2040,7 @@ impl UiRuntimeSlotsResource {
     where
         A: UiApp + 'static,
     {
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         let next = slot.next_ingress_epoch()?;
         let runtime = slot
             .runtime
@@ -873,6 +2052,63 @@ impl UiRuntimeSlotsResource {
         slot.accepted_ingress(next)
     }
 
+    /// One synchronous M13 observation at the owning mounted slot. Pending
+    /// framework work is never interpreted as valid gameplay permission.
+    pub fn input_ownership(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<InputOwnershipSnapshot, UiRuntimeSlotOperationFailure> {
+        let slot = self.slot_mut(slot_id)?;
+        if slot.requires_settlement {
+            return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
+        }
+        slot.runtime
+            .input_ownership()
+            .map_err(UiRuntimeSlotOperationFailure::InputObservation)
+    }
+
+    /// Observe the authoritative RunenUI snapshot for an already selected
+    /// native input binding while unrelated M13 work is pending. This is
+    /// deliberately NOT a gameplay permission or publication checkpoint:
+    /// the ordinary input_ownership() API still refuses pending work.
+    pub(crate) fn native_input_ownership(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<InputOwnershipSnapshot, UiRuntimeSlotOperationFailure> {
+        let slot = self.slot_mut(slot_id)?;
+        if !slot.native_input_selected {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        slot.runtime
+            .input_ownership()
+            .map_err(UiRuntimeSlotOperationFailure::InputObservation)
+    }
+
+    /// True only for an already selected native slot with outstanding M13
+    /// work. No caller may infer a gameplay permission from this flag.
+    pub(crate) fn native_input_is_pending(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<bool, UiRuntimeSlotOperationFailure> {
+        let slot = self.slot_mut(slot_id)?;
+        if !slot.native_input_selected {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        Ok(slot.requires_settlement)
+    }
+
+    /// Queue admission is not completed cancellation. Native retirement may
+    /// release its old binding only after these exact M13 receipts are observed.
+    pub(crate) fn native_cancellations_pending(
+        &self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<bool, UiRuntimeSlotOperationFailure> {
+        let slot = self
+            .slot(slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        Ok(!slot.native_cancellations.is_empty())
+    }
+
     #[must_use]
     pub fn contains(&self, slot_id: UiRuntimeSlotId) -> bool {
         self.slots.iter().any(|slot| slot.id == slot_id)
@@ -880,6 +2116,59 @@ impl UiRuntimeSlotsResource {
 
     pub fn slot_ids(&self) -> impl Iterator<Item = UiRuntimeSlotId> + '_ {
         self.slots.iter().map(|slot| slot.id)
+    }
+
+    /// Returns a bounded trace tail for a developer-operated native debug
+    /// qualification. Reads the original M13 runtime, including terminal
+    /// integrity diagnostics, without pumping or modifying its input state.
+    #[cfg(debug_assertions)]
+    pub fn debug_native_trace_tail<A: UiApp + 'static>(
+        &self,
+        slot_id: UiRuntimeSlotId,
+        limit: usize,
+    ) -> Vec<String> {
+        let Some(runtime) = self
+            .slot(slot_id)
+            .and_then(|slot| slot.runtime.typed::<A>())
+        else {
+            return Vec::new();
+        };
+        runtime
+            .trace()
+            .records()
+            .map(|record| format!("{record:?}"))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .take(limit)
+            .rev()
+            .collect()
+    }
+
+    /// Test-only bounded transcript for an exact typed runtime failure.
+    /// Reads the original RunenUI trace without mutating or replaying input.
+    #[cfg(test)]
+    pub(crate) fn test_trace_tail<A: UiApp + 'static>(
+        &self,
+        slot_id: UiRuntimeSlotId,
+        limit: usize,
+    ) -> Vec<String> {
+        let Some(runtime) = self
+            .slot(slot_id)
+            .and_then(|slot| slot.runtime.typed::<A>())
+        else {
+            return Vec::new();
+        };
+        runtime
+            .trace()
+            .records()
+            .map(|record| format!("{record:?}"))
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .take(limit)
+            .rev()
+            .collect()
     }
 
     /// Returns the Engine ingress generation that might require new RunenUI publication.
@@ -896,7 +2185,333 @@ impl UiRuntimeSlotsResource {
         &mut self,
         slot_id: UiRuntimeSlotId,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        self.slot_mut(slot_id)?.settle_pending()
+        self.slot_mut_application(slot_id)?.settle_pending()
+    }
+
+    /// Admit an exact native-normalized keyboard occurrence without inventing
+    /// a UI or gameplay disposition. Rejection returns the original event and
+    /// framework kind; acceptance retains the framework's work sequence.
+    ///
+    /// The host MUST pump/correlate the exact M13 record before allowing a
+    /// competing gameplay transition.
+    pub(crate) fn submit_native_keyboard(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        event: KeyboardEvent,
+    ) -> Result<KeyboardSubmission, UiRuntimeNativeKeyboardAdmissionError> {
+        let slot = match self.slot_mut(slot_id) {
+            Ok(slot) => slot,
+            Err(failure) => {
+                return Err(UiRuntimeNativeKeyboardAdmissionError::Slot { failure, event });
+            }
+        };
+        let next = match slot.next_native_ingress_epoch() {
+            Ok(next) => next,
+            Err(failure) => {
+                return Err(UiRuntimeNativeKeyboardAdmissionError::Slot { failure, event });
+            }
+        };
+        let cancellation = if event.phase() == KeyboardPhase::Cancel {
+            let reserve = slot.native_cancellations.try_reserve(1);
+            if reserve.is_err() {
+                return Err(UiRuntimeNativeKeyboardAdmissionError::Slot {
+                    failure: UiRuntimeSlotOperationFailure::NativeCancellationCapacity,
+                    event,
+                });
+            }
+            let snapshot = match slot.runtime.input_ownership() {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    return Err(UiRuntimeNativeKeyboardAdmissionError::Slot {
+                        failure: UiRuntimeSlotOperationFailure::InputObservation(error),
+                        event,
+                    });
+                }
+            };
+            Some((snapshot.scope().clone(), event.device_id()))
+        } else {
+            None
+        };
+        let receipt = slot
+            .runtime
+            .submit_keyboard(event)
+            .map_err(UiRuntimeNativeKeyboardAdmissionError::Framework)?;
+        if let Some((scope, device)) = cancellation {
+            slot.native_cancellations.push(NativeCancellationReceipt {
+                scope,
+                device,
+                sequence: receipt.sequence(),
+                family: UiInputFamily::Keyboard,
+                pointer: None,
+                surface: None,
+            });
+        }
+        slot.ingress_epoch = next;
+        slot.requires_settlement = true;
+        Ok(receipt)
+    }
+
+    /// Admit one genuine original keyboard Down and its associated Unicode
+    /// KeyEvent.text atomically to RunenUI's single M13 FIFO. A selected native
+    /// slot may have earlier legal work pending: that condition revokes game
+    /// permission but does NOT revoke its existing canonical ingress owner.
+    /// Only the already-accepted native binding grants this bounded exemption;
+    /// ordinary application mutations retain the settled-epoch gate.
+    ///
+    /// No terminal receipt or gameplay right is inferred from this admission.
+    pub(crate) fn submit_native_keyboard_with_text(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        keyboard: KeyboardEvent,
+        text: CommittedTextEvent,
+    ) -> Result<(KeyboardSubmission, TextSubmission), UiRuntimeNativeKeyboardTextAdmissionError>
+    {
+        let slot = match self.slot_mut(slot_id) {
+            Ok(slot) => slot,
+            Err(failure) => {
+                return Err(UiRuntimeNativeKeyboardTextAdmissionError::Slot {
+                    failure,
+                    events: Box::new((keyboard, text)),
+                });
+            }
+        };
+        let next = slot.next_native_ingress_epoch();
+        let next = match next {
+            Ok(next) => next,
+            Err(failure) => {
+                return Err(UiRuntimeNativeKeyboardTextAdmissionError::Slot {
+                    failure,
+                    events: Box::new((keyboard, text)),
+                });
+            }
+        };
+        let receipts = slot
+            .runtime
+            .submit_keyboard_with_text(keyboard, text)
+            .map_err(UiRuntimeNativeKeyboardTextAdmissionError::Framework)?;
+        slot.ingress_epoch = next;
+        slot.requires_settlement = true;
+        Ok(receipts)
+    }
+
+    /// Admit exactly one native pointer observation to the pinned runtime.
+    /// Callers supply the original completed-Present input context; admission
+    /// alone never authorizes gameplay or claims a displayed surface.
+    pub(crate) fn submit_native_pointer(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        event: PointerEvent,
+    ) -> Result<PointerSubmission, UiRuntimeNativePointerAdmissionError> {
+        let slot = match self.slot_mut(slot_id) {
+            Ok(slot) => slot,
+            Err(failure) => {
+                return Err(UiRuntimeNativePointerAdmissionError::Slot {
+                    failure,
+                    event: Box::new(event),
+                });
+            }
+        };
+        let next = match slot.next_native_ingress_epoch() {
+            Ok(next) => next,
+            Err(failure) => {
+                return Err(UiRuntimeNativePointerAdmissionError::Slot {
+                    failure,
+                    event: Box::new(event),
+                });
+            }
+        };
+        let cancellation = if event.phase() == runenui_core::PointerPhase::Cancel {
+            if slot.native_cancellations.try_reserve(1).is_err() {
+                return Err(UiRuntimeNativePointerAdmissionError::Slot {
+                    failure: UiRuntimeSlotOperationFailure::NativeCancellationCapacity,
+                    event: Box::new(event),
+                });
+            }
+            let snapshot = match slot.runtime.input_ownership() {
+                Ok(snapshot) => snapshot,
+                Err(error) => {
+                    return Err(UiRuntimeNativePointerAdmissionError::Slot {
+                        failure: UiRuntimeSlotOperationFailure::InputObservation(error),
+                        event: Box::new(event),
+                    });
+                }
+            };
+            Some((
+                snapshot.scope().clone(),
+                event.device_id(),
+                event.pointer_id(),
+                event.surface_context().surface_id().clone(),
+            ))
+        } else {
+            None
+        };
+        let receipt = slot
+            .runtime
+            .submit_pointer(event)
+            .map_err(UiRuntimeNativePointerAdmissionError::Framework)?;
+        if let Some((scope, device, pointer, surface)) = cancellation {
+            slot.native_cancellations.push(NativeCancellationReceipt {
+                scope,
+                device,
+                sequence: receipt.sequence(),
+                family: UiInputFamily::Pointer,
+                pointer: Some(pointer),
+                surface: Some(surface),
+            });
+        }
+        slot.ingress_epoch = next;
+        slot.requires_settlement = true;
+        Ok(receipt)
+    }
+
+    /// Original native committed text uses the same pinned M13 input FIFO and
+    /// ingress generation as keyboard and pointer; it is never gameplay input.
+    pub(crate) fn submit_native_text(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        event: CommittedTextEvent,
+    ) -> Result<TextSubmission, UiRuntimeNativeTextAdmissionError> {
+        let slot = match self.slot_mut(slot_id) {
+            Ok(slot) => slot,
+            Err(failure) => {
+                return Err(UiRuntimeNativeTextAdmissionError::Slot { failure, event });
+            }
+        };
+        let next = match slot.next_native_ingress_epoch() {
+            Ok(next) => next,
+            Err(failure) => {
+                return Err(UiRuntimeNativeTextAdmissionError::Slot { failure, event });
+            }
+        };
+        let receipt = slot
+            .runtime
+            .submit_text(event)
+            .map_err(UiRuntimeNativeTextAdmissionError::Framework)?;
+        slot.ingress_epoch = next;
+        slot.requires_settlement = true;
+        Ok(receipt)
+    }
+
+    /// Canonical native composition admission shares one ingress epoch and
+    /// one pinned RunenUI queue with keyboard, pointer and committed text.
+    /// Neither native preedit nor composition generation is owned by Engine.
+    fn admit_native_composition<T>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        submit: impl FnOnce(
+            &mut UiRuntimeSlotKind,
+        ) -> Result<T, UiRuntimeNativeCompositionAdmissionError>,
+    ) -> Result<T, UiRuntimeNativeCompositionAdmissionError> {
+        let slot = self
+            .slot_mut(slot_id)
+            .map_err(UiRuntimeNativeCompositionAdmissionError::Slot)?;
+        let next = slot
+            .next_native_ingress_epoch()
+            .map_err(UiRuntimeNativeCompositionAdmissionError::Slot)?;
+        let receipt = submit(&mut slot.runtime)?;
+        slot.ingress_epoch = next;
+        slot.requires_settlement = true;
+        Ok(receipt)
+    }
+
+    pub(crate) fn start_native_composition(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<CompositionStartSubmission, UiRuntimeNativeCompositionAdmissionError> {
+        self.admit_native_composition(slot_id, |runtime| {
+            runtime
+                .start_composition(None)
+                .map_err(UiRuntimeNativeCompositionAdmissionError::Start)
+        })
+    }
+
+    pub(crate) fn update_native_composition(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        generation: CompositionGeneration,
+        preedit: String,
+        range: Option<CompositionRange>,
+    ) -> Result<CompositionSubmission, UiRuntimeNativeCompositionAdmissionError> {
+        self.admit_native_composition(slot_id, |runtime| {
+            runtime
+                .update_composition(generation, preedit, range)
+                .map_err(UiRuntimeNativeCompositionAdmissionError::Event)
+        })
+    }
+
+    pub(crate) fn end_native_composition(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, UiRuntimeNativeCompositionAdmissionError> {
+        self.admit_native_composition(slot_id, |runtime| {
+            runtime
+                .end_composition(generation)
+                .map_err(UiRuntimeNativeCompositionAdmissionError::Event)
+        })
+    }
+
+    pub(crate) fn cancel_native_composition(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        generation: CompositionGeneration,
+    ) -> Result<CompositionSubmission, UiRuntimeNativeCompositionAdmissionError> {
+        let slot = self
+            .slot_mut(slot_id)
+            .map_err(UiRuntimeNativeCompositionAdmissionError::Slot)?;
+        slot.native_cancellations.try_reserve(1).map_err(|_| {
+            UiRuntimeNativeCompositionAdmissionError::Slot(
+                UiRuntimeSlotOperationFailure::NativeCancellationCapacity,
+            )
+        })?;
+        let scope = slot
+            .runtime
+            .input_ownership()
+            .map_err(|error| {
+                UiRuntimeNativeCompositionAdmissionError::Slot(
+                    UiRuntimeSlotOperationFailure::InputObservation(error),
+                )
+            })?
+            .scope()
+            .clone();
+        let receipt = self.admit_native_composition(slot_id, |runtime| {
+            runtime
+                .cancel_composition(generation)
+                .map_err(UiRuntimeNativeCompositionAdmissionError::Event)
+        })?;
+        self.slot_mut(slot_id)
+            .expect("synchronous native cancellation retains its admitted slot")
+            .native_cancellations
+            .push(NativeCancellationReceipt {
+                scope,
+                sequence: receipt.sequence(),
+                family: UiInputFamily::Composition,
+                device: None,
+                pointer: None,
+                surface: None,
+            });
+        Ok(receipt)
+    }
+
+    /// Return one actual canonical pump result with ALL ordered M13 records.
+    /// Paused and terminal batches remain inspectable, never silently equated
+    /// to successful input settlement. There is no additional input queue.
+    pub(crate) fn pump_native_input_records(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<
+        (InputPumpBatch, Result<(), UiRuntimeSlotOperationFailure>),
+        UiRuntimeSlotOperationFailure,
+    > {
+        let slot = self.slot_mut(slot_id)?;
+        slot.begin_readiness_checkpoint();
+        slot.requires_settlement = true;
+        let batch = slot
+            .runtime
+            .pump(runtime_pump_budget())
+            .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+        let settlement = slot.observe_batch_report(&batch);
+        Ok((batch, settlement))
     }
 
     /// Checks RunenUI's own redraw authority; no Engine-owned dirty mirror is used.
@@ -923,7 +2538,7 @@ impl UiRuntimeSlotsResource {
         context: &SurfaceBuildContext<'_>,
     ) -> Result<SurfacePublication, UiRuntimeSlotOperationFailure> {
         let native = self.native_clock.is_some();
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         if slot.requires_settlement {
             return Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce);
         }
@@ -961,7 +2576,7 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         context: UiEvaluationContext,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         let next = slot.next_ingress_epoch()?;
         let runtime = slot.runtime.counter_mut()?;
         let artifact = runtime.state().artifact.clone();
@@ -990,7 +2605,7 @@ impl UiRuntimeSlotsResource {
         slot_id: UiRuntimeSlotId,
         authored_id: &str,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         let authored_id = ElementId::new(authored_id)
             .map_err(|_| UiRuntimeSlotOperationFailure::InvalidAuthoredId)?;
         let next = slot.next_ingress_epoch()?;
@@ -1032,7 +2647,7 @@ impl UiRuntimeSlotsResource {
         request: UiRuntimePendingEventRequest,
         disposition: UiRuntimeHostRequestDisposition,
     ) -> Result<(), UiRuntimeSlotOperationFailure> {
-        let slot = self.slot_mut(slot_id)?;
+        let slot = self.slot_mut_application(slot_id)?;
         let response = match disposition {
             UiRuntimeHostRequestDisposition::Accepted => RunenwerkUiHostResponse::Accepted,
             UiRuntimeHostRequestDisposition::Rejected => RunenwerkUiHostResponse::Rejected,
@@ -1071,6 +2686,13 @@ impl UiRuntimeSlotsResource {
         publication_facts_for_runtime(runtime)
     }
 
+    /// Sticky native enrollment is a historical capability marker, not a
+    /// second binding authority. A retired native slot must still be torn
+    /// down through the owning World transaction.
+    pub(crate) fn was_native_input_selected(&self, slot: UiRuntimeSlotId) -> Option<bool> {
+        self.slot(slot).map(|entry| entry.native_input_selected)
+    }
+
     /// Returns the actual RunenUI scope-retirement facts to the owning native
     /// caller, rather than interpreting shutdown success as native-input clearance.
     /// No slot state is removed if shutdown fails.
@@ -1084,7 +2706,47 @@ impl UiRuntimeSlotsResource {
         let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
             return Ok(None);
         };
+        if self.slots[index].native_input_selected && !self.native_closed {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        self.unmount_slot(index)
+    }
+
+    /// Scoped native teardown after the World has independently established
+    /// that every original recipient and pending declaration has retired.
+    /// A normal selected-slot app mutation cannot enter this path.
+    pub(crate) fn unmount_retired_native(
+        &mut self,
+        _permit: &super::native_transaction::NativeAppMutationPermit,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<Option<InputShutdownBatch>, UiRuntimeSlotOperationFailure> {
+        if self.native_mutation_slot.is_some() || self.native_mount_permitted {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        let Some(index) = self.slots.iter().position(|slot| slot.id == slot_id) else {
+            return Ok(None);
+        };
+        if !self.slots[index].native_input_selected {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        self.unmount_slot(index)
+    }
+
+    fn unmount_slot(
+        &mut self,
+        index: usize,
+    ) -> Result<Option<InputShutdownBatch>, UiRuntimeSlotOperationFailure> {
         let retirement = self.slots[index].runtime.shutdown()?;
+        // Closing the actual framework scope terminates queued originals; it
+        // is distinct from claiming their Cancel was processed successfully.
+        if self.slots[index].native_cancellations.iter().any(|expected| {
+            retirement.final_ownership().scope() != &expected.scope
+                || retirement.final_ownership().status() != runenui_runtime::RuntimeStatus::Closed
+                || !retirement.ordered_records().iter().any(|record| matches!(record,
+                    InputArbitrationRecord::ScopeRetired(retired) if retired.scope() == &expected.scope))
+        }) {
+            return Err(UiRuntimeSlotOperationFailure::NativeCancellationEvidence);
+        }
         self.slots.remove(index);
         Ok(Some(retirement))
     }
@@ -1100,6 +2762,148 @@ impl UiRuntimeSlotsResource {
     ) -> Result<bool, UiRuntimeSlotOperationFailure> {
         self.unmount_with_retirement(slot_id)
             .map(|retirement| retirement.is_some())
+    }
+
+    /// Infallible only after a binding has already verified the existing
+    /// mounted slot/scope. Sticky until unmount: recipient retirement cannot
+    /// reopen a bare resource-mutator escape through the same runtime.
+    pub(crate) fn enroll_native_input(&mut self, slot_id: UiRuntimeSlotId) {
+        self.slots
+            .iter_mut()
+            .find(|slot| slot.id == slot_id)
+            .expect("validated RunenUI native binding references mounted slot")
+            .native_input_selected = true;
+    }
+
+    /// Test-only ingress into the real mounted typed framework semantic path.
+    /// Uses the selected-slot mutation guard; no production focus control or
+    /// additional M13 authority is introduced by the regression harness.
+    #[cfg(test)]
+    pub(crate) fn test_request_first_typed_focus<A: UiApp + 'static>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        let slot = self.slot_mut_application(slot_id)?;
+        let next = slot.next_ingress_epoch()?;
+        let runtime = slot
+            .runtime
+            .typed_mut::<A>()
+            .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
+        let target = runtime
+            .index()
+            .nodes()
+            .first()
+            .ok_or(UiRuntimeSlotOperationFailure::AutomationRejected)?
+            .id()
+            .clone();
+        runtime
+            .submit_command(
+                target,
+                SemanticCommand::RequestFocus,
+                runenui_core::CommandOrigin::programmatic(),
+            )
+            .map_err(|_| UiRuntimeSlotOperationFailure::AutomationRejected)?;
+        slot.accepted_ingress(next)
+    }
+
+    /// Simulates an external/terminal framework scope disappearing while its
+    /// old native recipient is still recorded. This is deliberately NOT an
+    /// authorized production unmount; negative recipient tests must detect it.
+    #[cfg(test)]
+    pub(crate) fn test_inject_external_scope_loss(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        let index = self
+            .slots
+            .iter()
+            .position(|slot| slot.id == slot_id)
+            .ok_or(UiRuntimeSlotOperationFailure::MissingSlot)?;
+        self.unmount_slot(index).map(|_| ())
+    }
+
+    /// Queue real typed RunenUI application actions without an intermediate pump.
+    /// This test-only fixture builds a genuine bounded backlog behind a selected
+    /// native recipient; it does not create an Engine-owned input queue or alter
+    /// production ingress, ownership, or cancellation rules.
+    #[cfg(test)]
+    pub(crate) fn test_queue_unpumped_typed_actions<A: UiApp + 'static>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+        count: usize,
+        mut action: impl FnMut() -> A::Action,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        let runtime = self
+            .slot_mut(slot_id)?
+            .runtime
+            .typed_mut::<A>()
+            .ok_or(UiRuntimeSlotOperationFailure::WrongAppKind)?;
+        for _ in 0..count {
+            runtime
+                .submit_action(action())
+                .map_err(|_| UiRuntimeSlotOperationFailure::ActionRejected)?;
+        }
+        Ok(())
+    }
+
+    /// Test-only state inspection of an already mounted real typed UiApp.
+    /// This does not synthesize M13 receipts, alter focus or bypass native
+    /// production input ownership.
+    #[cfg(test)]
+    pub(crate) fn test_typed_state<A: UiApp + 'static>(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Option<&A::State> {
+        self.slot_mut(slot_id)
+            .ok()?
+            .runtime
+            .typed_mut::<A>()
+            .map(|runtime| runtime.state())
+    }
+
+    /// A test-only pending-pump fixture. The real native transaction still
+    /// invokes RunenUI's ordinary settlement and requires a fresh final M13
+    /// observation; this only establishes the unavailable *prestate*.
+    #[cfg(test)]
+    pub(crate) fn test_mark_native_pending(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<(), UiRuntimeSlotOperationFailure> {
+        self.slot_mut(slot_id)?.requires_settlement = true;
+        Ok(())
+    }
+
+    /// Only the Engine World mutation transaction calls this function after
+    /// checking the original recipient, native source and framework scope.
+    /// A plain selected-slot mutator cannot grant itself this capability.
+    pub(crate) fn transact_native_app<T>(
+        &mut self,
+        _permit: &super::native_transaction::NativeAppMutationPermit,
+        slot_id: UiRuntimeSlotId,
+        operation: impl FnOnce(&mut Self) -> Result<T, UiRuntimeSlotOperationFailure>,
+    ) -> Result<T, UiRuntimeSlotOperationFailure> {
+        if self.native_mutation_slot.is_some() {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        self.native_mutation_slot = Some(slot_id);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| operation(self)));
+        self.native_mutation_slot = None;
+        match outcome {
+            Ok(result) => result,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+
+    fn slot_mut_application(
+        &mut self,
+        slot_id: UiRuntimeSlotId,
+    ) -> Result<&mut UiRuntimeSlot, UiRuntimeSlotOperationFailure> {
+        let authorized = self.native_mutation_slot == Some(slot_id);
+        let slot = self.slot_mut(slot_id)?;
+        if slot.native_input_selected && !authorized {
+            return Err(UiRuntimeSlotOperationFailure::NativeInputTransactionRequired);
+        }
+        Ok(slot)
     }
 
     fn slot(&self, slot_id: UiRuntimeSlotId) -> Option<&UiRuntimeSlot> {
@@ -1643,6 +3447,24 @@ mod tests {
     }
 
     impl UiApp for InitialTimerApp {
+        fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(6, 2)
+                .with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 1, 0, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 1, 0, 0, 0))
+        }
+
+        fn action_producer_budget(
+            _state: &Self::State,
+            _action: &Self::Action,
+        ) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+        }
+
+        fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0)
+        }
+
         type State = usize;
         type Action = bool;
         type HostProtocol = runenui_core::NoHostProtocol;
@@ -1672,6 +3494,2359 @@ mod tests {
                 )
             }
         }
+    }
+
+    #[test]
+    fn native_committed_text_rejects_unmounted_target_without_losing_original_utf8() {
+        let mut slots = UiRuntimeSlotsResource::default();
+        let text = CommittedTextEvent::new("漢字é", Some(InputDeviceId::new(11).unwrap()))
+            .expect("original nonempty Unicode text");
+        let error = slots
+            .submit_native_text(UiRuntimeSlotId(u64::MAX), text)
+            .expect_err("a nonexistent native M13 recipient cannot accept text");
+        match error {
+            UiRuntimeNativeTextAdmissionError::Slot {
+                failure: UiRuntimeSlotOperationFailure::MissingSlot,
+                event,
+            } => {
+                assert_eq!(event.text(), "漢字é");
+                assert_eq!(event.device_id(), InputDeviceId::new(11));
+            }
+            other => panic!("unexpected M13 native text admission result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn native_paired_refusal_retains_both_originals_without_logging_unicode() {
+        use runenui_core::{
+            KeyLocation, KeyModifiers, KeyboardCompositionState, LogicalKey, PhysicalKey,
+        };
+        let mut slots = UiRuntimeSlotsResource::default();
+        let device = InputDeviceId::new(31).expect("nonzero original device");
+        let error = slots
+            .submit_native_keyboard_with_text(
+                UiRuntimeSlotId(u64::MAX),
+                KeyboardEvent::new(
+                    KeyboardPhase::Down,
+                    PhysicalKey::Code(String::from("KeyX")),
+                    LogicalKey::Character(String::from("x")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(device),
+                ),
+                CommittedTextEvent::new("private Ω", Some(device))
+                    .expect("nonempty genuine Unicode original"),
+            )
+            .expect_err("an unknown slot rejects both original members");
+        let diagnostic = format!("{error:?}");
+        assert!(
+            !diagnostic.contains("private Ω"),
+            "native admission errors must never log original secret text"
+        );
+        let (keyboard, text) = error.into_events();
+        assert_eq!(keyboard.device_id(), Some(device));
+        assert_eq!(text.device_id(), Some(device));
+        assert_eq!(text.text(), "private Ω");
+    }
+
+    #[test]
+    fn native_committed_text_from_focused_typed_field_has_exact_m13_receipt() {
+        use runenui_core::{
+            CommandOrigin, EditIntent, EditResolution, IntoUpdateOutput, KeyLocation, KeyModifiers,
+            KeyboardCompositionState, KeyboardPhase, LogicalKey, NoHostProtocol, PhysicalKey,
+            SemanticCommand, SemanticEditableMode, TextAffinity, TextDocumentId,
+            TextDocumentRevision, TextDocumentSnapshot, TextPosition, TextSelection, UpdateOutput,
+        };
+
+        #[derive(Clone)]
+        struct TextState {
+            text: String,
+            revision: u64,
+        }
+        enum TextAction {
+            Edit(Box<EditIntent>),
+            Idle,
+        }
+        struct NativeTextApp;
+        impl UiApp for NativeTextApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                match action {
+                    TextAction::Edit(_) => {
+                        runenui_core::ProducerBudget::new(3, 1).with_reconciliation(1, 1, 1)
+                    }
+                    TextAction::Idle => {
+                        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+                    }
+                }
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
+            type State = TextState;
+            type Action = TextAction;
+            type HostProtocol = NoHostProtocol;
+
+            fn root(state: &Self::State) -> impl View<Self::Action> {
+                let snapshot = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(state.revision),
+                );
+                let position = TextPosition::new(
+                    snapshot,
+                    &state.text,
+                    state.text.len(),
+                    TextAffinity::Downstream,
+                )
+                .expect("the complete UTF-8 source ends at a scalar boundary");
+                runenui_core::text_field(
+                    snapshot,
+                    state.text.clone(),
+                    TextSelection::collapsed(position),
+                    SemanticEditableMode::SingleLine,
+                    |intent| TextAction::Edit(Box::new(intent)),
+                )
+                .expect("controlled native text source is valid")
+                .id("native.text.field")
+            }
+
+            fn update(
+                state: &mut Self::State,
+                action: Self::Action,
+            ) -> impl IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                match action {
+                    TextAction::Edit(intent) => {
+                        let replacement = intent.replacement();
+                        state.text.replace_range(
+                            replacement.start()..replacement.end(),
+                            intent.replacement_text(),
+                        );
+                        state.revision += 1;
+                        let snapshot = TextDocumentSnapshot::new(
+                            TextDocumentId::new(1276),
+                            TextDocumentRevision::new(state.revision),
+                        );
+                        UpdateOutput::edit(EditResolution::accepted(
+                            intent.request().clone(),
+                            snapshot,
+                        ))
+                    }
+                    TextAction::Idle => UpdateOutput::effects(Effects::none()),
+                }
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<NativeTextApp>(
+                UiTypedScreenId::new("native.text.focused"),
+                TextState {
+                    text: String::new(),
+                    revision: 0,
+                },
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("real typed text widget mounted");
+        let owner = {
+            let runtime = slots
+                .slot_mut(slot)
+                .expect("mounted slot")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("typed app runtime");
+            runtime.index().nodes()[0].id().clone()
+        };
+        slots
+            .slot_mut(slot)
+            .expect("mounted slot")
+            .runtime
+            .typed_mut::<NativeTextApp>()
+            .expect("typed runtime")
+            .submit_command(
+                owner,
+                SemanticCommand::RequestFocus,
+                CommandOrigin::programmatic(),
+            )
+            .expect("real widget accepts focus request");
+        slots.settle_slot(slot).expect("focus request settles");
+        let before = slots.input_ownership(slot).expect("actual M13 owner");
+        assert!(
+            before.keyboard().focused_node().is_some(),
+            "text ingress requires actual focused RunenUI ownership"
+        );
+
+        // Winit reports physical keyboard events and independent Ime::Commit.
+        // An M13 keyboard event alone NEVER inserts text; the host must
+        // separately prove the original KeyEvent.text candidate (below) or
+        // deliver the independent OS IME commit. LogicalKey alone is never a
+        // second text occurrence, including after composition retirement.
+        let key_device = InputDeviceId::new(11).expect("checked original keyboard device");
+        let key_receipt = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Down,
+                    PhysicalKey::Code(String::from("KeyE")),
+                    LogicalKey::Character(String::from("é")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(key_device),
+                ),
+            )
+            .expect("focused TextField accepts a real M13 keyboard occurrence");
+        let (key_batch, key_status) = slots
+            .pump_native_input_records(slot)
+            .expect("original keyboard occurrence settles through canonical M13");
+        assert_eq!(key_status, Ok(()));
+        assert!(matches!(
+            native_keyboard_finality(
+                before.scope(),
+                key_device,
+                key_receipt,
+                &key_batch,
+                &key_status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("focused text owner survives keyboard")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("original typed TextField remains live")
+                .state()
+                .text,
+            "",
+            "printable KeyEvent cannot duplicate a subsequent IME Commit"
+        );
+
+        let original = CommittedTextEvent::new("漢字é", None)
+            .expect("original native Unicode commit is nonempty");
+        let receipt = slots
+            .submit_native_text(slot, original)
+            .expect("real focused field accepts native commit");
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("canonical M13 pump produces real ordered receipts");
+        assert_eq!(status, Ok(()));
+        assert!(
+            matches!(
+                native_text_finality(before.scope(), None, receipt, &batch, &status),
+                Ok(UiInputFinality::Committed(_))
+            ),
+            "only an exact reached M13 text settlement qualifies this commit"
+        );
+        assert_eq!(
+            native_text_finality(
+                before.scope(),
+                Some(InputDeviceId::new(11).expect("checked device")),
+                receipt,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativeTextEvidenceFailure::WrongDevice),
+            "winit IME provides no keyboard device; it must not inherit one"
+        );
+        let later = slots
+            .submit_native_text(
+                slot,
+                CommittedTextEvent::new("Ω", None).expect("second Unicode commit"),
+            )
+            .expect("second independent native text sequence");
+        assert_eq!(
+            native_text_finality(before.scope(), None, later, &batch, &status),
+            Err(UiRuntimeNativeTextEvidenceFailure::NotProcessed),
+            "an earlier pump must never authorize an unprocessed later commit"
+        );
+        let edited = &slots
+            .slot_mut(slot)
+            .expect("text runtime still mounted")
+            .runtime
+            .typed_mut::<NativeTextApp>()
+            .expect("typed text owner")
+            .state()
+            .text;
+        assert_eq!(
+            edited, "漢字é",
+            "real native text reached the actual M10 editor without duplication"
+        );
+
+        // Complete the independently sequenced later Unicode commit before
+        // starting a new composition lifecycle on the same real focused field.
+        let (_, finish_text) = slots
+            .pump_native_input_records(slot)
+            .expect("all earlier committed text settles first");
+        assert_eq!(finish_text, Ok(()));
+
+        let before_start = slots
+            .input_ownership(slot)
+            .expect("the same focused typed owner remains live");
+        let start = slots
+            .start_native_composition(slot)
+            .expect("real focused TextField accepts original OS composition start");
+        // The actual native composition input can reach its own M13 terminal
+        // receipt while later independent application work remains queued.
+        // Do not promote global quiescence to receipt terminality or invent a
+        // second IME composition generation during continuation.
+        {
+            let runtime = slots
+                .slot_mut(slot)
+                .expect("same focused native text slot")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("original text runtime still mounted");
+            for _ in 0..(RUNTIME_PUMP_WORK_LIMIT + 2) {
+                runtime
+                    .submit_action(TextAction::Idle)
+                    .expect("independent bounded application work admitted");
+            }
+        }
+        let (start_batch, start_status) = slots
+            .pump_native_input_records(slot)
+            .expect("M13 composition start returns ordered evidence");
+        assert_eq!(
+            start_status,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            "later work is not the same as unprocessed original composition"
+        );
+        assert_eq!(
+            start_batch.report().outcome(),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        );
+        assert!(matches!(
+            native_composition_finality(
+                before_start.scope(),
+                start.sequence(),
+                &start_batch,
+                &start_status
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert_eq!(
+            native_composition_finality(
+                before_start.scope(),
+                start.sequence(),
+                &start_batch,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativeCompositionEvidenceFailure::Unsettled),
+            "a genuinely missing slot cannot masquerade as ordinary pending work"
+        );
+        assert_eq!(
+            slots.input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        for _ in 0..4 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        let started = slots
+            .input_ownership(slot)
+            .expect("M13 composition generation is observable");
+        assert_eq!(
+            started.keyboard().composition_generation(),
+            Some(start.generation()),
+            "RunenUI, never Engine, owns the active generation"
+        );
+
+        let preedit = "aßz";
+        let range =
+            CompositionRange::new(preedit, 1, 3).expect("UTF-8 range aligns with the ß scalar");
+        let update = slots
+            .update_native_composition(
+                slot,
+                start.generation().clone(),
+                preedit.to_owned(),
+                Some(range),
+            )
+            .expect("accepted original Unicode preedit");
+        let (update_batch, update_status) = slots
+            .pump_native_input_records(slot)
+            .expect("preedit remains in the same canonical M13 input queue");
+        assert_eq!(update_status, Ok(()));
+        assert!(matches!(
+            native_composition_finality(
+                started.scope(),
+                update.sequence(),
+                &update_batch,
+                &update_status
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+
+        let before_end = slots
+            .input_ownership(slot)
+            .expect("original composition still owns the focused field");
+        let end = slots
+            .end_native_composition(slot, start.generation().clone())
+            .expect("original native IME commit ends its generation");
+        let (end_batch, end_status) = slots
+            .pump_native_input_records(slot)
+            .expect("composition end must settle before durable commit");
+        assert_eq!(end_status, Ok(()));
+        assert!(matches!(
+            native_composition_finality(
+                before_end.scope(),
+                end.sequence(),
+                &end_batch,
+                &end_status
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert!(
+            slots
+                .input_ownership(slot)
+                .expect("composition end settled")
+                .keyboard()
+                .composition_generation()
+                .is_none()
+        );
+
+        let renewed = slots
+            .start_native_composition(slot)
+            .expect("new OS preedit receives a distinct canonical generation");
+        let (_, renewed_status) = slots
+            .pump_native_input_records(slot)
+            .expect("second composition start settles");
+        assert_eq!(renewed_status, Ok(()));
+        let before_cancel = slots
+            .input_ownership(slot)
+            .expect("new composition has one M13 owner");
+        assert_eq!(
+            before_cancel.keyboard().composition_generation(),
+            Some(renewed.generation())
+        );
+        let cancel = slots
+            .cancel_native_composition(slot, renewed.generation().clone())
+            .expect("OS IME disabled cancels the current generation");
+        let (cancel_batch, cancel_status) = slots
+            .pump_native_input_records(slot)
+            .expect("composition cancel has exact ordered settlement");
+        assert_eq!(cancel_status, Ok(()));
+        assert!(matches!(
+            native_composition_finality(
+                before_cancel.scope(),
+                cancel.sequence(),
+                &cancel_batch,
+                &cancel_status
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert!(
+            slots
+                .input_ownership(slot)
+                .expect("canonical cancellation settled")
+                .keyboard()
+                .composition_generation()
+                .is_none()
+        );
+
+        // The other legitimate original text path is KeyEvent.text while no
+        // IME composition is active. The accepted winit adapter classifies
+        // this candidate; only M13 owns the actual typed text mutation and
+        // its source/device-qualified finality.
+        let keyboard_owner = slots
+            .input_ownership(slot)
+            .expect("same text focus survives composition cancellation");
+        assert!(keyboard_owner.keyboard().focused_node().is_some());
+        assert!(
+            keyboard_owner
+                .keyboard()
+                .text_input_capability()
+                .accepts_committed_text()
+        );
+        let key_text = runenui_winit::text_input::keyboard_committed_text_candidate(
+            winit::event::ElementState::Pressed,
+            false,
+            true,
+            KeyboardCompositionState::Inactive,
+            &LogicalKey::Character("x".into()),
+            Some("x"),
+        )
+        .expect("real original keyboard text is eligible without composition");
+        assert_eq!(
+            runenui_winit::text_input::keyboard_committed_text_candidate(
+                winit::event::ElementState::Pressed,
+                false,
+                true,
+                KeyboardCompositionState::Active,
+                &LogicalKey::Character("x".into()),
+                Some("x"),
+            ),
+            None,
+            "a composing keyboard key cannot duplicate an IME Commit"
+        );
+        let key_text_receipt = slots
+            .submit_native_text(
+                slot,
+                CommittedTextEvent::new(key_text, Some(key_device))
+                    .expect("original keyboard device and text are nonempty"),
+            )
+            .expect("actual focused typed text field admits original keyboard text");
+        let (key_text_batch, key_text_status) = slots
+            .pump_native_input_records(slot)
+            .expect("original keyboard text receives real M13 settlement");
+        assert_eq!(key_text_status, Ok(()));
+        assert!(matches!(
+            native_text_finality(
+                keyboard_owner.scope(),
+                Some(key_device),
+                key_text_receipt,
+                &key_text_batch,
+                &key_text_status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert_eq!(
+            native_text_finality(
+                keyboard_owner.scope(),
+                None,
+                key_text_receipt,
+                &key_text_batch,
+                &key_text_status,
+            ),
+            Err(UiRuntimeNativeTextEvidenceFailure::WrongDevice),
+            "ordinary keyboard text must never impersonate device-free IME Commit"
+        );
+        let edited = &slots
+            .slot_mut(slot)
+            .expect("typed text slot survives")
+            .runtime
+            .typed_mut::<NativeTextApp>()
+            .expect("focused text owner")
+            .state()
+            .text;
+        assert_eq!(
+            edited, "漢字éΩx",
+            "one keyboard text input, one inserted character"
+        );
+
+        // REV-001: the original IME Commit is terminal in the real canonical
+        // M13 input FIFO even when later unrelated application work exhausts
+        // this pump's bounded work budget. No gameplay permission follows from
+        // the receipt, and a second pump may not replay the same text.
+        let before_backlog = slots.input_ownership(slot).expect("settled IME owner");
+        let backlog_commit = slots
+            .submit_native_text(
+                slot,
+                CommittedTextEvent::new("§", None).expect("original Unicode IME Commit"),
+            )
+            .expect("focused editor admits original IME text before unrelated work");
+        {
+            let runtime = slots
+                .slot_mut(slot)
+                .expect("same mounted UI slot")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("same typed editor");
+            for _ in 0..(RUNTIME_PUMP_WORK_LIMIT + 2) {
+                runtime
+                    .submit_action(TextAction::Idle)
+                    .expect("independent application work remains legally queued");
+            }
+        }
+        let (partial, pending_status) = slots
+            .pump_native_input_records(slot)
+            .expect("real text records remain observable under bounded work");
+        assert_eq!(
+            partial.report().outcome(),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        );
+        assert_eq!(
+            pending_status,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        let original_settlement = partial
+            .ordered_records()
+            .iter()
+            .find_map(|record| match record {
+                InputArbitrationRecord::InputSettled(settlement)
+                    if settlement.sequence() == backlog_commit.sequence() =>
+                {
+                    Some(settlement)
+                }
+                _ => None,
+            })
+            .expect("exact original IME text was terminal in the partial batch");
+        assert!(matches!(
+            original_settlement.finality(),
+            UiInputFinality::Committed(_)
+        ));
+        assert_eq!(
+            native_text_finality(
+                before_backlog.scope(),
+                None,
+                backlog_commit,
+                &partial,
+                &pending_status,
+            ),
+            Ok(original_settlement.finality().clone()),
+            "unrelated pending application work cannot erase a reached IME receipt"
+        );
+        assert_eq!(
+            native_text_finality(
+                before_backlog.scope(),
+                Some(key_device),
+                backlog_commit,
+                &partial,
+                &pending_status,
+            ),
+            Err(UiRuntimeNativeTextEvidenceFailure::WrongDevice),
+            "an IME device-free commit cannot borrow physical keyboard identity"
+        );
+        assert_eq!(
+            native_text_finality(
+                before_backlog.scope(),
+                None,
+                backlog_commit,
+                &partial,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativeTextEvidenceFailure::Unsettled),
+            "a real slot failure cannot be misclassified as bounded pending work"
+        );
+        assert_eq!(
+            slots.input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        for _ in 0..4 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        let resumed = slots
+            .input_ownership(slot)
+            .expect("ordinary bounded runtime continuation reaches quiescence");
+        assert_eq!(resumed.scope(), before_backlog.scope());
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("typed editor survived continuation")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("the same real editor")
+                .state()
+                .text,
+            "漢字éΩx§",
+            "exact original text is applied once after bounded continuation"
+        );
+        assert!(
+            !slots
+                .pump_native_input_records(slot)
+                .expect("later checkpoint remains observable")
+                .0
+                .ordered_records()
+                .iter()
+                .any(|record| matches!(
+                    record,
+                    InputArbitrationRecord::InputSettled(settlement)
+                        if settlement.sequence() == backlog_commit.sequence()
+                )),
+            "the exact original IME text receipt is not replayed"
+        );
+
+        // REV-001 / RunenUI #549: reproduce the public API boundary faced by
+        // a *single* native KeyEvent carrying both a physical keyboard Down
+        // and associated text. The keyboard is terminal while >256 later
+        // legitimate M13 actions remain; the original text cannot enter the
+        // independently gated M13 FIFO during that pending interval. This is
+        // a characterized BLOCKER, not a simulated successful host replay.
+        let key_owner = slots.input_ownership(slot).expect("actual focused owner");
+        let source_key = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Down,
+                    PhysicalKey::Code(String::from("KeyV")),
+                    LogicalKey::Character(String::from("v")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(key_device),
+                ),
+            )
+            .expect("real focused M13 keyboard original can queue");
+        slots
+            .test_queue_unpumped_typed_actions::<NativeTextApp>(
+                slot,
+                RUNTIME_PUMP_WORK_LIMIT * 3 + 6,
+                || TextAction::Idle,
+            )
+            .expect("390 legal independent canonical application actions");
+        let (keyboard_batch, keyboard_status) = slots
+            .pump_native_input_records(slot)
+            .expect("exact original keyboard input pump is observable");
+        assert_eq!(
+            keyboard_status,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        assert!(matches!(
+            native_keyboard_finality(
+                key_owner.scope(),
+                key_device,
+                source_key,
+                &keyboard_batch,
+                &keyboard_status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert!(
+            matches!(
+                slots.submit_native_text(
+                    slot,
+                    CommittedTextEvent::new("v", Some(key_device))
+                        .expect("paired original KeyEvent.text"),
+                ),
+                Err(UiRuntimeNativeTextAdmissionError::Slot {
+                    failure: UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce,
+                    ..
+                })
+            ),
+            "exact keyboard terminality does not grant a second canonical text admission"
+        );
+        assert_eq!(
+            slots.settle_slot(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            "one additional bounded World settlement cannot drain 390 queued actions"
+        );
+        assert!(
+            matches!(
+                slots.submit_native_text(
+                    slot,
+                    CommittedTextEvent::new("v", Some(key_device)).expect("same original text"),
+                ),
+                Err(UiRuntimeNativeTextAdmissionError::Slot {
+                    failure: UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce,
+                    ..
+                })
+            ),
+            "host cannot legally retry original paired text during the remaining backlog"
+        );
+        let mut finished = false;
+        for _ in 0..32 {
+            if slots.settle_slot(slot).is_ok() {
+                finished = true;
+                break;
+            }
+        }
+        assert!(finished, "finite M13 application backlog eventually drains");
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("same selected typed text slot")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("same text app owner")
+                .state()
+                .text,
+            "漢字éΩx§",
+            "the currently available public contract has not delivered KeyEvent.text"
+        );
+        // A local test *can* still own its original payload and submit it
+        // after settlement; the real Winit callback must not be assumed to
+        // retain it across native turns or to preserve its focus lifetime.
+        let delayed = slots
+            .submit_native_text(
+                slot,
+                CommittedTextEvent::new("v", Some(key_device))
+                    .expect("explicit locally retained original candidate"),
+            )
+            .expect("submission becomes possible only after all 390 actions settle");
+        let (delayed_batch, delayed_status) = slots
+            .pump_native_input_records(slot)
+            .expect("post-backlog text has a distinct terminal M13 receipt");
+        assert_eq!(delayed_status, Ok(()));
+        assert!(matches!(
+            native_text_finality(
+                key_owner.scope(),
+                Some(key_device),
+                delayed,
+                &delayed_batch,
+                &delayed_status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("same typed slot")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("same text owner")
+                .state()
+                .text,
+            "漢字éΩx§v"
+        );
+
+        // The accepted paired M13 API preserves BOTH originals behind already
+        // queued work. Unlike the earlier characterization, this is an actual
+        // Engine native-selected slot entry, not a delayed host-local replay.
+        // The selected slot is pending after the original 390 legitimate
+        // actions: admission must not require global M13 quiescence.
+        let paired_owner = slots
+            .input_ownership(slot)
+            .expect("same focused M13 text-session owner");
+        slots.enroll_native_input(slot);
+        slots
+            .test_queue_unpumped_typed_actions::<NativeTextApp>(
+                slot,
+                RUNTIME_PUMP_WORK_LIMIT * 3 + 6,
+                || TextAction::Idle,
+            )
+            .expect("390 earlier canonical typed actions fit their own budgets");
+        slots
+            .test_mark_native_pending(slot)
+            .expect("selected native slot has prior legitimate work");
+        assert_eq!(
+            slots.input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            "gameplay-visible ownership observation remains pending and fail-closed"
+        );
+        let previous_epoch = slots.ingress_epoch(slot).expect("prior slot epoch");
+        let (paired_key, paired_text) = slots
+            .submit_native_keyboard_with_text(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Down,
+                    PhysicalKey::Code(String::from("KeyB")),
+                    LogicalKey::Character(String::from("b")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(key_device),
+                ),
+                CommittedTextEvent::new("b", Some(key_device))
+                    .expect("actual original native KeyEvent.text"),
+            )
+            .expect("selected native admission binds two originals despite pending M13 work");
+        assert!(paired_key.sequence() < paired_text.sequence());
+        assert_eq!(
+            slots.ingress_epoch(slot),
+            previous_epoch.checked_add(1),
+            "one original native keyboard/text occurrence is one ingress epoch"
+        );
+
+        let mut seen = Vec::new();
+        let mut finished_pair = false;
+        for turn in 0..32 {
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .expect("actual bounded M13 input pump");
+            for record in batch.ordered_records() {
+                let InputArbitrationRecord::InputSettled(settled) = record else {
+                    continue;
+                };
+                let family = if settled.sequence() == paired_key.sequence() {
+                    Some(UiInputFamily::Keyboard)
+                } else if settled.sequence() == paired_text.sequence() {
+                    Some(UiInputFamily::CommittedText)
+                } else {
+                    None
+                };
+                if let Some(family) = family {
+                    assert_eq!(settled.family(), family);
+                    assert_eq!(settled.scope(), paired_owner.scope());
+                    assert_eq!(settled.device_id(), Some(key_device));
+                    assert!(matches!(settled.finality(), UiInputFinality::Committed(_)));
+                    seen.push((settled.sequence(), family));
+                }
+            }
+            if turn == 0 {
+                assert!(
+                    seen.is_empty(),
+                    "390 already queued actions cannot be mistaken for terminal original receipts"
+                );
+            }
+            match status {
+                Ok(()) => {
+                    finished_pair = true;
+                    break;
+                }
+                Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {}
+                Err(error) => panic!("unexpected native M13 failure during finite work: {error:?}"),
+            }
+        }
+        assert!(
+            finished_pair,
+            "selected native 390-action backlog is finite"
+        );
+        assert_eq!(
+            seen,
+            [
+                (paired_key.sequence(), UiInputFamily::Keyboard),
+                (paired_text.sequence(), UiInputFamily::CommittedText)
+            ],
+            "both source-owned originals settle exactly once, in M13 FIFO order"
+        );
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("same selected text slot survives")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("same focused editor")
+                .state()
+                .text,
+            "漢字éΩx§vb",
+            "original text is delivered once, without host-side replay"
+        );
+
+        // Device-free IME Preedit -> End -> Commit can follow 390 already
+        // queued canonical actions without adding any host-owned generation
+        // or replay queue. RunenUI allocates the original generation itself
+        // at ingress, and every subsequent event stays inside that FIFO.
+        let ime_owner = slots
+            .native_input_ownership(slot)
+            .expect("selected live M13 IME owner");
+        assert!(ime_owner.keyboard().composition_generation().is_none());
+        slots
+            .test_queue_unpumped_typed_actions::<NativeTextApp>(
+                slot,
+                RUNTIME_PUMP_WORK_LIMIT * 3 + 6,
+                || TextAction::Idle,
+            )
+            .expect("390 preceding canonical IME-independent actions");
+        slots
+            .test_mark_native_pending(slot)
+            .expect("selected IME slot is genuinely pending");
+        let start = slots
+            .start_native_composition(slot)
+            .expect("M13 must admit original native IME Start behind legal backlog");
+        let generation = start.generation().clone();
+        assert_eq!(
+            slots
+                .native_input_ownership(slot)
+                .expect("pending composition uses runtime-owned generation")
+                .keyboard()
+                .composition_generation(),
+            Some(&generation),
+            "M13 owns the pending generation before its Start is pumped"
+        );
+        let preedit = slots
+            .update_native_composition(slot, generation.clone(), String::from("あ"), None)
+            .expect("original IME Preedit remains source-bound behind backlog");
+        let end = slots
+            .end_native_composition(slot, generation)
+            .expect("original IME End queues after its Start/Preedit");
+        let committed = slots
+            .submit_native_text(
+                slot,
+                CommittedTextEvent::new("あ", None)
+                    .expect("IME Commit never inherits a physical keyboard device"),
+            )
+            .expect("original device-free IME Commit queues after composition End");
+
+        let expected = [
+            (start.sequence(), UiInputFamily::Composition),
+            (preedit.sequence(), UiInputFamily::Composition),
+            (end.sequence(), UiInputFamily::Composition),
+            (committed.sequence(), UiInputFamily::CommittedText),
+        ];
+        let mut delivered = Vec::new();
+        let mut drained_ime = false;
+        for turn in 0..32 {
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .expect("existing M13 FIFO handles original IME backlog");
+            for record in batch.ordered_records() {
+                let InputArbitrationRecord::InputSettled(receipt) = record else {
+                    continue;
+                };
+                if expected
+                    .iter()
+                    .any(|(sequence, _)| *sequence == receipt.sequence())
+                {
+                    assert_eq!(receipt.scope(), ime_owner.scope());
+                    assert_eq!(receipt.device_id(), None);
+                    assert!(
+                        matches!(receipt.finality(), UiInputFinality::Committed(_)),
+                        "original IME callbacks require truthful terminal receipts"
+                    );
+                    delivered.push((receipt.sequence(), receipt.family()));
+                }
+            }
+            if turn == 0 {
+                assert!(
+                    delivered.is_empty(),
+                    "390 earlier real actions must not be mistaken for terminal IME receipts"
+                );
+            }
+            match status {
+                Ok(()) => {
+                    drained_ime = true;
+                    break;
+                }
+                Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => {}
+                Err(other) => panic!("native IME pending M13 failed: {other:?}"),
+            }
+        }
+        assert!(
+            drained_ime,
+            "finite canonical pending IME work must complete"
+        );
+        assert_eq!(
+            delivered, expected,
+            "exact original Preedit/End/Commit receipts must remain ordered and once-only"
+        );
+        assert_eq!(
+            slots
+                .slot_mut(slot)
+                .expect("focused slot survives IME")
+                .runtime
+                .typed_mut::<NativeTextApp>()
+                .expect("original typed document")
+                .state()
+                .text,
+            "漢字éΩx§vbあ",
+            "original IME Commit edits once without synthetic keyboard text"
+        );
+    }
+
+    #[test]
+    fn native_qualifier_text_field_survives_repeated_cursor_click_and_publication_rehit() {
+        use runenui_core::{
+            Color, EdgeInsets, FlexContainerStyle, FlexDirection, FontFamily, ItemAlignment,
+            LayoutBound, LayoutContainer, LayoutDimension, LayoutFactor, LayoutStyle, LogicalPoint,
+            MainAxisAlignment, NoHostProtocol, PointerButton, PointerButtons, PointerDeviceKind,
+            PointerPhase, SemanticEditableMode, TextAffinity, TextDocumentId, TextDocumentRevision,
+            TextDocumentSnapshot, TextPosition, TextSelection, Typography, WorkResidencyBudget,
+            WorkStartBudget, text_field,
+        };
+
+        fn font(size: u16) -> Typography {
+            Typography::new(
+                FontFamily::generic(GenericFontFamily::SansSerif),
+                LogicalLength::from(size),
+            )
+        }
+
+        struct QualificationClickProbe;
+        impl UiApp for QualificationClickProbe {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(9, 0).with_reconciliation(8, 0, 8)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(10, 1).with_reconciliation(8, 8, 8)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                // Match the real eight-owner centered native qualification app
+                // and the pinned M11 two-framework-service input frontier.
+                runenui_core::ProducerBudget::new(28, 13)
+                    .with_reconciliation(8, 8, 8)
+                    .with_work_starts(WorkStartBudget::new(0, 0, 0, 0, 2))
+                    .with_work_residency(WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &()) -> impl View<Self::Action> {
+                let document = TextDocumentSnapshot::new(
+                    TextDocumentId::new(1276),
+                    TextDocumentRevision::new(0),
+                );
+                let caret = TextPosition::new(document, "", 0, TextAffinity::Downstream)
+                    .expect("empty authored text has valid caret");
+                let editable = text_field(
+                    document,
+                    "",
+                    TextSelection::collapsed(caret),
+                    SemanticEditableMode::SingleLine,
+                    |_| (),
+                )
+                .expect("valid checked native text field")
+                .placeholder("CLICK HERE - type Unicode text")
+                .id("u9c.qualify.editable")
+                .with_layout(
+                    LayoutStyle::default()
+                        .with_width(LayoutDimension::Fill)
+                        .with_min_height(LayoutBound::length(LogicalLength::from(52_u16))),
+                )
+                .foreground(Color::rgb(20, 29, 45))
+                .background(Color::rgb(242, 246, 252))
+                .padding(EdgeInsets::symmetric(
+                    LogicalLength::from(14_u16),
+                    LogicalLength::from(12_u16),
+                ))
+                .radius(runenui_core::Radius::all(LogicalLength::from(10_u16)))
+                .typography(font(16));
+                let panel = column(vec![
+                    text("RUNENWERK  /  U9-C INPUT TEST")
+                        .foreground(Color::rgb(244, 247, 253))
+                        .typography(font(26))
+                        .into_element(),
+                    text("1   W halten, dann ins Textfeld klicken.")
+                        .foreground(Color::rgb(180, 192, 211))
+                        .typography(font(14))
+                        .into_element(),
+                    text("2   Unicode tippen, Tab + Space und Button testen.")
+                        .foreground(Color::rgb(180, 192, 211))
+                        .typography(font(14))
+                        .into_element(),
+                    editable.into_element(),
+                    button("BUTTON AKTIVIEREN")
+                        .id("u9c.qualify.button")
+                        .key("u9c.qualify.button")
+                        .on_activate(|| ())
+                        .with_layout(
+                            LayoutStyle::default()
+                                .with_width(LayoutDimension::Fill)
+                                .with_min_height(LayoutBound::length(LogicalLength::from(52_u16))),
+                        )
+                        .foreground(Color::WHITE)
+                        .background(Color::rgb(55, 111, 208))
+                        .padding(EdgeInsets::symmetric(
+                            LogicalLength::from(16_u16),
+                            LogicalLength::from(14_u16),
+                        ))
+                        .radius(runenui_core::Radius::all(LogicalLength::from(10_u16)))
+                        .typography(font(16))
+                        .into_element(),
+                    text("UI-Klicks: 0     Textzeichen: 0")
+                        .foreground(Color::rgb(147, 199, 255))
+                        .typography(font(14))
+                        .into_element(),
+                ])
+                .id("u9c.qualify.panel")
+                .with_layout(
+                    LayoutStyle::default()
+                        .with_width(LayoutDimension::percent(
+                            LayoutFactor::new(0.9).expect("finite width"),
+                        ))
+                        .with_max_width(LayoutBound::length(LogicalLength::from(640_u16)))
+                        .with_container(LayoutContainer::Flex(
+                            FlexContainerStyle::default()
+                                .with_direction(FlexDirection::Column)
+                                .with_align_items(ItemAlignment::Stretch),
+                        ))
+                        .with_gap(LogicalLength::from(16_u16)),
+                )
+                .background(Color::rgb(24, 33, 49))
+                .padding(EdgeInsets::all(LogicalLength::from(28_u16)))
+                .radius(runenui_core::Radius::all(LogicalLength::from(18_u16)));
+                column(vec![panel.into_element()])
+                    .id("u9c.qualify.root")
+                    .with_layout(
+                        LayoutStyle::default()
+                            .with_width(LayoutDimension::Fill)
+                            .with_height(LayoutDimension::Fill)
+                            .with_container(LayoutContainer::Flex(
+                                FlexContainerStyle::default()
+                                    .with_direction(FlexDirection::Column)
+                                    .with_justify_content(MainAxisAlignment::Center)
+                                    .with_align_items(ItemAlignment::Center),
+                            )),
+                    )
+                    .background(Color::rgb(13, 19, 30))
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").expect("controlled font family")],
+            );
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<QualificationClickProbe>(
+                UiTypedScreenId::new("native.qualification.click.rehit"),
+                (),
+                &fonts,
+            )
+            .slot_id()
+            .expect("same eight-owner centered RunenUI app as Windows qualification");
+        let style = StyleEnvironment::default();
+        let build = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(LogicalLength::from(1280_u16), LogicalLength::from(720_u16)),
+        );
+        let mut publication = slots
+            .publish_surface_for_slot(slot, &build)
+            .expect("actual native-sized displayed input context");
+        let field_id = ElementId::new("u9c.qualify.editable").expect("authored field ID");
+        let field_bounds = publication
+            .frame()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&field_id))
+            .expect("editable has a published paint node")
+            .bounds();
+        assert!(
+            field_bounds.width() > 2.0 && field_bounds.height() > 2.0,
+            "empty field must retain a real hit target through its visible placeholder"
+        );
+        let panel_id = ElementId::new("u9c.qualify.panel").expect("authored panel ID");
+        let panel_bounds = publication
+            .frame()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&panel_id))
+            .expect("centered panel has real displayed bounds")
+            .bounds();
+        assert!(
+            (panel_bounds.x() + panel_bounds.width() / 2.0 - 640.0).abs() < 4.0
+                && (panel_bounds.y() + panel_bounds.height() / 2.0 - 360.0).abs() < 4.0,
+            "responsive native panel must actually be centered in 1280x720"
+        );
+        let button_id = ElementId::new("u9c.qualify.button").expect("authored button ID");
+        let button_bounds = publication
+            .frame()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&button_id))
+            .expect("actual clickable button has published bounds")
+            .bounds();
+        assert!(
+            button_bounds.width() > 200.0 && button_bounds.height() >= 52.0,
+            "native test must render a conspicuous real button"
+        );
+        let point = LogicalPoint::new(
+            field_bounds.x() + field_bounds.width() / 2.0,
+            field_bounds.y() + field_bounds.height() / 2.0,
+        )
+        .expect("published field center is finite");
+        let target = slots
+            .slot_mut(slot)
+            .expect("mounted typed slot")
+            .runtime
+            .typed_mut::<QualificationClickProbe>()
+            .expect("original typed runtime")
+            .index()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&field_id))
+            .expect("same mounted field owner")
+            .id()
+            .clone();
+        assert_eq!(
+            publication.hit_test_scene().target_at(point),
+            Some(&target),
+            "the actual published placeholder must be hit-testable, not just painted"
+        );
+        let device = InputDeviceId::new(7).expect("original native device");
+        let pointer = PointerId::new(1).expect("original mouse stream");
+        let mut clicked = false;
+
+        for index in 0..315 {
+            // Reproduce the source mix observed on Windows: many physical
+            // cursor moves interleaved with native Down/Up pairs and successive
+            // publications that can cause framework stationary re-hits.
+            let events = if index >= 190 && index % 17 == 0 {
+                vec![PointerPhase::Move, PointerPhase::Down, PointerPhase::Up]
+            } else {
+                vec![PointerPhase::Move]
+            };
+            for phase in events {
+                let before = slots
+                    .input_ownership(slot)
+                    .expect("previous M13 work must settle without a phantom claim");
+                let mut event = PointerEvent::new(
+                    pointer,
+                    PointerDeviceKind::Mouse,
+                    phase,
+                    point,
+                    publication.input_context().clone(),
+                )
+                .with_device_id(device);
+                if phase == PointerPhase::Down {
+                    event = event
+                        .with_buttons(PointerButtons::new([PointerButton::Primary]))
+                        .with_changed_button(PointerButton::Primary);
+                } else if phase == PointerPhase::Up {
+                    event = event.with_changed_button(PointerButton::Primary);
+                }
+                let submission = slots
+                    .submit_native_pointer(slot, event)
+                    .expect("original mouse occurrence admitted by real pinned M13");
+                let (batch, status) = slots
+                    .pump_native_input_records(slot)
+                    .expect("canonical bounded M13 owner returned exact records");
+                let finality = native_pointer_finality(
+                    before.scope(),
+                    device,
+                    pointer,
+                    publication.input_context().surface_id(),
+                    submission,
+                    &batch,
+                    &status,
+                );
+                assert!(
+                    matches!(&finality, Ok(UiInputFinality::Committed(_))),
+                    "native cursor/click terminal receipt lost at {index} {phase:?}: {finality:?}, {status:?}, {:?}; trace={:?}",
+                    batch.report(),
+                    slots.test_trace_tail::<QualificationClickProbe>(slot, 20),
+                );
+                if phase == PointerPhase::Up {
+                    clicked = true;
+                }
+            }
+            if slots
+                .has_pending_redraw(slot)
+                .expect("settled owner supplies redraw intent")
+            {
+                publication = slots
+                    .publish_surface_for_slot(slot, &build)
+                    .expect("actual framework publication and stationary rehit");
+                slots
+                    .settle_slot(slot)
+                    .expect("publication's derived pointer work remains valid");
+            }
+        }
+        assert!(clicked, "real native-style click pairs were exercised");
+        let final_ownership = slots
+            .input_ownership(slot)
+            .expect("UI remains Running and settled after cursor/click storm");
+        assert_eq!(
+            final_ownership.keyboard().focused_node(),
+            Some(&target),
+            "clicking the actual displayed editable target must establish its M13 keyboard focus"
+        );
+    }
+
+    #[test]
+    fn native_pointer_admission_keeps_exact_device_stream_surface_and_m13_sequence() {
+        use runenui_core::{LogicalPoint, NoHostProtocol, PointerDeviceKind, PointerPhase};
+        use runenui_runtime::{
+            InputArbitrationRecord, UiInputFamily, UiInputFinality, UiInputProcessingRejection,
+        };
+        use runenui_winit::touch_input::TouchInputState;
+        use winit::event::TouchPhase;
+
+        struct NativePointerApp;
+        impl UiApp for NativePointerApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                // Accepted RunenUI Winit text/touch profile: the pointer submission
+                // retains an Up/cancel continuation and cursor-service response even
+                // though this one-node fixture emits no widget or app action.
+                runenui_core::ProducerBudget::new(6, 2)
+                    .with_application_outputs(0)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                text("pointer settlement")
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").expect("test font name")],
+            );
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<NativePointerApp>(UiTypedScreenId::new("native.pointer.probe"), (), &fonts)
+            .slot_id()
+            .expect("one real pinned RunenUI runtime");
+        let style = StyleEnvironment::default();
+        let build = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(
+                LogicalLength::from(RUNTIME_SURFACE_WIDTH),
+                LogicalLength::from(RUNTIME_SURFACE_HEIGHT),
+            ),
+        );
+        let published = slots
+            .publish_surface_for_slot(slot, &build)
+            .expect("actual runtime publishes hit context");
+        let device = InputDeviceId::new(7).expect("checked native device");
+        let other_device = InputDeviceId::new(8).expect("other native device");
+        let pointer = PointerId::new(3).expect("nonzero pointer stream");
+        let other_pointer = PointerId::new(5).expect("different pointer stream");
+        let event = || {
+            PointerEvent::new(
+                pointer,
+                PointerDeviceKind::Mouse,
+                PointerPhase::Move,
+                LogicalPoint::new(12.0, 8.0).expect("finite"),
+                published.input_context().clone(),
+            )
+            .with_device_id(device)
+        };
+        let missing = slots
+            .submit_native_pointer(UiRuntimeSlotId(u64::MAX), event())
+            .expect_err("unmounted recipient cannot accept work");
+        assert!(matches!(
+            missing,
+            UiRuntimeNativePointerAdmissionError::Slot {
+                failure: UiRuntimeSlotOperationFailure::MissingSlot,
+                ref event,
+            } if event.pointer_id() == pointer && event.device_id() == Some(device)
+        ));
+        let before = slots
+            .input_ownership(slot)
+            .expect("valid pre-input M13 scope");
+        let admitted = slots
+            .submit_native_pointer(slot, event())
+            .expect("real typed runtime accepts one native pointer");
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("one owner returns exact ordered M13 records");
+        assert_eq!(status, Ok(()));
+        let settlement = batch
+            .ordered_records()
+            .iter()
+            .find_map(|record| match record {
+                InputArbitrationRecord::InputSettled(value)
+                    if value.sequence() == admitted.sequence() =>
+                {
+                    Some(value)
+                }
+                _ => None,
+            })
+            .expect("one reached pointer receipt");
+        assert_eq!(settlement.family(), UiInputFamily::Pointer);
+        assert_eq!(settlement.device_id(), Some(device));
+        assert_eq!(settlement.pointer_id(), Some(pointer));
+        assert_eq!(
+            settlement.surface_id(),
+            Some(published.input_context().surface_id())
+        );
+        assert_eq!(
+            native_pointer_finality(
+                before.scope(),
+                device,
+                pointer,
+                published.input_context().surface_id(),
+                admitted,
+                &batch,
+                &status,
+            ),
+            Ok(settlement.finality().clone()),
+            "exact pointer finality must come from the framework's receipt"
+        );
+        // A second genuine runtime produces an exact cursor receipt, but the
+        // next separately admitted application action is still queued after a
+        // one-envelope bounded pump. The exact pointer receipt remains usable;
+        // the slot itself must remain unsettled for subsequent native input.
+        let delayed_slot = slots
+            .mount_app::<NativePointerApp>(
+                UiTypedScreenId::new("native.pointer.bounded.pending"),
+                (),
+                &fonts,
+            )
+            .slot_id()
+            .expect("independent admitted native pointer slot");
+        let delayed_publication = slots
+            .publish_surface_for_slot(delayed_slot, &build)
+            .expect("framework-owned surface input context");
+        let delayed_before = slots
+            .input_ownership(delayed_slot)
+            .expect("exact scope before deferred pointer");
+        let delayed_submission = slots
+            .submit_native_pointer(
+                delayed_slot,
+                PointerEvent::new(
+                    pointer,
+                    PointerDeviceKind::Mouse,
+                    PointerPhase::Move,
+                    LogicalPoint::new(12.0, 8.0).expect("finite pointer point"),
+                    delayed_publication.input_context().clone(),
+                )
+                .with_device_id(device),
+            )
+            .expect("real pointer precedes independently admitted application action");
+        let delayed_batch = {
+            let runtime = slots
+                .slot_mut(delayed_slot)
+                .expect("mounted test slot")
+                .runtime
+                .typed_mut::<NativePointerApp>()
+                .expect("real typed runtime");
+            runtime
+                .submit_action(())
+                .expect("independent action stays queued behind pointer");
+            runtime
+                .pump(runenui_runtime::PumpBudget::new(1, 0, 0, 0))
+                .expect("one-envelope canonical M13 pump")
+        };
+        let delayed_status = slots
+            .slot_mut(delayed_slot)
+            .expect("mounted test slot")
+            .observe_batch_report(&delayed_batch);
+        assert_eq!(
+            delayed_batch.report().outcome(),
+            runenui_runtime::PumpOutcome::BudgetExhausted,
+            "a real bounded pump must leave independent application work"
+        );
+        assert_eq!(
+            delayed_status,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            "other queued work still prevents future original input admission"
+        );
+        let delayed_settlement = delayed_batch
+            .ordered_records()
+            .iter()
+            .find_map(|record| match record {
+                InputArbitrationRecord::InputSettled(value)
+                    if value.sequence() == delayed_submission.sequence() =>
+                {
+                    Some(value)
+                }
+                _ => None,
+            })
+            .expect("the original pointer reached its own exact M13 terminal receipt");
+        assert_eq!(
+            native_pointer_finality(
+                delayed_before.scope(),
+                device,
+                pointer,
+                delayed_publication.input_context().surface_id(),
+                delayed_submission,
+                &delayed_batch,
+                &delayed_status,
+            ),
+            Ok(delayed_settlement.finality().clone()),
+            "globally pending unrelated work must not undo an exact terminal cursor receipt"
+        );
+        assert_eq!(
+            native_pointer_finality(
+                delayed_before.scope(),
+                other_device,
+                pointer,
+                delayed_publication.input_context().surface_id(),
+                delayed_submission,
+                &delayed_batch,
+                &delayed_status,
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::WrongDevice),
+            "bounded-pump handling must still reject foreign physical devices"
+        );
+        assert_eq!(
+            native_pointer_finality(
+                delayed_before.scope(),
+                device,
+                pointer,
+                delayed_publication.input_context().surface_id(),
+                delayed_submission,
+                &delayed_batch,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::Unsettled),
+            "an actual owner failure cannot qualify a reached pointer receipt"
+        );
+        assert_eq!(
+            native_pointer_finality(
+                before.scope(),
+                device,
+                pointer,
+                published.input_context().surface_id(),
+                admitted,
+                &batch,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::Unsettled),
+            "a failed canonical M13 pump never qualifies an earlier matching pointer receipt"
+        );
+        assert_eq!(
+            native_pointer_finality(
+                before.scope(),
+                other_device,
+                pointer,
+                published.input_context().surface_id(),
+                admitted,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::WrongDevice),
+        );
+        assert_eq!(
+            native_pointer_finality(
+                before.scope(),
+                device,
+                other_pointer,
+                published.input_context().surface_id(),
+                admitted,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::WrongPointer),
+        );
+        // A correctly scoped, sequenced, and device-qualified original
+        // pointer can still reach an exact ProcessingRejected receipt. That
+        // is NOT a committed native pointer stream or gameplay permission.
+        let wrong_stream_device = PointerEvent::new(
+            pointer,
+            PointerDeviceKind::Mouse,
+            PointerPhase::Move,
+            LogicalPoint::new(12.0, 8.0).expect("finite"),
+            published.input_context().clone(),
+        )
+        .with_device_id(other_device)
+        .with_buttons(runenui_core::PointerButtons::new([
+            runenui_core::PointerButton::Primary,
+        ]));
+        let rejected_submission = slots
+            .submit_native_pointer(slot, wrong_stream_device)
+            .expect("framework queue admits original foreign-device pointer for processing");
+        let (rejected_batch, rejected_status) = slots
+            .pump_native_input_records(slot)
+            .expect("foreign-device pointer obtains canonical terminal M13 receipt");
+        assert_eq!(rejected_status, Ok(()));
+        let refused = native_pointer_finality(
+            before.scope(),
+            other_device,
+            pointer,
+            published.input_context().surface_id(),
+            rejected_submission,
+            &rejected_batch,
+            &rejected_status,
+        );
+        assert!(
+            matches!(
+                refused,
+                Ok(UiInputFinality::ProcessingRejected(
+                    UiInputProcessingRejection::InvalidPointerStream
+                ))
+            ),
+            "a reached invalid foreign-device stream must be expressly rejected, not committed: {refused:?}"
+        );
+
+        // Real selective touch cancellation uses one framework-owned M13
+        // stream for each original device, even when their OS contact IDs
+        // overlap. A's Cancel cannot retire B or borrow its settlement.
+        let mut contacts = TouchInputState::default();
+        let touch_a = InputDeviceId::new(9).expect("touch A");
+        let touch_b = InputDeviceId::new(10).expect("touch B");
+        let position = LogicalPoint::new(12.0, 8.0).expect("finite touch");
+        let mut pointer_a = None;
+        let mut pointer_b = None;
+        for (touch_device, contact) in [(touch_a, &mut pointer_a), (touch_b, &mut pointer_b)] {
+            let down = contacts
+                .transition(
+                    touch_device,
+                    41,
+                    TouchPhase::Started,
+                    position,
+                    published.input_context().clone(),
+                )
+                .expect("distinct device-qualified touch contact starts");
+            let pointer_id = down.pointer_id();
+            *contact = Some(pointer_id);
+            let submission = slots
+                .submit_native_pointer(slot, down)
+                .expect("touch Down admitted to pinned M13");
+            let (batch, status) = slots
+                .pump_native_input_records(slot)
+                .expect("touch Down has actual terminal M13 record");
+            assert!(matches!(
+                native_pointer_finality(
+                    before.scope(),
+                    touch_device,
+                    pointer_id,
+                    published.input_context().surface_id(),
+                    submission,
+                    &batch,
+                    &status,
+                ),
+                Ok(UiInputFinality::Committed(_))
+            ));
+        }
+        let pointer_a = pointer_a.expect("A live original contact");
+        let pointer_b = pointer_b.expect("B live original contact");
+        assert_ne!(pointer_a, pointer_b);
+        let cancelled = contacts.cancel_device(touch_a);
+        assert_eq!(cancelled.len(), 1);
+        assert_eq!(contacts.active_contact_count(), 1);
+        let cancel = cancelled.into_iter().next().expect("A Cancel");
+        assert_eq!(cancel.pointer_id(), pointer_a);
+        let submission = slots
+            .submit_native_pointer(slot, cancel)
+            .expect("A device-specific Cancel admitted");
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("A Cancel reaches a real M13 settlement");
+        assert!(matches!(
+            native_pointer_finality(
+                before.scope(),
+                touch_a,
+                pointer_a,
+                published.input_context().surface_id(),
+                submission,
+                &batch,
+                &status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        let released_b = contacts
+            .transition(
+                touch_b,
+                41,
+                TouchPhase::Ended,
+                position,
+                published.input_context().clone(),
+            )
+            .expect("B still owns its authentic Up after A cancellation");
+        assert_eq!(released_b.pointer_id(), pointer_b);
+        let submission = slots
+            .submit_native_pointer(slot, released_b)
+            .expect("B Up admitted independently after A retirement");
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("B Up reaches its own terminal M13 record");
+        assert!(matches!(
+            native_pointer_finality(
+                before.scope(),
+                touch_b,
+                pointer_b,
+                published.input_context().surface_id(),
+                submission,
+                &batch,
+                &status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+        assert_eq!(contacts.active_contact_count(), 0);
+
+        let later = slots
+            .submit_native_pointer(slot, event())
+            .expect("second independently sequenced original pointer event");
+        assert_eq!(
+            native_pointer_finality(
+                before.scope(),
+                device,
+                pointer,
+                published.input_context().surface_id(),
+                later,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::NotProcessed),
+        );
+        let foreign = slots
+            .mount_app::<NativePointerApp>(
+                UiTypedScreenId::new("native.pointer.foreign"),
+                (),
+                &fonts,
+            )
+            .slot_id()
+            .expect("distinct framework scope");
+        let foreign_ownership = slots.input_ownership(foreign).expect("foreign scope");
+        assert_eq!(
+            native_pointer_finality(
+                foreign_ownership.scope(),
+                device,
+                pointer,
+                published.input_context().surface_id(),
+                admitted,
+                &batch,
+                &status,
+            ),
+            Err(UiRuntimeNativePointerEvidenceFailure::WrongScope),
+        );
+    }
+
+    #[test]
+    fn native_keyboard_admission_preserves_exact_rejection_and_ordered_m13_settlement() {
+        use runenui_core::{
+            CommandOrigin, KeyLocation, KeyModifiers, KeyboardCompositionState, KeyboardPhase,
+            LogicalKey, NoHostProtocol, PhysicalKey,
+        };
+        use runenui_runtime::{InputArbitrationRecord, SubmitKeyboardErrorKind, UiInputFinality};
+
+        struct NativeKeyboardApp;
+        impl UiApp for NativeKeyboardApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                button("Native focus target")
+                    .id("native.keyboard.focus")
+                    .key("native.keyboard.focus")
+                    .on_activate(|| ())
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+            }
+        }
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let slot = slots
+            .mount_app::<NativeKeyboardApp>(
+                UiTypedScreenId::new("native.keyboard.probe"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("actual RunenUI typed runtime mounts");
+        let native_device = InputDeviceId::new(7).expect("checked native device identity");
+        let keyboard = |device: Option<InputDeviceId>| {
+            KeyboardEvent::new(
+                KeyboardPhase::Down,
+                PhysicalKey::Code(String::from("KeyW")),
+                LogicalKey::Character(String::from("w")),
+                KeyModifiers::NONE,
+                false,
+                KeyLocation::Standard,
+                KeyboardCompositionState::Inactive,
+                device,
+            )
+        };
+
+        let epoch = slots.ingress_epoch(slot).expect("mount generation");
+        let before_unfocused = slots
+            .input_ownership(slot)
+            .expect("fresh M13 ownership before rejected input");
+        let missing = slots
+            .submit_native_keyboard(UiRuntimeSlotId(u64::MAX), keyboard(Some(native_device)))
+            .expect_err("unknown slot cannot admit native input");
+        assert!(matches!(
+            missing,
+            UiRuntimeNativeKeyboardAdmissionError::Slot {
+                failure: UiRuntimeSlotOperationFailure::MissingSlot,
+                ref event,
+            } if event.physical_key() == &PhysicalKey::Code(String::from("KeyW"))
+        ));
+        let rejected = slots
+            .submit_native_keyboard(slot, keyboard(Some(native_device)))
+            .expect_err("missing focus rejects before M13 sequence reservation");
+        assert!(matches!(
+            rejected,
+            UiRuntimeNativeKeyboardAdmissionError::Framework(ref error)
+                if error.kind() == SubmitKeyboardErrorKind::NoFocusedTarget
+                    && error.event().physical_key()
+                        == &PhysicalKey::Code(String::from("KeyW"))
+        ));
+        // The framework may reject device-less headless keyboard input for
+        // lack of focus, but this is not an originating native-device receipt.
+        let missing_native_device = slots
+            .submit_native_keyboard(slot, keyboard(None))
+            .expect_err("missing focus rejects device-less keyboard");
+        assert_eq!(slots.ingress_epoch(slot), Some(epoch));
+        let after_unfocused = slots
+            .input_ownership(slot)
+            .expect("fresh M13 ownership after rejected input");
+        assert!(native_no_focused_keyboard_claim_witness(
+            native_device,
+            &before_unfocused,
+            &after_unfocused,
+            &rejected,
+        ));
+        let repeated_down = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Down,
+                    PhysicalKey::Code(String::from("KeyW")),
+                    LogicalKey::Character(String::from("w")),
+                    KeyModifiers::NONE,
+                    true,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(native_device),
+                ),
+            )
+            .expect_err("repeat without focus is not a newly admitted original Down");
+        let after_repeat = slots
+            .input_ownership(slot)
+            .expect("rejected repeat must leave M13 ownership observable");
+        assert_eq!(after_repeat, after_unfocused);
+        assert!(native_original_keyboard_repeat_nonclaim(
+            native_device,
+            &before_unfocused,
+            &after_repeat,
+            &repeated_down,
+        ));
+        assert!(
+            !native_no_focused_keyboard_claim_witness(
+                native_device,
+                &before_unfocused,
+                &after_repeat,
+                &repeated_down,
+            ),
+            "repeat rejection may not authorize a fresh game press"
+        );
+        assert!(!native_original_keyboard_repeat_nonclaim(
+            InputDeviceId::new(17).expect("another valid device"),
+            &before_unfocused,
+            &after_repeat,
+            &repeated_down,
+        ));
+        assert!(!native_original_keyboard_repeat_nonclaim(
+            native_device,
+            &before_unfocused,
+            &after_unfocused,
+            &rejected,
+        ));
+        assert!(!native_original_keyboard_repeat_nonclaim(
+            native_device,
+            &before_unfocused,
+            &after_repeat,
+            &missing,
+        ));
+        assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
+            &before_unfocused,
+            &after_unfocused,
+            &missing,
+        ));
+        assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
+            &before_unfocused,
+            &after_unfocused,
+            &missing_native_device,
+        ));
+        let another_device = InputDeviceId::new(17).expect("valid distinct native device");
+        assert!(!native_no_focused_keyboard_claim_witness(
+            another_device,
+            &before_unfocused,
+            &after_unfocused,
+            &rejected,
+        ));
+        // The authentic original Up closes physical held truth even when
+        // the focused framework target is absent. It must never be mistaken
+        // for a new positively permitted gameplay Down.
+        let original_up = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Up,
+                    PhysicalKey::Code(String::from("KeyW")),
+                    LogicalKey::Character(String::from("w")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(native_device),
+                ),
+            )
+            .expect_err("unfocused original Up has no framework target");
+        let after_original_up = slots
+            .input_ownership(slot)
+            .expect("no-focus physical Up does not mutate M13 ownership");
+        assert!(native_original_keyboard_release_nonclaim(
+            native_device,
+            &after_unfocused,
+            &after_original_up,
+            &original_up,
+        ));
+        assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
+            &after_unfocused,
+            &after_original_up,
+            &original_up,
+        ));
+        assert!(!native_original_keyboard_release_nonclaim(
+            another_device,
+            &after_unfocused,
+            &after_original_up,
+            &original_up,
+        ));
+        // A synthesized cancellation is not the original keyboard Down
+        // occurrence for which the owner authorized NoFocusedTarget nonclaim.
+        let cancel = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Cancel,
+                    PhysicalKey::Code(String::from("KeyW")),
+                    LogicalKey::Character(String::from("w")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(native_device),
+                ),
+            )
+            .expect_err("no focused RunenUI target for Cancel");
+        let after_cancel = slots
+            .input_ownership(slot)
+            .expect("synthetic rejection cannot mutate M13 ownership");
+        assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
+            &after_unfocused,
+            &after_cancel,
+            &cancel,
+        ));
+        assert!(!native_original_keyboard_release_nonclaim(
+            native_device,
+            &after_unfocused,
+            &after_cancel,
+            &cancel,
+        ));
+        assert_eq!(slots.ingress_epoch(slot), Some(epoch));
+
+        let focus_id = ElementId::new("native.keyboard.focus").expect("valid authored target");
+        let runtime = slots
+            .slot_mut(slot)
+            .expect("mounted")
+            .runtime
+            .typed_mut::<NativeKeyboardApp>()
+            .expect("exact UiApp");
+        let target = runtime
+            .index()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id() == Some(&focus_id))
+            .expect("mounted focusable target")
+            .id()
+            .clone();
+        let focus_id_from_runtime = target.clone();
+        runtime
+            .submit_command(
+                target,
+                SemanticCommand::RequestFocus,
+                CommandOrigin::programmatic(),
+            )
+            .expect("semantic focus admitted");
+        slots.settle_slot(slot).expect("focus settles");
+        let focused = slots
+            .input_ownership(slot)
+            .expect("fresh canonical M13 ownership after focus");
+        assert_eq!(
+            focused.keyboard().focused_node(),
+            Some(&focus_id_from_runtime),
+            "the semantic focus request must establish a real keyboard target"
+        );
+        assert!(!native_no_focused_keyboard_claim_witness(
+            native_device,
+            &before_unfocused,
+            &focused,
+            &rejected,
+        ));
+        assert!(!native_original_keyboard_repeat_nonclaim(
+            native_device,
+            &before_unfocused,
+            &focused,
+            &repeated_down,
+        ));
+
+        let receipt = slots
+            .submit_native_keyboard(slot, keyboard(Some(native_device)))
+            .expect("focused keyboard event accepted");
+        assert_eq!(slots.ingress_epoch(slot), Some(epoch + 1));
+        let (batch, status) = slots
+            .pump_native_input_records(slot)
+            .expect("bounded input observation succeeds");
+        assert_eq!(status, Ok(()));
+        assert_eq!(batch.processed_through(), Some(receipt.sequence()));
+        let settled = batch
+            .ordered_records()
+            .iter()
+            .find_map(|record| match record {
+                InputArbitrationRecord::InputSettled(value)
+                    if value.sequence() == receipt.sequence() =>
+                {
+                    Some(value)
+                }
+                _ => None,
+            })
+            .expect("exact reached M13 input");
+        assert_eq!(settled.scope(), batch.final_ownership().scope());
+        assert!(matches!(settled.finality(), UiInputFinality::Committed(_)));
+        assert_eq!(
+            native_keyboard_finality(settled.scope(), native_device, receipt, &batch, &status),
+            Ok(settled.finality().clone())
+        );
+
+        assert_eq!(
+            native_keyboard_finality(
+                settled.scope(),
+                native_device,
+                receipt,
+                &batch,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::Unsettled),
+            "even a matching accepted keyboard receipt is invalid after a failed M13 pump"
+        );
+        assert_eq!(
+            native_keyboard_finality(settled.scope(), another_device, receipt, &batch, &status,),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongDevice),
+            "an unrelated device cannot borrow this exact M13 receipt"
+        );
+
+        // A genuinely focused, previously admitted original Down has an
+        // ordinary same-device M13 Cancel. The native host must observe its
+        // committed settlement; an accepted queue receipt alone is insufficient.
+        let cancel = slots
+            .submit_native_keyboard(
+                slot,
+                KeyboardEvent::new(
+                    KeyboardPhase::Cancel,
+                    PhysicalKey::Code(String::from("KeyW")),
+                    LogicalKey::Character(String::from("w")),
+                    KeyModifiers::NONE,
+                    false,
+                    KeyLocation::Standard,
+                    KeyboardCompositionState::Inactive,
+                    Some(native_device),
+                ),
+            )
+            .expect("focused native keyboard Cancel enters the canonical M13 queue");
+        let (cancel_batch, cancel_status) = slots
+            .pump_native_input_records(slot)
+            .expect("focused native keyboard Cancel reaches canonical settlement");
+        assert!(matches!(
+            native_keyboard_finality(
+                settled.scope(),
+                native_device,
+                cancel,
+                &cancel_batch,
+                &cancel_status,
+            ),
+            Ok(UiInputFinality::Committed(_))
+        ));
+
+        let missing_scope_slot = slots
+            .mount_app::<NativeKeyboardApp>(
+                UiTypedScreenId::new("native.keyboard.foreign"),
+                (),
+                &UiRuntimeFontConfiguration::default(),
+            )
+            .slot_id()
+            .expect("independent mounted scope");
+        let foreign_scope = slots
+            .input_ownership(missing_scope_slot)
+            .expect("foreign scope is observable");
+        assert_eq!(
+            native_keyboard_finality(
+                foreign_scope.scope(),
+                native_device,
+                receipt,
+                &batch,
+                &status
+            ),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongScope)
+        );
+
+        let next = slots
+            .submit_native_keyboard(slot, keyboard(Some(native_device)))
+            .expect("second distinct native keyboard submission");
+        assert_eq!(
+            native_keyboard_finality(settled.scope(), native_device, next, &batch, &status),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::NotProcessed)
+        );
+
+        // Another owner pumping before host correlation must not leave an
+        // inferred grant. The first batch cannot stand in for later work.
+        slots.settle_slot(slot).expect("canonical work settles");
+        let (later, later_status) = slots
+            .pump_native_input_records(slot)
+            .expect("later empty canonical pump");
+        let lost_observation =
+            native_keyboard_finality(settled.scope(), native_device, next, &later, &later_status);
+        assert!(lost_observation.is_err());
+
+        // RunenUI can process an observation without a hardware device,
+        // but that M13 settlement is not valid native game-permission proof.
+        let device_less = slots
+            .submit_native_keyboard(slot, keyboard(None))
+            .expect("non-native keyboard observation can be submitted");
+        let (device_less_batch, device_less_status) = slots
+            .pump_native_input_records(slot)
+            .expect("real M13 batch is observable");
+        assert_eq!(device_less_status, Ok(()));
+        assert_eq!(
+            native_keyboard_finality(
+                settled.scope(),
+                native_device,
+                device_less,
+                &device_less_batch,
+                &device_less_status,
+            ),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongDevice)
+        );
+
+        // REV-001: RunenUI can complete the exact original keyboard receipt
+        // before unrelated, legally queued application actions finish. This
+        // canonical fixture observes the distinction without granting gameplay
+        // permission or fabricating a new receipt from a later pump.
+        let backlog_receipt = slots
+            .submit_native_keyboard(slot, keyboard(Some(native_device)))
+            .expect("focused native keyboard admits an original input");
+        {
+            let runtime = slots
+                .slot_mut(slot)
+                .expect("same mounted runtime")
+                .runtime
+                .typed_mut::<NativeKeyboardApp>()
+                .expect("same typed runtime");
+            for _ in 0..(RUNTIME_PUMP_WORK_LIMIT + 2) {
+                runtime
+                    .submit_action(())
+                    .expect("independent application actions are legally queued");
+            }
+        }
+        let (partial_batch, partial_status) = slots
+            .pump_native_input_records(slot)
+            .expect("partial canonical pump remains observable");
+        assert_eq!(
+            partial_batch.report().outcome(),
+            runenui_runtime::PumpOutcome::BudgetExhausted
+        );
+        assert_eq!(
+            partial_status,
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce)
+        );
+        assert!(
+            partial_batch
+                .processed_through()
+                .is_some_and(|through| through >= backlog_receipt.sequence())
+        );
+        assert!(
+            partial_batch
+                .ordered_records()
+                .iter()
+                .any(|record| matches!(
+                    record,
+                    InputArbitrationRecord::InputSettled(settlement)
+                        if settlement.sequence() == backlog_receipt.sequence()
+                            && settlement.scope() == focused.scope()
+                            && settlement.device_id() == Some(native_device)
+                            && matches!(settlement.finality(), UiInputFinality::Committed(_))
+                ))
+        );
+        assert_eq!(
+            slots.input_ownership(slot),
+            Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce),
+            "a reached receipt cannot make the selected slot globally ready"
+        );
+        let terminal = partial_batch
+            .ordered_records()
+            .iter()
+            .find_map(|record| match record {
+                InputArbitrationRecord::InputSettled(value)
+                    if value.sequence() == backlog_receipt.sequence() =>
+                {
+                    Some(value)
+                }
+                _ => None,
+            })
+            .expect("original native keyboard terminal receipt exists in partial batch");
+        assert_eq!(
+            native_keyboard_finality(
+                focused.scope(),
+                native_device,
+                backlog_receipt,
+                &partial_batch,
+                &partial_status,
+            ),
+            Ok(terminal.finality().clone()),
+            "bounded unrelated application work does not erase the exact keyboard receipt"
+        );
+        assert_eq!(
+            native_keyboard_finality(
+                focused.scope(),
+                another_device,
+                backlog_receipt,
+                &partial_batch,
+                &partial_status,
+            ),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::WrongDevice),
+            "a foreign physical device cannot borrow a reached receipt"
+        );
+        assert_eq!(
+            native_keyboard_finality(
+                focused.scope(),
+                native_device,
+                backlog_receipt,
+                &partial_batch,
+                &Err(UiRuntimeSlotOperationFailure::MissingSlot),
+            ),
+            Err(UiRuntimeNativeKeyboardEvidenceFailure::Unsettled),
+            "unrelated terminal failures must never pass as normal bounded work"
+        );
+        for _ in 0..4 {
+            if slots.settle_slot(slot).is_ok() {
+                break;
+            }
+        }
+        let resumed = slots
+            .input_ownership(slot)
+            .expect("ordinary bounded continuation eventually settles");
+        assert_eq!(resumed.scope(), focused.scope());
+        assert!(
+            !slots
+                .pump_native_input_records(slot)
+                .expect("later quiescent observation is available")
+                .0
+                .ordered_records()
+                .iter()
+                .any(|record| matches!(
+                    record,
+                    InputArbitrationRecord::InputSettled(settlement)
+                        if settlement.sequence() == backlog_receipt.sequence()
+                )),
+            "an earlier exact keyboard terminal receipt cannot replay"
+        );
     }
 
     #[test]
@@ -2127,6 +6302,151 @@ mod tests {
     }
 
     #[test]
+    fn pending_native_publication_preserves_only_compatible_visual_not_input_authority() {
+        use crate::plugins::render::host::RenderSurfaceId;
+        use crate::plugins::render::{
+            RenderFrameProducerId, RunenUiPaintSubmission, RunenUiPaintSubmissionRegistryResource,
+        };
+        use crate::plugins::ui::{
+            UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
+            UiRuntimePresentationBinding,
+        };
+        use crate::runtime::NativeWindowId;
+
+        let mut slots = UiRuntimeSlotsResource::default();
+        let (source, _, _, registry) = counter_projection_fixture();
+        let fonts = UiRuntimeFontConfiguration::new(vec![CONTROLLED_FONT_BYTES.to_vec()])
+            .with_generic_mapping(
+                GenericFontFamily::SansSerif,
+                vec![FontFamilyName::new("JetBrains Mono").expect("valid font")],
+            );
+        let slot = slots
+            .mount_with_fonts(source, &registry, &fonts)
+            .slot_id()
+            .expect("real RunenUI slot");
+        let surface = RenderSurfaceId::primary();
+        let producer = RenderFrameProducerId::try_from_raw(57).unwrap();
+        let style = StyleEnvironment::default();
+        let binding = UiRuntimePresentationBinding::new(slot, producer, surface, style.clone());
+        let mapping =
+            UiRuntimeNativeMapping::new(NativeWindowId::primary(), surface, (320, 160), 1.0)
+                .unwrap();
+        let context = SurfaceBuildContext::tight(
+            &style,
+            LogicalSize::new(
+                LogicalLength::from(RUNTIME_SURFACE_WIDTH),
+                LogicalLength::from(RUNTIME_SURFACE_HEIGHT),
+            ),
+        );
+        let publication = slots.publish_surface_for_slot(slot, &context).unwrap();
+
+        let mut associations = UiRuntimePresentationAssociationsResource::default();
+        associations.bind(binding.clone()).unwrap();
+        assert!(associations.update_mapping(slot, mapping));
+        let first_id = associations
+            .stage(binding.clone(), mapping, 1, publication.clone())
+            .unwrap();
+        assert!(associations.associate_accepted_submission(first_id));
+        assert!(
+            associations
+                .promote_completed_publication(first_id)
+                .is_some()
+        );
+        let mut paints = RunenUiPaintSubmissionRegistryResource::default();
+        assert!(
+            paints
+                .replace(
+                    RunenUiPaintSubmission::new(
+                        producer,
+                        first_id,
+                        publication.paint_publication().clone(),
+                    )
+                    .with_render_surface(surface),
+                )
+                .is_none()
+        );
+        assert_eq!(paints.submission_count(), 1);
+        assert!(
+            associations.defer_unsettled_publication(&binding, mapping),
+            "the exact old renderer target is compatible"
+        );
+        assert_eq!(
+            paints
+                .get_for_surface(&producer, surface)
+                .map(|paint| paint.publication_id),
+            Some(first_id),
+            "the existing immutable paint stays a visual-only contribution"
+        );
+        assert!(
+            associations
+                .displayed_for_native_recipient(slot, NativeWindowId::primary())
+                .is_none(),
+            "pending M13 cannot reuse any old completed-Present hit mapping"
+        );
+        assert!(!associations.associate_accepted_submission(first_id));
+        assert!(
+            associations
+                .promote_completed_publication(first_id)
+                .is_none(),
+            "a late old GPU receipt cannot reactivate stale input"
+        );
+        assert!(associations.needs_publication(slot, mapping, 1));
+
+        // Several consecutive bounded-pump deferrals keep only one unchanged
+        // visual contribution and cannot allocate duplicate renderer entries.
+        for _ in 0..16 {
+            assert!(associations.defer_unsettled_publication(&binding, mapping));
+            assert_eq!(paints.submission_count(), 1);
+        }
+
+        // A fresh aligned generation may recover input only after its own
+        // accepted GPU submission and terminal completed Present.
+        let recovered_id = associations
+            .stage(binding.clone(), mapping, 2, publication.clone())
+            .unwrap();
+        assert_ne!(recovered_id, first_id);
+        assert!(associations.displayed_for_mapping(slot, mapping).is_none());
+        assert!(associations.associate_accepted_submission(recovered_id));
+        assert!(
+            associations
+                .promote_completed_publication(recovered_id)
+                .is_some()
+        );
+
+        let later = associations
+            .stage(binding.clone(), mapping, 3, publication.clone())
+            .unwrap();
+        assert!(associations.associate_accepted_submission(later));
+        assert!(associations.defer_unsettled_publication(&binding, mapping));
+        assert!(
+            associations.promote_completed_publication(later).is_none(),
+            "even accepted but not completed old work may not restore input"
+        );
+
+        // A physical resize or raster-scale change must invalidate old paint;
+        // the caller obeys update_mapping's mandatory renderer retirement.
+        let resized =
+            UiRuntimeNativeMapping::new(NativeWindowId::primary(), surface, (640, 320), 2.0)
+                .unwrap();
+        assert!(
+            !associations.defer_unsettled_publication(&binding, resized),
+            "not-yet-applied physical mapping must not license visual reuse"
+        );
+        paints.remove_for_surface(&producer, surface);
+        associations.invalidate_mapping(slot);
+        assert_eq!(paints.submission_count(), 0);
+        assert!(associations.update_mapping(slot, resized));
+        assert!(associations.displayed_for_mapping(slot, resized).is_none());
+        assert!(associations.needs_publication(slot, resized, 3));
+
+        // Rebind/retire may never reinstate the old target, even if later
+        // native geometry happens to equal its old width and height.
+        associations.unbind(slot);
+        assert!(!associations.defer_unsettled_publication(&binding, mapping));
+        assert!(associations.binding(slot).is_none());
+    }
+
+    #[test]
     fn host_presentation_mapping_rejects_invalid_scale_and_extent() {
         use crate::plugins::render::host::RenderSurfaceId;
         use crate::plugins::ui::{UiRuntimeMappingError, UiRuntimeNativeMapping};
@@ -2349,6 +6669,15 @@ mod tests {
         impl Widget<Box<EditIntent>> for ClippedPaintProbe {
             type State = ();
 
+            fn producer_budget(
+                &self,
+                _: runenui_core::WidgetProducerPhase,
+                _: &Self::State,
+            ) -> runenui_core::WidgetProducerBudget {
+                // Pure geometric paint; no action, command or work producer.
+                runenui_core::WidgetProducerBudget::new(0)
+            }
+
             fn create_state(&self) -> Self::State {}
 
             fn measure(&self, _: &Self::State, _: WidgetMeasureInput) -> WidgetMeasure {
@@ -2376,6 +6705,24 @@ mod tests {
         struct ClippedEditableApp;
 
         impl UiApp for ClippedEditableApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(4, 0).with_reconciliation(3, 0, 3)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(4, 0).with_reconciliation(3, 3, 3)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(15, 9)
+                    .with_reconciliation(3, 3, 3)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = ();
             type Action = Box<EditIntent>;
             type HostProtocol = NoHostProtocol;
@@ -2486,6 +6833,24 @@ mod tests {
         struct TodoLikePlaceholderApp;
 
         impl UiApp for TodoLikePlaceholderApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(13, 9)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = ();
             type Action = Box<EditIntent>;
             type HostProtocol = NoHostProtocol;
@@ -2774,6 +7139,21 @@ mod tests {
 
         struct IncrementApp;
         impl UiApp for IncrementApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = i32;
             type Action = i32;
             type HostProtocol = NoHostProtocol;
@@ -2822,6 +7202,24 @@ mod tests {
             Completed,
         }
         impl UiApp for ApprovalApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(6, 2)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 1, 0))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 1, 0))
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = bool;
             type Action = ApprovalAction;
             type HostProtocol = ApprovalProtocol;
@@ -3035,6 +7433,21 @@ mod tests {
 
         struct ChainedApp;
         impl UiApp for ChainedApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
             type State = usize;
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -3124,6 +7537,24 @@ mod tests {
 
         struct ResponseApp;
         impl UiApp for ResponseApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(6, 2)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 1, 0))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 1, 0))
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = usize;
             type Action = ResponseAction;
             type HostProtocol = ResponseProtocol;
@@ -3204,6 +7635,21 @@ mod tests {
 
         struct InitialApp;
         impl UiApp for InitialApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = usize;
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -3251,6 +7697,21 @@ mod tests {
 
         struct InitialChainApp;
         impl UiApp for InitialChainApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(2, 1).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = usize;
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -3318,6 +7779,21 @@ mod tests {
 
         struct EmptyApp;
         impl UiApp for EmptyApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -3354,6 +7830,71 @@ mod tests {
                 self.runtime.pump(budget)
             }
 
+            fn input_ownership(&mut self) -> Result<InputOwnershipSnapshot, InputObservationError> {
+                self.runtime.input_ownership()
+            }
+
+            fn submit_keyboard(
+                &mut self,
+                event: KeyboardEvent,
+            ) -> Result<KeyboardSubmission, SubmitKeyboardError> {
+                self.runtime.submit_keyboard(event)
+            }
+
+            fn submit_keyboard_with_text(
+                &mut self,
+                keyboard: KeyboardEvent,
+                text: CommittedTextEvent,
+            ) -> Result<(KeyboardSubmission, TextSubmission), SubmitKeyboardWithTextError>
+            {
+                self.runtime.submit_keyboard_with_text(keyboard, text)
+            }
+
+            fn submit_pointer(
+                &mut self,
+                event: PointerEvent,
+            ) -> Result<PointerSubmission, SubmitPointerError> {
+                self.runtime.submit_pointer(event)
+            }
+
+            fn submit_text(
+                &mut self,
+                event: CommittedTextEvent,
+            ) -> Result<TextSubmission, SubmitTextError> {
+                self.runtime.submit_text(event)
+            }
+
+            fn start_composition(
+                &mut self,
+                device: Option<InputDeviceId>,
+            ) -> Result<CompositionStartSubmission, SubmitCompositionStartError> {
+                self.runtime.start_composition(device)
+            }
+
+            fn update_composition(
+                &mut self,
+                generation: CompositionGeneration,
+                preedit: String,
+                range: Option<CompositionRange>,
+            ) -> Result<CompositionSubmission, SubmitCompositionError> {
+                self.runtime
+                    .submit_composition_update(generation, preedit, range)
+            }
+
+            fn end_composition(
+                &mut self,
+                generation: CompositionGeneration,
+            ) -> Result<CompositionSubmission, SubmitCompositionError> {
+                self.runtime.submit_composition_end(generation)
+            }
+
+            fn cancel_composition(
+                &mut self,
+                generation: CompositionGeneration,
+            ) -> Result<CompositionSubmission, SubmitCompositionError> {
+                self.runtime.cancel_composition(generation)
+            }
+
             fn pending_redraw(&mut self) -> bool {
                 self.runtime.take_redraw_request().is_some()
             }
@@ -3388,7 +7929,8 @@ mod tests {
             id,
             screen_id: UiTypedScreenId::new("ordinary.shutdown-preflight"),
             runtime: UiRuntimeSlotKind::Typed(Box::new(FailOnceOnShutdown {
-                runtime: AppRuntime::<EmptyApp>::mount(()),
+                runtime: AppRuntime::<EmptyApp>::mount(())
+                    .expect("one static text fixture must admit initial reconciliation"),
                 fail_next_shutdown: true,
             })),
             ingress_epoch: 1,
@@ -3396,6 +7938,8 @@ mod tests {
             next_deadline: None,
             native_clock: None,
             deadline_observed_at: None,
+            native_input_selected: false,
+            native_cancellations: Vec::new(),
         });
         slots.next_slot_id = 2;
 
@@ -3473,7 +8017,8 @@ mod tests {
             id,
             screen_id: UiTypedScreenId::new("managed.shutdown-preflight"),
             runtime: UiRuntimeSlotKind::Typed(Box::new(FailOnceOnShutdown {
-                runtime: AppRuntime::<EmptyApp>::mount(()),
+                runtime: AppRuntime::<EmptyApp>::mount(())
+                    .expect("one static text fixture must admit initial reconciliation"),
                 fail_next_shutdown: true,
             })),
             ingress_epoch: 1,
@@ -3481,6 +8026,8 @@ mod tests {
             next_deadline: None,
             native_clock: None,
             deadline_observed_at: None,
+            native_input_selected: false,
+            native_cancellations: Vec::new(),
         });
         managed_slots.next_slot_id = 2;
         let mut app = App::headless();
@@ -3558,6 +8105,21 @@ mod tests {
 
         struct EmptyApp;
         impl UiApp for EmptyApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -3654,6 +8216,21 @@ mod tests {
         };
         struct MotionApp;
         impl UiApp for MotionApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
@@ -3735,6 +8312,24 @@ mod tests {
         };
         struct SearchApp;
         impl UiApp for SearchApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(4, 0).with_reconciliation(3, 0, 3)
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(4, 0).with_reconciliation(3, 3, 3)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(19, 13)
+                    .with_reconciliation(3, 3, 3)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+            }
+
             type State = ();
             type Action = ();
             type HostProtocol = runenui_core::NoHostProtocol;
