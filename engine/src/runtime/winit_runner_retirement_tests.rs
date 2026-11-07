@@ -742,7 +742,7 @@ fn refused_secondary_close_preserves_host_identity_and_redraw() {
 }
 
 #[test]
-fn creation_failure_cannot_discard_unresolved_render_attachment() {
+fn creation_failure_records_diagnostic_without_discarding_unresolved_render_attachment() {
     let mut runner = runner_with_frame_pacing(FramePacingPolicyResource::on_demand());
     runner
         .state
@@ -767,30 +767,52 @@ fn creation_failure_cannot_discard_unresolved_render_attachment() {
         .unwrap()
         .confirm_surface_attachment(surface, request.native_window_id, (640, 480))
         .unwrap();
-    assert!(
-        runner
-            .mark_window_creation_failed(request.native_window_id, "injected failure")
-            .is_err()
-    );
-    assert_ne!(
-        runner
-            .state
-            .world
-            .resource::<WindowStateRegistryResource>()
-            .unwrap()
-            .record(request.native_window_id)
-            .unwrap()
-            .lifecycle_state,
+
+    let error = runner
+        .mark_window_creation_failed(request.native_window_id, "injected failure")
+        .expect_err("an attached Render surface without a GPU attachment cannot be retired");
+    let error_text = format!("{error:#}");
+    assert!(error_text.contains("injected failure"));
+    assert!(error_text.contains("secondary rollback refused"));
+
+    let record = runner
+        .state
+        .world
+        .resource::<WindowStateRegistryResource>()
+        .unwrap()
+        .record(request.native_window_id)
+        .unwrap();
+    // Native creation failed. This does not mean Render cleanup succeeded.
+    assert_eq!(
+        record.lifecycle_state,
         crate::runtime::NativeWindowLifecycleState::CreationFailed
     );
+    let reason = record.failure_reason.as_deref().unwrap();
+    assert!(reason.contains("injected failure"));
+    assert!(reason.contains("secondary rollback refused"));
+
+    let render = runner
+        .state
+        .world
+        .resource::<RenderSurfaceRegistryResource>()
+        .unwrap();
     assert_eq!(
-        runner
-            .state
-            .world
-            .resource::<RenderSurfaceRegistryResource>()
-            .unwrap()
-            .surface_for_native_window(request.native_window_id),
-        Some(surface)
+        render.surface_for_native_window(request.native_window_id),
+        Some(surface),
+        "a refused Render rollback must keep its owner mapping"
+    );
+    assert_eq!(
+        render.record(surface).map(|record| record.lifecycle_state),
+        Some(RenderSurfaceLifecycleState::Attached),
+        "Native creation failure may not silently retire the Render surface"
+    );
+    assert!(
+        !runner
+            .window_realizer
+            .realized_windows()
+            .iter()
+            .any(|(_, id, _)| *id == request.native_window_id),
+        "failed creation cannot publish a realized native window"
     );
 }
 
