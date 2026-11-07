@@ -190,11 +190,17 @@ fn default_typed_ui_declares_in_either_native_order_without_second_flow_or_gpu()
         };
         let app = accepted(probe);
         assert_eq!(
-            app.world().resource::<UiRuntimeSlotsResource>().unwrap().len(),
+            app.world()
+                .resource::<UiRuntimeSlotsResource>()
+                .unwrap()
+                .len(),
             1
         );
         assert_eq!(
-            app.world().resource::<RenderFlowRegistryResource>().unwrap().flow_count(),
+            app.world()
+                .resource::<RenderFlowRegistryResource>()
+                .unwrap()
+                .flow_count(),
             1
         );
         assert!(!app.world().has_resource::<Gfx>());
@@ -204,15 +210,22 @@ fn default_typed_ui_declares_in_either_native_order_without_second_flow_or_gpu()
 #[test]
 fn explicit_nondefault_nonsend_state_mounts_headlessly_without_present_or_gpu() {
     let local_state = PersistedState(Rc::new(Cell::new(7)));
-    let app = accepted(CompositionProbe::new().ui_with_state::<PersistedUi>(
-        UiTypedScreenId::new("proof.persisted"),
-        local_state,
-    ));
+    let app = accepted(
+        CompositionProbe::new()
+            .ui_with_state::<PersistedUi>(UiTypedScreenId::new("proof.persisted"), local_state),
+    );
     assert_eq!(
-        app.world().resource::<UiRuntimeSlotsResource>().unwrap().len(),
+        app.world()
+            .resource::<UiRuntimeSlotsResource>()
+            .unwrap()
+            .len(),
         1
     );
-    assert!(app.world().resource::<RenderFlowRegistryResource>().is_err());
+    assert!(
+        app.world()
+            .resource::<RenderFlowRegistryResource>()
+            .is_err()
+    );
     assert!(!app.world().has_resource::<Gfx>());
 }
 
@@ -228,6 +241,10 @@ fn ambiguous_native_multiple_ui_is_rejected_before_owner_mounting() {
     };
     assert!(error.to_string().contains("explicit placement"));
     assert!(app.world().resource::<UiRuntimeSlotsResource>().is_err());
-    assert!(app.world().resource::<RenderFlowRegistryResource>().is_err());
+    assert!(
+        app.world()
+            .resource::<RenderFlowRegistryResource>()
+            .is_err()
+    );
     assert!(!app.world().has_resource::<Gfx>());
 }
