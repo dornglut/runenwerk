@@ -88,7 +88,10 @@ impl AppNativeHostExt for App {
 
     fn with_primary_window_size_px(&mut self, size_px: (u32, u32)) -> &mut Self {
         if self.initial_native_window == NativeInitialWindow::None {
-            self.record_missing_capability("with_primary_window_size_px", "initial native primary window");
+            self.record_missing_capability(
+                "with_primary_window_size_px",
+                "initial native primary window",
+            );
             return self;
         }
         if matches!(self.host_selection, AppHostSelection::Headless) {
@@ -487,6 +490,66 @@ mod tests {
                 assert!(!record.close_intent_pending);
             }
         }
+    }
+
+    #[test]
+    fn zero_initial_window_selection_preserves_default_and_requires_native() {
+        let default = App::new();
+        assert_eq!(default.initial_native_window, NativeInitialWindow::Primary);
+
+        let mut zero_window = App::new();
+        zero_window.enable_windowing().unwrap();
+        assert_eq!(zero_window.initial_native_window, NativeInitialWindow::None);
+        assert_eq!(
+            zero_window.into_windowed_state().initial_native_window,
+            NativeInitialWindow::None
+        );
+
+        let mut headless = App::headless();
+        assert!(headless.enable_windowing().is_err());
+
+        let mut late = App::new();
+        late.prepare_lifecycle_for_execution().unwrap();
+        assert!(late.enable_windowing().is_err());
+        assert_eq!(late.initial_native_window, NativeInitialWindow::Primary);
+    }
+
+    #[test]
+    fn zero_initial_window_rejects_primary_only_configuration_in_either_order() {
+        let mut primary_size = App::new();
+        primary_size.with_primary_window_size_px((1600, 900));
+        assert!(primary_size.enable_windowing().is_err());
+        assert_eq!(primary_size.initial_native_window, NativeInitialWindow::Primary);
+
+        let mut windowless = App::new();
+        windowless.enable_windowing().unwrap();
+        windowless.with_primary_window_size_px((1600, 900));
+        assert!(
+            windowless.admit_composition().is_err(),
+            "an invalid initial-primary size must fail at App admission"
+        );
+
+        let mut close = App::new();
+        close.enable_windowing().unwrap();
+        assert!(
+            close
+                .with_primary_close_policy(NativePrimaryClosePolicy::ApproveUnhandled)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn windowless_render_selection_rejects_before_winit_or_startup() {
+        let mut app = App::new();
+        app.enable_windowing().unwrap();
+        app.add_plugin(crate::plugins::RenderPlugin);
+        let error = app
+            .run()
+            .expect_err("unsupported secondary Render attachment needs an explicit failure");
+        assert!(
+            format!("{error:#}").contains("no primary Gfx owner"),
+            "unsupported selection silently started the host: {error:#}"
+        );
     }
 
     #[test]

@@ -9911,7 +9911,7 @@ mod tests {
                 .is_err()
         );
 
-        install_native_window_provider_resources(app.world_mut());
+        install_native_window_provider_resources(app.world_mut(), NativeInitialWindow::Primary);
 
         let windows = app
             .world()

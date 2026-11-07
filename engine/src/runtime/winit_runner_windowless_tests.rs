@@ -26,14 +26,22 @@ struct WindowlessCounters {
 
 fn assert_windowless_startup(mut world: WorldMut) -> Result<()> {
     let registry = world.resource::<WindowStateRegistryResource>()?;
-    ensure!(registry.primary_window_id().is_none(), "Startup fabricated a primary window");
-    ensure!(registry.records().next().is_none(), "Startup already had a window record");
+    ensure!(
+        registry.primary_window_id().is_none(),
+        "Startup fabricated a primary window"
+    );
+    ensure!(
+        registry.records().next().is_none(),
+        "Startup already had a window record"
+    );
     ensure!(
         !world.has_resource::<PrimaryPresentationMetricsResource>(),
         "zero-window Startup fabricated primary presentation metrics"
     );
-    world.resource_mut::<WindowlessCounters>()?
-        .startups.fetch_add(1, Ordering::SeqCst);
+    world
+        .resource_mut::<WindowlessCounters>()?
+        .startups
+        .fetch_add(1, Ordering::SeqCst);
     Ok(())
 }
 
