@@ -5,15 +5,15 @@
 mod linux {
     use anyhow::{Context, Result, ensure};
     use engine::app::{App, AppNativeHostExt};
-    use engine::plugins::{RenderPlugin, default_plugins};
     use engine::plugins::render::Gfx;
     use engine::plugins::render::host::{
         RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
     };
+    use engine::plugins::{RenderPlugin, default_plugins};
     use engine::runtime::{
-        NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId,
-        NativeWindowLifecycleState, NativeWindowRequest, NativeWindowRequestOutcome,
-        NativeWindowRequestReadiness, WindowStateRegistryResource, FramePacingPolicyResource,
+        FramePacingPolicyResource, NativeWindowHook, NativeWindowHookRegistryResource,
+        NativeWindowId, NativeWindowLifecycleState, NativeWindowRequest,
+        NativeWindowRequestOutcome, NativeWindowRequestReadiness, WindowStateRegistryResource,
     };
     use std::{
         sync::{
@@ -195,16 +195,14 @@ mod linux {
                 return Ok(());
             }
 
-            if self.failure_reported.load(Ordering::SeqCst)
-                && !self.verified.load(Ordering::SeqCst)
+            if self.failure_reported.load(Ordering::SeqCst) && !self.verified.load(Ordering::SeqCst)
             {
                 let failures = world
                     .resource::<WindowStateRegistryResource>()?
                     .records()
                     .filter(|record| {
                         record.native_window_id != NativeWindowId::primary()
-                            && record.lifecycle_state
-                                == NativeWindowLifecycleState::CreationFailed
+                            && record.lifecycle_state == NativeWindowLifecycleState::CreationFailed
                     })
                     .map(|record| (record.native_window_id, record.failure_reason.clone()))
                     .collect::<Vec<_>>();
@@ -219,8 +217,7 @@ mod linux {
                         let no_active_mapping = render.surface_for_native_window(*id).is_none();
                         let retired = render.records().any(|record| {
                             record.native_window_id == *id
-                                && record.lifecycle_state
-                                    == RenderSurfaceLifecycleState::Retired
+                                && record.lifecycle_state == RenderSurfaceLifecycleState::Retired
                         });
                         verified = no_active_mapping && retired;
                     }
@@ -283,7 +280,9 @@ mod linux {
                         "physical Winit secondary did not fail at the intended Render seam: {reason}"
                     );
                 }
-                other => anyhow::bail!("injected Render failure returned wrong terminal: {other:?}"),
+                other => {
+                    anyhow::bail!("injected Render failure returned wrong terminal: {other:?}")
+                }
             }
             ensure!(
                 ticket.try_recv() == Err(std::sync::mpsc::TryRecvError::Disconnected),
