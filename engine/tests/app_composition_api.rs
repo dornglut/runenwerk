@@ -303,7 +303,11 @@ fn constructor_style_ui_intent_preserves_nondefault_nonsend_typed_state() {
 
 #[test]
 fn constructor_style_ui_intent_lowers_into_existing_native_ui_only_owner() {
-    let app = accepted(CompositionProbe::new().ui(DefaultUi::new(())).native_window());
+    let app = accepted(
+        CompositionProbe::new()
+            .ui(DefaultUi::new(()))
+            .native_window(),
+    );
 
     assert_eq!(
         app.world()
