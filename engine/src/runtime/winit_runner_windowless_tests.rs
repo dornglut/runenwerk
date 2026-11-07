@@ -159,6 +159,25 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
                     .world
                     .has_resource::<crate::plugins::render::Gfx>()
             );
+            // An original raw device event has no window identity.
+            // It may still advance real app-owned input with only
+            // nonprimary physical windows, without inventing a primary.
+            self.runner.frame_requested = false;
+            self.runner
+                .request_redraw_for_native_window(NativeWindowId::primary());
+            assert!(
+                self.runner.frame_requested,
+                "native nonprimary-only OnDemand device input cannot advance"
+            );
+            assert!(
+                self.runner
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .unwrap()
+                    .record(NativeWindowId::primary())
+                    .is_none()
+            );
             // The original Native owner must retire both real secondaries
             // without a primary role or a synthetic ordinary frame.
             let prior_frames = self.runner.ordinary_frames;
@@ -722,7 +741,10 @@ fn zero_window_native_os_idle_modes() -> Result<()> {
         observed: false,
     };
     event_loop.run_app(&mut proof)?;
-    ensure!(proof.observed, "idle Native Host did not reach a settled turn");
+    ensure!(
+        proof.observed,
+        "idle Native Host did not reach a settled turn"
+    );
     ensure!(startups.load(Ordering::SeqCst) == 1);
     println!(
         "native_zero_window_idle=pass mode={mode} physical_x11=true startup_once=true no_window=true no_frames=true no_deadline=true"

@@ -4298,10 +4298,17 @@ impl WinitRunner {
     #[track_caller]
     fn request_redraw_for_native_window(&mut self, native_window_id: NativeWindowId) {
         // Unattributed device events cannot fabricate a primary recipient.
+        // After a real secondary exists, however, their original input
+        // state may require one ordinary application turn even under
+        // OnDemand pacing. Wake the App without assigning the event or
+        // a redraw to a nonexistent primary window.
         if self.state.initial_native_window == NativeInitialWindow::None
             && native_window_id == NativeWindowId::primary()
             && !self.window_realizer.has_primary_window()
         {
+            if self.window_realizer.has_any_window() {
+                self.request_ordinary_frame("unattributed native device input");
+            }
             return;
         }
         self.request_ordinary_frame("native window or application request");
