@@ -6,6 +6,7 @@ mod linux {
     use anyhow::{Context, Result, ensure};
     use engine::app::App;
     use engine::plugins::default_plugins;
+    use engine::plugins::render::Gfx;
     use engine::runtime::{
         NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId,
         NativeWindowLifecycleState, NativeWindowRequest, NativeWindowRequestOutcome,
@@ -32,7 +33,7 @@ mod linux {
         }
 
         fn attach(&mut self, _window: &Window, world: &mut runen_ecs::World) -> Result<()> {
-            if world.has_resource::<runen_gpu::Gfx>() {
+            if world.has_resource::<Gfx>() {
                 self.unexpected_gpu.store(true, Ordering::SeqCst);
             }
             let secondary = world

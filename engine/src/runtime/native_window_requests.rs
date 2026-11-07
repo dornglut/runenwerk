@@ -159,7 +159,9 @@ impl NativeWindowRequests {
             .lock()
             .map_err(|_| NativeWindowRequestError::Poisoned)?;
         match shared.readiness {
-            NativeWindowRequestReadiness::NotReady => return Err(NativeWindowRequestError::NotReady),
+            NativeWindowRequestReadiness::NotReady => {
+                return Err(NativeWindowRequestError::NotReady);
+            }
             NativeWindowRequestReadiness::Closed => return Err(NativeWindowRequestError::Closed),
             NativeWindowRequestReadiness::Ready => {}
         }

@@ -1,10 +1,10 @@
 use crate::app::App;
 use crate::app::domain::host::AppHostSelection;
 use crate::runtime::frame_pacing::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
-use crate::runtime::window::PrimaryWindowInitialSizePxResource;
 use crate::runtime::native_window_requests::{
     NativeWindowRequestError, NativeWindowRequestOwner, NativeWindowRequests,
 };
+use crate::runtime::window::PrimaryWindowInitialSizePxResource;
 use crate::runtime::winit_runner;
 use anyhow::Result;
 
@@ -107,7 +107,8 @@ impl App {
             return Err(NativeWindowRequestError::SealedComposition);
         }
         if !self.world.has_resource::<NativeWindowRequestOwner>() {
-            self.world.insert_resource(NativeWindowRequestOwner::default());
+            self.world
+                .insert_resource(NativeWindowRequestOwner::default());
         }
         self.world
             .resource::<NativeWindowRequestOwner>()

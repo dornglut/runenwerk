@@ -20,14 +20,14 @@ use crate::runtime::frame_pacing::{
     FramePacingPolicyResource, FramePacingRuntimeStateResource, FramePacingSchedule,
 };
 use crate::runtime::native_window_hooks::with_native_window_hooks;
+use crate::runtime::native_window_requests::{
+    NativeWindowRequestOutcome, NativeWindowRequestOwner,
+};
 use crate::runtime::platform::{
     PlatformEvent, PlatformWindowEvent, PlatformWindowEventQueueResource,
     apply_native_recipient_input_event, apply_native_window_event,
 };
 use crate::runtime::presentation::ensure_primary_presentation_metrics;
-use crate::runtime::native_window_requests::{
-    NativeWindowRequestOutcome, NativeWindowRequestOwner,
-};
 use crate::runtime::window::{
     NativeWindowCreationRequest, NativeWindowId, NativeWindowLifecycleState,
     WindowStateRegistryResource,
@@ -451,7 +451,9 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
     if let Ok(owner) = state.world.resource::<NativeWindowRequestOwner>() {
         let proxy = event_loop.create_proxy();
         owner.attach_wake(move || {
-            proxy.send_event(NativeHostEvent::NativeWindowRequests).is_ok()
+            proxy
+                .send_event(NativeHostEvent::NativeWindowRequests)
+                .is_ok()
         })?;
     }
     let transport = NativeWakeTransport::new(event_loop.create_proxy());
