@@ -778,3 +778,25 @@ fn windowless_native_device_redraw_does_not_infer_primary() -> Result<()> {
     );
     Ok(())
 }
+
+#[test]
+fn windowless_late_ui_without_presentation_is_not_silently_admitted() -> Result<()> {
+    let mut app = App::new();
+    app.enable_windowing()?;
+    let state = app.into_windowed_state();
+    let mut runner = WinitRunner::new(state);
+    ensure!(runner.reject_unsupported_windowless_ui().is_ok());
+    let mut slots = UiRuntimeSlotsResource::default();
+    let result = slots.mount_app::<StartupUiProbe>(
+        UiTypedScreenId::new("windowless.late.ui.probe"),
+        (),
+        &UiRuntimeFontConfiguration::default(),
+    );
+    ensure!(result.accepted_mount());
+    runner.state.world.insert_resource(slots);
+    let error = runner
+        .reject_unsupported_windowless_ui()
+        .expect_err("a later UI runtime without presentation must not silently progress");
+    ensure!(format!("{error:#}").contains("without a supported presentation target"));
+    Ok(())
+}

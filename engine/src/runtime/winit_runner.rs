@@ -4477,10 +4477,29 @@ impl WinitRunner {
         Ok(continuation)
     }
 
+    /// This selected Native mode has no owner-approved UI/Render target.
+    /// A later World mutation must not bypass the pre-run and Startup checks
+    /// and then silently mount an invisible, unprogressed UI runtime.
+    fn reject_unsupported_windowless_ui(&self) -> Result<()> {
+        if self.state.initial_native_window == NativeInitialWindow::None
+            && self
+                .state
+                .world
+                .resource::<UiRuntimeSlotsResource>()
+                .is_ok_and(|slots| !slots.is_empty())
+        {
+            anyhow::bail!(
+                "zero-initial-window Native Host acquired UI without a supported presentation target"
+            );
+        }
+        Ok(())
+    }
+
     fn apply_frame_pacing(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         if event_loop.exiting() {
             return Ok(());
         }
+        self.reject_unsupported_windowless_ui()?;
         if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>() {
             transport.ensure_delivery()?;
         }
