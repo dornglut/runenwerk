@@ -1,6 +1,9 @@
 use crate::app::App;
 use crate::app::domain::host::AppHostSelection;
 use crate::runtime::frame_pacing::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
+use crate::runtime::native_window_requests::{
+    NativeWindowRequestError, NativeWindowRequestOwner, NativeWindowRequests,
+};
 use crate::runtime::window::PrimaryWindowInitialSizePxResource;
 use crate::runtime::winit_runner;
 use anyhow::Result;
@@ -91,6 +94,28 @@ impl AppNativeHostExt for App {
 }
 
 impl App {
+    /// Acquire Native Host window commands before run consumes the App.
+    /// The handle stays NotReady until the original Winit Host can receive
+    /// requests. Queueing is not a physical creation acknowledgement.
+    pub fn native_window_requests(
+        &mut self,
+    ) -> std::result::Result<NativeWindowRequests, NativeWindowRequestError> {
+        if !self.is_native_window_host() {
+            return Err(NativeWindowRequestError::UnsupportedHost);
+        }
+        if !self.lifecycle.is_configuring() {
+            return Err(NativeWindowRequestError::SealedComposition);
+        }
+        if !self.world.has_resource::<NativeWindowRequestOwner>() {
+            self.world
+                .insert_resource(NativeWindowRequestOwner::default());
+        }
+        self.world
+            .resource::<NativeWindowRequestOwner>()
+            .map(|owner| owner.handle())
+            .map_err(|_| NativeWindowRequestError::MissingOwner)
+    }
+
     pub(crate) fn prepare_native_ui_host(&mut self) -> Result<()> {
         use crate::plugins::ui::UiRuntimeSlotsResource;
         if !self.world.has_resource::<UiRuntimeSlotsResource>() {

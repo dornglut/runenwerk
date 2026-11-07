@@ -157,6 +157,11 @@ name = "native_host_smoke"
 path = "tests/native_host_smoke.rs"
 harness = false
 
+[[test]]
+name = "native_window_requests_os"
+path = "tests/native_window_requests_os.rs"
+harness = false
+
 [[bench]]
 name = "phase35_runtime"
 harness = false

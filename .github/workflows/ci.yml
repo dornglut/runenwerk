@@ -141,6 +141,70 @@ jobs:
                 --test native_host_smoke \
                 --locked
 
+      - name: Prove physical X11 Native request-to-realization receipts
+        env:
+          RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          if ! timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --test native_window_requests_os --locked >"$log" 2>&1; then
+            cat "$log"
+            rm -f "$log"
+            exit 1
+          fi
+          cat "$log"
+          grep -F "native_window_requests_os=pass" "$log"
+          rm -f "$log"
+
+          race_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE=close-race \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --test native_window_requests_os --locked >"$race_log" 2>&1; then
+            cat "$race_log"
+            rm -f "$race_log"
+            exit 1
+          fi
+          cat "$race_log"
+          grep -F "native_window_request_close_race=pass accepted=1 cancelled=1 physical_x11=true" "$race_log"
+          rm -f "$race_log"
+
+          render_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE=render-failure \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --test native_window_requests_os --locked >"$render_log" 2>&1; then
+            cat "$render_log"
+            rm -f "$render_log"
+            exit 1
+          fi
+          cat "$render_log"
+          grep -F "native_window_request_render_rollback=pass physical_x11=true native_failed=true render_retired=true" "$render_log"
+          rm -f "$render_log"
+
+          fatal_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE=fatal-exit \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --test native_window_requests_os --locked >"$fatal_log" 2>&1; then
+            cat "$fatal_log"
+            rm -f "$fatal_log"
+            exit 1
+          fi
+          cat "$fatal_log"
+          grep -F "native_window_request_fatal_exit=pass physical_x11=true accepted=1 cancelled=1" "$fatal_log"
+          rm -f "$fatal_log"
+
+          refusal_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE=render-refusal \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --test native_window_requests_os --locked >"$refusal_log" 2>&1; then
+            cat "$refusal_log"
+            rm -f "$refusal_log"
+            exit 1
+          fi
+          cat "$refusal_log"
+          grep -F "native_window_request_render_refusal=pass physical_x11=true unsettled=true retained=true" "$refusal_log"
+          rm -f "$refusal_log"
+
       - name: Prove physical X11 primary close approval and veto
         env:
           RUNENWERK_NATIVE_CLOSE_OS_SMOKE: '1'

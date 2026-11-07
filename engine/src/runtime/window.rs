@@ -218,11 +218,22 @@ impl WindowStateRegistryResource {
         title: impl Into<String>,
         size_px: (u32, u32),
     ) -> NativeWindowCreationRequest {
+        let request = self.adopt_native_window_request(title, size_px);
+        self.pending_creation_requests.push(request.clone());
+        request
+    }
+
+    /// Adopt an external Native Host request for immediate Winit processing.
+    /// It must not also enter the frame-scheduled creation queue.
+    pub(crate) fn adopt_native_window_request(
+        &mut self,
+        title: impl Into<String>,
+        size_px: (u32, u32),
+    ) -> NativeWindowCreationRequest {
         let native_window_id = self.allocate_window_id();
         let request = NativeWindowCreationRequest::new(native_window_id, title, size_px);
         self.records
             .insert(native_window_id, NativeWindowRecord::requested(&request));
-        self.pending_creation_requests.push(request.clone());
         request
     }
 
@@ -340,6 +351,78 @@ mod tests {
                 .record(request.native_window_id)
                 .map(|record| record.lifecycle_state),
             Some(NativeWindowLifecycleState::Requested)
+        );
+    }
+
+    #[test]
+    fn external_native_admission_reserves_identity_without_frame_queued_request() {
+        let mut registry = WindowStateRegistryResource::default();
+        registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
+        let external = registry.adopt_native_window_request("External", (640, 480));
+
+        assert_ne!(external.native_window_id, NativeWindowId::primary());
+        assert_eq!(external.title, "External");
+        assert!(
+            registry.pending_creation_requests().is_empty(),
+            "external Native user-event requests must not enter the ECS frame queue"
+        );
+        let record = registry.record(external.native_window_id).unwrap();
+        assert_eq!(
+            record.lifecycle_state,
+            NativeWindowLifecycleState::Requested
+        );
+        assert_eq!(record.failure_reason, None);
+
+        let frame_scheduled = registry.request_window("Frame-scheduled", (800, 600));
+        assert_ne!(external.native_window_id, frame_scheduled.native_window_id);
+        assert_eq!(
+            registry.pending_creation_requests(),
+            std::slice::from_ref(&frame_scheduled),
+            "the original frame-scheduled path must remain independently queued"
+        );
+    }
+
+    #[test]
+    fn failed_external_native_creation_preserves_terminal_diagnostic_and_unique_identity() {
+        let mut registry = WindowStateRegistryResource::default();
+        registry.register_primary_window("Runtime", (1280, 720), 1.0, true);
+
+        let rejected = registry.adopt_native_window_request("Rejected", (640, 480));
+        registry
+            .record_mut(rejected.native_window_id)
+            .expect("external Native request must have an owned provisional record")
+            .mark_creation_failed("injected physical/Render attachment refusal");
+
+        let failure = registry.record(rejected.native_window_id).unwrap();
+        assert_eq!(
+            failure.lifecycle_state,
+            NativeWindowLifecycleState::CreationFailed
+        );
+        assert_eq!(
+            failure.failure_reason.as_deref(),
+            Some("injected physical/Render attachment refusal")
+        );
+        assert!(registry.pending_creation_requests().is_empty());
+
+        let later = registry.adopt_native_window_request("Later", (640, 480));
+        assert_ne!(
+            later.native_window_id, rejected.native_window_id,
+            "a failed physical generation must not be reused while its record is retained"
+        );
+        assert_eq!(
+            registry
+                .record(later.native_window_id)
+                .unwrap()
+                .lifecycle_state,
+            NativeWindowLifecycleState::Requested
+        );
+        assert_eq!(
+            registry
+                .record(rejected.native_window_id)
+                .unwrap()
+                .lifecycle_state,
+            NativeWindowLifecycleState::CreationFailed,
+            "later requests must not overwrite the exact failed identity"
         );
     }
 

@@ -13,6 +13,7 @@ use winit::event_loop::EventLoopProxy;
 #[derive(Debug, Clone, Copy)]
 pub enum NativeHostEvent {
     RunenUiWake,
+    NativeWindowRequests,
 }
 
 struct NativeClockEpoch {
