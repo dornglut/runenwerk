@@ -4,13 +4,16 @@
 #[cfg(target_os = "linux")]
 mod linux {
     use anyhow::{Context, Result, ensure};
-    use engine::app::App;
-    use engine::plugins::default_plugins;
+    use engine::app::{App, AppNativeHostExt};
+    use engine::plugins::{RenderPlugin, default_plugins};
     use engine::plugins::render::Gfx;
+    use engine::plugins::render::host::{
+        RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+    };
     use engine::runtime::{
         NativeWindowHook, NativeWindowHookRegistryResource, NativeWindowId,
         NativeWindowLifecycleState, NativeWindowRequest, NativeWindowRequestOutcome,
-        NativeWindowRequestReadiness, WindowStateRegistryResource,
+        NativeWindowRequestReadiness, WindowStateRegistryResource, FramePacingPolicyResource,
     };
     use std::{
         sync::{
@@ -159,6 +162,161 @@ mod linux {
         Ok(())
     }
 
+    /// Test-only fault injection: a real X11 primary and Render-owned Gfx
+    /// must have existed. Withhold the Gfx resource for the secondary request,
+    /// forcing Render's normal secondary-attach error + rollback behavior.
+    /// No production fault switch or new Renderer interface is installed.
+    struct RenderRollbackHook {
+        injected: bool,
+        verified: Arc<AtomicBool>,
+        failure_reported: Arc<AtomicBool>,
+        ready_to_request: mpsc::Sender<()>,
+        accepted_request: mpsc::Receiver<()>,
+    }
+
+    impl NativeWindowHook for RenderRollbackHook {
+        fn name(&self) -> &'static str {
+            "native_real_window_render_rollback"
+        }
+
+        fn frame(&mut self, _window: &Window, world: &mut runen_ecs::World) -> Result<()> {
+            if !self.injected {
+                self.injected = true;
+                let gfx = world
+                    .remove_resource::<Gfx>()
+                    .context("selected native Render must own real Gfx before fault injection")?;
+                drop(gfx);
+                self.ready_to_request
+                    .send(())
+                    .context("Native rollback proof worker went away")?;
+                self.accepted_request
+                    .recv_timeout(Duration::from_secs(12))
+                    .context("Native rollback proof did not admit a secondary request")?;
+                return Ok(());
+            }
+
+            if self.failure_reported.load(Ordering::SeqCst)
+                && !self.verified.load(Ordering::SeqCst)
+            {
+                let failures = world
+                    .resource::<WindowStateRegistryResource>()?
+                    .records()
+                    .filter(|record| {
+                        record.native_window_id != NativeWindowId::primary()
+                            && record.lifecycle_state
+                                == NativeWindowLifecycleState::CreationFailed
+                    })
+                    .map(|record| (record.native_window_id, record.failure_reason.clone()))
+                    .collect::<Vec<_>>();
+                let mut verified = false;
+                if failures.len() == 1 {
+                    let (id, reason) = &failures[0];
+                    if reason.as_deref().is_some_and(|message| {
+                        message.contains("GPU surface attachment failed")
+                            && message.contains("runtime gfx is unavailable")
+                    }) {
+                        let render = world.resource::<RenderSurfaceRegistryResource>()?;
+                        let no_active_mapping = render.surface_for_native_window(*id).is_none();
+                        let retired = render.records().any(|record| {
+                            record.native_window_id == *id
+                                && record.lifecycle_state
+                                    == RenderSurfaceLifecycleState::Retired
+                        });
+                        verified = no_active_mapping && retired;
+                    }
+                }
+                self.verified.store(verified, Ordering::SeqCst);
+                // Always request a bounded exit; the external test assertion
+                // below fails if the exact owner invariants were not observed.
+                world
+                    .resource_mut::<WindowStateRegistryResource>()?
+                    .record_mut(NativeWindowId::primary())
+                    .context("Native primary missing after injected secondary rollback")?
+                    .request_close();
+            }
+            Ok(())
+        }
+    }
+
+    pub(super) fn render_failure() -> Result<()> {
+        let verified = Arc::new(AtomicBool::new(false));
+        let failure_reported = Arc::new(AtomicBool::new(false));
+        let (ready_to_request, ready_receiver) = mpsc::channel();
+        let (accepted_sender, accepted_request) = mpsc::channel();
+        let mut app = App::new();
+        app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(30));
+        app.add_plugins(default_plugins());
+        app.add_plugin(RenderPlugin);
+        app.init_resource::<NativeWindowHookRegistryResource>();
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()?
+            .register_hook(RenderRollbackHook {
+                injected: false,
+                verified: Arc::clone(&verified),
+                failure_reported: Arc::clone(&failure_reported),
+                ready_to_request,
+                accepted_request,
+            });
+
+        let windows = app.native_window_requests()?;
+        let worker = thread::spawn(move || -> Result<()> {
+            ready_receiver
+                .recv_timeout(Duration::from_secs(12))
+                .context("real Render native primary never reached initial frame")?;
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Ready,
+                "Native owner was not ready when Render rollback was injected"
+            );
+            let ticket = windows.request(NativeWindowRequest::new(
+                "secondary with injected missing Gfx",
+                (500, 360),
+            ))?;
+            accepted_sender
+                .send(())
+                .context("Native Render rollback hook exited before admission")?;
+            let result = ticket.recv_timeout(Duration::from_secs(12))?;
+            match result {
+                NativeWindowRequestOutcome::CreationFailed { reason } => {
+                    ensure!(
+                        reason.contains("GPU surface attachment failed")
+                            && reason.contains("runtime gfx is unavailable"),
+                        "physical Winit secondary did not fail at the intended Render seam: {reason}"
+                    );
+                }
+                other => anyhow::bail!("injected Render failure returned wrong terminal: {other:?}"),
+            }
+            ensure!(
+                ticket.try_recv() == Err(std::sync::mpsc::TryRecvError::Disconnected),
+                "failed Native request delivered multiple terminal outcomes"
+            );
+            failure_reported.store(true, Ordering::SeqCst);
+            let deadline = Instant::now() + Duration::from_secs(12);
+            while windows.readiness()? != NativeWindowRequestReadiness::Closed {
+                ensure!(
+                    Instant::now() < deadline,
+                    "Native owner did not stop after injected Render rollback"
+                );
+                thread::sleep(Duration::from_millis(5));
+            }
+            Ok(())
+        });
+
+        let app_result = app.run();
+        let worker_result = worker
+            .join()
+            .expect("Render rollback worker must not panic");
+        app_result?;
+        worker_result?;
+        ensure!(
+            verified.load(Ordering::SeqCst),
+            "Native failure record or Render retired surface was inconsistent"
+        );
+        println!(
+            "native_window_request_render_rollback=pass physical_x11=true native_failed=true render_retired=true"
+        );
+        Ok(())
+    }
+
     pub(super) fn run() -> Result<()> {
         let secondary_count = Arc::new(AtomicUsize::new(0));
         let unexpected_gpu = Arc::new(AtomicBool::new(false));
@@ -254,6 +412,9 @@ fn main() {
             Some("1") => linux::run().expect("real Native window request proof must pass"),
             Some("close-race") => {
                 linux::close_race().expect("real Native close/request race proof must pass")
+            }
+            Some("render-failure") => {
+                linux::render_failure().expect("real Render rollback test must pass")
             }
             _ => panic!("unexpected native window-request proof mode"),
         }
