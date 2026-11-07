@@ -405,18 +405,17 @@ mod linux {
         });
 
         let execution = app.run();
-        let worker_result = worker.join().expect("fatal-exit request worker must not panic");
+        let worker_result = worker
+            .join()
+            .expect("fatal-exit request worker must not panic");
         worker_result?;
         let err = execution.expect_err("injected Native fatal exit must terminate App");
         ensure!(
-            format!("{err:#}").contains(
-                "injected native fatal shutdown after accepted window request"
-            ),
+            format!("{err:#}")
+                .contains("injected native fatal shutdown after accepted window request"),
             "unexpected Native exit error: {err:#}"
         );
-        println!(
-            "native_window_request_fatal_exit=pass physical_x11=true accepted=1 cancelled=1"
-        );
+        println!("native_window_request_fatal_exit=pass physical_x11=true accepted=1 cancelled=1");
         Ok(())
     }
 
