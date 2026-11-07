@@ -4774,15 +4774,6 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             return;
         }
         if self.state.initial_native_window == NativeInitialWindow::None {
-            if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>()
-                && let Err(error) = owner.mark_ready()
-            {
-                self.exit_with_error(event_loop, error.into());
-                return;
-            }
-            if self.exit_if_app_stopping(event_loop) {
-                return;
-            }
             // Winit's wake and owner resources are established before Startup.
             // Startup-authored requests can be accepted now; the Winit owner
             // realizes them only after this callback returns, never reentrantly.
@@ -4794,6 +4785,17 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 .map(|owner| owner.mark_ready());
             if let Some(Err(error)) = readiness {
                 self.exit_with_error(event_loop, error.into());
+                return;
+            }
+            // The shutdown capability becomes ready only after window
+            // ingress is ready; shutdown immediately closes that gate.
+            if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>()
+                && let Err(error) = owner.mark_ready()
+            {
+                self.exit_with_error(event_loop, error.into());
+                return;
+            }
+            if self.exit_if_app_stopping(event_loop) {
                 return;
             }
             if let Err(err) = self.run_startup_if_needed() {
@@ -4892,15 +4894,6 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
         self.request_native_redraw(NativeWindowId::primary(), &window);
         self.window_realizer
             .publish_window(NativeWindowId::primary(), window);
-        // Mandatory physical primary, Startup and declared input have now
-        // actually succeeded. Do not advertise external shutdown readiness
-        // earlier while those initial owner attachments are incomplete.
-        if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>()
-            && let Err(error) = owner.mark_ready()
-        {
-            self.exit_with_error(event_loop, error.into());
-            return;
-        }
         let readiness = self
             .state
             .world
@@ -4908,6 +4901,15 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             .ok()
             .map(|owner| owner.mark_ready());
         if let Some(Err(error)) = readiness {
+            self.exit_with_error(event_loop, error.into());
+            return;
+        }
+        // Mandatory primary, Startup, declared input and window-request
+        // readiness have now succeeded. Never advertise shutdown readiness
+        // earlier: its first Accepted request seals window ingress.
+        if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>()
+            && let Err(error) = owner.mark_ready()
+        {
             self.exit_with_error(event_loop, error.into());
             return;
         }
