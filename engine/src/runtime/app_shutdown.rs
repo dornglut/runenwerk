@@ -213,7 +213,9 @@ mod tests {
             NativeWindowRequestOutcome::Cancelled
         );
         assert_eq!(
-            window_handle.request(NativeWindowRequest::new("late", (64, 64))).err(),
+            window_handle
+                .request(NativeWindowRequest::new("late", (64, 64)))
+                .err(),
             Some(NativeWindowRequestError::Closed)
         );
         assert_eq!(
@@ -264,7 +266,10 @@ mod tests {
             });
             barrier.wait();
             let result = request.join().unwrap();
-            assert_eq!(stop.join().unwrap(), Ok(AppShutdownRequestOutcome::Accepted));
+            assert_eq!(
+                stop.join().unwrap(),
+                Ok(AppShutdownRequestOutcome::Accepted)
+            );
             match result {
                 Ok(ticket) => assert_eq!(
                     ticket.recv_timeout(Duration::from_secs(1)).unwrap(),

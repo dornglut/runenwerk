@@ -1,5 +1,4 @@
 use crate::app::{NativeInitialWindow, WindowedAppState};
-use crate::runtime::app_shutdown::AppShutdownOwner;
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
@@ -16,6 +15,7 @@ use crate::plugins::ui::{
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
+use crate::runtime::app_shutdown::AppShutdownOwner;
 use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use crate::runtime::frame_pacing::{
     FramePacingPolicyResource, FramePacingRuntimeStateResource, FramePacingSchedule,

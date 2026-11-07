@@ -135,9 +135,7 @@ impl App {
     /// Obtain an App-owned shutdown handle before native run consumes App.
     /// A Headless App still has only bounded execution; the future shared
     /// long-running Headless driver is a separate delivery.
-    pub fn shutdown_handle(
-        &mut self,
-    ) -> std::result::Result<AppShutdownHandle, AppShutdownError> {
+    pub fn shutdown_handle(&mut self) -> std::result::Result<AppShutdownHandle, AppShutdownError> {
         if !self.is_native_window_host() {
             return Err(AppShutdownError::UnsupportedHost);
         }
