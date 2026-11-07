@@ -1,11 +1,11 @@
 ---
 title: Windowless App Lifetime and Dynamic Windowing
-description: Proposed decision for one open-ended Runenwerk App with explicit optional native-window capability, independent work advancement, typed runtime requests, and safe shutdown.
+description: Proposed decision for one explicit-intent, windowless-capable Runenwerk App with bounded owner-controlled progression, typed window requests, and safe shutdown.
 status: draft
 owner: engine
 layer: architecture
 canonical: true
-last_reviewed: 2026-10-30
+last_reviewed: 2026-11-07
 publication: reference
 pagefind: false
 related_adrs:
@@ -34,10 +34,16 @@ semantic model remain authoritative until an independently reviewed successor
 decision is accepted. No new generic AppRunner, universal Host trait or mutable
 command registry is accepted by this draft.
 
-Evidence baseline: protected Runenwerk
-`main@505581b30537901de9964badbf99cd083237f359`, 2026-10-30. This is
-a static-source review. No Rust compilation, `cargo validate`, OS window
-execution, GPU proof or independent consumer qualification is claimed.
+Evidence: original protected Runenwerk
+`main@505581b30537901de9964badbf99cd083237f359` (2026-10-30);
+source findings rechecked against protected
+`main@b4683b99939464c3bc79e85f04c752687f01bc86` (2026-11-07),
+including accepted native UI/input and non-frame GPU progress. This ADR
+remains a source-backed proposal, not an implementation or native OS proof.
+The separate bounded Rust test-local typed composition candidate in
+[#1426 / draft PR #1441](https://github.com/dornglut/runenwerk/pull/1441)
+passed exact-head CI, but it does not compile-prove these App lifetime,
+window-command or error-recovery contracts.
 
 ## Context and verified gaps
 
@@ -70,6 +76,13 @@ Current accepted source does not satisfy this entry/lifetime contract:
 - `engine/src/plugins/ui/app_ext.rs` already exposes
   `AppUiExt::ui(&mut self) -> UiAppMounting`; a fluent `.ui::<A>()`
   spelling is not a drop-in compatible overload.
+- `engine/src/main.rs` currently consists of `App::new().run()`, which
+  starts a native window today; interpreting that spelling as a passive,
+  windowless or invalid App is an observable supported-consumer break.
+- Current `winit_runner` has bounded Render-owned native non-frame GPU
+  progress and accepted U9-C input ownership from closed #1392/#1276.
+  Those specialized paths do not provide a general headless service driver,
+  a NativeWindow request handle or a universal non-frame command inbox.
 
 A new `App::new()` default would deliberately supersede the earlier
 behavior-preserving #884 and #875 decisions, rather than reinterpret those
@@ -96,55 +109,83 @@ Host selection remains a concrete internal Runenwerk/OS integration concern.
 Ordinary application authors do not need `.host(Host::native())` or an
 overloaded public Host hierarchy. Unsupported platform combinations reject
 before entering a running state wherever admission can detect them.
+**No valid execution intent** also rejects admission for an open-ended run;
+merely constructing an App does not count as intentional service execution.
+No RunenUI slot may first receive a headless clock and then silently switch
+to the Native clock at Host selection.
 
-### 2. Open-ended App lifetime is independent of frames
+### 2. Open-ended App lifetime requires explicit execution intent
 
-**Proposed new meaning:** `App::run(self)` starts the accepted App exactly once
-and normally remains running until an admitted application shutdown occurs or
-the runtime encounters a terminal failure. It does not secretly mean
-`run_for_frames(1)` and must not force `Update` or a visual frame during an
-otherwise idle period.
+**Proposed new meaning:** `App::run(self)` starts an admitted App exactly
+once and normally remains running until selected application shutdown or
+terminal failure. It does not secretly mean `run_for_frames(1)` and does
+not force Update or a visual frame during idle periods.
 
-A deliberately empty `App::new().run()` is a valid **passive, idle process**:
-the runtime waits without spinning until it receives a supported shutdown,
-wake or other admitted event. It does **not** imply an interactive terminal,
-stdin parser, OS terminal window, new network port, worker pool or timer.
-This behavior is intentionally different from a finite batch job.
+**Fail-first ordinary default (owner-selected design policy):** a bare
+`App::new().run()?` with no declared execution intent is **an actionable
+admission error**, not an application that silently waits forever and not an
+implicit native window. Its error identifies the absent execution intent
+and suggests a supported window, service, bounded-advancement or deliberate
+keep-alive choice. Validation occurs before Startup or owner effects; the
+consuming API must either preflight safely or expose a recoverable result
+when admission can fail. Exact Rust error/return types remain a compile gate.
 
-A real external or application-owned shutdown path must exist for the
-blocking run API. Before consuming `App` in `run(self)`, a caller must be
-able to obtain a cheap, clonable **App-owned shutdown handle** that survives
-that move and can wake either headless or native execution. The control
-contract is scoped to *App lifetime*, not a service locator or universal
-product-command bus:
+Execution intent must be *real and explicit*, not inferred from incidental
+resources, builtin plugins, a `Time` resource or the existence of ECS
+systems. Qualifying declared paths include:
 
-- Requesting graceful shutdown is nonblocking, thread-safe, and safe while
-  idle; the runtime can distinguish `Accepted`, `AlreadyStopping`, and
-  `Closed` (illustrative result categories). Enqueue acceptance is **not**
-  completed cleanup or process exit.
-- The lifecycle transitions toward stopping once; new work admission then
-  rejects, and existing owner operations settle under the relevant cleanup
-  contract. Cancellation and final completion have observable outcomes,
-  including failures.
-- A handle obtained before `run(self)` can be held by an existing
-  application controller or signal adapter. Bare `App::new().run()`
-  does not by itself spawn a signal handler, a worker, or a terminal reader.
-  Direct OS forced termination is distinct from graceful App shutdown.
-- A command or shutdown wake must not be lost if it races the transition to
-  blocking wait. Notification delivery failure or a closed runtime is never
-  misreported as successful execution.
+- One or more initial `window(...)` declarations: ordinary native desktop
+  execution, with a documented last-window lifetime policy.
+- An explicit `enable_windowing()`: intentional native event-loop support
+  with **zero** initially realized windows, able to receive typed requests
+  after readiness.
+- An owner-backed long-running service/job/command ingress with documented
+  wake, progress, failure and shutdown integration. The exact capability
+  admission contract must be proved; arbitrary `add_plugin(...)` calls do
+  **not** automatically establish that a live service exists.
+- Explicit `keep_alive` policy (spelling provisional): deliberately allow
+  a passive App even without other work, with documented idle diagnostics and
+  a real pre-run shutdown path. Opt-in is intentional; it is not silently
+  selected by `App::new()`.
 
-For illustration only, the semantic requirement is equivalent to obtaining
-`let shutdown = app.shutdown_handle();` **before** `app.run()?`.
-The precise Rust spelling, ownership/Send/Sync bounds, shutdown result
-type and event-loop integration require a compile and platform proof.
-Graceful OS signal integration is platform-specific and cannot be claimed
-solely from the presence of an OS process.
+A bounded explicit `run_for_frames(n)` or applicable fixed-step operation
+is a valid *finite advancement request*, even if no open-ended service
+intent exists. Zero-frame behavior, repeatability and returning App identity
+remain subject to the existing advancement-owner contract.
 
-Accepted bounded operations such as `run_for_frames(n)` and the
-fixed-cadence-owner `run_for_fixed_steps(n)` remain explicit **nonterminating
-advancement** on a reusable App instance. Future finite work completion
-policy must not redefine the meaning of open-ended `run()`.
+A real external or application-owned shutdown path must exist for a
+blocking `run(self)`. Before consuming App, a caller must be able to
+obtain a cheap, clonable **App-owned shutdown handle** that survives the
+move and can wake either the selected headless or native execution. That
+handle scopes to App lifetime, **not** a generic command bus:
+
+- Graceful shutdown requests are nonblocking, thread-safe and valid while
+  idle; distinguish `Accepted`, `AlreadyStopping` and `Closed`
+  (illustrative categories). Acceptance is **not** completed cleanup.
+- App transitions toward stopping once; future work admission rejects.
+  Existing owner operations must complete or receive terminal cancellation,
+  including window-request tickets and typed UI/Render/GPU obligations.
+  Cleanup failures remain observable.
+- A handle acquired before `run(self)` may be held by an explicitly
+  configured controller or signal adapter. No implicit terminal reader,
+  network listener or OS signal handler is installed.
+- Wake races with admission, blocking waits or shutdown must not lose
+  accepted work; a closed or failed transport cannot claim success.
+
+An intentionally passive `keep_alive` App without an external controller
+can still remain blocked by choice; this is explicit opt-in and should
+be inspectable as `Idle / no active ingress`, not misrepresented as useful
+work. An ordinary configured server may sleep without frames while waiting
+for its actual admitted ingress. If this liveness policy proves impossible
+to implement safely for a selected Host, that configuration must reject
+rather than busy-spin.
+
+The spelling `app.shutdown_handle()` **before** `app.run()?`, and the
+future `keep_alive` selector, are illustrative. Their ownership,
+`Send`/`Sync` bounds, result types and native/headless wake integration
+require executable and platform proof. Direct OS forced termination is not
+graceful App shutdown. Successful bounded advancement does not terminate
+the App; finite work completion remains distinct from `run()`.
 
 ### 3. A wake is not automatically an application frame
 
@@ -181,114 +222,151 @@ execution needs inspectable; unsupported no-frame delivery is not
 silently claimed. Fixed-step simulation deadlines are advancement requests
 and remain distinct from completion-only turns.
 
-The pending **OnDemand GPU progress / exact terminal delivery** contract is
-separately owned by #1392/#1276. This ADR must not authorize fake GPU progress
-via repeated Update/FixedUpdate/RenderPrepare/RenderSubmit/FrameEnd or
-unnecessary Present. It also does not create a competing scheduler or a
-parallel RunenECS World.
+**Current accepted source correction:** #1392's native OnDemand GPU-only
+completion and #1276's U9-C native input integration are merged into
+`main@b4683b99939464c3bc79e85f04c752687f01bc86`. Reuse their
+bounded source-owner completion and input-settlement paths; do not create
+another progress loop or claim they provide arbitrary network/headless
+command delivery. No fake Update/FixedUpdate/RenderPrepare/RenderSubmit/
+FrameEnd or unnecessary Present is authorized. This proposal creates
+neither a competing scheduler nor a parallel RunenECS World.
 
 ### 4. Windows are runtime instances, not application topology
 
-Windowing is an optionally selected pre-run capability. Individual native
-windows can be **requested and retired while running** through the existing
-native event-loop owner. The public interface uses a stable logical
-`WindowKey`; a realized window receives a distinct internal generation,
-`NativeWindowId`, platform Winit ID and, when rendering is selected, a
-Render-owned surface association.
+Windowing is an explicitly selected capability, while physical native
+windows are independently requested, realized and retired by the existing
+native event-loop owner.
 
-A request accepted into the command queue is **not** a physically created
-window. Its owner must publish a later terminal outcome
-`Created(key, generation, ...)` or `Failed(key, reason)`, correlated to
-that exact request. Reopening the same human-readable key after retirement
-must not allow stale events, inputs, or GPU/UI publications to target its
-replacement. Duplicate live keys reject.
+**Typed ingress after consuming `run(self)`:** after selecting windowing
+during configuration, the caller can obtain a cheap clonable *window-owner*
+request handle **before** passing the App to `run` (illustrative
+`app.window_requests()?`). The handle owns no Winit window, ECS World,
+Render surface, general command bus or second application runtime. The
+native owner provides its actual wake transport when ready. The contract
+must expose readiness/closed state; a request submitted before readiness
+must either be explicitly and boundedly buffered or return `NotReady`.
+The precise choice and API require compile and event-loop proof. External
+callers never create/destroy Winit windows on the wrong thread.
 
-Windows must be created and destroyed on the event-loop thread required by
-the selected platform. Cross-thread callers send bounded typed requests and
-wake the owner; they never hold or mutate Winit windows directly.
+A request has a stable correlation ticket and a logical `WindowKey`;
+**queued/accepted** is distinct from a terminal result:
+`Created(key, incarnation, ...)`, `CreationFailed(reason)` or
+`Cancelled/RejectedOnShutdown(reason)` (illustrative categories).
+Queue capacity, duplicate active keys, wrong Host, closed ingress and
+unsupported placement must reject truthfully. Every **accepted ticket**
+must eventually have one observable terminal disposition, including when
+the event loop exits, startup fails or shutdown races a request. No
+accepted request is silently dropped on queue drain or owner cleanup.
+Physical window creation and required owner attachment must complete
+before claiming `Created`; first Present/input focus may still be later.
 
-Windows must **not** be mandatory Render/GPU surfaces. A native window
-without a selected rendering capability remains legal. Headless UI and
-offscreen GPU operations remain legal without native windows.
+**Identity and primary roles:** `WindowKey` is a logical, app-facing
+name/reference, not `NativeWindowId`, Winit `WindowId` or an ECS
+`Entity`. Each successful incarnation is correlated with a fresh
+generation and owner-controlled physical IDs. Reopening a retired key
+cannot revive stale input, paint, UI bindings or outstanding receipts.
+
+The **primary presentation/input convenience role** is likewise a
+logical, explicitly assigned owner role. A zero-window native App begins
+with *no* primary physical window. Its first late-created window must
+not silently become primary just because it is first; a request may
+explicitly claim the vacant primary role if that operation is supported
+and admitted, otherwise primary-only UI/Render helpers return a precise
+unbound/unsupported-target result. Current `NativeWindowId::primary()`
+and `RenderSurfaceId::primary()` assumptions require an owner-qualified
+migration. A native window without Render/GPU remains valid; headless UI
+and offscreen GPU do not imply native window creation.
+
+The physical realization and disposal of windows stay on the selected
+event-loop thread. No universal entity registry, mutable service locator,
+new `Host` hierarchy or global command layer follows from this model.
 
 ### 5. Startup, last-window closure, and shutdown
 
-Startup is a one-shot App lifecycle occurrence, **not** a callback whose
-existence depends on a primary physical window. The native event loop must
-be prepared before Startup when native capability is selected. The
-admission/realization ordering **must be precise**:
+**Startup occurs once per admitted App**, not once per realized native
+window. Native capability/event-loop readiness and the current
+Host-specific resources precede Startup, but the first native window
+need not exist.
 
-1. Validate composition and create the selected native event loop and
-   required Host resources.
-2. If **initial windows are declared**, realize and validate the mandatory
-   initial window/presentation attachments **before Startup**. A required
-   first-window/attachment failure aborts startup with a reportable
-   error and safe owner cleanup; no product Startup systems execute on a
-   partially realized native topology. This keeps ordinary desktop
-   apps from starting with a missing required main window.
-3. If **zero initial windows are declared**, run Startup after the native
-   loop is ready even though no window or Render surface exists.
-4. After Startup, a **runtime-created** window is an asynchronous request
-   whose own `Created` or `Failed` result is delivered to its caller.
-   Its local failure does not automatically replay Startup or terminate
-   all unrelated work. The owning lifecycle can still require App exit
-   for an explicitly fatal failure.
+The initial attachment frontier is deliberate:
 
-OS suspend/resume and later first-window creation must never rerun Startup.
-This order is a **proposed contract**; the current Winit runner's unconditional
-primary realization/Startup path must be refactored and physically qualified.
+1. Validate configuration and execution intent. Select the Host and
+   clock once; establish native event-loop readiness if selected.
+2. For **mandatory initially declared windows**, realize physical windows
+   and validate the *already-declared mandatory* owner attachments
+   that can actually be checked before Startup. A failed mandatory
+   realization rejects Startup with truthful error and owner cleanup.
+   Preflight is not proof of later Present, input display, or rollback
+   of already committed external effects.
+3. When **no initial native windows** are declared, run Startup once
+   after selected native readiness without inventing a primary window,
+   Render surface or UI input target.
+4. Operations **created during Startup** (new UI mounts, RenderFlow,
+   window requests or dynamically selected targets where supported)
+   are later owner operations with independent outcomes; they are
+   not retroactively made required pre-Startup attachments.
+5. After Startup, window requests yield correlated `Created`,
+   `CreationFailed` or terminal cancellation without rerunning
+   Startup. OS suspend/resume and close/reopen do not replay Startup.
+
+Current `winit_runner::resumed` unconditionally realizes a primary
+window before Startup, and `realize_declared_primary_input()` currently
+occurs **after** Startup. Do not move that input binding earlier by
+assertion: decide which selected pre-Startup recipient invariants actually
+need preflight, then qualify both ordinary desktop and Startup-authored UI.
+A post-mount `PlacementRetained` or pending HostProtocol terminal work
+requires owner-specific cleanup and error recovery; there is no universal
+transactional rollback of Window, UI, Input and Render effects.
 
 **Two independent policies must not be conflated:**
 
-- **Window close authorization:** a close intent may be accepted, vetoed
-  or deferred by the native/product close owner. Current
-  `NativePrimaryClosePolicy::Explicit` is the native primary default;
-  `ApproveUnhandled` is currently opt-in. An ordinary future
-  `.window(...)` convenience path must **deliberately select or
-  implement its documented unhandled-close behavior**, while retaining
-  the expert explicit veto path for unsaved documents. Do not silently
-  reclassify the existing native ClosePolicy as App lifetime policy.
-- **App lifetime after window retirement:** *after* the owner has
-  approved and safely retired a window, a separate App policy decides
-  whether the application shuts down. A formerly distinguished
-  `NativeWindowId::primary()` must not by itself cause unconditional
-  `event_loop.exit()`.
+- **Window-close authorization:** native/product policy approves, vetoes
+  or defers one close intent; current primary default is
+  `NativePrimaryClosePolicy::Explicit`, while
+  `ApproveUnhandled` is opt-in. The ordinary future
+  `.window(...)` convenience must explicitly select its documented
+  unhandled-close behavior without removing the expert veto path.
+- **App lifetime after safe retirement:** App-specific policy separately
+  decides whether the application keeps running. The old special
+  `NativeWindowId::primary()` must no longer cause unconditional exit.
 
-**Proposed ordinary defaults** (lifetime semantics, not yet Rust API):
+**Proposed ordinary lifetime defaults** (not final Rust spellings):
 
-| Configured application intent | Default last-window App lifetime |
+| Intent | Default lifetime |
 | --- | --- |
-| No initially declared native windows | Keep App alive until explicit shutdown |
-| One or more initially declared native windows | Request App shutdown **after the last realized window is safely retired** |
-| Explicit `keep_alive` policy (name provisional) | Keep App alive even when no windows remain |
-| Explicit `quit_on_last_window_close` policy (name provisional) | Request App shutdown after the final window retires |
+| No execution intent, `App::new().run()` | **Reject at admission**, actionable `NoExecutionIntent` (illustrative error) |
+| One or more initially declared windows | Request shutdown only after the last window **safely retires and accepted pending window requests are settled** |
+| Explicit `enable_windowing()` without initial windows | Remain alive and accept typed window requests after readiness |
+| Owner-backed persistent service/ingress | Remain alive until admitted shutdown or terminal failure |
+| Explicit `keep_alive` | Remain alive even with zero windows and no other work |
+| Explicit `quit_on_last_window_close` | Request shutdown after final safe retirement and prior accepted request disposition |
 
-Selecting `.enable_windowing()` **only selects the native capability**:
-it does not independently override a selected lifetime policy. For
-example, `.window(...).enable_windowing()` and
-`.enable_windowing().window(...)` must have the same default lifetime,
-and explicit lifetime selection wins over the inferred convenience
-default. Duplicate or contradictory explicit policies reject
-predictably. A native zero-initial-window console-first App therefore
-keeps running by default without a fabricated primary window and can
-reopen windows as needed. When the caller wants a persistent App
-despite initial windows, it selects keep-alive explicitly.
+`enable_windowing()` selects capability, **not** a conflicting
+implicit keep-alive override. `.window(...).enable_windowing()`
+and `.enable_windowing().window(...)` have the same inferred
+ordinary desktop lifetime, unless an explicit lifetime choice overrides
+it. Duplicate contradictory explicit policies reject.
 
-The ordinary unhandled-close convenience and the last-window policy
-must be selected/validated consistently before Startup; a vetoed
-close never counts as a retired window, and pending Render/Input/UI
-retirement cannot be bypassed merely to make the window count zero.
+**Last-window/request race rule:** only the Native owner can linearize
+request admission, window retirement and the transition to stopping.
+An accepted request pending when the last window retires prevents a
+premature “zero-window -> quit” conclusion: drain/settle that request,
+allow a successfully realized replacement to keep the App running,
+or close admission and issue terminal cancellation/failure for every
+unrealized accepted request before shutdown. A request arriving after
+the stopping gate must reject, not be reported accepted and lost.
+A vetoed close or pending UI/Input/Render retirement never counts as
+safe final retirement. Explicit App shutdown may cancel queued work,
+but must publish correlated terminal dispositions. These rules require
+concurrent/racing native proof; they are **not** implemented today.
 
-Do not equate: window close, document close, simulation termination, command
-source EOF/disconnect, background job completion, App shutdown, or OS forced
-process termination.
-
-The shutdown protocol must stop admission of new work, quiesce/cancel selected
-owners, settle pending typed UI/Render/GPU/Input obligations, and return a
-truthful success or failure. Previously committed Startup side effects
-are not generically reversible; existing fail-stop semantics remain.
-An exact shutdown lifecycle shape and timeout policy need executable owner
-proof before acceptance.
+Do not equate window close, document close, simulation termination,
+terminal EOF/disconnect, network command completion, App shutdown or OS
+forced termination. Previously committed Startup effects are not
+generically reversible. Stopping must reject new work, quiesce or cancel
+owner work, settle UI/Render/GPU/Input and request tickets, and return
+truthful failure when cleanup cannot complete. Exact shutdown sequencing,
+boundedness and failure recovery remain executable owner gates.
 
 ### 6. Console and external control remain optional callers
 
@@ -338,38 +416,57 @@ consuming `run(self) -> Result<()>` cannot naively discard partially
 mounted UI on failure. Typed preflight and cleanup or an actionable
 recovery outcome require direct proof.
 
+A future **App Info** inspection surface may expose *read-only,
+owner-derived* Configuring/Admitted/Requested/Realized/Stopping/Retired
+status, selected intent, shutdown policy, window tickets and physical
+bindings, typed UI instances, installed ECS resources, and errors with
+source/owner links. It must not create a parallel writable App registry
+or transfer semantic authority from Host, ECS, RunenUI or Render.
+
 ## Illustrative public surface (not final Rust API)
 
 ```rust
-// Open-ended, windowless, event-driven runtime; no terminal is implied.
-App::new().run()?;
+// Accidental empty open-ended application: clear admission error.
+App::new().run()?; // NoExecutionIntent; no native window or silent idle hang.
 
-// Declared native window; no explicit public Host selection.
+// Deliberately passive, open-ended application: explicit intent.
+// The caller should acquire a shutdown handle before consuming App.
+let app = App::new().keep_alive();
+let shutdown = app.shutdown_handle();
+app.run()?;
+
+// Ordinary native window: no public Host enum necessary.
 App::new()
     .window(Window::new("editor").title("Editor"))
     .run()?;
 
-// Native event loop exists before any physical window; later runtime commands
-// can ask its owner to open the first window.
+// Native Host with zero initial windows: obtain its typed request handle
+// before moving App into run; the owner publishes readiness and receipts.
+let app = App::new().enable_windowing();
+let windows = app.window_requests()?;
+app.run()?; // Windows can be requested by a separately admitted controller.
+
+// Native typed UI convenience, separate #1405 API decision.
 App::new()
-    .enable_windowing()
+    .window(Window::new("todo").title("Todo"))
+    .ui(TodoUi::new(TodoUiState::load()?))
     .run()?;
 
-// Optional local command adapter; does not open an OS terminal window.
-App::new()
-    .enable_windowing()
-    .console(Console::stdin())
-    .run()?;
-
-// Explicit bounded headless advancement for tests and simulations.
+// Explicit finite headless advancement remains a separate operation.
 let app = App::new().run_for_frames(100)?;
 ```
 
-These snippets specify desired ergonomics, **not compile-proven signatures**.
-Exact `Window` construction, typed key representation, explicit UI state,
-runtime command receivers, return/ownership types, clock admission,
-generic method resolution, error types and `.ui::<A>()` naming require
-an isolated Rust compile probe and an independently maintained consumer.
+All snippets above specify **intent and preferred ergonomics**, not
+existing compile-proven `App` signatures. In particular the constructor
+shape `TodoUi::new(state)` was tested only through #1426's **test-local**
+blanket extension trait/intent facade; public prelude visibility, inherent
+`new` conflicts and the accepted `AppUiExt::ui()` method-name collision
+remain #1405 decisions. `Window`, `window_requests`, `keep_alive`,
+shutdown handle, ticket/result and `NoExecutionIntent` types are
+conceptual. A real application must move a request handle into an
+actual controller rather than rely on an unused local binding.
+Owner-specific admission, failure and state-retention types require
+separate Rust compile and platform proofs.
 
 ## Rejected alternatives
 
@@ -391,16 +488,26 @@ an isolated Rust compile probe and an independently maintained consumer.
 - Report accepted window requests as fully created, or use one unversioned
   window string as a physical handle: permits stale events and incorrect
   render/input attachment.
+- Treat an accidentally empty open-ended `App::new().run()` as implicit
+  keep-alive: conceals missing execution intent and can hang without any
+  useful admission or actionable diagnostics. Explicit keep-alive remains
+  supported.
 
 ## Migration and acceptance gates
 
 **Intentional public breaking changes**, if accepted:
-`App::new()` no longer immediately selects native; headless
-`App::run()` no longer returns after one frame; maintained native
-products must explicitly declare/select windowing; headless one-frame
-tools must choose bounded execution. Existing `set_title`, native
-size/close policies, `AppUiExt::ui()`, and default-plugin ordering must
-be reconciled without indefinite compatibility aliases.
+`App::new()` no longer immediately selects native; bare
+`App::new().run()` becomes a diagnostic admission failure; previously
+headless `App::run()` no longer returns after one frame; maintained native
+products must explicitly declare/select windowing, and headless one-frame
+tools must choose bounded execution. **`engine/src/main.rs` must migrate**
+from its current bare `App::new().run()` to a declared native window or
+another real explicit intent. Audit maintained Arena, Editor, Draw and
+Runtime Preview, plus `App::headless`, `set_title`, native size/close
+policies, `AppUiExt::ui()`, default-plugin ordering, and direct-world
+window/RunenUI mutations before replacing supported call sites.
+No indefinite compatibility aliases or silent behavior-preserving
+fallbacks are presumed.
 
 **Two distinct approval steps are required.** This *proposed* document may
 be critically reviewed and its **semantic policy** accepted only once
@@ -417,17 +524,25 @@ Before accepting the final public API or publishing implementation:
 1. **Rust API:** Compile-test the fluent by-value/error contract and the
    `AppUiExt::ui()` vs `.ui::<A>()` collision; verify typed default
    UI state, explicit target, and registration order independence.
-2. **Idle headless:** Prove Startup once, no idle Update/frame spin,
-   reliable wake, correct shutdown request while the consuming
-   `run(self)` blocks, no implicit console/port/GPU/window.
+2. **Execution intent / idle headless:** Prove bare empty `App::new().run()`
+   rejects **before Startup** with actionable error; incidental resource,
+   ECS system and generic plugin presence do not count as a live service.
+   Explicit keep-alive and real owner-backed service remain idle without
+   Update/frame spin, have reliable wake and external shutdown after
+   `run(self)` consumes App, and install no implicit console/port/GPU/window.
 3. **Headless bounded:** Prove zero/positive frame counts, repeatability
    and fixed-step cadence errors/progress remain well-defined.
-4. **Native zero-window:** Prove Winit readiness and Startup **without a
-   primary window**, late first-window physical creation/failure, suspended
-   /resumed Startup identity and correct close policy.
-5. **Multiple native windows:** Prove independent close/reopen, logical
-   key generations, DPI/resize/focus/input correlation and Render
-   surface ownership after failures and retirement.
+4. **Native zero-window / typed request:** Prove pre-run acquisition of a
+   window-owner request handle, readiness or NotReady behavior, reliable
+   no-frame command wake, correlated accepted/Created/Failed/Cancelled
+   ticket disposition, Winit Startup **without a primary window**, late
+   first-window physical creation/failure, suspended/resumed Startup
+   identity and correct close policy.
+5. **Multiple native windows:** Prove safe close/reopen, logical
+   key + incarnation, explicit primary role versus first-created named
+   window, DPI/resize/focus/input correlation, Render surface ownership,
+   and last-close versus queued-request/shutdown races, including
+   terminal settlement of every previously accepted request.
 6. **Integrated UI/game:** Prove native Todo UI, game HUD with custom
    RenderFlow, no duplicate Present and terminal UI/GPU/input settlement.
 7. **Mixed work:** Prove concurrent network/worker completion/fixed
@@ -441,11 +556,16 @@ Before accepting the final public API or publishing implementation:
    guarantee of a blocking main-thread `run()` on every platform.
 10. **Governance:** Reconcile accepted ADR 0019/0023, #884/#875,
     source-owner split #1423/#1405, strict launch ownership #1311,
-    automation/terminal designs, and competing U9-C/Render PRs.
-    Require repository `cargo validate`, exact-head hosted evidence,
-    independent critical review and protected merge.
+    automation/terminal designs and **already merged** U9-C (#1276)
+    and non-frame GPU progress (#1392). Verify exact-current protected
+    main and maintained consumers. Require repository `cargo validate`,
+    exact-head hosted evidence, critical review and protected merge.
 
-**Gate verdict at proposal:** architecture direction is supported by
-source and independent use cases; final Rust signatures, sustained
-headless driver, zero-window Startup and lifecycle/shutdown/owner-retirement
-remain **HOLD**. A proposed ADR is not permission to bypass these gates.
+**Gate verdict at proposal:** the owner-selected **explicit-intent,
+fail-first empty App** policy and one-App/windowless direction are now
+written down for critical review. This remains a **DRAFT / HOLD**, not
+an accepted ADR, public Rust API, sustained headless driver, zero-window
+native implementation or native UI proof. Window ticket/wake/shutdown,
+primary role, Startup attachment, retained RunenUI/Render work and
+maintained-consumer migration require separately qualified execution.
+Do not merge or repin Todo from draft heads.
