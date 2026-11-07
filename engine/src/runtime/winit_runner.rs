@@ -4298,7 +4298,8 @@ impl WinitRunner {
     #[track_caller]
     fn request_redraw_for_native_window(&mut self, native_window_id: NativeWindowId) {
         // Unattributed device events cannot fabricate a primary recipient.
-        if native_window_id == NativeWindowId::primary()
+        if self.state.initial_native_window == NativeInitialWindow::None
+            && native_window_id == NativeWindowId::primary()
             && !self.window_realizer.has_primary_window()
         {
             return;
