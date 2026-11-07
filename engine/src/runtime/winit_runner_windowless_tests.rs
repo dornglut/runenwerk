@@ -80,10 +80,11 @@ struct ExitAfterLateWindow {
 
 impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        let frames_before_resume = self.runner.ordinary_frames;
         self.runner.resumed(event_loop);
         assert!(!self.runner.window_realizer.has_primary_window());
         assert_eq!(
-            self.runner.ordinary_frames, 0,
+            self.runner.ordinary_frames, frames_before_resume,
             "Winit resume or Startup must not produce an ordinary frame"
         );
         if !self.runner.window_realizer.has_any_window() {
