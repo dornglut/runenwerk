@@ -26,6 +26,7 @@ struct WindowlessCounters {
     updates: Arc<AtomicUsize>,
     requests: NativeWindowRequests,
     startup_ticket: mpsc::Sender<NativeWindowRequestTicket>,
+    fail_startup: bool,
 }
 
 fn assert_windowless_startup(mut world: WorldMut) -> Result<()> {
@@ -56,6 +57,9 @@ fn assert_windowless_startup(mut world: WorldMut) -> Result<()> {
         .startup_ticket
         .send(ticket)
         .context("windowless Startup ticket observer is unavailable")?;
+    if counters.fail_startup {
+        anyhow::bail!("intentional windowless Startup failure after request acceptance");
+    }
     Ok(())
 }
 
@@ -191,6 +195,7 @@ fn zero_window_native_os_startup() -> Result<()> {
         updates: Arc::clone(&updates),
         requests: windows.clone(),
         startup_ticket: startup_sender,
+        fail_startup: false,
     });
     app.add_systems(Startup, assert_windowless_startup.on_invoker_thread());
     app.add_systems(Update, count_update);
@@ -274,6 +279,91 @@ fn zero_window_native_os_startup() -> Result<()> {
         "native_zero_window_startup=pass physical_x11=true first={} second={} startup=1 no_primary=true no_gpu=true after_window_update=true retired=true",
         first.raw(),
         second.raw()
+    );
+    Ok(())
+}
+
+#[test]
+fn zero_window_native_os_startup_failure() -> Result<()> {
+    if std::env::var_os("RUNENWERK_NATIVE_ZERO_WINDOW_STARTUP_FAIL_OS_SMOKE").is_none() {
+        return Ok(());
+    }
+
+    let mut app = App::new();
+    app.enable_windowing()?;
+    app.add_plugins(default_plugins());
+    let windows = app.native_window_requests()?;
+    ensure!(windows.readiness()? == NativeWindowRequestReadiness::NotReady);
+    let (startup_sender, startup_receiver) = mpsc::channel();
+    let startups = Arc::new(AtomicUsize::new(0));
+    let updates = Arc::new(AtomicUsize::new(0));
+    app.insert_resource(WindowlessCounters {
+        startups: Arc::clone(&startups),
+        updates: Arc::clone(&updates),
+        requests: windows.clone(),
+        startup_ticket: startup_sender,
+        fail_startup: true,
+    });
+    app.add_systems(Startup, assert_windowless_startup.on_invoker_thread());
+    app.add_systems(Update, count_update);
+    app.admit_composition()?;
+    app.prepare_lifecycle_for_execution()?;
+    app.prepare_native_ui_host()?;
+    let mut state = app.into_windowed_state();
+    let initial = state.initial_native_window;
+    install_native_window_provider_resources(&mut state.world, initial);
+
+    let mut builder = EventLoop::<NativeHostEvent>::with_user_event();
+    builder.with_any_thread(true).with_x11();
+    let event_loop = builder.build()?;
+    let owner = state.world.resource::<NativeWindowRequestOwner>()?;
+    let proxy = event_loop.create_proxy();
+    owner.attach_wake(move || {
+        proxy
+            .send_event(NativeHostEvent::NativeWindowRequests)
+            .is_ok()
+    })?;
+    state
+        .world
+        .insert_resource(NativeWakeTransport::new(event_loop.create_proxy()));
+    event_loop.set_control_flow(ControlFlow::Wait);
+
+    let mut proof = ExitAfterLateWindow {
+        runner: WinitRunner::new(state),
+        observed: false,
+    };
+    event_loop.run_app(&mut proof)?;
+    let terminal = startup_receiver
+        .recv_timeout(Duration::from_secs(5))
+        .context("failed Startup did not record its accepted ticket")?
+        .recv_timeout(Duration::from_secs(5))?;
+    ensure!(
+        matches!(terminal, NativeWindowRequestOutcome::Cancelled),
+        "failed Startup stranded or falsely realized its window: {terminal:?}"
+    );
+    ensure!(windows.readiness()? == NativeWindowRequestReadiness::Closed);
+    ensure!(startups.load(Ordering::SeqCst) == 1);
+    ensure!(updates.load(Ordering::SeqCst) == 0);
+    ensure!(proof.runner.window_realizer.realized_windows().is_empty());
+    ensure!(!proof.observed);
+    let original_error = proof
+        .runner
+        .fatal_error
+        .as_ref()
+        .context("failed Startup did not propagate a fatal Native Host error")?;
+    ensure!(
+        format!("{original_error:#}")
+            .contains("intentional windowless Startup failure after request acceptance"),
+        "unexpected Startup failure: {original_error:#}"
+    );
+    let retry = proof
+        .runner
+        .run_startup_if_needed()
+        .expect_err("failed Startup was retried");
+    ensure!(format!("{retry:#}").contains("previously failed"));
+    ensure!(startups.load(Ordering::SeqCst) == 1);
+    println!(
+        "native_zero_window_startup_failure=pass physical_x11=true accepted_cancelled=1 startup_once=true no_physical=true"
     );
     Ok(())
 }
