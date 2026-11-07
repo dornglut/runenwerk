@@ -395,6 +395,90 @@ mod tests {
     }
 
     #[test]
+    fn drained_inflight_ticket_settles_after_owner_close() {
+        let owner = NativeWindowRequestOwner::default();
+        let handle = owner.handle();
+        owner.attach_wake(|| true).unwrap();
+        owner.mark_ready().unwrap();
+        let ticket = handle.request(sample()).unwrap();
+        let pending = owner.take_pending().unwrap();
+        assert_eq!(pending.len(), 1);
+
+        // The Native owner may start stopping while its invoker still owns
+        // a drained batch. A live ticket is not lost when queue state closes.
+        owner.close();
+        assert_eq!(
+            handle.readiness().unwrap(),
+            NativeWindowRequestReadiness::Closed
+        );
+        assert!(matches!(
+            handle.request(sample()),
+            Err(NativeWindowRequestError::Closed)
+        ));
+        assert_eq!(ticket.try_recv(), Err(TryRecvError::Empty));
+        drop(pending);
+        assert_eq!(
+            ticket.recv_timeout(Duration::from_secs(1)).unwrap(),
+            NativeWindowRequestOutcome::Cancelled
+        );
+        assert_eq!(ticket.try_recv(), Err(TryRecvError::Disconnected));
+    }
+
+    #[test]
+    fn dropped_ticket_does_not_retract_accepted_native_work() {
+        let owner = NativeWindowRequestOwner::default();
+        let handle = owner.handle();
+        owner.attach_wake(|| true).unwrap();
+        owner.mark_ready().unwrap();
+
+        let ticket = handle.request(sample()).unwrap();
+        drop(ticket);
+        let mut pending = owner.take_pending().unwrap();
+        assert_eq!(pending.len(), 1);
+        pending[0].finish(NativeWindowRequestOutcome::CreationFailed {
+            reason: "injected Native owner failure".into(),
+        });
+        drop(pending);
+
+        // Delivery to an absent receiver is nonfatal; Winit retains the
+        // actual admission/realization authority and remains operable.
+        assert_eq!(
+            handle.readiness().unwrap(),
+            NativeWindowRequestReadiness::Ready
+        );
+        let next = handle.request(sample()).unwrap();
+        assert_eq!(next.id().raw(), 2);
+        drop(owner);
+        assert_eq!(
+            next.recv_timeout(Duration::from_secs(1)).unwrap(),
+            NativeWindowRequestOutcome::Cancelled
+        );
+    }
+
+    #[test]
+    fn invalid_extent_does_not_consume_request_identity() {
+        let owner = NativeWindowRequestOwner::default();
+        let handle = owner.handle();
+        owner.attach_wake(|| true).unwrap();
+        owner.mark_ready().unwrap();
+        assert!(matches!(
+            handle.request(NativeWindowRequest::new("zero", (0, 200))),
+            Err(NativeWindowRequestError::InvalidExtent)
+        ));
+        assert!(matches!(
+            handle.request(NativeWindowRequest::new("zero", (200, 0))),
+            Err(NativeWindowRequestError::InvalidExtent)
+        ));
+        let first = handle.request(sample()).unwrap();
+        assert_eq!(first.id().raw(), 1);
+        drop(owner);
+        assert_eq!(
+            first.recv_timeout(Duration::from_secs(1)).unwrap(),
+            NativeWindowRequestOutcome::Cancelled
+        );
+    }
+
+    #[test]
     fn racing_producers_cannot_obtain_a_ticket_after_owner_closure() {
         let owner = NativeWindowRequestOwner::default();
         let handle = owner.handle();

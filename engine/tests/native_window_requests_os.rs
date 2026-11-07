@@ -15,7 +15,7 @@ mod linux {
     use std::{
         sync::{
             Arc,
-            atomic::{AtomicBool, Ordering},
+            atomic::{AtomicBool, AtomicUsize, Ordering},
         },
         thread,
         time::{Duration, Instant},
@@ -23,7 +23,7 @@ mod linux {
     use winit::window::Window;
 
     struct Hook {
-        secondary_attached: Arc<AtomicBool>,
+        secondary_count: Arc<AtomicUsize>,
         unexpected_gpu: Arc<AtomicBool>,
     }
 
@@ -36,15 +36,17 @@ mod linux {
             if world.has_resource::<Gfx>() {
                 self.unexpected_gpu.store(true, Ordering::SeqCst);
             }
-            let secondary = world
+            let secondary_count = world
                 .resource::<WindowStateRegistryResource>()?
                 .records()
-                .any(|record| {
+                .filter(|record| {
                     record.native_window_id != NativeWindowId::primary()
                         && record.lifecycle_state == NativeWindowLifecycleState::Created
-                });
-            if secondary {
-                self.secondary_attached.store(true, Ordering::SeqCst);
+                })
+                .count();
+            self.secondary_count
+                .fetch_max(secondary_count, Ordering::SeqCst);
+            if secondary_count >= 2 {
                 world
                     .resource_mut::<WindowStateRegistryResource>()?
                     .record_mut(NativeWindowId::primary())
@@ -56,7 +58,7 @@ mod linux {
     }
 
     pub(super) fn run() -> Result<()> {
-        let secondary_attached = Arc::new(AtomicBool::new(false));
+        let secondary_count = Arc::new(AtomicUsize::new(0));
         let unexpected_gpu = Arc::new(AtomicBool::new(false));
         let mut app = App::new();
         app.add_plugins(default_plugins());
@@ -64,7 +66,7 @@ mod linux {
         app.world_mut()
             .resource_mut::<NativeWindowHookRegistryResource>()?
             .register_hook(Hook {
-                secondary_attached: Arc::clone(&secondary_attached),
+                secondary_count: Arc::clone(&secondary_count),
                 unexpected_gpu: Arc::clone(&unexpected_gpu),
             });
 
@@ -100,6 +102,16 @@ mod linux {
                 id != NativeWindowId::primary(),
                 "secondary reused primary NativeWindowId"
             );
+
+            // The Native owner must realize an accepted request even if the
+            // caller drops its individual result receiver. The second
+            // physical attach closes the initial primary through its hook.
+            let dropped = windows.request(NativeWindowRequest::new(
+                "Native dropped-receiver proof",
+                (400, 300),
+            ))?;
+            drop(dropped);
+
             // The Created receipt may precede primary-close settlement; do
             // not assume the owner has already closed when Winit sends it.
             let shutdown_deadline = Instant::now() + Duration::from_secs(20);
@@ -118,15 +130,15 @@ mod linux {
             .join()
             .expect("Native window request worker must not panic")?;
         ensure!(
-            secondary_attached.load(Ordering::SeqCst),
-            "physical secondary window did not reach Native attach hook"
+            secondary_count.load(Ordering::SeqCst) >= 2,
+            "two physical secondary windows, including the dropped receiver, did not reach Native attach hooks"
         );
         ensure!(
             !unexpected_gpu.load(Ordering::SeqCst),
             "Native window request materialized GPU without RenderPlugin"
         );
         println!(
-            "native_window_requests_os=pass secondary={} physical_x11=true",
+            "native_window_requests_os=pass secondary={} physical_x11=true dropped_receiver_realized=true",
             secondary_id.raw()
         );
         Ok(())
