@@ -3961,6 +3961,39 @@ impl WinitRunner {
         });
     }
 
+    /// Classify the actual owner result without treating missing or pending
+    /// Native state as proof that physical/Render cleanup is settled.
+    fn external_window_request_outcome(
+        native_window_id: NativeWindowId,
+        result: &Result<()>,
+        record: Option<&crate::runtime::window::NativeWindowRecord>,
+    ) -> NativeWindowRequestOutcome {
+        match result {
+            Err(error) => NativeWindowRequestOutcome::CreationFailedUnsettled {
+                native_window_id,
+                reason: format!("{error:#}"),
+            },
+            Ok(()) => match record {
+                Some(record) if record.lifecycle_state == NativeWindowLifecycleState::Created => {
+                    NativeWindowRequestOutcome::Created { native_window_id }
+                }
+                Some(record)
+                    if record.lifecycle_state == NativeWindowLifecycleState::CreationFailed =>
+                {
+                    NativeWindowRequestOutcome::CreationFailed {
+                        reason: record.failure_reason.clone().unwrap_or_else(|| {
+                            "native window creation failed without an owner diagnostic".to_string()
+                        }),
+                    }
+                }
+                _ => NativeWindowRequestOutcome::CreationFailedUnsettled {
+                    native_window_id,
+                    reason: "native window owner did not publish a terminal record".to_string(),
+                },
+            },
+        }
+    }
+
     /// Native-only request delivery does not schedule ECS Update or a fake
     /// ordinary frame. Physical window creation may legitimately redraw.
     fn drain_external_window_requests(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
@@ -3977,56 +4010,18 @@ impl WinitRunner {
                 .adopt_native_window_request(&command.request.title, command.request.size_px);
             let native_window_id = request.native_window_id;
             let result = self.create_window_for_request(event_loop, request);
-            let outcome = match &result {
-                Err(error) => NativeWindowRequestOutcome::CreationFailedUnsettled {
-                    native_window_id,
-                    reason: format!("{error:#}"),
-                },
-                Ok(()) => {
-                    let record = self
-                        .state
-                        .world
-                        .resource::<WindowStateRegistryResource>()
-                        .ok()
-                        .and_then(|registry| registry.record(native_window_id));
-                    match record {
-                        Some(record)
-                            if record.lifecycle_state == NativeWindowLifecycleState::Created =>
-                        {
-                            NativeWindowRequestOutcome::Created { native_window_id }
-                        }
-                        Some(record)
-                            if record.lifecycle_state
-                                == NativeWindowLifecycleState::CreationFailed =>
-                        {
-                            NativeWindowRequestOutcome::CreationFailed {
-                                reason: record.failure_reason.clone().unwrap_or_else(|| {
-                                    "native window creation failed without an owner diagnostic"
-                                        .to_string()
-                                }),
-                            }
-                        }
-                        _ => NativeWindowRequestOutcome::CreationFailed {
-                            reason: "native window owner did not publish a terminal record"
-                                .to_string(),
-                        },
-                    }
-                }
-            };
+            let record = self
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .ok()
+                .and_then(|registry| registry.record(native_window_id));
+            let outcome = Self::external_window_request_outcome(native_window_id, &result, record);
             let terminal_record_missing = result.is_ok()
-                && self
-                    .state
-                    .world
-                    .resource::<WindowStateRegistryResource>()
-                    .ok()
-                    .and_then(|registry| registry.record(native_window_id))
-                    .is_none_or(|record| {
-                        !matches!(
-                            record.lifecycle_state,
-                            NativeWindowLifecycleState::Created
-                                | NativeWindowLifecycleState::CreationFailed
-                        )
-                    });
+                && matches!(
+                    outcome,
+                    NativeWindowRequestOutcome::CreationFailedUnsettled { .. }
+                );
             command.finish(outcome);
             if terminal_record_missing {
                 anyhow::bail!("native window request missing a terminal owner record");

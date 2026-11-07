@@ -817,6 +817,75 @@ fn creation_failure_records_diagnostic_without_discarding_unresolved_render_atta
 }
 
 #[test]
+fn external_window_receipt_requires_an_authoritative_terminal_native_record() {
+    let mut registry = WindowStateRegistryResource::default();
+    let request = registry.request_window("external", (640, 480));
+    let native_window_id = request.native_window_id;
+    let success: Result<()> = Ok(());
+
+    let missing = WinitRunner::external_window_request_outcome(native_window_id, &success, None);
+    assert!(matches!(
+        missing,
+        NativeWindowRequestOutcome::CreationFailedUnsettled {
+            native_window_id: observed,
+            reason,
+        } if observed == native_window_id && reason.contains("terminal record")
+    ));
+
+    let requested = WinitRunner::external_window_request_outcome(
+        native_window_id,
+        &success,
+        registry.record(native_window_id),
+    );
+    assert!(matches!(
+        requested,
+        NativeWindowRequestOutcome::CreationFailedUnsettled {
+            native_window_id: observed,
+            ..
+        } if observed == native_window_id
+    ));
+
+    registry
+        .record_mut(native_window_id)
+        .unwrap()
+        .mark_creation_failed("physical creation rejected and rolled back");
+    assert_eq!(
+        WinitRunner::external_window_request_outcome(
+            native_window_id,
+            &success,
+            registry.record(native_window_id)
+        ),
+        NativeWindowRequestOutcome::CreationFailed {
+            reason: "physical creation rejected and rolled back".to_string()
+        }
+    );
+
+    registry.register_created_window(native_window_id, "external", (640, 480), 1.0, false);
+    assert_eq!(
+        WinitRunner::external_window_request_outcome(
+            native_window_id,
+            &success,
+            registry.record(native_window_id)
+        ),
+        NativeWindowRequestOutcome::Created { native_window_id }
+    );
+
+    let failure: Result<()> = Err(anyhow::anyhow!("Render rollback refused"));
+    let unsettled = WinitRunner::external_window_request_outcome(
+        native_window_id,
+        &failure,
+        registry.record(native_window_id),
+    );
+    assert!(matches!(
+        unsettled,
+        NativeWindowRequestOutcome::CreationFailedUnsettled {
+            native_window_id: observed,
+            reason,
+        } if observed == native_window_id && reason.contains("rollback refused")
+    ));
+}
+
+#[test]
 fn saturated_source_journal_cannot_retire_render_or_a_selected_ui_recipient() {
     use crate::plugins::ui::{
         NativeInputRecipient, UiRuntimeFontConfiguration, UiRuntimeSlotsResource, UiTypedScreenId,
