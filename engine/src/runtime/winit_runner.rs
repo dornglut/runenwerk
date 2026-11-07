@@ -1,5 +1,4 @@
-use crate::app::WindowedAppState;
-use crate::app::domain::state::NativeInitialWindow;
+use crate::app::{NativeInitialWindow, WindowedAppState};
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
@@ -7641,7 +7640,10 @@ mod tests {
 
         let mut windowed = App::new();
         configure_probe(&mut windowed);
-        install_native_window_provider_resources(windowed.world_mut(), NativeInitialWindow::Primary);
+        install_native_window_provider_resources(
+            windowed.world_mut(),
+            NativeInitialWindow::Primary,
+        );
         let mut runner = WinitRunner {
             state: windowed.into_windowed_state(),
             window_realizer: WinitWindowRealizer::default(),

@@ -61,7 +61,10 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
         self.runner.resumed(event_loop);
         assert!(!self.runner.window_realizer.has_primary_window());
         if !self.runner.window_realizer.has_any_window() {
-            assert!(!self.runner.frame_requested, "zero-window Startup requested a frame");
+            assert!(
+                !self.runner.frame_requested,
+                "zero-window Startup requested a frame"
+            );
             assert!(
                 self.runner
                     .state
@@ -107,7 +110,13 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
                 record.native_window_id != NativeWindowId::primary()
                     && record.lifecycle_state == NativeWindowLifecycleState::Created
             }));
-            assert!(!self.runner.state.world.has_resource::<crate::plugins::render::Gfx>());
+            assert!(
+                !self
+                    .runner
+                    .state
+                    .world
+                    .has_resource::<crate::plugins::render::Gfx>()
+            );
             self.observed = true;
             event_loop.exit();
         }
@@ -151,7 +160,11 @@ fn zero_window_native_os_startup() -> Result<()> {
     let event_loop = builder.build()?;
     let owner = state.world.resource::<NativeWindowRequestOwner>()?;
     let proxy = event_loop.create_proxy();
-    owner.attach_wake(move || proxy.send_event(NativeHostEvent::NativeWindowRequests).is_ok())?;
+    owner.attach_wake(move || {
+        proxy
+            .send_event(NativeHostEvent::NativeWindowRequests)
+            .is_ok()
+    })?;
     state
         .world
         .insert_resource(NativeWakeTransport::new(event_loop.create_proxy()));
@@ -160,7 +173,10 @@ fn zero_window_native_os_startup() -> Result<()> {
     let worker = thread::spawn(move || -> Result<NativeWindowId> {
         let deadline = Instant::now() + Duration::from_secs(20);
         while windows.readiness()? == NativeWindowRequestReadiness::NotReady {
-            ensure!(Instant::now() < deadline, "windowless Winit was never request-ready");
+            ensure!(
+                Instant::now() < deadline,
+                "windowless Winit was never request-ready"
+            );
             thread::sleep(Duration::from_millis(5));
         }
         ensure!(windows.readiness()? == NativeWindowRequestReadiness::Ready);
@@ -179,12 +195,23 @@ fn zero_window_native_os_startup() -> Result<()> {
         observed: false,
     };
     let execution = event_loop.run_app(&mut proof).map_err(anyhow::Error::from);
-    let result = worker.join().expect("windowless request worker must not panic");
+    let result = worker
+        .join()
+        .expect("windowless request worker must not panic");
     execution?;
     let native_id = result.context("worker failed to observe late window")?;
-    ensure!(proof.observed, "physical nonprimary window never advanced an ordinary frame");
-    ensure!(startups.load(Ordering::SeqCst) == 1, "Startup did not run exactly once");
-    ensure!(updates.load(Ordering::SeqCst) > 0, "secondary window never advanced ECS Update");
+    ensure!(
+        proof.observed,
+        "physical nonprimary window never advanced an ordinary frame"
+    );
+    ensure!(
+        startups.load(Ordering::SeqCst) == 1,
+        "Startup did not run exactly once"
+    );
+    ensure!(
+        updates.load(Ordering::SeqCst) > 0,
+        "secondary window never advanced ECS Update"
+    );
     ensure!(observer.readiness()? == NativeWindowRequestReadiness::Closed);
     println!(
         "native_zero_window_startup=pass physical_x11=true id={} startup=1 no_primary=true no_gpu=true after_window_update=true",

@@ -121,7 +121,9 @@ impl App {
             "enable_windowing must be selected before App admission"
         );
         ensure!(
-            !self.world.has_resource::<PrimaryWindowInitialSizePxResource>()
+            !self
+                .world
+                .has_resource::<PrimaryWindowInitialSizePxResource>()
                 && !self.world.has_resource::<NativePrimaryClosePolicy>(),
             "zero initial windows conflict with selected initial-primary configuration"
         );
@@ -209,7 +211,10 @@ impl App {
                 !crate::plugins::render::render_integration_is_active(&self.world),
                 "zero-initial-window Native startup with RenderPlugin is not yet supported: no primary Gfx owner exists for secondary attachment"
             );
-            if let Ok(slots) = self.world.resource::<crate::plugins::ui::UiRuntimeSlotsResource>() {
+            if let Ok(slots) = self
+                .world
+                .resource::<crate::plugins::ui::UiRuntimeSlotsResource>()
+            {
                 ensure!(
                     slots.is_empty(),
                     "zero-initial-window Native startup does not yet support pre-mounted UI without an explicit presentation target"
@@ -519,7 +524,10 @@ mod tests {
         let mut primary_size = App::new();
         primary_size.with_primary_window_size_px((1600, 900));
         assert!(primary_size.enable_windowing().is_err());
-        assert_eq!(primary_size.initial_native_window, NativeInitialWindow::Primary);
+        assert_eq!(
+            primary_size.initial_native_window,
+            NativeInitialWindow::Primary
+        );
 
         let mut windowless = App::new();
         windowless.enable_windowing().unwrap();
@@ -542,6 +550,7 @@ mod tests {
     fn windowless_render_selection_rejects_before_winit_or_startup() {
         let mut app = App::new();
         app.enable_windowing().unwrap();
+        app.add_plugins(crate::plugins::default_plugins());
         app.add_plugin(crate::plugins::RenderPlugin);
         let error = app
             .run()
