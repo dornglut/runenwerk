@@ -7,7 +7,7 @@ use crate::plugins::default_plugins;
 use crate::runtime::native_window_requests::{
     NativeWindowRequest, NativeWindowRequestOutcome, NativeWindowRequestReadiness,
 };
-use crate::runtime::system::SystemConfigExt;
+use crate::runtime::system::SystemMobilityExt;
 use crate::runtime::{Startup, Update, WorldMut};
 use anyhow::{Context, Result, ensure};
 use runen_ecs::Resource;
