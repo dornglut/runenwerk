@@ -244,7 +244,10 @@ impl NativeWindowRequestOwner {
         Ok(())
     }
 
-    /// Called only after physical primary realization and one-shot Startup.
+    /// Called when the selected Winit owner can actually receive and drain
+    /// requests. The zero-initial-window path admits ingress before Startup so
+    /// Startup may author a request; the retained primary-first path becomes
+    /// ready after its initial window and one-shot Startup are realized.
     pub(crate) fn mark_ready(&self) -> Result<(), NativeWindowRequestError> {
         let mut shared = self
             .shared

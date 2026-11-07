@@ -205,6 +205,72 @@ jobs:
           grep -F "native_window_request_render_refusal=pass physical_x11=true unsettled=true retained=true" "$refusal_log"
           rm -f "$refusal_log"
 
+      - name: Prove physical X11 zero-initial-window Startup and first late window
+        env:
+          RUNENWERK_NATIVE_ZERO_WINDOW_OS_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          if ! timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib zero_window_native_os_startup --locked -- --nocapture >"$log" 2>&1; then
+            cat "$log"
+            rm -f "$log"
+            exit 1
+          fi
+          cat "$log"
+          grep -F "native_zero_window_startup=pass" "$log"
+          rm -f "$log"
+
+          failure_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_ZERO_WINDOW_STARTUP_FAIL_OS_SMOKE=1 \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib zero_window_native_os_startup_failure --locked -- --nocapture >"$failure_log" 2>&1; then
+            cat "$failure_log"
+            rm -f "$failure_log"
+            exit 1
+          fi
+          cat "$failure_log"
+          grep -F "native_zero_window_startup_failure=pass" "$failure_log"
+          rm -f "$failure_log"
+
+          registry_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_ZERO_WINDOW_REGISTRY_OS_SMOKE=1 \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib zero_window_native_os_registry_startup_request --locked -- --nocapture >"$registry_log" 2>&1; then
+            cat "$registry_log"
+            rm -f "$registry_log"
+            exit 1
+          fi
+          cat "$registry_log"
+          grep -F "native_zero_window_registry_startup=pass" "$registry_log"
+          rm -f "$registry_log"
+
+          ui_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_ZERO_WINDOW_UI_OS_SMOKE=1 \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib zero_window_native_os_startup_rejects_unbound_ui --locked -- --nocapture >"$ui_log" 2>&1; then
+            cat "$ui_log"
+            rm -f "$ui_log"
+            exit 1
+          fi
+          cat "$ui_log"
+          grep -F "native_zero_window_startup_ui=pass" "$ui_log"
+          rm -f "$ui_log"
+
+          for mode in default uncapped on-demand; do
+            idle_log="$(mktemp)"
+            if ! RUNENWERK_NATIVE_ZERO_WINDOW_IDLE_OS_SMOKE="$mode" \
+                 timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+                 cargo +stable test -p engine --lib zero_window_native_os_idle_modes --locked -- --nocapture >"$idle_log" 2>&1; then
+              cat "$idle_log"
+              rm -f "$idle_log"
+              exit 1
+            fi
+            cat "$idle_log"
+            grep -F "native_zero_window_idle=pass mode=$mode" "$idle_log"
+            rm -f "$idle_log"
+          done
+
       - name: Prove physical X11 primary close approval and veto
         env:
           RUNENWERK_NATIVE_CLOSE_OS_SMOKE: '1'

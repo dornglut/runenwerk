@@ -1,5 +1,6 @@
 use crate::app::App;
 use crate::app::domain::host::AppHostSelection;
+use crate::app::domain::state::NativeInitialWindow;
 use crate::runtime::frame_pacing::{FramePacingPolicyResource, FramePacingRuntimeStateResource};
 use crate::runtime::native_window_requests::{
     NativeWindowRequestError, NativeWindowRequestOwner, NativeWindowRequests,
@@ -58,6 +59,10 @@ impl AppNativeHostExt for App {
             ));
         }
         ensure!(
+            self.initial_native_window == NativeInitialWindow::Primary,
+            "primary close policy requires an initially declared native primary window"
+        );
+        ensure!(
             !self.world.has_resource::<NativePrimaryClosePolicy>(),
             "primary close policy has already been selected"
         );
@@ -82,6 +87,13 @@ impl AppNativeHostExt for App {
     }
 
     fn with_primary_window_size_px(&mut self, size_px: (u32, u32)) -> &mut Self {
+        if self.initial_native_window == NativeInitialWindow::None {
+            self.record_missing_capability(
+                "with_primary_window_size_px",
+                "initial native primary window",
+            );
+            return self;
+        }
         if matches!(self.host_selection, AppHostSelection::Headless) {
             self.record_missing_capability("with_primary_window_size_px", "native-window Host");
             return self;
@@ -94,6 +106,31 @@ impl AppNativeHostExt for App {
 }
 
 impl App {
+    /// Select the existing Native event loop with no mandatory initial window.
+    ///
+    /// App::new() retains its native-primary behavior until the separate
+    /// breaking constructor migration. No logical primary, UI, GPU or
+    /// Render surface is implicitly selected.
+    pub fn enable_windowing(&mut self) -> Result<&mut Self> {
+        ensure!(
+            self.is_native_window_host(),
+            "enable_windowing requires a Native-window Host; App::headless() is stable"
+        );
+        ensure!(
+            self.lifecycle.is_configuring(),
+            "enable_windowing must be selected before App admission"
+        );
+        ensure!(
+            !self
+                .world
+                .has_resource::<PrimaryWindowInitialSizePxResource>()
+                && !self.world.has_resource::<NativePrimaryClosePolicy>(),
+            "zero initial windows conflict with selected initial-primary configuration"
+        );
+        self.initial_native_window = NativeInitialWindow::None;
+        Ok(self)
+    }
+
     /// Acquire Native Host window commands before run consumes the App.
     /// The handle stays NotReady until the original Winit Host can receive
     /// requests. Queueing is not a physical creation acknowledgement.
@@ -169,6 +206,21 @@ impl App {
 
     pub(crate) fn run_windowed(mut self) -> Result<()> {
         self.admit_composition()?;
+        if self.initial_native_window == NativeInitialWindow::None {
+            ensure!(
+                !crate::plugins::render::render_integration_is_active(&self.world),
+                "zero-initial-window Native startup with RenderPlugin is not yet supported: no primary Gfx owner exists for secondary attachment"
+            );
+            if let Ok(slots) = self
+                .world
+                .resource::<crate::plugins::ui::UiRuntimeSlotsResource>()
+            {
+                ensure!(
+                    slots.is_empty(),
+                    "zero-initial-window Native startup does not yet support pre-mounted UI without an explicit presentation target"
+                );
+            }
+        }
         self.prepare_lifecycle_for_execution()?;
         // Direct resource mounting is a real public ingress too. Never silently
         // run already-settled ManualClock slots through a native host.
@@ -443,6 +495,70 @@ mod tests {
                 assert!(!record.close_intent_pending);
             }
         }
+    }
+
+    #[test]
+    fn zero_initial_window_selection_preserves_default_and_requires_native() {
+        let default = App::new();
+        assert_eq!(default.initial_native_window, NativeInitialWindow::Primary);
+
+        let mut zero_window = App::new();
+        zero_window.enable_windowing().unwrap();
+        assert_eq!(zero_window.initial_native_window, NativeInitialWindow::None);
+        assert_eq!(
+            zero_window.into_windowed_state().initial_native_window,
+            NativeInitialWindow::None
+        );
+
+        let mut headless = App::headless();
+        assert!(headless.enable_windowing().is_err());
+
+        let mut late = App::new();
+        late.prepare_lifecycle_for_execution().unwrap();
+        assert!(late.enable_windowing().is_err());
+        assert_eq!(late.initial_native_window, NativeInitialWindow::Primary);
+    }
+
+    #[test]
+    fn zero_initial_window_rejects_primary_only_configuration_in_either_order() {
+        let mut primary_size = App::new();
+        primary_size.with_primary_window_size_px((1600, 900));
+        assert!(primary_size.enable_windowing().is_err());
+        assert_eq!(
+            primary_size.initial_native_window,
+            NativeInitialWindow::Primary
+        );
+
+        let mut windowless = App::new();
+        windowless.enable_windowing().unwrap();
+        windowless.with_primary_window_size_px((1600, 900));
+        assert!(
+            windowless.admit_composition().is_err(),
+            "an invalid initial-primary size must fail at App admission"
+        );
+
+        let mut close = App::new();
+        close.enable_windowing().unwrap();
+        assert!(
+            close
+                .with_primary_close_policy(NativePrimaryClosePolicy::ApproveUnhandled)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn windowless_render_selection_rejects_before_winit_or_startup() {
+        let mut app = App::new();
+        app.enable_windowing().unwrap();
+        app.add_plugins(crate::plugins::default_plugins());
+        app.add_plugin(crate::plugins::RenderPlugin);
+        let error = app
+            .run()
+            .expect_err("unsupported secondary Render attachment needs an explicit failure");
+        assert!(
+            format!("{error:#}").contains("no primary Gfx owner"),
+            "unsupported selection silently started the host: {error:#}"
+        );
     }
 
     #[test]

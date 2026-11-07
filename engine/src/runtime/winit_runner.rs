@@ -1,4 +1,4 @@
-use crate::app::WindowedAppState;
+use crate::app::{NativeInitialWindow, WindowedAppState};
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
@@ -433,7 +433,8 @@ fn displayed_native_mouse_point(
 }
 
 pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
-    install_native_window_provider_resources(&mut state.world);
+    let initial_native_window = state.initial_native_window;
+    install_native_window_provider_resources(&mut state.world, initial_native_window);
 
     let mut event_loop_builder = EventLoop::<NativeHostEvent>::with_user_event();
     with_native_window_hooks(&mut state.world, |registry, _world| {
@@ -465,24 +466,7 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
     }
     state.world.insert_resource(transport);
     event_loop.set_control_flow(ControlFlow::Wait);
-    let mut runner = WinitRunner {
-        state,
-        window_realizer: WinitWindowRealizer::default(),
-        native_ui_keyboards: HashMap::new(),
-        native_ui_mice: HashMap::new(),
-        native_ui_touches: HashMap::new(),
-        native_ui_modifiers: HashMap::new(),
-        native_ime_applied: HashSet::new(),
-        last_primary_redraw_at: None,
-        frame_pacing_schedule: FramePacingSchedule::default(),
-        gpu_progress_deadline: None,
-        ordinary_frames: 0,
-        fatal_error: None,
-        frame_requested: false,
-        frame_in_progress: false,
-        owned_redraws: HashSet::new(),
-        shutdown_done: false,
-    };
+    let mut runner = WinitRunner::new(state);
     let execution = event_loop.run_app(&mut runner).map_err(anyhow::Error::from);
     let execution = match (runner.fatal_error.take(), execution) {
         (Some(error), Err(loop_error)) => {
@@ -514,14 +498,19 @@ fn shutdown_native_ui(world: &mut runen_ecs::World) -> Result<()> {
     Ok(())
 }
 
-fn install_native_window_provider_resources(world: &mut runen_ecs::World) {
+fn install_native_window_provider_resources(
+    world: &mut runen_ecs::World,
+    initial_window: NativeInitialWindow,
+) {
     // The ECS World owns the *one* real winit source allocator. A native
     // mutation can now resolve its original source without a mirrored map
     // or an unverifiable primary-window assumption.
     if !world.has_resource::<WinitInputAdapter>() {
         world.insert_resource(WinitInputAdapter::default());
     }
-    ensure_primary_presentation_metrics(world);
+    if initial_window == NativeInitialWindow::Primary {
+        ensure_primary_presentation_metrics(world);
+    }
     if !world.has_resource::<WindowStateRegistryResource>() {
         world.insert_resource(WindowStateRegistryResource::default());
     }
@@ -556,6 +545,27 @@ struct WinitRunner {
 }
 
 impl WinitRunner {
+    fn new(state: WindowedAppState) -> Self {
+        Self {
+            state,
+            window_realizer: WinitWindowRealizer::default(),
+            native_ui_keyboards: HashMap::new(),
+            native_ui_mice: HashMap::new(),
+            native_ui_touches: HashMap::new(),
+            native_ui_modifiers: HashMap::new(),
+            native_ime_applied: HashSet::new(),
+            last_primary_redraw_at: None,
+            frame_pacing_schedule: FramePacingSchedule::default(),
+            gpu_progress_deadline: None,
+            ordinary_frames: 0,
+            fatal_error: None,
+            frame_requested: false,
+            frame_in_progress: false,
+            owned_redraws: HashSet::new(),
+            shutdown_done: false,
+        }
+    }
+
     /// The original winit identity allocator is directly World-owned, not
     /// cloned into a second native/UI source authority.
     fn native_input(&self) -> &WinitInputAdapter {
@@ -4287,6 +4297,20 @@ impl WinitRunner {
 
     #[track_caller]
     fn request_redraw_for_native_window(&mut self, native_window_id: NativeWindowId) {
+        // Unattributed device events cannot fabricate a primary recipient.
+        // After a real secondary exists, however, their original input
+        // state may require one ordinary application turn even under
+        // OnDemand pacing. Wake the App without assigning the event or
+        // a redraw to a nonexistent primary window.
+        if self.state.initial_native_window == NativeInitialWindow::None
+            && native_window_id == NativeWindowId::primary()
+            && !self.window_realizer.has_primary_window()
+        {
+            if self.window_realizer.has_any_window() {
+                self.request_ordinary_frame("unattributed native device input");
+            }
+            return;
+        }
         self.request_ordinary_frame("native window or application request");
         if let Ok(registry) = self
             .state
@@ -4337,7 +4361,7 @@ impl WinitRunner {
     fn run_requested_frame<F>(
         &mut self,
         now: Instant,
-        primary_window_ready: bool,
+        window_ready: bool,
         after_frame: F,
     ) -> Result<bool>
     where
@@ -4345,7 +4369,7 @@ impl WinitRunner {
     {
         if self.frame_in_progress
             || !self.frame_requested
-            || !primary_window_ready
+            || !window_ready
             || !self.frame_is_ready(now)
         {
             return Ok(false);
@@ -4378,7 +4402,7 @@ impl WinitRunner {
         }
         match self.run_requested_frame(
             Instant::now(),
-            self.window_realizer.has_primary_window(),
+            self.window_realizer.has_any_window(),
             |runner| runner.apply_window_effects(event_loop),
         ) {
             Ok(false) => {}
@@ -4453,10 +4477,29 @@ impl WinitRunner {
         Ok(continuation)
     }
 
+    /// This selected Native mode has no owner-approved UI/Render target.
+    /// A later World mutation must not bypass the pre-run and Startup checks
+    /// and then silently mount an invisible, unprogressed UI runtime.
+    fn reject_unsupported_windowless_ui(&self) -> Result<()> {
+        if self.state.initial_native_window == NativeInitialWindow::None
+            && self
+                .state
+                .world
+                .resource::<UiRuntimeSlotsResource>()
+                .is_ok_and(|slots| !slots.is_empty())
+        {
+            anyhow::bail!(
+                "zero-initial-window Native Host acquired UI without a supported presentation target"
+            );
+        }
+        Ok(())
+    }
+
     fn apply_frame_pacing(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         if event_loop.exiting() {
             return Ok(());
         }
+        self.reject_unsupported_windowless_ui()?;
         if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>() {
             transport.ensure_delivery()?;
         }
@@ -4466,8 +4509,19 @@ impl WinitRunner {
             render_native_host::gpu_progress_interest(&self.state.world),
         );
         let policy = self.frame_pacing_policy();
-        let decision = self.frame_pacing_schedule.decide(policy, now);
-        let (unfinished, ui_deadline) = self.ui_readiness()?;
+        let any_window = self.window_realizer.has_any_window();
+        // Preserve selected pacing but do not spin a Host without a window.
+        let active_policy = if any_window {
+            policy
+        } else {
+            FramePacingPolicyResource::on_demand()
+        };
+        let decision = self.frame_pacing_schedule.decide(active_policy, now);
+        let (unfinished, ui_deadline) = if any_window {
+            self.ui_readiness()?
+        } else {
+            (false, None)
+        };
         if unfinished
             || ui_deadline.is_some_and(|deadline| deadline <= now)
             || decision.request_redraw
@@ -4479,7 +4533,7 @@ impl WinitRunner {
         {
             self.request_native_redraw(NativeWindowId::primary(), &window);
         }
-        let capped_deadline = if self.frame_requested && !self.frame_is_ready(now) {
+        let capped_deadline = if any_window && self.frame_requested && !self.frame_is_ready(now) {
             self.last_primary_redraw_at
                 .zip(policy.target_frame_interval())
                 .and_then(|(last, interval)| last.checked_add(interval))
@@ -4641,6 +4695,57 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.state.initial_native_window == NativeInitialWindow::None {
+            // Winit's wake and owner resources are established before Startup.
+            // Startup-authored requests can be accepted now; the Winit owner
+            // realizes them only after this callback returns, never reentrantly.
+            let readiness = self
+                .state
+                .world
+                .resource::<NativeWindowRequestOwner>()
+                .ok()
+                .map(|owner| owner.mark_ready());
+            if let Some(Err(error)) = readiness {
+                self.exit_with_error(event_loop, error.into());
+                return;
+            }
+            if let Err(err) = self.run_startup_if_needed() {
+                self.exit_with_error(event_loop, anyhow!("runtime startup failed: {err:#}"));
+                return;
+            }
+            // This bounded Native slice has no UI placement/presentation
+            // contract for a windowless App. Startup runs after preflight,
+            // so it can create a previously absent typed UI slot itself.
+            // Reject that real unsupported mount instead of silently
+            // suppressing RunenUI progress while no target exists.
+            if self
+                .state
+                .world
+                .resource::<UiRuntimeSlotsResource>()
+                .is_ok_and(|slots| !slots.is_empty())
+            {
+                self.exit_with_error(
+                    event_loop,
+                    anyhow!(
+                        "zero-initial-window Native Startup mounted UI without a supported presentation target"
+                    ),
+                );
+                return;
+            }
+            // An existing ECS World consumer may have authored window
+            // requests during Startup. Those already belong to the same
+            // Native registry and Winit realizer; drain them at this real
+            // native turn without synthesizing an Update/Render frame.
+            if let Err(err) = self.apply_window_effects(event_loop) {
+                self.exit_with_error(
+                    event_loop,
+                    anyhow!("windowless native Startup effects failed: {err:#}"),
+                );
+                return;
+            }
+            self.pace_or_exit(event_loop);
+            return;
+        }
         if self.window_realizer.has_primary_window() {
             return;
         }
@@ -5213,6 +5318,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
 #[cfg(test)]
 #[path = "winit_runner_retirement_tests.rs"]
 mod retirement_tests;
+
+#[cfg(test)]
+#[path = "winit_runner_windowless_tests.rs"]
+mod windowless_tests;
 
 #[cfg(test)]
 #[path = "winit_runner_cursor_tests.rs"]
@@ -6162,7 +6271,7 @@ mod tests {
     pub(super) fn runner_with_frame_pacing(policy: FramePacingPolicyResource) -> WinitRunner {
         let mut app = App::new();
         app.with_frame_pacing(policy);
-        install_native_window_provider_resources(app.world_mut());
+        install_native_window_provider_resources(app.world_mut(), NativeInitialWindow::Primary);
         app.world_mut()
             .resource_mut::<WindowStateRegistryResource>()
             .expect("native Host test fixture should install window registry")
@@ -7590,7 +7699,10 @@ mod tests {
 
         let mut windowed = App::new();
         configure_probe(&mut windowed);
-        install_native_window_provider_resources(windowed.world_mut());
+        install_native_window_provider_resources(
+            windowed.world_mut(),
+            NativeInitialWindow::Primary,
+        );
         let mut runner = WinitRunner {
             state: windowed.into_windowed_state(),
             window_realizer: WinitWindowRealizer::default(),
@@ -9860,7 +9972,7 @@ mod tests {
                 .is_err()
         );
 
-        install_native_window_provider_resources(app.world_mut());
+        install_native_window_provider_resources(app.world_mut(), NativeInitialWindow::Primary);
 
         let windows = app
             .world()
