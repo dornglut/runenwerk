@@ -3930,6 +3930,11 @@ impl WinitRunner {
         if self.shutdown_done {
             return Ok(());
         }
+        // Close new work immediately, but do not publish terminal Closed
+        // until the original Native input/UI cleanup attempt has returned.
+        if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>() {
+            owner.begin_close();
+        }
         // The legacy ECS registry's queued creations have no typed tickets.
         // When stopping before their Winit drain, publish their existing
         // explicit failure records; never retain falsely Requested windows.
@@ -3945,9 +3950,6 @@ impl WinitRunner {
                     );
                 }
             }
-        }
-        if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>() {
-            owner.close();
         }
         if let Ok(owner) = self.state.world.resource::<NativeWindowRequestOwner>() {
             owner.close();
@@ -3974,6 +3976,9 @@ impl WinitRunner {
         }
         let cleanup = shutdown_native_ui(&mut self.state.world);
         self.shutdown_done = cleanup.is_ok();
+        if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>() {
+            owner.close();
+        }
         cleanup?;
         if let Some(error) = cancellation_failure {
             return Err(error);

@@ -141,9 +141,24 @@ impl AppShutdownOwner {
         Ok(shared.readiness == AppShutdownReadiness::Stopping)
     }
 
+    /// Close ingress before Native cleanup begins. Stopping is observable
+    /// until the owner has actually attempted its terminal obligations.
+    pub(crate) fn begin_close(&self) {
+        let mut shared = self
+            .shared
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        if shared.readiness != AppShutdownReadiness::Closed {
+            shared.readiness = AppShutdownReadiness::Stopping;
+        }
+        shared.wake = None;
+        shared.window_requests.close();
+    }
+
     pub(crate) fn close(&self) {
         // Even poisoned ownership must close Native admission and return an
         // exact terminal result for every pending accepted window ticket.
+        // A pre-run dropped App has no admitted runtime cleanup to observe.
         let mut shared = self
             .shared
             .lock()
@@ -224,6 +239,31 @@ mod tests {
         );
         owner.close();
         assert_eq!(shutdown.readiness(), Ok(AppShutdownReadiness::Closed));
+    }
+
+    #[test]
+    fn stopping_is_visible_until_native_cleanup_finishes() {
+        let windows = NativeWindowRequestOwner::default();
+        windows.attach_wake(|| true).unwrap();
+        windows.mark_ready().unwrap();
+        let window_handle = windows.handle();
+        let owner = AppShutdownOwner::new(window_handle.clone());
+        owner.attach_wake(|| true).unwrap();
+        owner.mark_ready().unwrap();
+        let handle = owner.handle();
+
+        owner.begin_close();
+        assert_eq!(handle.readiness(), Ok(AppShutdownReadiness::Stopping));
+        assert_eq!(
+            handle.request_shutdown(),
+            Ok(AppShutdownRequestOutcome::AlreadyStopping)
+        );
+        assert_eq!(
+            window_handle.readiness(),
+            Ok(NativeWindowRequestReadiness::Closed)
+        );
+        owner.close();
+        assert_eq!(handle.readiness(), Ok(AppShutdownReadiness::Closed));
     }
 
     #[test]
