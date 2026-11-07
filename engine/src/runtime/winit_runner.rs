@@ -4128,7 +4128,9 @@ impl WinitRunner {
         self.window_realizer
             .mark_creation_failed(registry, native_window_id, diagnostic);
         if let Err(error) = rollback {
-            anyhow::bail!("native window creation failed: {reason}; secondary rollback refused: {error}");
+            anyhow::bail!(
+                "native window creation failed: {reason}; secondary rollback refused: {error}"
+            );
         }
         Ok(())
     }

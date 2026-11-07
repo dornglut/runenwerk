@@ -470,9 +470,10 @@ mod linux {
                 "Native record did not preserve failed physical window identity: {record:?}"
             );
             ensure!(
-                record.failure_reason.as_deref().is_some_and(|reason| {
-                    reason.contains("secondary rollback refused")
-                }),
+                record
+                    .failure_reason
+                    .as_deref()
+                    .is_some_and(|reason| { reason.contains("secondary rollback refused") }),
                 "Native did not retain the unsettled Render diagnostic: {record:?}"
             );
 
@@ -585,7 +586,9 @@ mod linux {
             observed.load(Ordering::SeqCst),
             "Native hook did not confirm retained Render and failed Native owner records"
         );
-        println!("native_window_request_render_refusal=pass physical_x11=true unsettled=true retained=true");
+        println!(
+            "native_window_request_render_refusal=pass physical_x11=true unsettled=true retained=true"
+        );
         Ok(())
     }
 
@@ -691,9 +694,8 @@ fn main() {
             Some("fatal-exit") => {
                 linux::fatal_shutdown().expect("real Native fatal-exit request proof must pass")
             }
-            Some("render-refusal") => {
-                linux::render_refusal().expect("real Native Render rollback-refusal proof must pass")
-            }
+            Some("render-refusal") => linux::render_refusal()
+                .expect("real Native Render rollback-refusal proof must pass"),
             _ => panic!("unexpected native window-request proof mode"),
         }
     }

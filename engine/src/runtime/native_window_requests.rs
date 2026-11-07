@@ -51,8 +51,12 @@ impl NativeWindowRequestId {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NativeWindowRequestOutcome {
-    Created { native_window_id: NativeWindowId },
-    CreationFailed { reason: String },
+    Created {
+        native_window_id: NativeWindowId,
+    },
+    CreationFailed {
+        reason: String,
+    },
     /// Physical realization failed while owner cleanup/rollback could not be
     /// confirmed. The Native window was not published as Created, but this
     /// process-local identity may still have Render-owned recovery obligations.
