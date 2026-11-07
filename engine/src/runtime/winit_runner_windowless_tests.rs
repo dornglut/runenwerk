@@ -4,6 +4,9 @@
 use super::*;
 use crate::app::App;
 use crate::plugins::default_plugins;
+use crate::plugins::ui::{
+    UiRuntimeFontConfiguration, UiRuntimeSlotsResource, UiTypedScreenId,
+};
 use crate::runtime::native_window_requests::{
     NativeWindowRequest, NativeWindowRequestOutcome, NativeWindowRequestReadiness,
     NativeWindowRequestTicket, NativeWindowRequests,
@@ -72,12 +75,17 @@ fn count_update(counters: runen_ecs::Res<WindowlessCounters>) {
 struct ExitAfterLateWindow {
     runner: WinitRunner,
     observed: bool,
+    expected_windows: usize,
 }
 
 impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         self.runner.resumed(event_loop);
         assert!(!self.runner.window_realizer.has_primary_window());
+        assert_eq!(
+            self.runner.ordinary_frames, 0,
+            "Winit resume or Startup must not produce an ordinary frame"
+        );
         if !self.runner.window_realizer.has_any_window() {
             assert!(
                 !self.runner.frame_requested,
@@ -131,10 +139,14 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
                     .map(|record| record.native_window_id)
                     .collect::<Vec<_>>()
             };
-            if created.len() < 2 {
+            if created.len() < self.expected_windows {
                 return;
             }
-            assert_eq!(created.len(), 2, "unexpected extra Native windows");
+            assert_eq!(
+                created.len(),
+                self.expected_windows,
+                "unexpected extra Native windows"
+            );
             assert!(created.iter().all(|id| *id != NativeWindowId::primary()));
             assert!(
                 !self
@@ -256,6 +268,7 @@ fn zero_window_native_os_startup() -> Result<()> {
     let mut proof = ExitAfterLateWindow {
         runner: WinitRunner::new(state),
         observed: false,
+        expected_windows: 2,
     };
     let execution = event_loop.run_app(&mut proof).map_err(anyhow::Error::from);
     let result = worker
@@ -332,6 +345,7 @@ fn zero_window_native_os_startup_failure() -> Result<()> {
     let mut proof = ExitAfterLateWindow {
         runner: WinitRunner::new(state),
         observed: false,
+        expected_windows: 2,
     };
     event_loop.run_app(&mut proof)?;
     let terminal = startup_receiver
@@ -365,6 +379,213 @@ fn zero_window_native_os_startup_failure() -> Result<()> {
     ensure!(startups.load(Ordering::SeqCst) == 1);
     println!(
         "native_zero_window_startup_failure=pass physical_x11=true accepted_cancelled=1 startup_once=true no_physical=true"
+    );
+    Ok(())
+}
+
+#[derive(Resource)]
+struct RegistryStartupCounters {
+    startups: Arc<AtomicUsize>,
+    updates: Arc<AtomicUsize>,
+}
+
+fn queue_registry_window_in_startup(mut world: WorldMut) -> Result<()> {
+    ensure!(
+        !world.has_resource::<PrimaryPresentationMetricsResource>(),
+        "registry-first Startup must not fabricate primary presentation metrics"
+    );
+    let registry = world.resource_mut::<WindowStateRegistryResource>()?;
+    ensure!(registry.primary_window_id().is_none());
+    ensure!(registry.records().next().is_none());
+    let request = registry.request_window("Startup registry first window", (560, 400));
+    ensure!(request.native_window_id != NativeWindowId::primary());
+    ensure!(registry.pending_creation_requests().len() == 1);
+    world
+        .resource_mut::<RegistryStartupCounters>()?
+        .startups
+        .fetch_add(1, Ordering::SeqCst);
+    Ok(())
+}
+
+fn count_registry_update(counters: runen_ecs::Res<RegistryStartupCounters>) {
+    counters.updates.fetch_add(1, Ordering::SeqCst);
+}
+
+#[test]
+fn zero_window_native_os_registry_startup_request() -> Result<()> {
+    if std::env::var_os("RUNENWERK_NATIVE_ZERO_WINDOW_REGISTRY_OS_SMOKE").is_none() {
+        return Ok(());
+    }
+
+    let mut app = App::new();
+    app.enable_windowing()?;
+    app.add_plugins(default_plugins());
+    let startups = Arc::new(AtomicUsize::new(0));
+    let updates = Arc::new(AtomicUsize::new(0));
+    app.insert_resource(RegistryStartupCounters {
+        startups: Arc::clone(&startups),
+        updates: Arc::clone(&updates),
+    });
+    app.add_systems(Startup, queue_registry_window_in_startup.on_invoker_thread());
+    app.add_systems(Update, count_registry_update);
+    app.admit_composition()?;
+    app.prepare_lifecycle_for_execution()?;
+    app.prepare_native_ui_host()?;
+    let mut state = app.into_windowed_state();
+    let initial = state.initial_native_window;
+    install_native_window_provider_resources(&mut state.world, initial);
+
+    let mut builder = EventLoop::<NativeHostEvent>::with_user_event();
+    builder.with_any_thread(true).with_x11();
+    let event_loop = builder.build()?;
+    state
+        .world
+        .insert_resource(NativeWakeTransport::new(event_loop.create_proxy()));
+    event_loop.set_control_flow(ControlFlow::Wait);
+    let mut proof = ExitAfterLateWindow {
+        runner: WinitRunner::new(state),
+        observed: false,
+        expected_windows: 1,
+    };
+    event_loop.run_app(&mut proof)?;
+
+    ensure!(proof.observed, "frame-independent Startup request never realized");
+    ensure!(startups.load(Ordering::SeqCst) == 1);
+    ensure!(updates.load(Ordering::SeqCst) > 0);
+    ensure!(
+        proof
+            .runner
+            .state
+            .world
+            .resource::<WindowStateRegistryResource>()?
+            .pending_creation_requests()
+            .is_empty()
+    );
+    println!(
+        "native_zero_window_registry_startup=pass physical_x11=true startup_once=true queued_first_created=true retired=true"
+    );
+    Ok(())
+}
+
+// Test the actual bypass around initial App composition checks: Startup can
+// install a new typed UI runtime after the Native Host has been admitted.
+struct StartupUiProbe;
+
+impl runenui_core::UiApp for StartupUiProbe {
+    fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+    }
+
+    fn action_producer_budget(
+        _state: &Self::State,
+        _action: &Self::Action,
+    ) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+    }
+
+    fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(13, 9)
+            .with_reconciliation(1, 1, 1)
+            .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
+            .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
+    }
+
+    type State = ();
+    type Action = ();
+    type HostProtocol = runenui_core::NoHostProtocol;
+
+    fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+        runenui_core::button("Startup typed UI probe").on_activate(|| ())
+    }
+
+    fn update(
+        _: &mut Self::State,
+        _: Self::Action,
+    ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+    }
+}
+
+#[derive(Resource)]
+struct StartupUiCounter(Arc<AtomicUsize>);
+
+fn mount_unsupported_ui_during_startup(mut world: WorldMut) -> Result<()> {
+    ensure!(
+        !world.has_resource::<UiRuntimeSlotsResource>(),
+        "UI probe should be created only during Startup"
+    );
+    let mut slots = UiRuntimeSlotsResource::default();
+    let result = slots.mount_app::<StartupUiProbe>(
+        UiTypedScreenId::new("windowless.startup.ui.probe"),
+        (),
+        &UiRuntimeFontConfiguration::default(),
+    );
+    ensure!(
+        result.accepted_mount(),
+        "Startup typed UI mount did not actually succeed: {:?}",
+        result.failure()
+    );
+    world.insert_resource(slots);
+    world
+        .resource_mut::<StartupUiCounter>()?
+        .0
+        .fetch_add(1, Ordering::SeqCst);
+    Ok(())
+}
+
+#[test]
+fn zero_window_native_os_startup_rejects_unbound_ui() -> Result<()> {
+    if std::env::var_os("RUNENWERK_NATIVE_ZERO_WINDOW_UI_OS_SMOKE").is_none() {
+        return Ok(());
+    }
+
+    let mut app = App::new();
+    app.enable_windowing()?;
+    app.add_plugins(default_plugins());
+    let count = Arc::new(AtomicUsize::new(0));
+    app.insert_resource(StartupUiCounter(Arc::clone(&count)));
+    app.add_systems(
+        Startup,
+        mount_unsupported_ui_during_startup.on_invoker_thread(),
+    );
+    app.admit_composition()?;
+    app.prepare_lifecycle_for_execution()?;
+    app.prepare_native_ui_host()?;
+    let mut state = app.into_windowed_state();
+    let initial = state.initial_native_window;
+    install_native_window_provider_resources(&mut state.world, initial);
+
+    let mut builder = EventLoop::<NativeHostEvent>::with_user_event();
+    builder.with_any_thread(true).with_x11();
+    let event_loop = builder.build()?;
+    state
+        .world
+        .insert_resource(NativeWakeTransport::new(event_loop.create_proxy()));
+    event_loop.set_control_flow(ControlFlow::Wait);
+    let mut proof = ExitAfterLateWindow {
+        runner: WinitRunner::new(state),
+        observed: false,
+        expected_windows: 2,
+    };
+    event_loop.run_app(&mut proof)?;
+
+    ensure!(count.load(Ordering::SeqCst) == 1);
+    ensure!(!proof.observed);
+    ensure!(proof.runner.ordinary_frames == 0);
+    ensure!(proof.runner.window_realizer.realized_windows().is_empty());
+    ensure!(
+        proof
+            .runner
+            .fatal_error
+            .as_ref()
+            .is_some_and(|error| {
+                format!("{error:#}").contains(
+                    "zero-initial-window Native Startup mounted UI without a supported presentation target",
+                )
+            }),
+        "unsupported Startup-authored UI was not reported truthfully"
+    );
+    println!(
+        "native_zero_window_startup_ui=pass physical_x11=true no_primary=true unsupported_mount_rejected=true no_frame=true"
     );
     Ok(())
 }

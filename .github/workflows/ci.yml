@@ -233,6 +233,30 @@ jobs:
           grep -F "native_zero_window_startup_failure=pass" "$failure_log"
           rm -f "$failure_log"
 
+          registry_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_ZERO_WINDOW_REGISTRY_OS_SMOKE=1 \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib zero_window_native_os_registry_startup_request --locked -- --nocapture >"$registry_log" 2>&1; then
+            cat "$registry_log"
+            rm -f "$registry_log"
+            exit 1
+          fi
+          cat "$registry_log"
+          grep -F "native_zero_window_registry_startup=pass" "$registry_log"
+          rm -f "$registry_log"
+
+          ui_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_ZERO_WINDOW_UI_OS_SMOKE=1 \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib zero_window_native_os_startup_rejects_unbound_ui --locked -- --nocapture >"$ui_log" 2>&1; then
+            cat "$ui_log"
+            rm -f "$ui_log"
+            exit 1
+          fi
+          cat "$ui_log"
+          grep -F "native_zero_window_startup_ui=pass" "$ui_log"
+          rm -f "$ui_log"
+
       - name: Prove physical X11 primary close approval and veto
         env:
           RUNENWERK_NATIVE_CLOSE_OS_SMOKE: '1'

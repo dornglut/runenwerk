@@ -4687,6 +4687,36 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 self.exit_with_error(event_loop, anyhow!("runtime startup failed: {err:#}"));
                 return;
             }
+            // This bounded Native slice has no UI placement/presentation
+            // contract for a windowless App. Startup runs after preflight,
+            // so it can create a previously absent typed UI slot itself.
+            // Reject that real unsupported mount instead of silently
+            // suppressing RunenUI progress while no target exists.
+            if self
+                .state
+                .world
+                .resource::<UiRuntimeSlotsResource>()
+                .is_ok_and(|slots| !slots.is_empty())
+            {
+                self.exit_with_error(
+                    event_loop,
+                    anyhow!(
+                        "zero-initial-window Native Startup mounted UI without a supported presentation target"
+                    ),
+                );
+                return;
+            }
+            // An existing ECS World consumer may have authored window
+            // requests during Startup. Those already belong to the same
+            // Native registry and Winit realizer; drain them at this real
+            // native turn without synthesizing an Update/Render frame.
+            if let Err(err) = self.apply_window_effects(event_loop) {
+                self.exit_with_error(
+                    event_loop,
+                    anyhow!("windowless native Startup effects failed: {err:#}"),
+                );
+                return;
+            }
             self.pace_or_exit(event_loop);
             return;
         }
