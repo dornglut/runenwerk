@@ -25,6 +25,9 @@ use crate::runtime::platform::{
     apply_native_recipient_input_event, apply_native_window_event,
 };
 use crate::runtime::presentation::ensure_primary_presentation_metrics;
+use crate::runtime::native_window_requests::{
+    NativeWindowRequestOutcome, NativeWindowRequestOwner,
+};
 use crate::runtime::window::{
     NativeWindowCreationRequest, NativeWindowId, NativeWindowLifecycleState,
     WindowStateRegistryResource,
@@ -443,6 +446,14 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
             return combine_execution_and_cleanup(Err(error.into()), cleanup);
         }
     };
+    // The Native owner retains its own command wake; neither this proxy nor
+    // the receipt queue is a second runtime, window registry or UI wake.
+    if let Ok(owner) = state.world.resource::<NativeWindowRequestOwner>() {
+        let proxy = event_loop.create_proxy();
+        owner.attach_wake(move || {
+            proxy.send_event(NativeHostEvent::NativeWindowRequests).is_ok()
+        })?;
+    }
     let transport = NativeWakeTransport::new(event_loop.create_proxy());
     if state.world.has_resource::<UiRuntimeSlotsResource>() {
         state
@@ -3897,6 +3908,9 @@ impl WinitRunner {
         if self.shutdown_done {
             return Ok(());
         }
+        if let Ok(owner) = self.state.world.resource::<NativeWindowRequestOwner>() {
+            owner.close();
+        }
         if let Ok(transport) = self.state.world.resource::<NativeWakeTransport>() {
             transport.close();
         }
@@ -3943,6 +3957,80 @@ impl WinitRunner {
         with_native_window_hooks(&mut self.state.world, |registry, world| {
             registry.attach_hooks(window, world);
         });
+    }
+
+    /// Native-only request delivery does not schedule ECS Update or a fake
+    /// ordinary frame. Physical window creation may legitimately redraw.
+    fn drain_external_window_requests(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+        let pending = match self.state.world.resource::<NativeWindowRequestOwner>() {
+            Ok(owner) => owner.take_pending()?,
+            Err(_) => return Ok(()),
+        };
+        for mut command in pending {
+            let request = self
+                .state
+                .world
+                .resource_mut::<WindowStateRegistryResource>()
+                .context("native Host window registry missing during external request")?
+                .adopt_native_window_request(&command.request.title, command.request.size_px);
+            let native_window_id = request.native_window_id;
+            let result = self.create_window_for_request(event_loop, request);
+            let outcome = match &result {
+                Err(error) => NativeWindowRequestOutcome::CreationFailed {
+                    reason: format!("{error:#}"),
+                },
+                Ok(()) => {
+                    let record = self
+                        .state
+                        .world
+                        .resource::<WindowStateRegistryResource>()
+                        .ok()
+                        .and_then(|registry| registry.record(native_window_id));
+                    match record {
+                        Some(record)
+                            if record.lifecycle_state == NativeWindowLifecycleState::Created =>
+                        {
+                            NativeWindowRequestOutcome::Created { native_window_id }
+                        }
+                        Some(record)
+                            if record.lifecycle_state
+                                == NativeWindowLifecycleState::CreationFailed =>
+                        {
+                            NativeWindowRequestOutcome::CreationFailed {
+                                reason: record.failure_reason.clone().unwrap_or_else(|| {
+                                    "native window creation failed without an owner diagnostic"
+                                        .to_string()
+                                }),
+                            }
+                        }
+                        _ => NativeWindowRequestOutcome::CreationFailed {
+                            reason: "native window owner did not publish a terminal record"
+                                .to_string(),
+                        },
+                    }
+                }
+            };
+            let terminal_record_missing = result.is_ok()
+                && self
+                    .state
+                    .world
+                    .resource::<WindowStateRegistryResource>()
+                    .ok()
+                    .and_then(|registry| registry.record(native_window_id))
+                    .is_none_or(|record| {
+                        !matches!(
+                            record.lifecycle_state,
+                            NativeWindowLifecycleState::Created
+                                | NativeWindowLifecycleState::CreationFailed
+                        )
+                    });
+            command.finish(outcome);
+            if terminal_record_missing {
+                anyhow::bail!("native window request missing a terminal owner record");
+            }
+            result?;
+        }
+        Ok(())
     }
 
     fn drain_pending_window_requests(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
@@ -4513,19 +4601,30 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             frame_requested = self.frame_requested, "native turn started");
     }
 
-    fn user_event(&mut self, event_loop: &ActiveEventLoop, _event: NativeHostEvent) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: NativeHostEvent) {
         if event_loop.exiting() {
             return;
         }
-        if self
-            .state
-            .world
-            .resource::<NativeWakeTransport>()
-            .is_ok_and(NativeWakeTransport::acknowledge)
-        {
-            self.request_ordinary_frame("pending native UI wake");
-        } else {
-            tracing::debug!(target: "engine.runtime.native_wake", "stale or closed UI callback ignored");
+        match event {
+            NativeHostEvent::RunenUiWake => {
+                if self
+                    .state
+                    .world
+                    .resource::<NativeWakeTransport>()
+                    .is_ok_and(NativeWakeTransport::acknowledge)
+                {
+                    self.request_ordinary_frame("pending native UI wake");
+                } else {
+                    tracing::debug!(target: "engine.runtime.native_wake", "stale or closed UI callback ignored");
+                }
+            }
+            NativeHostEvent::NativeWindowRequests => {
+                if let Err(error) = self.drain_external_window_requests(event_loop) {
+                    self.exit_with_error(event_loop, error.context("native window command failed"));
+                    return;
+                }
+                self.pace_or_exit(event_loop);
+            }
         }
     }
 
@@ -4586,6 +4685,16 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
         self.request_native_redraw(NativeWindowId::primary(), &window);
         self.window_realizer
             .publish_window(NativeWindowId::primary(), window);
+        let readiness = self
+            .state
+            .world
+            .resource::<NativeWindowRequestOwner>()
+            .ok()
+            .map(|owner| owner.mark_ready());
+        if let Some(Err(error)) = readiness {
+            self.exit_with_error(event_loop, error.into());
+            return;
+        }
         self.pace_or_exit(event_loop);
     }
 

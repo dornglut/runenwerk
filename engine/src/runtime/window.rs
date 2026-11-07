@@ -218,11 +218,22 @@ impl WindowStateRegistryResource {
         title: impl Into<String>,
         size_px: (u32, u32),
     ) -> NativeWindowCreationRequest {
+        let request = self.adopt_native_window_request(title, size_px);
+        self.pending_creation_requests.push(request.clone());
+        request
+    }
+
+    /// Adopt an external Native Host request for immediate Winit processing.
+    /// It must not also enter the frame-scheduled creation queue.
+    pub(crate) fn adopt_native_window_request(
+        &mut self,
+        title: impl Into<String>,
+        size_px: (u32, u32),
+    ) -> NativeWindowCreationRequest {
         let native_window_id = self.allocate_window_id();
         let request = NativeWindowCreationRequest::new(native_window_id, title, size_px);
         self.records
             .insert(native_window_id, NativeWindowRecord::requested(&request));
-        self.pending_creation_requests.push(request.clone());
         request
     }
 

@@ -141,6 +141,22 @@ jobs:
                 --test native_host_smoke \
                 --locked
 
+      - name: Prove physical X11 Native request-to-realization receipts
+        env:
+          RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          if ! timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --test native_window_requests_os --locked >"$log" 2>&1; then
+            cat "$log"
+            rm -f "$log"
+            exit 1
+          fi
+          cat "$log"
+          grep -F "native_window_requests_os=pass" "$log"
+          rm -f "$log"
+
       - name: Prove physical X11 primary close approval and veto
         env:
           RUNENWERK_NATIVE_CLOSE_OS_SMOKE: '1'
