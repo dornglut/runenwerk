@@ -242,10 +242,16 @@ during configuration, the caller can obtain a cheap clonable *window-owner*
 request handle **before** passing the App to `run` (illustrative
 `app.window_requests()?`). The handle owns no Winit window, ECS World,
 Render surface, general command bus or second application runtime. The
-native owner provides its actual wake transport when ready. The contract
-must expose readiness/closed state; a request submitted before readiness
-must either be explicitly and boundedly buffered or return `NotReady`.
-The precise choice and API require compile and event-loop proof. External
+native owner provides its actual wake transport when ready. The proposed
+**fail-first readiness policy** is no hidden pre-Run request buffering:
+a caller may clone the handle before consuming `run`, but sending a
+request before Native Host readiness returns `NotReady` without
+accepting a ticket. A typed readiness notification/query lets callers
+wait and submit once ready; startup failure and closed transport become
+observable terminal readiness failures, not a wait forever. Native Host
+is ready only when its window-request drain/wake can actually deliver
+work. Startup-authored requests after that readiness are ordinary owner
+requests. This policy still needs Rust and event-loop proof. External
 callers never create/destroy Winit windows on the wrong thread.
 
 A request has a stable correlation ticket and a logical `WindowKey`;
@@ -339,7 +345,7 @@ transactional rollback of Window, UI, Input and Render effects.
 | Explicit `enable_windowing()` without initial windows | Remain alive and accept typed window requests after readiness |
 | Owner-backed persistent service/ingress | Remain alive until admitted shutdown or terminal failure |
 | Explicit `keep_alive` | Remain alive even with zero windows and no other work |
-| Explicit `quit_on_last_window_close` | Request shutdown after final safe retirement and prior accepted request disposition |
+| Explicit `quit_on_last_window_close` | Request shutdown after the last safe retirement **once at least one window has actually been realized**, with prior accepted request disposition |
 
 `enable_windowing()` selects capability, **not** a conflicting
 implicit keep-alive override. `.window(...).enable_windowing()`
@@ -533,7 +539,8 @@ Before accepting the final public API or publishing implementation:
 3. **Headless bounded:** Prove zero/positive frame counts, repeatability
    and fixed-step cadence errors/progress remain well-defined.
 4. **Native zero-window / typed request:** Prove pre-run acquisition of a
-   window-owner request handle, readiness or NotReady behavior, reliable
+   window-owner request handle, fail-first `NotReady` before a truthful
+   readiness notification (no implicit pre-Run command buffer), reliable
    no-frame command wake, correlated accepted/Created/Failed/Cancelled
    ticket disposition, Winit Startup **without a primary window**, late
    first-window physical creation/failure, suspended/resumed Startup
@@ -542,7 +549,9 @@ Before accepting the final public API or publishing implementation:
    key + incarnation, explicit primary role versus first-created named
    window, DPI/resize/focus/input correlation, Render surface ownership,
    and last-close versus queued-request/shutdown races, including
-   terminal settlement of every previously accepted request.
+   terminal settlement of every previously accepted request. A zero-window
+   App with explicit quit-on-last does not quit before any realized
+   window has actually retired.
 6. **Integrated UI/game:** Prove native Todo UI, game HUD with custom
    RenderFlow, no duplicate Present and terminal UI/GPU/input settlement.
 7. **Mixed work:** Prove concurrent network/worker completion/fixed
