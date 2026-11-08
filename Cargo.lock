@@ -3267,6 +3267,8 @@ dependencies = [
  "ron 0.12.3",
  "serde",
  "tempfile",
+ "ui_definition",
+ "ui_program",
 ]
 
 [[package]]

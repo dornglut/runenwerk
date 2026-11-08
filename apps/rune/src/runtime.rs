@@ -49,9 +49,10 @@ fn load_ui(project_root: &Path, source: &str) -> Result<UiNodeDefinition> {
     let root = project_root
         .canonicalize()
         .with_context(|| format!("cannot resolve project {}", project_root.display()))?;
-    let path = root.join(relative).canonicalize().with_context(|| {
-        format!("cannot resolve UI source {}", root.join(relative).display())
-    })?;
+    let path = root
+        .join(relative)
+        .canonicalize()
+        .with_context(|| format!("cannot resolve UI source {}", root.join(relative).display()))?;
 
     ensure!(
         path.starts_with(&root),
@@ -85,8 +86,7 @@ pub fn run(project_root: &Path) -> Result<()> {
             "/../../assets/fonts/JetBrainsMono-Regular.ttf"
         ));
 
-        let fonts =
-            UiRuntimeFontConfiguration::new(vec![FONT.to_vec()]).with_system_fonts();
+        let fonts = UiRuntimeFontConfiguration::new(vec![FONT.to_vec()]).with_system_fonts();
 
         let report = app.ui().mount_with_fonts(FileScreen { root }, &fonts);
         let slot = report
@@ -147,7 +147,10 @@ mod tests {
 
         let project_root = tempfile::tempdir()?;
         let outside = tempfile::tempdir()?;
-        fs::write(outside.path().join("external.ron"), "Spacer(id: AuthoredId(\"x\"))")?;
+        fs::write(
+            outside.path().join("external.ron"),
+            "Spacer(id: AuthoredId(\"x\"))",
+        )?;
         symlink(
             outside.path().join("external.ron"),
             project_root.path().join("external.ron"),

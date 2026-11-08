@@ -64,8 +64,7 @@ pub fn create(parent: &Path, name: &str) -> Result<PathBuf> {
     let app_content = ron::ser::to_string_pretty(&manifest, pretty.clone())?;
     let ui_content = ron::ser::to_string_pretty(&label, pretty)?;
 
-    fs::create_dir(&root)
-        .with_context(|| format!("cannot create {}", root.display()))?;
+    fs::create_dir(&root).with_context(|| format!("cannot create {}", root.display()))?;
 
     let write_result = (|| -> Result<()> {
         fs::create_dir(root.join("ui")).context("cannot create ui directory")?;
@@ -92,11 +91,11 @@ pub fn create(parent: &Path, name: &str) -> Result<PathBuf> {
 pub fn load(root: &Path) -> Result<AppManifest> {
     let path = root.join("app.ron");
 
-    let content = fs::read_to_string(&path)
-        .with_context(|| format!("cannot read {}", path.display()))?;
+    let content =
+        fs::read_to_string(&path).with_context(|| format!("cannot read {}", path.display()))?;
 
-    let manifest: AppManifest = ron::from_str(&content)
-        .with_context(|| format!("invalid {}", path.display()))?;
+    let manifest: AppManifest =
+        ron::from_str(&content).with_context(|| format!("invalid {}", path.display()))?;
 
     ensure!(
         manifest.schema_version == SCHEMA_VERSION,
@@ -115,10 +114,7 @@ pub fn load(root: &Path) -> Result<AppManifest> {
     );
 
     if let Some(ui) = &manifest.ui {
-        ensure!(
-            !ui.source.trim().is_empty(),
-            "UI source cannot be empty"
-        );
+        ensure!(!ui.source.trim().is_empty(), "UI source cannot be empty");
     }
 
     Ok(manifest)
