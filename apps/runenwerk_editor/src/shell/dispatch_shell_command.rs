@@ -1144,7 +1144,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
     }
 
     if selected_material_before != app.material_lab_runtime().selected_material_asset_id()
-        && let Some(shell_state) = shell_state.as_deref_mut()
+        && let Some(shell_state) = shell_state
     {
         shell_state.clear_cached_projection();
     }
