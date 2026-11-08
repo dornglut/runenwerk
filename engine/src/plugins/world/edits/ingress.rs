@@ -176,6 +176,7 @@ mod tests {
     #[test]
     fn missing_dirty_map_rejects_before_operation_log_append() {
         let mut world = configured_world();
+        world.insert_resource(WorldRenderCacheInvalidationQueueResource::default());
         world
             .remove_resource::<DirtyChunkMapResource>()
             .expect("configured world must have dirty map");
@@ -187,6 +188,15 @@ mod tests {
         assert!(operations.operations.is_empty());
         assert!(operations.by_id.is_empty());
         assert_eq!(operations.next_op_id, 0);
+        let journal = world
+            .resource::<RegionInvalidationJournalResource>()
+            .expect("region journal remains available");
+        assert!(journal.recent_records.is_empty());
+        assert_eq!(journal.next_sequence, 1);
+        let queue = world
+            .resource::<WorldRenderCacheInvalidationQueueResource>()
+            .expect("optional render queue remains available");
+        assert!(queue.pending_records.is_empty());
     }
 
     #[test]
