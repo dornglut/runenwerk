@@ -3,10 +3,10 @@ use engine::plugins::world::adapters::resources::{
     SdfChunkStoreResource, WorldQuantizationScaleResource,
 };
 use engine::plugins::world::chunks::DirtyChunkMapResource;
-use engine::plugins::world::chunks::render_cache_bridge::WorldRenderCacheInvalidationQueueResource;
 use engine::plugins::world::chunks::lifecycle::{
     ChunkLifecycleState, WorldChunkRuntimeMapResource, WorldChunkRuntimeRecord,
 };
+use engine::plugins::world::chunks::render_cache_bridge::WorldRenderCacheInvalidationQueueResource;
 use engine::plugins::world::edits::ingress::{WorldEditIngressMeta, submit_world_operation};
 use engine::plugins::world::plugin::{
     WorldAuthorityState, WorldPlugin, WorldRuntimeConfig, WorldRuntimeMode, WorldRuntimeState,
