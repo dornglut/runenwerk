@@ -1,7 +1,9 @@
 use engine::plugins::world::adapters::resources::{
-    BuildQueueResource, OperationLogResource, SdfChunkStoreResource, WorldQuantizationScaleResource,
+    BuildQueueResource, OperationLogResource, RegionInvalidationJournalResource,
+    SdfChunkStoreResource, WorldQuantizationScaleResource,
 };
 use engine::plugins::world::chunks::DirtyChunkMapResource;
+use engine::plugins::world::chunks::render_cache_bridge::WorldRenderCacheInvalidationQueueResource;
 use engine::plugins::world::chunks::lifecycle::{
     ChunkLifecycleState, WorldChunkRuntimeMapResource, WorldChunkRuntimeRecord,
 };
@@ -1598,6 +1600,60 @@ fn runtime_sdf_payload_ref_chunk_revision_and_checksum_mismatches_are_rejected_b
             .expect("chunk runtime should exist");
         assert!(!chunks.by_chunk_id.contains_key(&chunk_id));
     }
+}
+
+#[test]
+fn missing_dirty_map_in_world_plugin_rejects_without_partial_publication() {
+    let mut app = world_app();
+
+    let publication_snapshot = |app: &App| {
+        let world = app.world();
+        let operations = world
+            .resource::<OperationLogResource>()
+            .expect("WorldPlugin installs operation log");
+        let journal = world
+            .resource::<RegionInvalidationJournalResource>()
+            .expect("WorldPlugin installs region journal");
+        let render_queue = world
+            .resource::<WorldRenderCacheInvalidationQueueResource>()
+            .expect("WorldPlugin installs optional Render invalidation queue");
+        (
+            operations.operations.len(),
+            operations.by_id.len(),
+            operations.next_op_id,
+            journal.recent_records.len(),
+            journal.next_sequence,
+            render_queue.pending_records.len(),
+        )
+    };
+    let before = publication_snapshot(&app);
+    assert_eq!(before.0, 0);
+
+    let scale = **app
+        .world()
+        .resource::<WorldQuantizationScaleResource>()
+        .expect("WorldPlugin installs quantization scale");
+    app.world_mut()
+        .remove_resource::<DirtyChunkMapResource>()
+        .expect("WorldPlugin installs dirty chunk map");
+
+    let result = submit_world_operation(
+        app.world_mut(),
+        Operation::Stamp {
+            stamp_id: "tests.world-missing-dirty-map".to_string(),
+            anchor_q: Default::default(),
+            payload: vec![1, 2, 3],
+        },
+        quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], scale),
+        WorldEditIngressMeta::default(),
+    );
+
+    assert_eq!(result, None, "incomplete World must reject the edit");
+    assert_eq!(
+        publication_snapshot(&app),
+        before,
+        "failed admission must preserve operation, journal, and Render queue authority"
+    );
 }
 
 #[test]
