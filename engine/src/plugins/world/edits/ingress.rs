@@ -332,7 +332,11 @@ mod tests {
             .resource::<RegionInvalidationJournalResource>()
             .expect("region journal must be available");
         assert_eq!(
-            journal.recent_records.front().expect("one ingress record").op_id,
+            journal
+                .recent_records
+                .front()
+                .expect("one ingress record")
+                .op_id,
             Some(accepted_id)
         );
         assert_eq!(
