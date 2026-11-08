@@ -17,7 +17,7 @@ use engine::{
     },
     prelude::AppRenderExt,
 };
-use runenui_core::{Color, StyleEnvironment, StyleProperties};
+use runenui_core::{Color, FontFamilyName, GenericFontFamily, StyleEnvironment, StyleProperties};
 use std::{
     collections::BTreeSet,
     fs,
@@ -33,8 +33,16 @@ const DEFAULT_FONT: &[u8] = include_bytes!(concat!(
     "/../../assets/fonts/JetBrainsMono-Regular.ttf"
 ));
 
-fn initial_ui_fonts() -> UiRuntimeFontConfiguration {
-    UiRuntimeFontConfiguration::new(vec![DEFAULT_FONT.to_vec()]).with_system_fonts()
+fn initial_ui_fonts() -> Result<UiRuntimeFontConfiguration> {
+    // Font registration alone does not claim the SansSerif generic family.
+    // Map the known bundled Latin face explicitly so a fresh installation can
+    // render the generated label without relying on ambient OS font mappings.
+    Ok(UiRuntimeFontConfiguration::new(vec![DEFAULT_FONT.to_vec()])
+        .with_system_fonts()
+        .with_generic_mapping(
+            GenericFontFamily::SansSerif,
+            vec![FontFamilyName::new("JetBrains Mono")?],
+        ))
 }
 
 struct FileScreen {
@@ -173,7 +181,7 @@ pub fn run(project_root: &Path) -> Result<()> {
 
         let report = app
             .ui()
-            .mount_with_fonts(FileScreen { root }, &initial_ui_fonts());
+            .mount_with_fonts(FileScreen { root }, &initial_ui_fonts()?);
         let slot = report
             .slot_id()
             .ok_or_else(|| anyhow!("UI mount rejected: {report:?}"))?;
@@ -222,7 +230,7 @@ mod tests {
 
         let slot = app
             .ui()
-            .mount_with_fonts(FileScreen { root }, &initial_ui_fonts())
+            .mount_with_fonts(FileScreen { root }, &initial_ui_fonts()?)
             .slot_id()
             .ok_or_else(|| anyhow!("generated UI was not mounted"))?;
 
