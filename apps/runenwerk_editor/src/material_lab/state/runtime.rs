@@ -10,7 +10,12 @@ fn source_for_selected_material_projection(
     catalog: &AssetCatalog,
     asset_id: AssetId,
 ) -> Option<Option<&AssetSourceDescriptor>> {
-    let record = catalog.asset(asset_id)?;
+    let Some(record) = catalog.asset(asset_id) else {
+        // In-memory graph fixtures can precede catalog admission, but must not
+        // override a source descriptor that is already known for this asset.
+        return (!catalog.sources.values().any(|source| source.asset_id == asset_id))
+            .then_some(None);
+    };
     if record.kind != AssetKind::MaterialGraph {
         return None;
     }
