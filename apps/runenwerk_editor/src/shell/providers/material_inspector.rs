@@ -63,10 +63,17 @@ impl EditorSurfaceProvider for MaterialInspectorProvider {
             "Clear material diagnostics".to_string(),
             SurfaceLocalAction::Material(MaterialSurfaceAction::ClearMaterialDiagnostics),
         )];
-        if view_model.selected_asset_id.is_some() {
+        if view_model.selected_asset_id.is_some()
+            && let Ok(origin) = context
+                .app
+                .material_source_origin_for_selected(Some(request.tool_surface_instance_id))
+        {
             actions.push((
                 "Build selected preview".to_string(),
-                SurfaceLocalAction::Material(MaterialSurfaceAction::BuildSelectedMaterialPreview),
+                SurfaceLocalAction::Material(MaterialSurfaceAction::SourceBound {
+                    origin,
+                    action: Box::new(MaterialSurfaceAction::BuildSelectedMaterialPreview),
+                }),
             ));
         }
 
@@ -87,12 +94,17 @@ impl EditorSurfaceProvider for MaterialInspectorProvider {
     fn map_action(
         &self,
         context: &SurfaceProviderDispatchContext<'_>,
-        _request: &SurfaceProviderRequest,
+        request: &SurfaceProviderRequest,
         action: SurfaceLocalAction,
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
         let SurfaceLocalAction::Material(action) = action else {
             return Ok(None);
         };
+        if let MaterialSurfaceAction::SourceBound { origin, .. } = &action
+            && origin.surface_instance_id != Some(request.tool_surface_instance_id)
+        {
+            return Ok(None);
+        }
         Ok(
             super::material_graph_canvas::material_surface_action_command(
                 action,

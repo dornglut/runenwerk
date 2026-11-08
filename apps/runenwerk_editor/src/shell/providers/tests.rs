@@ -1076,6 +1076,70 @@ fn material_preview_provider_supports_stable_key_first() {
 }
 
 #[test]
+fn material_preview_and_inspector_routes_keep_source_bound_invocation_identity() {
+    let cases = [
+        (
+            &MaterialPreviewProvider as &dyn EditorSurfaceProvider,
+            m6_material_request(ToolSurfaceKind::MaterialPreview),
+        ),
+        (
+            &MaterialInspectorProvider as &dyn EditorSurfaceProvider,
+            m6_material_request(ToolSurfaceKind::MaterialInspector),
+        ),
+    ];
+    let context = SurfaceProviderDispatchContext {
+        projection_epoch: 81,
+        _marker: std::marker::PhantomData,
+    };
+    for (provider, request) in cases {
+        let origin = editor_shell::MaterialSourceOrigin {
+            asset_id: asset_id(281),
+            source_id: asset_source_id(282),
+            document_id: material_graph::MaterialGraphDocumentId::new(283),
+            content_digest: [29; 32],
+            surface_instance_id: Some(request.tool_surface_instance_id),
+        };
+        let action = SurfaceLocalAction::Material(MaterialSurfaceAction::SourceBound {
+            origin,
+            action: Box::new(MaterialSurfaceAction::BuildSelectedMaterialPreview),
+        });
+        let proposal = provider
+            .map_action(&context, &request, action.clone())
+            .expect("bound Material panel action maps")
+            .expect("qualified Material panel action should propose a command");
+        assert!(matches!(
+            proposal,
+            SurfaceCommandProposal::Shell(ShellCommand::ApplyMaterialSurfaceAction {
+                action: MaterialSurfaceAction::SourceBound {
+                    origin: mapped_origin,
+                    action,
+                },
+                projection_epoch: 81,
+            }) if mapped_origin == origin
+                && matches!(*action, MaterialSurfaceAction::BuildSelectedMaterialPreview)
+        ));
+
+        let foreign = editor_shell::MaterialSourceOrigin {
+            surface_instance_id: None,
+            ..origin
+        };
+        assert!(
+            provider
+                .map_action(
+                    &context,
+                    &request,
+                    SurfaceLocalAction::Material(MaterialSurfaceAction::SourceBound {
+                        origin: foreign,
+                        action: Box::new(MaterialSurfaceAction::BuildSelectedMaterialPreview),
+                    }),
+                )
+                .expect("wrong-surface proposal should reject without error")
+                .is_none(),
+        );
+    }
+}
+
+#[test]
 fn material_lab_providers_do_not_require_legacy_tool_surface_kind() {
     let cases = [
         (
