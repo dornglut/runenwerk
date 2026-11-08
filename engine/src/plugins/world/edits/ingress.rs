@@ -53,6 +53,14 @@ pub fn submit_world_operation(
     )
     .ok()?;
 
+    // Validate the required mutation targets before append commits an operation ID.
+    // Optional Render/cache and region observation resources remain independent.
+    if world.resource::<OperationLogResource>().is_err()
+        || world.resource::<DirtyChunkMapResource>().is_err()
+    {
+        return None;
+    }
+
     let op_id = {
         let op_log = world.resource_mut::<OperationLogResource>().ok()?;
         op_log.append(OperationRecord {
@@ -101,5 +109,112 @@ fn world_runtime_is_authoritative(world: &World) -> bool {
     world
         .resource::<WorldRuntimeConfig>()
         .map(|config| matches!(config.mode, WorldRuntimeMode::Writable))
-        .unwrap_or(true)
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use world_ops::{WorldQuantizationScale, quantize_aabb};
+
+    fn configured_world() -> World {
+        let mut world = World::new();
+        world.insert_resource(WorldRuntimeConfig {
+            mode: WorldRuntimeMode::Writable,
+        });
+        world.insert_resource(PartitionConfigResource::default());
+        world.insert_resource(WorldQuantizationScaleResource(
+            WorldQuantizationScale::try_new(1024).expect("valid test quantization scale"),
+        ));
+        world.insert_resource(OperationLogResource::default());
+        world.insert_resource(DirtyChunkMapResource::default());
+        world
+    }
+
+    fn submit_sample(world: &mut World) -> Option<OperationId> {
+        let scale = WorldQuantizationScale::try_new(1024).expect("valid test quantization scale");
+        submit_world_operation(
+            world,
+            Operation::Stamp {
+                stamp_id: "tests.world-ingress-preflight".to_string(),
+                anchor_q: Default::default(),
+                payload: vec![1, 2, 3],
+            },
+            quantize_aabb([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], scale),
+            WorldEditIngressMeta::default(),
+        )
+    }
+
+    #[test]
+    fn missing_world_authority_rejects_without_mutating_operation_or_dirty_state() {
+        let mut world = configured_world();
+        world
+            .remove_resource::<WorldRuntimeConfig>()
+            .expect("configured world must have authority");
+
+        assert_eq!(submit_sample(&mut world), None);
+        let operations = world
+            .resource::<OperationLogResource>()
+            .expect("operation log must remain available");
+        assert!(operations.operations.is_empty());
+        assert!(operations.by_id.is_empty());
+        assert_eq!(operations.next_op_id, 0);
+        assert!(
+            world
+                .resource::<DirtyChunkMapResource>()
+                .expect("dirty map must remain available")
+                .by_chunk
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn missing_dirty_map_rejects_before_operation_log_append() {
+        let mut world = configured_world();
+        world
+            .remove_resource::<DirtyChunkMapResource>()
+            .expect("configured world must have dirty map");
+
+        assert_eq!(submit_sample(&mut world), None);
+        let operations = world
+            .resource::<OperationLogResource>()
+            .expect("operation log must remain available");
+        assert!(operations.operations.is_empty());
+        assert!(operations.by_id.is_empty());
+        assert_eq!(operations.next_op_id, 0);
+    }
+
+    #[test]
+    fn missing_operation_log_rejects_before_dirty_mutation() {
+        let mut world = configured_world();
+        world
+            .remove_resource::<OperationLogResource>()
+            .expect("configured world must have operation log");
+
+        assert_eq!(submit_sample(&mut world), None);
+        assert!(
+            world
+                .resource::<DirtyChunkMapResource>()
+                .expect("dirty map must remain available")
+                .by_chunk
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn writable_ingress_remains_valid_without_optional_render_cache_resources() {
+        let mut world = configured_world();
+        let op_id = submit_sample(&mut world);
+        assert!(op_id.is_some(), "valid World edits must remain admitted");
+        let operations = world
+            .resource::<OperationLogResource>()
+            .expect("operation log must remain available");
+        assert_eq!(operations.operations.len(), 1);
+        assert_eq!(operations.by_id.get(&op_id.expect("accepted id")), Some(&0));
+        assert!(!world
+            .resource::<DirtyChunkMapResource>()
+            .expect("dirty map must remain available")
+            .by_chunk
+            .is_empty());
+    }
 }
