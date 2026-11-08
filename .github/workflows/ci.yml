@@ -24,7 +24,7 @@ concurrency:
 jobs:
   validate:
     name: Runenwerk validation
-    uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@72103b957ed506b843c2db2f87d663af7413c646
+    uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@9d389c9aa39d37a5b99646d528de91c8ab5799ee
 
   runenrender-r6-vulkan-native:
     name: RunenRender Vulkan native/arena/consumer proofs
@@ -74,23 +74,45 @@ jobs:
         with:
           cache-targets: false
 
-      # The remote GHA compiler cache has an account-level egress quota; required
-      # merge-group validation must remain executable without that service.
+      # Optional compiler caching may fail without delaying required validation.
+      # Merge groups always compile directly; supported other events use
+      # sccache only after real setup success and binary verification.
       - name: Set up Rust compiler cache
+        id: sccache_setup
         if: github.event_name != 'merge_group'
+        continue-on-error: true
         uses: "Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba" # v0.0.11
         with:
           version: "v0.18.0"
+          disable_annotations: "true"
 
       - name: Configure Rust compiler cache
+        shell: bash
+        env:
+          CACHE_SETUP_OUTCOME: ${{ steps.sccache_setup.outcome }}
         run: |
+          set -euo pipefail
           echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
-          if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
-            {
-              echo "SCCACHE_GHA_ENABLED=on"
-              echo "RUSTC_WRAPPER=sccache"
-            } >> "$GITHUB_ENV"
-          fi
+          case "$GITHUB_EVENT_NAME" in
+            merge_group)
+              echo "Compiler cache: skipped for merge_group; using direct rustc"
+              ;;
+            pull_request|push|workflow_dispatch)
+              if [[ "$CACHE_SETUP_OUTCOME" == "success" ]] && command -v sccache >/dev/null; then
+                {
+                  echo "SCCACHE_GHA_ENABLED=on"
+                  echo "RUSTC_WRAPPER=sccache"
+                } >> "$GITHUB_ENV"
+                echo "Compiler cache: installed; source-addressed sccache enabled"
+              else
+                echo "Compiler cache: unavailable ($CACHE_SETUP_OUTCOME); using direct rustc"
+              fi
+              ;;
+            *)
+              echo "Unsupported validation event: $GITHUB_EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Install Mesa Vulkan fallback
         run: |
@@ -498,6 +520,15 @@ jobs:
             accepted_unknown_write_requires_verified_checkpoint_reimport_before_replay \
             --locked -- --nocapture --test-threads=1
 
+
+      - name: Report Rust compiler cache stats
+        if: always() && steps.sccache_setup.outcome == 'success'
+        shell: bash
+        run: |
+          if command -v sccache >/dev/null; then
+            sccache --show-stats || echo "Compiler cache statistics unavailable"
+          fi
+
   runenrender-r6-vulkan-boids-continuity:
     name: RunenRender Vulkan Boids continuity/pacing proofs
     runs-on: ubuntu-24.04
@@ -546,23 +577,45 @@ jobs:
         with:
           cache-targets: false
 
-      # The remote GHA compiler cache has an account-level egress quota; required
-      # merge-group validation must remain executable without that service.
+      # Optional compiler caching may fail without delaying required validation.
+      # Merge groups always compile directly; supported other events use
+      # sccache only after real setup success and binary verification.
       - name: Set up Rust compiler cache
+        id: sccache_setup
         if: github.event_name != 'merge_group'
+        continue-on-error: true
         uses: "Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba" # v0.0.11
         with:
           version: "v0.18.0"
+          disable_annotations: "true"
 
       - name: Configure Rust compiler cache
+        shell: bash
+        env:
+          CACHE_SETUP_OUTCOME: ${{ steps.sccache_setup.outcome }}
         run: |
+          set -euo pipefail
           echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
-          if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
-            {
-              echo "SCCACHE_GHA_ENABLED=on"
-              echo "RUSTC_WRAPPER=sccache"
-            } >> "$GITHUB_ENV"
-          fi
+          case "$GITHUB_EVENT_NAME" in
+            merge_group)
+              echo "Compiler cache: skipped for merge_group; using direct rustc"
+              ;;
+            pull_request|push|workflow_dispatch)
+              if [[ "$CACHE_SETUP_OUTCOME" == "success" ]] && command -v sccache >/dev/null; then
+                {
+                  echo "SCCACHE_GHA_ENABLED=on"
+                  echo "RUSTC_WRAPPER=sccache"
+                } >> "$GITHUB_ENV"
+                echo "Compiler cache: installed; source-addressed sccache enabled"
+              else
+                echo "Compiler cache: unavailable ($CACHE_SETUP_OUTCOME); using direct rustc"
+              fi
+              ;;
+            *)
+              echo "Unsupported validation event: $GITHUB_EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Install Mesa Vulkan fallback
         run: |
@@ -652,6 +705,15 @@ jobs:
             rm -f "$log"
           done
 
+
+      - name: Report Rust compiler cache stats
+        if: always() && steps.sccache_setup.outcome == 'success'
+        shell: bash
+        run: |
+          if command -v sccache >/dev/null; then
+            sccache --show-stats || echo "Compiler cache statistics unavailable"
+          fi
+
   runenrender-r6-vulkan-boids-readback:
     name: RunenRender Vulkan Boids readback/PreUpdate proofs
     runs-on: ubuntu-24.04
@@ -700,23 +762,45 @@ jobs:
         with:
           cache-targets: false
 
-      # The remote GHA compiler cache has an account-level egress quota; required
-      # merge-group validation must remain executable without that service.
+      # Optional compiler caching may fail without delaying required validation.
+      # Merge groups always compile directly; supported other events use
+      # sccache only after real setup success and binary verification.
       - name: Set up Rust compiler cache
+        id: sccache_setup
         if: github.event_name != 'merge_group'
+        continue-on-error: true
         uses: "Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba" # v0.0.11
         with:
           version: "v0.18.0"
+          disable_annotations: "true"
 
       - name: Configure Rust compiler cache
+        shell: bash
+        env:
+          CACHE_SETUP_OUTCOME: ${{ steps.sccache_setup.outcome }}
         run: |
+          set -euo pipefail
           echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
-          if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
-            {
-              echo "SCCACHE_GHA_ENABLED=on"
-              echo "RUSTC_WRAPPER=sccache"
-            } >> "$GITHUB_ENV"
-          fi
+          case "$GITHUB_EVENT_NAME" in
+            merge_group)
+              echo "Compiler cache: skipped for merge_group; using direct rustc"
+              ;;
+            pull_request|push|workflow_dispatch)
+              if [[ "$CACHE_SETUP_OUTCOME" == "success" ]] && command -v sccache >/dev/null; then
+                {
+                  echo "SCCACHE_GHA_ENABLED=on"
+                  echo "RUSTC_WRAPPER=sccache"
+                } >> "$GITHUB_ENV"
+                echo "Compiler cache: installed; source-addressed sccache enabled"
+              else
+                echo "Compiler cache: unavailable ($CACHE_SETUP_OUTCOME); using direct rustc"
+              fi
+              ;;
+            *)
+              echo "Unsupported validation event: $GITHUB_EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Install Mesa Vulkan fallback
         run: |
@@ -789,6 +873,15 @@ jobs:
             rm -f "$log"
           done
 
+
+      - name: Report Rust compiler cache stats
+        if: always() && steps.sccache_setup.outcome == 'success'
+        shell: bash
+        run: |
+          if command -v sccache >/dev/null; then
+            sccache --show-stats || echo "Compiler cache statistics unavailable"
+          fi
+
   runenrender-r6-vulkan-render-lab:
     name: RunenRender Vulkan Render Lab proofs
     runs-on: ubuntu-24.04
@@ -837,23 +930,45 @@ jobs:
         with:
           cache-targets: false
 
-      # The remote GHA compiler cache has an account-level egress quota; required
-      # merge-group validation must remain executable without that service.
+      # Optional compiler caching may fail without delaying required validation.
+      # Merge groups always compile directly; supported other events use
+      # sccache only after real setup success and binary verification.
       - name: Set up Rust compiler cache
+        id: sccache_setup
         if: github.event_name != 'merge_group'
+        continue-on-error: true
         uses: "Mozilla-Actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba" # v0.0.11
         with:
           version: "v0.18.0"
+          disable_annotations: "true"
 
       - name: Configure Rust compiler cache
+        shell: bash
+        env:
+          CACHE_SETUP_OUTCOME: ${{ steps.sccache_setup.outcome }}
         run: |
+          set -euo pipefail
           echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
-          if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
-            {
-              echo "SCCACHE_GHA_ENABLED=on"
-              echo "RUSTC_WRAPPER=sccache"
-            } >> "$GITHUB_ENV"
-          fi
+          case "$GITHUB_EVENT_NAME" in
+            merge_group)
+              echo "Compiler cache: skipped for merge_group; using direct rustc"
+              ;;
+            pull_request|push|workflow_dispatch)
+              if [[ "$CACHE_SETUP_OUTCOME" == "success" ]] && command -v sccache >/dev/null; then
+                {
+                  echo "SCCACHE_GHA_ENABLED=on"
+                  echo "RUSTC_WRAPPER=sccache"
+                } >> "$GITHUB_ENV"
+                echo "Compiler cache: installed; source-addressed sccache enabled"
+              else
+                echo "Compiler cache: unavailable ($CACHE_SETUP_OUTCOME); using direct rustc"
+              fi
+              ;;
+            *)
+              echo "Unsupported validation event: $GITHUB_EVENT_NAME" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Install Mesa Vulkan fallback
         run: |
@@ -1258,6 +1373,15 @@ jobs:
           path: render-lab/comparison
           if-no-files-found: error
           retention-days: 7
+
+
+      - name: Report Rust compiler cache stats
+        if: always() && steps.sccache_setup.outcome == 'success'
+        shell: bash
+        run: |
+          if command -v sccache >/dev/null; then
+            sccache --show-stats || echo "Compiler cache statistics unavailable"
+          fi
 
   runenrender-r6-vulkan-execution:
     name: RunenRender Vulkan execution proofs
