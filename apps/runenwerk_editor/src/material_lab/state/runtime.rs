@@ -2,6 +2,29 @@ use super::picker_projection::{first_palette_descriptor_key, palette_contains_de
 use super::*;
 use engine::plugins::render::CompiledMaterialResourceBinding;
 
+/// A source-less Material Graph is valid for in-memory preview/fixture projections.
+/// Once the catalog declares any source for this asset, however, its identity must
+/// resolve unambiguously. A dangling, foreign, or ambiguous descriptor must never
+/// turn an old cached document or preview into apparently current selected content.
+fn source_for_selected_material_projection(
+    catalog: &AssetCatalog,
+    asset_id: AssetId,
+) -> Option<Option<&AssetSourceDescriptor>> {
+    let record = catalog.asset(asset_id)?;
+    if record.kind != AssetKind::MaterialGraph {
+        return None;
+    }
+    if let Some(source) = material_source_for_asset(catalog, asset_id) {
+        return Some(Some(source));
+    }
+    if record.primary_source_id.is_none()
+        && !catalog.sources.values().any(|source| source.asset_id == asset_id)
+    {
+        return Some(None);
+    }
+    None
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorMaterialPreviewProduct {
     pub asset_id: AssetId,
@@ -196,7 +219,8 @@ impl MaterialLabRuntime {
         if self.selected_material_asset_id != Some(asset_id) {
             return None;
         }
-        material_source_for_asset(catalog, asset_id)
+        let source = source_for_selected_material_projection(catalog, asset_id)?;
+        source
             .map(|source| {
                 document.document_id == material_document_id_for_source(asset_id, source.source_id)
             })
@@ -212,7 +236,8 @@ impl MaterialLabRuntime {
         if self.selected_material_asset_id != Some(preview.asset_id) {
             return None;
         }
-        material_source_for_asset(catalog, preview.asset_id)
+        let source = source_for_selected_material_projection(catalog, preview.asset_id)?;
+        source
             .map(|source| source.source_id == preview.source_id)
             .unwrap_or(true)
             .then_some(preview)

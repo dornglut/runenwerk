@@ -69,6 +69,88 @@ fn same_asset_different_source_preview_cannot_override_graph_toolbar() {
 }
 
 #[test]
+fn unresolved_declared_material_source_hides_cached_graph_and_preview() {
+    let asset = asset_id(205);
+    let source_id = asset_source_id(22);
+    let mut document = texture_source_document(None);
+    document.document_id = material_document_id_for_source(asset, source_id);
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(asset, document);
+    runtime.set_active_preview(test_preview_product(asset));
+
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(
+        AssetRecord::new(asset, "selected", "Selected", AssetKind::MaterialGraph)
+            .with_primary_source(source_id),
+    );
+
+    // A missing source descriptor is not a legitimate source-less fixture.
+    assert!(runtime.selected_source_document_for_catalog(&catalog).is_none());
+    assert!(runtime.selected_preview_for_catalog(&catalog).is_none());
+    let missing = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert!(missing.graph.nodes.is_empty());
+    assert_eq!(missing.selected.as_ref().map(|item| item.node_count), Some(0));
+
+    // A descriptor for another asset also cannot qualify this selected source.
+    catalog.insert_source(AssetSourceDescriptor::new(
+        source_id,
+        asset_id(206),
+        AssetKind::MaterialGraph,
+        "assets/materials/foreign.ron",
+    ));
+    assert!(runtime.selected_source_document_for_catalog(&catalog).is_none());
+    assert!(runtime.selected_preview_for_catalog(&catalog).is_none());
+
+    // The exact source descriptor restores qualified selected projection.
+    catalog.insert_source(AssetSourceDescriptor::new(
+        source_id,
+        asset,
+        AssetKind::MaterialGraph,
+        "assets/materials/selected.ron",
+    ));
+    assert!(runtime.selected_source_document_for_catalog(&catalog).is_some());
+    assert!(runtime.selected_preview_for_catalog(&catalog).is_some());
+    let restored = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert_eq!(restored.graph.nodes.len(), 1);
+}
+
+#[test]
+fn ambiguous_declared_material_sources_hide_cached_selected_source() {
+    let asset = asset_id(207);
+    let first_source = asset_source_id(25);
+    let second_source = asset_source_id(26);
+    let mut document = texture_source_document(None);
+    document.document_id = material_document_id_for_source(asset, first_source);
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(asset, document);
+
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(AssetRecord::new(
+        asset,
+        "ambiguous",
+        "Ambiguous",
+        AssetKind::MaterialGraph,
+    ));
+    catalog.insert_source(AssetSourceDescriptor::new(
+        first_source,
+        asset,
+        AssetKind::MaterialGraph,
+        "assets/materials/first.ron",
+    ));
+    catalog.insert_source(AssetSourceDescriptor::new(
+        second_source,
+        asset,
+        AssetKind::MaterialGraph,
+        "assets/materials/second.ron",
+    ));
+
+    assert!(runtime.selected_source_document_for_catalog(&catalog).is_none());
+    let view = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert!(view.graph.nodes.is_empty());
+    assert_eq!(view.selected.as_ref().map(|item| item.node_count), Some(0));
+}
+
+#[test]
 fn replacing_material_document_within_same_asset_clears_old_selection() {
     let asset = asset_id(203);
     let mut runtime = MaterialLabRuntime::default();
