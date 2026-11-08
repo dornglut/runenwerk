@@ -38,10 +38,7 @@ pub fn submit_world_operation(
         return None;
     }
 
-    let base_world_revision = world
-        .resource::<WorldAuthorityState>()
-        .map(|value| value.world_revision)
-        .unwrap_or_default();
+    let base_world_revision = world.resource::<WorldAuthorityState>().ok()?.world_revision;
     let dirty_reason = dirty_reason_for_operation(&operation);
     let partition = world.resource::<PartitionConfigResource>().ok()?.clone();
     let quantization_scale = **world.resource::<WorldQuantizationScaleResource>().ok()?;
@@ -53,10 +50,11 @@ pub fn submit_world_operation(
     )
     .ok()?;
 
-    // Validate the required mutation targets before append commits an operation ID.
-    // Optional Render/cache and region observation resources remain independent.
+    // The operation, dirtiness, and region invalidation journal form one accepted edit.
+    // Missing required owners must reject before the operation ID is committed.
     if world.resource::<OperationLogResource>().is_err()
         || world.resource::<DirtyChunkMapResource>().is_err()
+        || world.resource::<RegionInvalidationJournalResource>().is_err()
     {
         return None;
     }
@@ -128,6 +126,8 @@ mod tests {
         ));
         world.insert_resource(OperationLogResource::default());
         world.insert_resource(DirtyChunkMapResource::default());
+        world.insert_resource(RegionInvalidationJournalResource::default());
+        world.insert_resource(WorldAuthorityState::default());
         world
     }
 
@@ -202,6 +202,50 @@ mod tests {
     }
 
     #[test]
+    fn missing_world_revision_state_rejects_before_operation_append() {
+        let mut world = configured_world();
+        world
+            .remove_resource::<WorldAuthorityState>()
+            .expect("configured world must have revision authority");
+
+        assert_eq!(submit_sample(&mut world), None);
+        let operations = world
+            .resource::<OperationLogResource>()
+            .expect("operation log must remain available");
+        assert!(operations.operations.is_empty());
+        assert_eq!(operations.next_op_id, 0);
+        assert!(
+            world
+                .resource::<DirtyChunkMapResource>()
+                .expect("dirty map must remain available")
+                .by_chunk
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn missing_region_journal_rejects_before_operation_or_dirty_mutation() {
+        let mut world = configured_world();
+        world
+            .remove_resource::<RegionInvalidationJournalResource>()
+            .expect("configured world must have region journal");
+
+        assert_eq!(submit_sample(&mut world), None);
+        let operations = world
+            .resource::<OperationLogResource>()
+            .expect("operation log must remain available");
+        assert!(operations.operations.is_empty());
+        assert_eq!(operations.next_op_id, 0);
+        assert!(
+            world
+                .resource::<DirtyChunkMapResource>()
+                .expect("dirty map must remain available")
+                .by_chunk
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn writable_ingress_remains_valid_without_optional_render_cache_resources() {
         let mut world = configured_world();
         let op_id = submit_sample(&mut world);
@@ -211,6 +255,15 @@ mod tests {
             .expect("operation log must remain available");
         assert_eq!(operations.operations.len(), 1);
         assert_eq!(operations.by_id.get(&op_id.expect("accepted id")), Some(&0));
+        assert_eq!(
+            world
+                .resource::<RegionInvalidationJournalResource>()
+                .expect("region journal must be available")
+                .recent_records
+                .len(),
+            1,
+            "accepted edit must reach the required region journal"
+        );
         assert!(
             !world
                 .resource::<DirtyChunkMapResource>()
