@@ -44,21 +44,21 @@ impl MaterialLabRuntime {
                 }
             })
             .collect::<Vec<_>>();
-        let selected_source_document =
-            self.active_source_document()
-                .and_then(|(source_asset_id, document)| {
-                    (Some(source_asset_id) == self.selected_material_asset_id).then_some(document)
-                })
-                .filter(|document| {
-                    self.selected_material_asset_id
-                        .and_then(|asset_id| {
-                            material_source_for_asset(catalog, asset_id).map(|source| {
-                                document.document_id
-                                    == material_document_id_for_source(asset_id, source.source_id)
-                            })
+        let selected_source_document = self
+            .active_source_document()
+            .and_then(|(source_asset_id, document)| {
+                (Some(source_asset_id) == self.selected_material_asset_id).then_some(document)
+            })
+            .filter(|document| {
+                self.selected_material_asset_id
+                    .and_then(|asset_id| {
+                        material_source_for_asset(catalog, asset_id).map(|source| {
+                            document.document_id
+                                == material_document_id_for_source(asset_id, source.source_id)
                         })
-                        .unwrap_or(true)
-                });
+                    })
+                    .unwrap_or(true)
+            });
         let selected = self.selected_material_asset_id.and_then(|asset_id| {
             selected_material_detail(
                 catalog,

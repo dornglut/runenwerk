@@ -219,8 +219,7 @@ fn same_asset_source_rebinding_rejects_stale_graph_delete_and_projection() {
 
     let replacement_path = "assets/materials/replacement.material.ron";
     let mut replacement_document = command_test_document();
-    replacement_document.document_id =
-        material_document_id_for_source(asset, replacement_source);
+    replacement_document.document_id = material_document_id_for_source(asset, replacement_source);
     write_material_graph_document(&root.join(replacement_path), &replacement_document)
         .expect("replacement material source should write");
     app.asset_catalog_runtime_mut()
@@ -243,19 +242,25 @@ fn same_asset_source_rebinding_rejects_stale_graph_delete_and_projection() {
     let replacement_bytes =
         std::fs::read(root.join(replacement_path)).expect("replacement source must exist");
 
-    let projection = app.material_lab_runtime().graph_canvas_view_model(
-        app.asset_catalog_runtime().catalog(),
-        Vec::new(),
-    );
+    let projection = app
+        .material_lab_runtime()
+        .graph_canvas_view_model(app.asset_catalog_runtime().catalog(), Vec::new());
     assert!(projection.graph.nodes.is_empty());
-    assert_eq!(projection.selected.as_ref().map(|row| row.node_count), Some(0));
+    assert_eq!(
+        projection.selected.as_ref().map(|row| row.node_count),
+        Some(0)
+    );
 
     assert!(
         app.apply_material_surface_action(MaterialSurfaceAction::DeleteSelectedGraphSelection)
             .is_err(),
         "old selection must not be interpreted against the same asset's new source"
     );
-    assert!(app.material_lab_runtime().selected_graph_nodes().contains(&graph::NodeId::new(1)));
+    assert!(
+        app.material_lab_runtime()
+            .selected_graph_nodes()
+            .contains(&graph::NodeId::new(1))
+    );
     assert!(!app.material_lab_runtime().can_undo());
     assert_eq!(
         std::fs::read(&original_path).expect("original source must remain"),
@@ -269,7 +274,8 @@ fn same_asset_source_rebinding_rejects_stale_graph_delete_and_projection() {
     let loaded = app
         .load_material_graph_document_for_asset(asset)
         .expect("new source identity should resolve");
-    app.material_lab_runtime_mut().set_active_source_document(asset, loaded);
+    app.material_lab_runtime_mut()
+        .set_active_source_document(asset, loaded);
     assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
     let _ = std::fs::remove_dir_all(root);
 }

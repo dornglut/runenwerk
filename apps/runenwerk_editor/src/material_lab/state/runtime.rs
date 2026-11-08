@@ -325,9 +325,13 @@ impl MaterialLabRuntime {
         asset_id: AssetId,
         document: material_graph::MaterialGraphDocument,
     ) {
-        if self.active_source_document.as_ref().is_some_and(|(current_asset, current)| {
-            *current_asset == asset_id && current.document_id != document.document_id
-        }) {
+        if self
+            .active_source_document
+            .as_ref()
+            .is_some_and(|(current_asset, current)| {
+                *current_asset == asset_id && current.document_id != document.document_id
+            })
+        {
             self.clear_graph_selection();
             self.node_picker_open = false;
             self.node_picker_highlighted_descriptor_key = None;
