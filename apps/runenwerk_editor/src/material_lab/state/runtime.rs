@@ -188,6 +188,36 @@ impl MaterialLabRuntime {
         self.selected_material_asset_id
     }
 
+    pub(super) fn selected_source_document_for_catalog(
+        &self,
+        catalog: &AssetCatalog,
+    ) -> Option<&material_graph::MaterialGraphDocument> {
+        let (asset_id, document) = self.active_source_document()?;
+        if self.selected_material_asset_id != Some(asset_id) {
+            return None;
+        }
+        material_source_for_asset(catalog, asset_id)
+            .map(|source| {
+                document.document_id == material_document_id_for_source(asset_id, source.source_id)
+            })
+            .unwrap_or(true)
+            .then_some(document)
+    }
+
+    pub(super) fn selected_preview_for_catalog(
+        &self,
+        catalog: &AssetCatalog,
+    ) -> Option<&EditorMaterialPreviewProduct> {
+        let preview = self.active_preview.as_ref()?;
+        if self.selected_material_asset_id != Some(preview.asset_id) {
+            return None;
+        }
+        material_source_for_asset(catalog, preview.asset_id)
+            .map(|source| source.source_id == preview.source_id)
+            .unwrap_or(true)
+            .then_some(preview)
+    }
+
     pub fn active_preview(&self) -> Option<&EditorMaterialPreviewProduct> {
         self.active_preview.as_ref()
     }

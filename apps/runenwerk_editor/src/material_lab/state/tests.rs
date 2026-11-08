@@ -401,6 +401,54 @@ fn material_graph_texture_picker_lists_catalog_texture_products() {
 }
 
 #[test]
+fn selected_material_resource_diagnostics_follow_source_identity() {
+    let first = asset_id(208);
+    let second = asset_id(209);
+    let second_source = asset_source_id(210);
+    let replacement_source = asset_source_id(211);
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(first, texture_source_document(None));
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(
+        AssetRecord::new(second, "second", "Second", AssetKind::MaterialGraph)
+            .with_primary_source(second_source),
+    );
+    catalog.insert_source(AssetSourceDescriptor::new(
+        second_source,
+        second,
+        AssetKind::MaterialGraph,
+        "assets/materials/second.material.ron",
+    ));
+
+    assert_eq!(runtime.material_resource_binding_diagnostic_rows(&catalog).len(), 1);
+    runtime.select_material_asset(Some(second));
+    assert!(
+        runtime.material_resource_binding_diagnostic_rows(&catalog).is_empty(),
+        "the previous material's resource diagnostics must not appear on the selected asset"
+    );
+
+    let mut second_document = texture_source_document(None);
+    second_document.document_id = material_document_id_for_source(second, second_source);
+    runtime.set_active_source_document(second, second_document);
+    assert_eq!(runtime.material_resource_binding_diagnostic_rows(&catalog).len(), 1);
+
+    catalog.insert_source(AssetSourceDescriptor::new(
+        replacement_source,
+        second,
+        AssetKind::MaterialGraph,
+        "assets/materials/replacement.material.ron",
+    ));
+    catalog.insert_asset_record(
+        AssetRecord::new(second, "second", "Second", AssetKind::MaterialGraph)
+            .with_primary_source(replacement_source),
+    );
+    assert!(
+        runtime.material_resource_binding_diagnostic_rows(&catalog).is_empty(),
+        "old source resource diagnostics must not appear after source replacement"
+    );
+}
+
+#[test]
 fn unresolved_texture_binding_reports_binding_diagnostic() {
     let asset_id = asset_id(91);
     let mut runtime = MaterialLabRuntime::default();

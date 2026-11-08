@@ -44,28 +44,8 @@ impl MaterialLabRuntime {
                 }
             })
             .collect::<Vec<_>>();
-        let selected_source_document = self
-            .active_source_document()
-            .and_then(|(source_asset_id, document)| {
-                (Some(source_asset_id) == self.selected_material_asset_id).then_some(document)
-            })
-            .filter(|document| {
-                self.selected_material_asset_id
-                    .and_then(|asset_id| {
-                        material_source_for_asset(catalog, asset_id).map(|source| {
-                            document.document_id
-                                == material_document_id_for_source(asset_id, source.source_id)
-                        })
-                    })
-                    .unwrap_or(true)
-            });
-        let selected_source_id = self.selected_material_asset_id.and_then(|asset_id| {
-            material_source_for_asset(catalog, asset_id).map(|source| source.source_id)
-        });
-        let selected_preview = self.active_preview.as_ref().filter(|preview| {
-            Some(preview.asset_id) == self.selected_material_asset_id
-                && selected_source_id.is_none_or(|source_id| preview.source_id == source_id)
-        });
+        let selected_source_document = self.selected_source_document_for_catalog(catalog);
+        let selected_preview = self.selected_preview_for_catalog(catalog);
         let selected = self.selected_material_asset_id.and_then(|asset_id| {
             selected_material_detail(
                 catalog,
