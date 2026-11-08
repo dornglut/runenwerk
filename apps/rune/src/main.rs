@@ -1,4 +1,3 @@
-
 mod project;
 mod runtime;
 
@@ -43,9 +42,7 @@ fn execute() -> Result<()> {
         [command] if command == "run" => run_project(),
 
         // Internal child-process entry point.
-        [command, root] if command == "__runtime" => {
-            runtime::run(Path::new(root))
-        }
+        [command, root] if command == "__runtime" => runtime::run(Path::new(root)),
 
         _ => bail!("unknown command; use rune --help"),
     }
@@ -56,10 +53,10 @@ fn run_project() -> Result<()> {
     let executable = env::current_exe()?;
 
     let status = Command::new(executable)
-      .arg("__runtime")
-      .arg(project_root)
-      .status()
-      .context("failed to launch Runenwerk runtime")?;
+        .arg("__runtime")
+        .arg(project_root)
+        .status()
+        .context("failed to launch Runenwerk runtime")?;
 
     if !status.success() {
         process::exit(status.code().unwrap_or(1));

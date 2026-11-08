@@ -78,7 +78,8 @@ members = [
     "apps/runenwerk_render_lab",
     "apps/runenwerk_arena",
 
-    "adapters/native_tablet_input", "apps/rune",
+    "adapters/native_tablet_input",
+    "apps/rune",
 ]
 
 [workspace.package]
