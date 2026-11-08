@@ -42,11 +42,15 @@ struct Shared {
     readiness: AppShutdownReadiness,
     wake: Option<ShutdownWake>,
     window_requests: NativeWindowRequests,
+    /// A rejected Winit wake seals ingress without claiming owner cleanup.
+    wake_failed: bool,
 }
 
 /// A cheap, thread-safe request capability obtained before `App::run(self)`.
 /// Acceptance requests owner-controlled termination, not completed cleanup.
 /// The caller can inspect `readiness` after the event loop has returned.
+/// A rejected wake seals ingress but cannot publish terminal `Closed` before
+/// the Native owner's cleanup attempt.
 #[derive(Clone)]
 pub struct AppShutdownHandle {
     shared: Arc<Mutex<Shared>>,
@@ -65,6 +69,7 @@ impl AppShutdownHandle {
         match shared.readiness {
             AppShutdownReadiness::NotReady => Err(AppShutdownError::NotReady),
             AppShutdownReadiness::Closed => Err(AppShutdownError::Closed),
+            AppShutdownReadiness::Stopping if shared.wake_failed => Err(AppShutdownError::Closed),
             AppShutdownReadiness::Stopping => Ok(AppShutdownRequestOutcome::AlreadyStopping),
             AppShutdownReadiness::Ready => {
                 // Linearize the stopping gate against the sole existing Native
@@ -72,8 +77,12 @@ impl AppShutdownHandle {
                 // later requests fail Closed. Neither can be silently lost.
                 shared.window_requests.close();
                 if !shared.wake.as_ref().is_some_and(|wake| wake()) {
-                    shared.readiness = AppShutdownReadiness::Closed;
+                    // A rejected wake cannot claim graceful acceptance or
+                    // terminal cleanup. The Native owner (or its Drop) must
+                    // publish Closed after cleanup has been attempted.
+                    shared.readiness = AppShutdownReadiness::Stopping;
                     shared.wake = None;
+                    shared.wake_failed = true;
                     return Err(AppShutdownError::Closed);
                 }
                 shared.readiness = AppShutdownReadiness::Stopping;
@@ -98,6 +107,7 @@ impl AppShutdownOwner {
                 readiness: AppShutdownReadiness::NotReady,
                 wake: None,
                 window_requests,
+                wake_failed: false,
             })),
         }
     }
@@ -275,6 +285,11 @@ mod tests {
         owner.mark_ready().unwrap();
         let handle = owner.handle();
         assert_eq!(handle.request_shutdown(), Err(AppShutdownError::Closed));
+        assert_eq!(handle.readiness(), Ok(AppShutdownReadiness::Stopping));
+        assert_eq!(handle.request_shutdown(), Err(AppShutdownError::Closed));
+        owner.begin_close();
+        assert_eq!(handle.readiness(), Ok(AppShutdownReadiness::Stopping));
+        owner.close();
         assert_eq!(handle.readiness(), Ok(AppShutdownReadiness::Closed));
         assert_eq!(
             window_handle.readiness(),
