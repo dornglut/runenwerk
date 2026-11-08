@@ -85,11 +85,18 @@ fn unresolved_declared_material_source_hides_cached_graph_and_preview() {
     );
 
     // A missing source descriptor is not a legitimate source-less fixture.
-    assert!(runtime.selected_source_document_for_catalog(&catalog).is_none());
+    assert!(
+        runtime
+            .selected_source_document_for_catalog(&catalog)
+            .is_none()
+    );
     assert!(runtime.selected_preview_for_catalog(&catalog).is_none());
     let missing = runtime.graph_canvas_view_model(&catalog, Vec::new());
     assert!(missing.graph.nodes.is_empty());
-    assert_eq!(missing.selected.as_ref().map(|item| item.node_count), Some(0));
+    assert_eq!(
+        missing.selected.as_ref().map(|item| item.node_count),
+        Some(0)
+    );
 
     // A descriptor for another asset also cannot qualify this selected source.
     catalog.insert_source(AssetSourceDescriptor::new(
@@ -98,7 +105,11 @@ fn unresolved_declared_material_source_hides_cached_graph_and_preview() {
         AssetKind::MaterialGraph,
         "assets/materials/foreign.ron",
     ));
-    assert!(runtime.selected_source_document_for_catalog(&catalog).is_none());
+    assert!(
+        runtime
+            .selected_source_document_for_catalog(&catalog)
+            .is_none()
+    );
     assert!(runtime.selected_preview_for_catalog(&catalog).is_none());
 
     // The exact source descriptor restores qualified selected projection.
@@ -108,7 +119,11 @@ fn unresolved_declared_material_source_hides_cached_graph_and_preview() {
         AssetKind::MaterialGraph,
         "assets/materials/selected.ron",
     ));
-    assert!(runtime.selected_source_document_for_catalog(&catalog).is_some());
+    assert!(
+        runtime
+            .selected_source_document_for_catalog(&catalog)
+            .is_some()
+    );
     assert!(runtime.selected_preview_for_catalog(&catalog).is_some());
     let restored = runtime.graph_canvas_view_model(&catalog, Vec::new());
     assert_eq!(restored.graph.nodes.len(), 1);
@@ -144,7 +159,11 @@ fn ambiguous_declared_material_sources_hide_cached_selected_source() {
         "assets/materials/second.ron",
     ));
 
-    assert!(runtime.selected_source_document_for_catalog(&catalog).is_none());
+    assert!(
+        runtime
+            .selected_source_document_for_catalog(&catalog)
+            .is_none()
+    );
     let view = runtime.graph_canvas_view_model(&catalog, Vec::new());
     assert!(view.graph.nodes.is_empty());
     assert_eq!(view.selected.as_ref().map(|item| item.node_count), Some(0));
