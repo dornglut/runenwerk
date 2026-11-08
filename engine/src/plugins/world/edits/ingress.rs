@@ -54,7 +54,9 @@ pub fn submit_world_operation(
     // Missing required owners must reject before the operation ID is committed.
     if world.resource::<OperationLogResource>().is_err()
         || world.resource::<DirtyChunkMapResource>().is_err()
-        || world.resource::<RegionInvalidationJournalResource>().is_err()
+        || world
+            .resource::<RegionInvalidationJournalResource>()
+            .is_err()
     {
         return None;
     }
