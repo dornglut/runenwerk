@@ -4,7 +4,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use ui_definition::{AuthoredId, UiNodeDefinition, UiValueBinding};
+use ui_definition::{AuthoredId, AuthoredUiTemplate, UiNodeDefinition, UiValueBinding};
 
 const SCHEMA_VERSION: u32 = 1;
 const DEFAULT_UI_SOURCE: &str = "ui/main.ron";
@@ -54,15 +54,20 @@ pub fn create(parent: &Path, name: &str) -> Result<PathBuf> {
         }),
     };
 
-    let label = UiNodeDefinition::Label {
-        id: AuthoredId::new("app.main.title"),
-        label: UiValueBinding::static_text("Hello from Runenwerk"),
-        availability: None,
+    let template = AuthoredUiTemplate {
+        id: AuthoredId::new("app.main"),
+        root: UiNodeDefinition::Label {
+            id: AuthoredId::new("app.main.title"),
+            label: UiValueBinding::static_text("Hello from Runenwerk"),
+            availability: None,
+        },
+        templates: Vec::new(),
+        menus: Vec::new(),
     };
 
     let pretty = ron::ser::PrettyConfig::default();
     let app_content = ron::ser::to_string_pretty(&manifest, pretty.clone())?;
-    let ui_content = ron::ser::to_string_pretty(&label, pretty)?;
+    let ui_content = ron::ser::to_string_pretty(&template, pretty)?;
 
     fs::create_dir(&root).with_context(|| format!("cannot create {}", root.display()))?;
 
@@ -140,9 +145,10 @@ mod tests {
         assert!(!root.join("Cargo.toml").exists());
 
         let source = fs::read_to_string(root.join(DEFAULT_UI_SOURCE))?;
-        let node: UiNodeDefinition = ron::from_str(&source)?;
+        let template: AuthoredUiTemplate = ron::from_str(&source)?;
+        assert!(ui_definition::workflow::validate_ui_template(&template).is_empty());
         assert!(matches!(
-            node,
+            template.root,
             UiNodeDefinition::Label {
                 label: UiValueBinding::Static(ui_definition::UiValue::Text(ref text)),
                 ..

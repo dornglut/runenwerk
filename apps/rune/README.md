@@ -12,7 +12,7 @@ cd hello-rune
 rune run
 ```
 
-`rune new` generates an `app.ron` and a `ui/main.ron` containing a static label. The latter is serialized from Runenwerk's existing `ui_definition::UiNodeDefinition` rather than a CLI-specific UI schema.
+`rune new` generates an `app.ron` and a `ui/main.ron` containing a static label. The UI file is an existing `ui_definition::AuthoredUiTemplate` with a `UiNodeDefinition` root, serialized without a CLI-specific schema.
 
 Edit `app.ron` to change the native window title or edit `ui/main.ron` to change the label, then close and restart `rune run`. **Live reload is not implemented.** Project files are interpreted at startup; no project-specific Rust build is needed.
 
@@ -27,7 +27,7 @@ Minimal manifest shape (schema version 1, experimental):
 )
 ```
 
-The `ui` field is optional for older window-only projects. UI paths must be relative, resolve within the project and refer to readable RON documents. The current UI adapter supports only a bounded subset of UI nodes; this proof generates a `Label`. No button actions, application state, multiple windows, developer server, packaging, or hot reload are provided.
+The `ui` field is optional for older window-only projects. UI paths must be relative, resolve within the project and refer to readable RON documents. The current UI adapter supports only a bounded subset of UI nodes; this proof generates a `Label` and explicitly rejects nested templates and menus. No button actions, application state, multiple windows, developer server, packaging, or hot reload are provided.
 
 `rune run` starts an Engine process via the same installed executable's internal runtime mode. The CLI remains necessary to launch RON-only projects; these are not independent compiled Cargo applications.
 

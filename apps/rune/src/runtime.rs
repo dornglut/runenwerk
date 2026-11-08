@@ -13,7 +13,7 @@ use std::{
     fs,
     path::{Component, Path},
 };
-use ui_definition::UiNodeDefinition;
+use ui_definition::{AuthoredUiTemplate, UiNodeDefinition};
 use ui_program::UiProgramSourceId;
 
 use crate::project;
@@ -61,7 +61,20 @@ fn load_ui(project_root: &Path, source: &str) -> Result<UiNodeDefinition> {
 
     let content = fs::read_to_string(&path)
         .with_context(|| format!("cannot read UI source {}", path.display()))?;
-    ron::from_str(&content).with_context(|| format!("invalid UI source {}", path.display()))
+    let template: AuthoredUiTemplate =
+        ron::from_str(&content).with_context(|| format!("invalid UI source {}", path.display()))?;
+    let diagnostics = ui_definition::workflow::validate_ui_template(&template);
+    ensure!(
+        diagnostics.is_empty(),
+        "invalid UI template {}: {diagnostics:?}",
+        path.display()
+    );
+    ensure!(
+        template.templates.is_empty() && template.menus.is_empty(),
+        "nested UI templates and menus are not supported by this native UI adapter"
+    );
+
+    Ok(template.root)
 }
 
 pub fn run(project_root: &Path) -> Result<()> {
