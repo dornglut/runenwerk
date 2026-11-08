@@ -314,6 +314,29 @@ pub(crate) struct RenderGpuExternalWork<'a> {
     pub(crate) imports: &'a [GpuWorkImport],
 }
 
+/// An empty F2/legacy paint span is only a true no-op when it has no GPU timing.
+///
+/// The canonical UI Render operation can still write timestamp queries even when
+/// there are no draws. Its resolve tail reads those queries, so removing that
+/// occurrence would make the prepared graph fail strict initialization.
+fn mixed_ui_without_executable_work(
+    nodes: &[ResolvedRenderGpuWorkNode],
+    mixed: &RunenUiMixedWork,
+) -> bool {
+    mixed.legacy_draws.is_empty()
+        && mixed
+            .contributions
+            .iter()
+            .all(|(_, _, work)| !work.has_render_work())
+        && !nodes.iter().any(|node| {
+            node.occurrence == mixed.ui_occurrence
+                && matches!(
+                    &node.operation,
+                    Some(GpuWorkOperation::Render(render)) if render.timestamp_writes().is_some()
+                )
+        })
+}
+
 /// Owns only the exact mixed UI node authoring seam in the existing canonical
 /// graph. The source-neutral F2 contribution is consumed once in the *final*
 /// fragment; provisional G3 hazard/control discovery never mints its token.
@@ -331,12 +354,7 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
         imports,
     } = external;
     let nodes = nodes.into_iter().collect::<Vec<_>>();
-    if mixed.legacy_draws.is_empty()
-        && mixed
-            .contributions
-            .iter()
-            .all(|(_, _, work)| !work.has_render_work())
-    {
+    if mixed_ui_without_executable_work(&nodes, &mixed) {
         // F2 explicitly declares legitimate nonpainting content (for example
         // an outline-free space glyph). It emits no GPU node. Contract the
         // corresponding no-work UI occurrence through its existing render
@@ -1571,6 +1589,131 @@ mod tests {
                 .expect("test surface view descriptor should be valid"),
             )
             .expect("test surface view handle should allocate")
+    }
+
+    #[test]
+    fn no_paint_timestamped_ui_retains_full_query_initialization() {
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let query_set = allocator
+            .allocate_query_set_handle(
+                GpuQuerySetDescriptor::new(
+                    common("timed empty UI queries"),
+                    GpuQueryKind::Timestamp,
+                    2,
+                )
+                .expect("timestamp query set descriptor"),
+            )
+            .expect("timestamp query set");
+        let view = color_target_view(&mut allocator);
+        let render = GpuRenderOperation::new(
+            [GpuRenderColorAttachment::new(
+                view,
+                GpuColorAttachmentLoad::Load,
+                GpuAttachmentStore::Store,
+                None,
+            )
+            .expect("empty UI attachment")],
+            None,
+            [],
+            Some(
+                GpuTimestampWrites::new(&query_set, Some(0), Some(1))
+                    .expect("empty UI timestamp writes"),
+            ),
+        )
+        .expect("timestamp-only UI Render operation");
+
+        let ui = RenderGpuWorkOccurrenceId::new(1);
+        let nodes = [ResolvedRenderGpuWorkNode::pass(
+            ui,
+            label("timed empty UI occurrence"),
+            GpuWorkOperation::Render(render.clone()),
+            GpuExecutionPreference::GraphicsRequired,
+            [],
+        )
+        .with_builtin_ui_composite()];
+        let mixed = RunenUiMixedWork {
+            ui_occurrence: ui,
+            legacy_draws: Vec::new(),
+            contributions: Vec::new(),
+        };
+        assert!(
+            !mixed_ui_without_executable_work(&nodes, &mixed),
+            "timestamp writes are real GPU work even when the UI paints nothing"
+        );
+        let emissions = mixed_ui_emissions(&render, mixed).expect("timed UI emissions");
+        assert_eq!(emissions.len(), 2, "begin/end timestamp writes must survive");
+
+        let mut emitted_nodes = emissions
+            .into_iter()
+            .enumerate()
+            .map(|(index, emission)| {
+                let MixedUiEmission::Legacy(operation) = emission else {
+                    panic!("empty timed UI should emit only timestamp operations");
+                };
+                ResolvedRenderGpuWorkNode::pass(
+                    RenderGpuWorkOccurrenceId::new(index as u64 + 1),
+                    label(&format!("timed empty UI emission {index}")),
+                    GpuWorkOperation::Render(*operation),
+                    GpuExecutionPreference::GraphicsRequired,
+                    [],
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let resolve_label = label("timed empty UI resolve");
+        let buffer = allocator
+            .allocate_buffer_handle(
+                GpuBufferDescriptor::new(
+                    common("timed empty UI resolve"),
+                    16,
+                    GpuBufferUsages::new(
+                        &resolve_label,
+                        [GpuBufferUsage::QueryResolve, GpuBufferUsage::CopySource],
+                    )
+                    .expect("resolve usage"),
+                    GpuBufferInitialization::Uninitialized,
+                )
+                .expect("resolve buffer descriptor"),
+            )
+            .expect("resolve buffer");
+        let resolve = GpuQueryResolveOperation::new(
+            &query_set,
+            GpuQueryRange::new(&query_set, 0, 2).expect("two queried timestamps"),
+            &buffer,
+            0,
+        )
+        .expect("timestamp resolve operation");
+        emitted_nodes.push(ResolvedRenderGpuWorkNode::timing_resolve(
+            RenderGpuWorkOccurrenceId::new(3),
+            label("timed empty UI query resolve"),
+            resolve,
+            [],
+        ));
+        let graph = prepare_render_gpu_frame_work_for_test(
+            label("timed empty UI and resolve graph"),
+            emitted_nodes,
+        )
+        .expect("both timestamp queries must be initialized before their resolve");
+        assert_eq!(graph.nodes().len(), 3);
+    }
+
+    #[test]
+    fn no_paint_without_timestamp_writes_remains_no_work() {
+        let ui = RenderGpuWorkOccurrenceId::new(1);
+        let nodes = [ResolvedRenderGpuWorkNode::empty_builtin_ui_composite(
+            ui,
+            label("untimed empty UI"),
+            [],
+        )];
+        let mixed = RunenUiMixedWork {
+            ui_occurrence: ui,
+            legacy_draws: Vec::new(),
+            contributions: Vec::new(),
+        };
+        assert!(
+            mixed_ui_without_executable_work(&nodes, &mixed),
+            "truly empty UI work should still be elided"
+        );
     }
 
     #[test]
