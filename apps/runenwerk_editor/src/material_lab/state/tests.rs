@@ -420,17 +420,29 @@ fn selected_material_resource_diagnostics_follow_source_identity() {
         "assets/materials/second.material.ron",
     ));
 
-    assert_eq!(runtime.material_resource_binding_diagnostic_rows(&catalog).len(), 1);
+    assert_eq!(
+        runtime
+            .material_resource_binding_diagnostic_rows(&catalog)
+            .len(),
+        1
+    );
     runtime.select_material_asset(Some(second));
     assert!(
-        runtime.material_resource_binding_diagnostic_rows(&catalog).is_empty(),
+        runtime
+            .material_resource_binding_diagnostic_rows(&catalog)
+            .is_empty(),
         "the previous material's resource diagnostics must not appear on the selected asset"
     );
 
     let mut second_document = texture_source_document(None);
     second_document.document_id = material_document_id_for_source(second, second_source);
     runtime.set_active_source_document(second, second_document);
-    assert_eq!(runtime.material_resource_binding_diagnostic_rows(&catalog).len(), 1);
+    assert_eq!(
+        runtime
+            .material_resource_binding_diagnostic_rows(&catalog)
+            .len(),
+        1
+    );
 
     catalog.insert_source(AssetSourceDescriptor::new(
         replacement_source,
@@ -443,7 +455,9 @@ fn selected_material_resource_diagnostics_follow_source_identity() {
             .with_primary_source(replacement_source),
     );
     assert!(
-        runtime.material_resource_binding_diagnostic_rows(&catalog).is_empty(),
+        runtime
+            .material_resource_binding_diagnostic_rows(&catalog)
+            .is_empty(),
         "old source resource diagnostics must not appear after source replacement"
     );
 }
