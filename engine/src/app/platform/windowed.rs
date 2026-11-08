@@ -664,7 +664,11 @@ mod tests {
 
         let mut headless = App::headless();
         assert!(headless.quit_on_last_window_close().is_err());
-        assert!(!headless.world().has_resource::<NativeQuitOnLastWindowClose>());
+        assert!(
+            !headless
+                .world()
+                .has_resource::<NativeQuitOnLastWindowClose>()
+        );
 
         let mut late = App::new();
         late.enable_windowing().unwrap();

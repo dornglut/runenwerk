@@ -4309,7 +4309,10 @@ impl WinitRunner {
         // Render, UI and original input retirement checks have returned.
         if retired_secondary
             && self.state.initial_native_window == NativeInitialWindow::None
-            && self.state.world.has_resource::<NativeQuitOnLastWindowClose>()
+            && self
+                .state
+                .world
+                .has_resource::<NativeQuitOnLastWindowClose>()
             && !self.window_realizer.has_any_window()
         {
             // Serialize final stopping against external ticket admission using
