@@ -49,13 +49,19 @@ fn switching_material_asset_invalidates_selection_and_foreign_source_projection(
     ));
     let after_switch = runtime.graph_canvas_view_model(&catalog, Vec::new());
     assert!(after_switch.graph.nodes.is_empty());
-    assert_eq!(after_switch.selected.as_ref().map(|row| row.node_count), Some(0));
+    assert_eq!(
+        after_switch.selected.as_ref().map(|row| row.node_count),
+        Some(0)
+    );
     assert!(after_switch.validation_overlays.is_empty());
 
     runtime.set_active_source_document(second, texture_source_document(None));
     let after_source = runtime.graph_canvas_view_model(&catalog, Vec::new());
     assert_eq!(after_source.graph.nodes.len(), 1);
-    assert_eq!(after_source.selected.as_ref().map(|row| row.node_count), Some(1));
+    assert_eq!(
+        after_source.selected.as_ref().map(|row| row.node_count),
+        Some(1)
+    );
 
     runtime.select_graph_node(NodeId::new(11));
     runtime.select_material_asset(Some(second));

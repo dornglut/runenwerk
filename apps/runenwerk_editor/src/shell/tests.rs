@@ -1786,7 +1786,10 @@ fn material_asset_switch_invalidates_old_shell_epoch_without_spurious_reselect()
     .expect("second asset switch must dispatch");
     let current_epoch = shell_state.current_projection_epoch();
     assert!(current_epoch > next_epoch);
-    assert_eq!(app.material_lab_runtime().selected_material_asset_id(), Some(second));
+    assert_eq!(
+        app.material_lab_runtime().selected_material_asset_id(),
+        Some(second)
+    );
 
     dispatch_shell_command(
         &mut app,

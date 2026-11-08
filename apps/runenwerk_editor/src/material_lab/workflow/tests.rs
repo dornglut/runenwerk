@@ -214,28 +214,25 @@ fn selected_material_switch_cannot_delete_old_graph_selection_in_other_source() 
     let mut app = material_edit_app(&root, first, first_source, command_test_document());
 
     let second_path = "assets/materials/other.material.ron";
-    let descriptor = AssetSourceDescriptor::new(
-        second_source,
-        second,
-        AssetKind::MaterialGraph,
-        second_path,
-    );
+    let descriptor =
+        AssetSourceDescriptor::new(second_source, second, AssetKind::MaterialGraph, second_path);
     let mut second_document = command_test_document();
     second_document.document_id = material_document_id_for_source(second, second_source);
     write_material_graph_document(&root.join(second_path), &second_document)
         .expect("second source must be available");
-    app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
-        AssetRecord::new(second, "other", "Other Material", AssetKind::MaterialGraph)
-            .with_primary_source(second_source),
-    );
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_asset_record(
+            AssetRecord::new(second, "other", "Other Material", AssetKind::MaterialGraph)
+                .with_primary_source(second_source),
+        );
     app.asset_catalog_runtime_mut()
         .catalog_mut()
         .insert_source(descriptor);
 
     let first_bytes = std::fs::read(root.join("assets/materials/edit.material.ron"))
         .expect("first source must exist");
-    let second_bytes = std::fs::read(root.join(second_path))
-        .expect("second source must exist");
+    let second_bytes = std::fs::read(root.join(second_path)).expect("second source must exist");
 
     app.apply_material_surface_action(MaterialSurfaceAction::SelectGraphNode {
         node_id: graph::NodeId::new(1),
@@ -269,7 +266,10 @@ fn selected_material_switch_cannot_delete_old_graph_selection_in_other_source() 
     assert!(
         !app.load_material_graph_document_for_asset(second)
             .expect("second edited source must decode")
-            .graph.nodes.iter().any(|node| node.id == graph::NodeId::new(1))
+            .graph
+            .nodes
+            .iter()
+            .any(|node| node.id == graph::NodeId::new(1))
     );
     assert!(app.material_lab_runtime().can_undo());
     let _ = std::fs::remove_dir_all(root);
@@ -302,7 +302,10 @@ fn wrong_material_document_identity_rejects_edit_and_write_without_mutating_sour
         .is_err()
     );
     assert!(!app.material_lab_runtime().can_undo());
-    assert_eq!(std::fs::read(&path).expect("source must remain"), wrong_bytes);
+    assert_eq!(
+        std::fs::read(&path).expect("source must remain"),
+        wrong_bytes
+    );
     assert!(
         app.write_material_graph_document_for_asset(selected, &wrong_document)
             .is_err(),
@@ -316,7 +319,10 @@ fn wrong_material_document_identity_rejects_edit_and_write_without_mutating_sour
             .is_err(),
         "a valid candidate must not overwrite a mismatched existing source"
     );
-    assert_eq!(std::fs::read(&path).expect("source must remain"), wrong_bytes);
+    assert_eq!(
+        std::fs::read(&path).expect("source must remain"),
+        wrong_bytes
+    );
     let _ = std::fs::remove_dir_all(root);
 }
 

@@ -44,11 +44,11 @@ impl MaterialLabRuntime {
                 }
             })
             .collect::<Vec<_>>();
-        let selected_source_document = self
-            .active_source_document()
-            .and_then(|(source_asset_id, document)| {
-                (Some(source_asset_id) == self.selected_material_asset_id).then_some(document)
-            });
+        let selected_source_document =
+            self.active_source_document()
+                .and_then(|(source_asset_id, document)| {
+                    (Some(source_asset_id) == self.selected_material_asset_id).then_some(document)
+                });
         let selected = self.selected_material_asset_id.and_then(|asset_id| {
             selected_material_detail(
                 catalog,
