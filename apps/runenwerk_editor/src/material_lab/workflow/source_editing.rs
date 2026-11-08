@@ -97,9 +97,9 @@ impl RunenwerkEditorApp {
                     }
                     _ => None,
                 };
-                if history_origin.is_some_and(|identity| {
-                    identity != (origin.asset_id, origin.document_id)
-                }) {
+                if history_origin
+                    .is_some_and(|identity| identity != (origin.asset_id, origin.document_id))
+                {
                     self.record_material_workflow_diagnostics([material_diagnostic(
                         AssetDiagnosticCode::RatificationRejected,
                         "Material history operation belongs to a different source document",

@@ -504,13 +504,20 @@ fn material_history_from_old_asset_cannot_undo_through_new_asset_binding() {
     write_material_graph_document(&root.join(second_path), &second_document)
         .expect("second source should write");
     let original_b = std::fs::read(root.join(second_path)).expect("second source bytes");
-    app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
-        AssetRecord::new(second, "history-b", "History B", AssetKind::MaterialGraph)
-            .with_primary_source(second_source),
-    );
-    app.asset_catalog_runtime_mut().catalog_mut().insert_source(
-        AssetSourceDescriptor::new(second_source, second, AssetKind::MaterialGraph, second_path),
-    );
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_asset_record(
+            AssetRecord::new(second, "history-b", "History B", AssetKind::MaterialGraph)
+                .with_primary_source(second_source),
+        );
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_source(AssetSourceDescriptor::new(
+            second_source,
+            second,
+            AssetKind::MaterialGraph,
+            second_path,
+        ));
     app.select_material_asset(second);
     let bound_b = app
         .material_source_origin_for_selected(None)
