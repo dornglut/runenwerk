@@ -28,6 +28,12 @@ pub enum NativePrimaryClosePolicy {
     ApproveUnhandled,
 }
 
+/// Explicit Native App lifetime intent for the zero-initial-window Host.
+/// Absence preserves the accepted zero-window keep-alive default.
+/// Legacy initial-primary close remains a separate lifetime contract.
+#[derive(Debug, Clone, Copy, runen_ecs::Resource)]
+pub(crate) struct NativeQuitOnLastWindowClose;
+
 fn approve_unhandled_primary_close_intent(mut windows: ResMut<WindowStateRegistryResource>) {
     if let Some(primary) = windows.primary_window_id()
         && let Some(record) = windows.record_mut(primary)
@@ -107,6 +113,36 @@ impl AppNativeHostExt for App {
 }
 
 impl App {
+    /// Request shutdown after the final successfully retired native window.
+    ///
+    /// This first bounded delivery supports the explicitly selected
+    /// zero-initial-window Native Host only. Legacy primary-close behavior
+    /// remains unchanged until independent Render/UI retirement qualification.
+    /// Queued accepted external window requests are terminally cancelled
+    /// under the existing Native stopping gate; subsequent requests reject.
+    pub fn quit_on_last_window_close(&mut self) -> Result<&mut Self> {
+        ensure!(
+            self.allow_topology_mutation("quit_on_last_window_close", None),
+            "native App lifetime must be selected during App configuration"
+        );
+        if !self.is_native_window_host() {
+            self.record_missing_capability("quit_on_last_window_close", "native-window Host");
+            return Err(anyhow!(
+                "quit_on_last_window_close requires a Native-window Host"
+            ));
+        }
+        ensure!(
+            self.initial_native_window == NativeInitialWindow::None,
+            "quit_on_last_window_close currently requires enable_windowing() with zero initial windows"
+        );
+        ensure!(
+            !self.world.has_resource::<NativeQuitOnLastWindowClose>(),
+            "quit_on_last_window_close was already selected"
+        );
+        self.world.insert_resource(NativeQuitOnLastWindowClose);
+        Ok(self)
+    }
+
     /// Select the existing Native event loop with no mandatory initial window.
     ///
     /// App::new() retains its native-primary behavior until the separate
@@ -604,6 +640,41 @@ mod tests {
                 .with_primary_close_policy(NativePrimaryClosePolicy::ApproveUnhandled)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn quit_after_last_native_window_is_explicit_and_selected_before_admission() {
+        let legacy = App::new();
+        assert!(!legacy.world().has_resource::<NativeQuitOnLastWindowClose>());
+
+        let mut legacy = App::new();
+        assert!(legacy.quit_on_last_window_close().is_err());
+        assert!(!legacy.world().has_resource::<NativeQuitOnLastWindowClose>());
+
+        let mut native = App::new();
+        native.enable_windowing().unwrap();
+        assert!(!native.world().has_resource::<NativeQuitOnLastWindowClose>());
+        native.quit_on_last_window_close().unwrap();
+        assert!(native.world().has_resource::<NativeQuitOnLastWindowClose>());
+        assert!(
+            native.quit_on_last_window_close().is_err(),
+            "duplicate lifetime selection must reject without changing the first choice"
+        );
+        assert!(native.world().has_resource::<NativeQuitOnLastWindowClose>());
+
+        let mut headless = App::headless();
+        assert!(headless.quit_on_last_window_close().is_err());
+        assert!(
+            !headless
+                .world()
+                .has_resource::<NativeQuitOnLastWindowClose>()
+        );
+
+        let mut late = App::new();
+        late.enable_windowing().unwrap();
+        late.prepare_lifecycle_for_execution().unwrap();
+        assert!(late.quit_on_last_window_close().is_err());
+        assert!(!late.world().has_resource::<NativeQuitOnLastWindowClose>());
     }
 
     #[test]

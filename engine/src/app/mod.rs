@@ -12,4 +12,5 @@ pub(crate) use domain::lifecycle::AppLifecycle;
 pub use domain::plugins::*;
 pub(crate) use domain::state::{NativeInitialWindow, WindowedAppState};
 pub use platform::native_launch::NativeHostLaunchOverrides;
+pub(crate) use platform::windowed::NativeQuitOnLastWindowClose;
 pub use platform::windowed::{AppNativeHostExt, NativePrimaryClosePolicy};

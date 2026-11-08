@@ -9,8 +9,8 @@ use crate::runtime::app_shutdown::{
     AppShutdownOwner, AppShutdownReadiness, AppShutdownRequestOutcome,
 };
 use crate::runtime::native_window_requests::{
-    NativeWindowRequest, NativeWindowRequestOutcome, NativeWindowRequestReadiness,
-    NativeWindowRequestTicket, NativeWindowRequests,
+    NativeWindowRequest, NativeWindowRequestError, NativeWindowRequestOutcome,
+    NativeWindowRequestReadiness, NativeWindowRequestTicket, NativeWindowRequests,
 };
 use crate::runtime::system::SystemMobilityExt;
 use crate::runtime::{Startup, Update, WorldMut};
@@ -71,12 +71,14 @@ fn count_update(counters: runen_ecs::Res<WindowlessCounters>) {
     counters.updates.fetch_add(1, Ordering::SeqCst);
 }
 
-/// Only the test wrapper owns this exit; no generic App shutdown API is
-/// introduced by the Native zero-window implementation.
+/// The wrapper exits only for the default idle zero-window Host. The explicit
+/// last-window policy must cause the real Winit owner to exit by itself.
 struct ExitAfterLateWindow {
     runner: WinitRunner,
     observed: bool,
     expected_windows: usize,
+    expect_last_close_exit: bool,
+    queue_before_last_close: Option<NativeWindowRequests>,
 }
 
 impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
@@ -181,10 +183,57 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
                     .record(NativeWindowId::primary())
                     .is_none()
             );
+            // A pending, then vetoed close must not retire a physical window
+            // or turn an explicit quit-after-last policy into a forced exit.
+            if self.expect_last_close_exit {
+                let vetoed = *created.last().unwrap();
+                self.runner
+                    .state
+                    .world
+                    .resource_mut::<WindowStateRegistryResource>()
+                    .unwrap()
+                    .record_mut(vetoed)
+                    .unwrap()
+                    .receive_close_intent();
+                self.runner
+                    .apply_window_effects(event_loop)
+                    .expect("pending close must remain nonterminal");
+                assert!(!event_loop.exiting());
+                assert_eq!(
+                    self.runner.window_realizer.realized_windows().len(),
+                    created.len()
+                );
+                self.runner
+                    .state
+                    .world
+                    .resource_mut::<WindowStateRegistryResource>()
+                    .unwrap()
+                    .record_mut(vetoed)
+                    .unwrap()
+                    .veto_close();
+                self.runner
+                    .apply_window_effects(event_loop)
+                    .expect("vetoed close must remain nonterminal");
+                assert!(!event_loop.exiting());
+            }
+
             // The original Native owner must retire both real secondaries
             // without a primary role or a synthetic ordinary frame.
             let prior_frames = self.runner.ordinary_frames;
-            for id in created {
+            let mut pending = None;
+            for (index, id) in created.iter().copied().enumerate() {
+                if index + 1 == created.len()
+                    && let Some(requests) = self.queue_before_last_close.as_ref()
+                {
+                    pending = Some(
+                        requests
+                            .request(NativeWindowRequest::new(
+                                "accepted before last native retirement",
+                                (320, 240),
+                            ))
+                            .expect("request must be admitted before the final close gate"),
+                    );
+                }
                 self.runner
                     .state
                     .world
@@ -193,30 +242,76 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
                     .record_mut(id)
                     .unwrap()
                     .request_close();
+                self.runner
+                    .apply_window_effects(event_loop)
+                    .expect("secondary Native owner retirement must succeed");
+                if index + 1 < created.len() {
+                    assert!(
+                        !event_loop.exiting(),
+                        "a non-final native retirement must not stop the App"
+                    );
+                }
             }
-            self.runner
-                .apply_window_effects(event_loop)
-                .expect("secondary Native owner retirement must succeed");
+            if self.expect_last_close_exit {
+                assert!(
+                    event_loop.exiting(),
+                    "explicit Native quit policy must stop after the last safe retirement"
+                );
+                assert!(
+                    self.runner
+                        .state
+                        .world
+                        .resource::<AppShutdownOwner>()
+                        .unwrap()
+                        .is_stopping()
+                        .unwrap(),
+                    "an installed App shutdown handle must observe the stopping frontier"
+                );
+                if let Some(requests) = self.queue_before_last_close.as_ref() {
+                    assert_eq!(
+                        pending.unwrap().try_recv().unwrap(),
+                        NativeWindowRequestOutcome::Cancelled,
+                        "queued accepted ticket must settle before exiting"
+                    );
+                    assert_eq!(
+                        requests.readiness().unwrap(),
+                        NativeWindowRequestReadiness::Closed
+                    );
+                    assert!(matches!(
+                        requests.request(NativeWindowRequest::new("too late", (320, 240))),
+                        Err(NativeWindowRequestError::Closed)
+                    ));
+                }
+            } else {
+                assert!(
+                    !event_loop.exiting(),
+                    "the default zero-window Host must remain alive after its last close"
+                );
+            }
             assert!(
                 self.runner.window_realizer.realized_windows().is_empty(),
                 "secondary physical windows were not retired"
             );
             assert_eq!(self.runner.ordinary_frames, prior_frames);
-            self.runner
-                .apply_frame_pacing(event_loop)
-                .expect("zero-window owner must return to idle pacing");
-            assert!(
+            if !self.expect_last_close_exit {
                 self.runner
-                    .state
-                    .world
-                    .resource::<FramePacingRuntimeStateResource>()
-                    .unwrap()
-                    .next_frame_delay_ms
-                    .is_none(),
-                "retiring the final secondary must not leave a frame deadline"
-            );
+                    .apply_frame_pacing(event_loop)
+                    .expect("zero-window owner must return to idle pacing");
+                assert!(
+                    self.runner
+                        .state
+                        .world
+                        .resource::<FramePacingRuntimeStateResource>()
+                        .unwrap()
+                        .next_frame_delay_ms
+                        .is_none(),
+                    "retiring the final secondary must not leave a frame deadline"
+                );
+            }
             self.observed = true;
-            event_loop.exit();
+            if !self.expect_last_close_exit {
+                event_loop.exit();
+            }
         }
     }
 
@@ -233,8 +328,10 @@ fn zero_window_native_os_startup() -> Result<()> {
 
     let mut app = App::new();
     app.enable_windowing()?;
+    app.quit_on_last_window_close()?;
     app.add_plugins(default_plugins());
     let windows = app.native_window_requests()?;
+    let shutdown = app.shutdown_handle()?;
     ensure!(windows.readiness()? == NativeWindowRequestReadiness::NotReady);
     let (startup_sender, startup_receiver) = mpsc::channel();
     let startups = Arc::new(AtomicUsize::new(0));
@@ -267,6 +364,15 @@ fn zero_window_native_os_startup() -> Result<()> {
             .send_event(NativeHostEvent::NativeWindowRequests)
             .is_ok()
     })?;
+    let shutdown_proxy = event_loop.create_proxy();
+    state
+        .world
+        .resource::<AppShutdownOwner>()?
+        .attach_wake(move || {
+            shutdown_proxy
+                .send_event(NativeHostEvent::AppShutdown)
+                .is_ok()
+        })?;
     state
         .world
         .insert_resource(NativeWakeTransport::new(event_loop.create_proxy()));
@@ -308,6 +414,8 @@ fn zero_window_native_os_startup() -> Result<()> {
         runner: WinitRunner::new(state),
         observed: false,
         expected_windows: 2,
+        expect_last_close_exit: true,
+        queue_before_last_close: Some(observer.clone()),
     };
     let execution = event_loop.run_app(&mut proof).map_err(anyhow::Error::from);
     let result = worker
@@ -328,6 +436,7 @@ fn zero_window_native_os_startup() -> Result<()> {
         "secondary window never advanced ECS Update"
     );
     ensure!(observer.readiness()? == NativeWindowRequestReadiness::Closed);
+    ensure!(shutdown.readiness()? == AppShutdownReadiness::Closed);
     println!(
         "native_zero_window_startup=pass physical_x11=true first={} second={} startup=1 no_primary=true no_gpu=true after_window_update=true retired=true",
         first.raw(),
@@ -385,6 +494,8 @@ fn zero_window_native_os_startup_failure() -> Result<()> {
         runner: WinitRunner::new(state),
         observed: false,
         expected_windows: 2,
+        expect_last_close_exit: false,
+        queue_before_last_close: None,
     };
     event_loop.run_app(&mut proof)?;
     let terminal = startup_receiver
@@ -488,6 +599,8 @@ fn zero_window_native_os_registry_startup_request() -> Result<()> {
         runner: WinitRunner::new(state),
         observed: false,
         expected_windows: 1,
+        expect_last_close_exit: false,
+        queue_before_last_close: None,
     };
     event_loop.run_app(&mut proof)?;
 
@@ -610,6 +723,8 @@ fn zero_window_native_os_startup_rejects_unbound_ui() -> Result<()> {
         runner: WinitRunner::new(state),
         observed: false,
         expected_windows: 2,
+        expect_last_close_exit: false,
+        queue_before_last_close: None,
     };
     event_loop.run_app(&mut proof)?;
 

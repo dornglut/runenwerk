@@ -1,4 +1,4 @@
-use crate::app::{NativeInitialWindow, WindowedAppState};
+use crate::app::{NativeInitialWindow, NativeQuitOnLastWindowClose, WindowedAppState};
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
@@ -4216,6 +4216,7 @@ impl WinitRunner {
         self.reconcile_native_cancellation_retirements()?;
 
         let windows = self.window_realizer.realized_windows();
+        let mut retired_secondary = false;
         for (window_id, native_window_id, window) in windows {
             let record = self
                 .state
@@ -4281,6 +4282,7 @@ impl WinitRunner {
                 self.window_realizer.remove_window(window_id);
                 self.native_ime_applied.remove(&native_window_id);
                 self.owned_redraws.remove(&native_window_id);
+                retired_secondary = true;
                 continue;
             }
 
@@ -4299,6 +4301,41 @@ impl WinitRunner {
                     }
                 }
             }
+        }
+
+        // Neither an empty Startup nor an approved/vetoed/pending close is
+        // evidence of final physical retirement. Only the Winit owner can
+        // decide the explicit Native lifetime transition after all window,
+        // Render, UI and original input retirement checks have returned.
+        if retired_secondary
+            && self.state.initial_native_window == NativeInitialWindow::None
+            && self
+                .state
+                .world
+                .has_resource::<NativeQuitOnLastWindowClose>()
+            && !self.window_realizer.has_any_window()
+        {
+            // Serialize final stopping against external ticket admission using
+            // the existing owner mutex. Accepted queued tickets become
+            // Cancelled exactly once; requests after closure reject Closed.
+            // The optional public shutdown capability observes Stopping until
+            // shutdown_native finishes its owner-specific cleanup.
+            if self.state.world.has_resource::<AppShutdownOwner>() {
+                self.state
+                    .world
+                    .resource::<AppShutdownOwner>()
+                    .context("App shutdown owner unavailable at the last-window stop gate")?
+                    .begin_close();
+            } else if self.state.world.has_resource::<NativeWindowRequestOwner>() {
+                self.state
+                    .world
+                    .resource::<NativeWindowRequestOwner>()
+                    .context("Native request owner unavailable at the last-window stop gate")?
+                    .close();
+            }
+            self.gpu_progress_deadline = None;
+            event_loop.set_control_flow(ControlFlow::Poll);
+            event_loop.exit();
         }
 
         Ok(())
@@ -4708,7 +4745,7 @@ impl WinitRunner {
     }
 
     fn pace_or_exit(&mut self, event_loop: &ActiveEventLoop) {
-        if self.exit_if_app_stopping(event_loop) {
+        if event_loop.exiting() || self.exit_if_app_stopping(event_loop) {
             return;
         }
         if let Err(error) = self
