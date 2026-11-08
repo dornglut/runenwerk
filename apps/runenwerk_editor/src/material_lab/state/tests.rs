@@ -40,7 +40,10 @@ fn same_asset_different_source_preview_cannot_override_graph_toolbar() {
     runtime.set_active_source_document(asset, document);
     runtime.set_active_preview(test_preview_product(asset));
     assert_ne!(
-        runtime.active_preview().expect("test preview must exist").source_id,
+        runtime
+            .active_preview()
+            .expect("test preview must exist")
+            .source_id,
         selected_source,
     );
 
