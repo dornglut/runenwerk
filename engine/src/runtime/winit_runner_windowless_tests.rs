@@ -183,6 +183,40 @@ impl ApplicationHandler<NativeHostEvent> for ExitAfterLateWindow {
                     .record(NativeWindowId::primary())
                     .is_none()
             );
+            // A pending, then vetoed close must not retire a physical window
+            // or turn an explicit quit-after-last policy into a forced exit.
+            if self.expect_last_close_exit {
+                let vetoed = *created.last().unwrap();
+                self.runner
+                    .state
+                    .world
+                    .resource_mut::<WindowStateRegistryResource>()
+                    .unwrap()
+                    .record_mut(vetoed)
+                    .unwrap()
+                    .receive_close_intent();
+                self.runner
+                    .apply_window_effects(event_loop)
+                    .expect("pending close must remain nonterminal");
+                assert!(!event_loop.exiting());
+                assert_eq!(
+                    self.runner.window_realizer.realized_windows().len(),
+                    created.len()
+                );
+                self.runner
+                    .state
+                    .world
+                    .resource_mut::<WindowStateRegistryResource>()
+                    .unwrap()
+                    .record_mut(vetoed)
+                    .unwrap()
+                    .veto_close();
+                self.runner
+                    .apply_window_effects(event_loop)
+                    .expect("vetoed close must remain nonterminal");
+                assert!(!event_loop.exiting());
+            }
+
             // The original Native owner must retire both real secondaries
             // without a primary role or a synthetic ordinary frame.
             let prior_frames = self.runner.ordinary_frames;

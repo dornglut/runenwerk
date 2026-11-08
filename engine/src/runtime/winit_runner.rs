@@ -4317,10 +4317,18 @@ impl WinitRunner {
             // Cancelled exactly once; requests after closure reject Closed.
             // The optional public shutdown capability observes Stopping until
             // shutdown_native finishes its owner-specific cleanup.
-            if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>() {
-                owner.begin_close();
-            } else if let Ok(owner) = self.state.world.resource::<NativeWindowRequestOwner>() {
-                owner.close();
+            if self.state.world.has_resource::<AppShutdownOwner>() {
+                self.state
+                    .world
+                    .resource::<AppShutdownOwner>()
+                    .context("App shutdown owner unavailable at the last-window stop gate")?
+                    .begin_close();
+            } else if self.state.world.has_resource::<NativeWindowRequestOwner>() {
+                self.state
+                    .world
+                    .resource::<NativeWindowRequestOwner>()
+                    .context("Native request owner unavailable at the last-window stop gate")?
+                    .close();
             }
             self.gpu_progress_deadline = None;
             event_loop.set_control_flow(ControlFlow::Poll);
