@@ -257,7 +257,18 @@ mod tests {
                     .as_shaped_text_run()
                     .is_some_and(|run| run.foreground() == Color::WHITE)
             }),
-            "the generated UI must publish visible white shaped text"
+            "the generated UI must publish visible white shaped text; primitives={:?}; binding_style={:?}",
+            submitted[0]
+                .publication
+                .scene()
+                .items()
+                .iter()
+                .map(|item| item.primitive())
+                .collect::<Vec<_>>(),
+            app.world()
+                .resource::<UiRuntimePresentationAssociationsResource>()?
+                .binding(slot)
+                .map(|binding| &binding.style),
         );
         Ok(())
     }
