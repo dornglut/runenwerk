@@ -1065,7 +1065,7 @@ struct NativePrimaryShutdownSignal {
     sender: mpsc::Sender<()>,
 }
 
-fn signal_native_primary_shutdown_startup(mut world: WorldMut) -> Result<()> {
+fn signal_native_primary_shutdown_startup(world: WorldMut) -> Result<()> {
     ensure!(
         world.has_resource::<PrimaryPresentationMetricsResource>(),
         "required primary metrics absent before primary Native Startup"
