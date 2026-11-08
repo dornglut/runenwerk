@@ -477,6 +477,71 @@ fn wrong_material_document_identity_rejects_edit_and_write_without_mutating_sour
 }
 
 #[test]
+fn material_history_from_old_asset_cannot_undo_through_new_asset_binding() {
+    let root = unique_temp_dir("material_history_wrong_source");
+    let first = asset_id(390);
+    let first_source = asset_source_id(391);
+    let second = asset_id(392);
+    let second_source = asset_source_id(393);
+    let mut app = material_edit_app(&root, first, first_source, command_test_document());
+
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 10,
+            delta_y: 2,
+        },
+    )
+    .expect("first asset edit should be recorded");
+    assert!(app.material_lab_runtime().can_undo());
+    let original_a = std::fs::read(root.join("assets/materials/edit.material.ron"))
+        .expect("edited first material bytes");
+
+    let second_path = "assets/materials/second-history.material.ron";
+    let mut second_document = command_test_document();
+    second_document.document_id = material_document_id_for_source(second, second_source);
+    write_material_graph_document(&root.join(second_path), &second_document)
+        .expect("second source should write");
+    let original_b = std::fs::read(root.join(second_path)).expect("second source bytes");
+    app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
+        AssetRecord::new(second, "history-b", "History B", AssetKind::MaterialGraph)
+            .with_primary_source(second_source),
+    );
+    app.asset_catalog_runtime_mut().catalog_mut().insert_source(
+        AssetSourceDescriptor::new(second_source, second, AssetKind::MaterialGraph, second_path),
+    );
+    app.select_material_asset(second);
+    let bound_b = app
+        .material_source_origin_for_selected(None)
+        .expect("second source origin should form");
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: bound_b,
+            action: Box::new(MaterialSurfaceAction::UndoMaterialEdit),
+        })
+        .is_err(),
+        "a B-origin Undo must not pop or write the latest A history entry"
+    );
+    assert_eq!(
+        std::fs::read(root.join("assets/materials/edit.material.ron"))
+            .expect("first source remains"),
+        original_a
+    );
+    assert_eq!(
+        std::fs::read(root.join(second_path)).expect("second source remains"),
+        original_b
+    );
+    assert!(app.material_lab_runtime().can_undo());
+
+    app.select_material_asset(first);
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit)
+        .expect("original source can undo its own history entry");
+    assert!(!app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn material_source_revision_rejects_external_same_document_byte_change() {
     let root = unique_temp_dir("material_source_revision");
     let asset = asset_id(380);

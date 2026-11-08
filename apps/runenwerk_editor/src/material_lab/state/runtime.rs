@@ -371,6 +371,23 @@ impl MaterialLabRuntime {
         self.redo_stack.pop()
     }
 
+    /// Source identity of the next history operation, without consuming it.
+    pub fn next_undo_source_identity(
+        &self,
+    ) -> Option<(AssetId, material_graph::MaterialGraphDocumentId)> {
+        self.undo_stack
+            .last()
+            .map(|(asset_id, document)| (*asset_id, document.document_id))
+    }
+
+    pub fn next_redo_source_identity(
+        &self,
+    ) -> Option<(AssetId, material_graph::MaterialGraphDocumentId)> {
+        self.redo_stack
+            .last()
+            .map(|(asset_id, document)| (*asset_id, document.document_id))
+    }
+
     pub fn can_undo(&self) -> bool {
         !self.undo_stack.is_empty()
     }

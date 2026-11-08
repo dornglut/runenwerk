@@ -88,6 +88,26 @@ impl RunenwerkEditorApp {
                     ));
                 }
                 self.admit_material_source_origin(origin)?;
+                let history_origin = match action.as_ref() {
+                    MaterialSurfaceAction::UndoMaterialEdit => {
+                        self.material_lab_runtime().next_undo_source_identity()
+                    }
+                    MaterialSurfaceAction::RedoMaterialEdit => {
+                        self.material_lab_runtime().next_redo_source_identity()
+                    }
+                    _ => None,
+                };
+                if history_origin.is_some_and(|identity| {
+                    identity != (origin.asset_id, origin.document_id)
+                }) {
+                    self.record_material_workflow_diagnostics([material_diagnostic(
+                        AssetDiagnosticCode::RatificationRejected,
+                        "Material history operation belongs to a different source document",
+                    )]);
+                    return Err(editor_core::EditorMutationError::runtime_rejected(
+                        "Material history source differs from the invocation source",
+                    ));
+                }
                 self.apply_qualified_material_surface_action(*action)
             }
             action if action.requires_source_origin() => {
