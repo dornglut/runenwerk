@@ -1,0 +1,12 @@
+[package]
+name = "rune"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+anyhow = "1.0.104"
+ron = "0.12.3"
+tempfile = "3.27.0"
+engine = { path = "../../engine" }
