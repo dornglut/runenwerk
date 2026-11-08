@@ -1641,7 +1641,11 @@ mod tests {
             "timestamp writes are real GPU work even when the UI paints nothing"
         );
         let emissions = mixed_ui_emissions(&render, mixed).expect("timed UI emissions");
-        assert_eq!(emissions.len(), 2, "begin/end timestamp writes must survive");
+        assert_eq!(
+            emissions.len(),
+            2,
+            "begin/end timestamp writes must survive"
+        );
 
         let mut emitted_nodes = emissions
             .into_iter()
