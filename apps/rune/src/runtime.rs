@@ -5,8 +5,8 @@ use engine::{
     plugins::{
         default_plugins,
         render::{
-            ManagedRenderProducerIds, RenderFrameProducerId, RunenUiPaintSubmissionRegistryResource,
-            SurfaceFrameSubmissionRegistryResource,
+            ManagedRenderProducerIds, RenderFrameProducerId,
+            RunenUiPaintSubmissionRegistryResource, SurfaceFrameSubmissionRegistryResource,
             host::RenderSurfaceId,
         },
         ui::{
