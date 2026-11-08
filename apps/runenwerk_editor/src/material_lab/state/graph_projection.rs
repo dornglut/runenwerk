@@ -67,7 +67,12 @@ impl MaterialLabRuntime {
                 && selected_source_id.is_none_or(|source_id| preview.source_id == source_id)
         });
         let selected = self.selected_material_asset_id.and_then(|asset_id| {
-            selected_material_detail(catalog, asset_id, selected_preview, selected_source_document)
+            selected_material_detail(
+                catalog,
+                asset_id,
+                selected_preview,
+                selected_source_document,
+            )
         });
         let mut validation_overlays = if selected_source_document.is_some() {
             material_graph_validation_overlays(&self.diagnostics, self.active_diagnostic_index)
@@ -233,113 +238,112 @@ fn material_graph_editor_view_model(
         .map(|edge| edge.from_port)
         .collect::<BTreeSet<_>>();
 
-    let nodes = document
-        .graph
-        .nodes
-        .iter()
-        .enumerate()
-        .map(|(index, node)| {
-            let descriptor = catalog.descriptor(&node.name);
-            let input_ports = node
-                .ports
-                .iter()
-                .filter(|port| port.direction == graph::PortDirection::Input)
-                .filter_map(|port| {
-                    material_graph::MaterialValueType::from_port_type_id(port.port_type).map(
-                        |value_type| MaterialGraphPortViewModel {
-                            port_id: port.id,
-                            name: port.name.clone(),
-                            value_type,
-                            connected: input_ports.contains(&port.id),
-                        },
-                    )
-                })
-                .collect();
-            let output_ports = node
-                .ports
-                .iter()
-                .filter(|port| port.direction == graph::PortDirection::Output)
-                .filter_map(|port| {
-                    material_graph::MaterialValueType::from_port_type_id(port.port_type).map(
-                        |value_type| MaterialGraphPortViewModel {
-                            port_id: port.id,
-                            name: port.name.clone(),
-                            value_type,
-                            connected: output_ports.contains(&port.id),
-                        },
-                    )
-                })
-                .collect();
-            let editable_values = descriptor.map_or_else(Vec::new, |descriptor| {
-                descriptor
-                    .values
-                    .iter()
-                    .map(|value| MaterialGraphPropertyViewModel {
-                        node_id: node.id,
-                        key: value.key.clone(),
-                        value_type: value.value_type,
-                        display_value: node
-                            .value(&value.key)
-                            .map(graph::GraphValue::canonical_component)
-                            .or_else(|| {
-                                value
-                                    .default_value
-                                    .as_ref()
-                                    .map(material_graph::MaterialLiteral::canonical_component)
-                            })
-                            .unwrap_or_default(),
-                        required: value.default_value.is_none(),
-                    })
-                    .collect()
-            });
-            let resource_bindings = descriptor.map_or_else(Vec::new, |descriptor| {
-                descriptor
-                    .resources
-                    .iter()
-                    .map(|resource| MaterialGraphResourceBindingViewModel {
-                        node_id: node.id,
-                        key: resource.key.clone(),
-                        resource_kind: resource.kind,
-                        reference: node.value(&resource.key).and_then(|value| match value {
-                            graph::GraphValue::Resource(reference) => {
-                                Some(reference.canonical_component())
-                            }
-                            _ => None,
-                        }),
-                        resolved_artifact_id: selected_preview.and_then(|preview| {
-                            preview
-                                .resolved_resources
-                                .iter()
-                                .find(|resolved| {
-                                    resolved.node_id == node.id
-                                        && resolved.binding_key == resource.key
+    let nodes =
+        document
+            .graph
+            .nodes
+            .iter()
+            .enumerate()
+            .map(|(index, node)| {
+                let descriptor = catalog.descriptor(&node.name);
+                let input_ports =
+                    node.ports
+                        .iter()
+                        .filter(|port| port.direction == graph::PortDirection::Input)
+                        .filter_map(|port| {
+                            material_graph::MaterialValueType::from_port_type_id(port.port_type)
+                                .map(|value_type| MaterialGraphPortViewModel {
+                                    port_id: port.id,
+                                    name: port.name.clone(),
+                                    value_type,
+                                    connected: input_ports.contains(&port.id),
                                 })
-                                .map(|resolved| resolved.artifact_id)
-                        }),
-                    })
-                    .collect()
-            });
-            let layout = layout_by_node.get(&node.id);
-            MaterialGraphNodeViewModel {
-                node_id: node.id,
-                descriptor_key: node.name.clone(),
-                label: descriptor
-                    .map(|descriptor| descriptor.label.clone())
-                    .unwrap_or_else(|| node.name.clone()),
-                position_x: layout
-                    .map(|layout| layout.position_x)
-                    .unwrap_or((index as i32 % 4) * 220),
-                position_y: layout
-                    .map(|layout| layout.position_y)
-                    .unwrap_or((index as i32 / 4) * 120),
-                input_ports,
-                output_ports,
-                editable_values,
-                resource_bindings,
-                selected: runtime.selected_graph_nodes().contains(&node.id),
-            }
-        })
-        .collect::<Vec<_>>();
+                        })
+                        .collect();
+                let output_ports =
+                    node.ports
+                        .iter()
+                        .filter(|port| port.direction == graph::PortDirection::Output)
+                        .filter_map(|port| {
+                            material_graph::MaterialValueType::from_port_type_id(port.port_type)
+                                .map(|value_type| MaterialGraphPortViewModel {
+                                    port_id: port.id,
+                                    name: port.name.clone(),
+                                    value_type,
+                                    connected: output_ports.contains(&port.id),
+                                })
+                        })
+                        .collect();
+                let editable_values = descriptor.map_or_else(Vec::new, |descriptor| {
+                    descriptor
+                        .values
+                        .iter()
+                        .map(|value| MaterialGraphPropertyViewModel {
+                            node_id: node.id,
+                            key: value.key.clone(),
+                            value_type: value.value_type,
+                            display_value: node
+                                .value(&value.key)
+                                .map(graph::GraphValue::canonical_component)
+                                .or_else(|| {
+                                    value
+                                        .default_value
+                                        .as_ref()
+                                        .map(material_graph::MaterialLiteral::canonical_component)
+                                })
+                                .unwrap_or_default(),
+                            required: value.default_value.is_none(),
+                        })
+                        .collect()
+                });
+                let resource_bindings = descriptor.map_or_else(Vec::new, |descriptor| {
+                    descriptor
+                        .resources
+                        .iter()
+                        .map(|resource| MaterialGraphResourceBindingViewModel {
+                            node_id: node.id,
+                            key: resource.key.clone(),
+                            resource_kind: resource.kind,
+                            reference: node.value(&resource.key).and_then(|value| match value {
+                                graph::GraphValue::Resource(reference) => {
+                                    Some(reference.canonical_component())
+                                }
+                                _ => None,
+                            }),
+                            resolved_artifact_id: selected_preview.and_then(|preview| {
+                                preview
+                                    .resolved_resources
+                                    .iter()
+                                    .find(|resolved| {
+                                        resolved.node_id == node.id
+                                            && resolved.binding_key == resource.key
+                                    })
+                                    .map(|resolved| resolved.artifact_id)
+                            }),
+                        })
+                        .collect()
+                });
+                let layout = layout_by_node.get(&node.id);
+                MaterialGraphNodeViewModel {
+                    node_id: node.id,
+                    descriptor_key: node.name.clone(),
+                    label: descriptor
+                        .map(|descriptor| descriptor.label.clone())
+                        .unwrap_or_else(|| node.name.clone()),
+                    position_x: layout
+                        .map(|layout| layout.position_x)
+                        .unwrap_or((index as i32 % 4) * 220),
+                    position_y: layout
+                        .map(|layout| layout.position_y)
+                        .unwrap_or((index as i32 / 4) * 120),
+                    input_ports,
+                    output_ports,
+                    editable_values,
+                    resource_bindings,
+                    selected: runtime.selected_graph_nodes().contains(&node.id),
+                }
+            })
+            .collect::<Vec<_>>();
     let edges = document
         .graph
         .edges
