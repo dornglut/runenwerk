@@ -48,6 +48,16 @@ impl MaterialLabRuntime {
             self.active_source_document()
                 .and_then(|(source_asset_id, document)| {
                     (Some(source_asset_id) == self.selected_material_asset_id).then_some(document)
+                })
+                .filter(|document| {
+                    self.selected_material_asset_id
+                        .and_then(|asset_id| {
+                            material_source_for_asset(catalog, asset_id).map(|source| {
+                                document.document_id
+                                    == material_document_id_for_source(asset_id, source.source_id)
+                            })
+                        })
+                        .unwrap_or(true)
                 });
         let selected = self.selected_material_asset_id.and_then(|asset_id| {
             selected_material_detail(
@@ -74,7 +84,11 @@ impl MaterialLabRuntime {
         MaterialGraphCanvasViewModel {
             rows,
             selected,
-            graph: material_graph_editor_view_model(self, &validation_overlays),
+            graph: material_graph_editor_view_model(
+                self,
+                &validation_overlays,
+                selected_source_document,
+            ),
             palette,
             texture_picker: material_texture_resource_picker_view_model(
                 catalog,
@@ -194,13 +208,11 @@ fn selected_material_detail(
 fn material_graph_editor_view_model(
     runtime: &MaterialLabRuntime,
     overlays: &[MaterialGraphValidationOverlayViewModel],
+    selected_source_document: Option<&material_graph::MaterialGraphDocument>,
 ) -> MaterialGraphEditorViewModel {
-    let Some((asset_id, document)) = runtime.active_source_document() else {
+    let Some(document) = selected_source_document else {
         return MaterialGraphEditorViewModel::default();
     };
-    if Some(asset_id) != runtime.selected_material_asset_id {
-        return MaterialGraphEditorViewModel::default();
-    }
 
     let catalog = material_graph::MaterialNodeCatalog::first_slice();
     let layout_by_node = document

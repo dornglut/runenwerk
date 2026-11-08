@@ -28,6 +28,22 @@ use texture::{
 };
 
 #[test]
+fn replacing_material_document_within_same_asset_clears_old_selection() {
+    let asset = asset_id(203);
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(asset, texture_source_document(None));
+    runtime.select_graph_node(NodeId::new(11));
+    assert!(runtime.selected_graph_nodes().contains(&NodeId::new(11)));
+
+    let mut replacement = texture_source_document(None);
+    replacement.document_id = material_graph::MaterialGraphDocumentId::new(902);
+    runtime.set_active_source_document(asset, replacement);
+    assert!(runtime.selected_graph_nodes().is_empty());
+    assert!(runtime.selected_graph_edges().is_empty());
+    assert_eq!(runtime.selected_material_asset_id(), Some(asset));
+}
+
+#[test]
 fn switching_material_asset_invalidates_selection_and_foreign_source_projection() {
     let first = asset_id(201);
     let second = asset_id(202);

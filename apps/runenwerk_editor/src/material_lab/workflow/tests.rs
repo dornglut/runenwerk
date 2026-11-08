@@ -205,6 +205,76 @@ fn material_graph_texture_ref_edit_mutates_source_graph() {
 }
 
 #[test]
+fn same_asset_source_rebinding_rejects_stale_graph_delete_and_projection() {
+    let root = unique_temp_dir("material_source_rebinding");
+    let asset = asset_id(294);
+    let original_source = asset_source_id(295);
+    let replacement_source = asset_source_id(296);
+    let mut app = material_edit_app(&root, asset, original_source, command_test_document());
+
+    app.apply_material_surface_action(MaterialSurfaceAction::SelectGraphNode {
+        node_id: graph::NodeId::new(1),
+    })
+    .expect("original source graph selection must succeed");
+
+    let replacement_path = "assets/materials/replacement.material.ron";
+    let mut replacement_document = command_test_document();
+    replacement_document.document_id =
+        material_document_id_for_source(asset, replacement_source);
+    write_material_graph_document(&root.join(replacement_path), &replacement_document)
+        .expect("replacement material source should write");
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_source(AssetSourceDescriptor::new(
+            replacement_source,
+            asset,
+            AssetKind::MaterialGraph,
+            replacement_path,
+        ));
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_asset_record(
+            AssetRecord::new(asset, "edit", "Edit", AssetKind::MaterialGraph)
+                .with_primary_source(replacement_source),
+        );
+
+    let original_path = root.join("assets/materials/edit.material.ron");
+    let original_bytes = std::fs::read(&original_path).expect("original source must exist");
+    let replacement_bytes =
+        std::fs::read(root.join(replacement_path)).expect("replacement source must exist");
+
+    let projection = app.material_lab_runtime().graph_canvas_view_model(
+        app.asset_catalog_runtime().catalog(),
+        Vec::new(),
+    );
+    assert!(projection.graph.nodes.is_empty());
+    assert_eq!(projection.selected.as_ref().map(|row| row.node_count), Some(0));
+
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::DeleteSelectedGraphSelection)
+            .is_err(),
+        "old selection must not be interpreted against the same asset's new source"
+    );
+    assert!(app.material_lab_runtime().selected_graph_nodes().contains(&graph::NodeId::new(1)));
+    assert!(!app.material_lab_runtime().can_undo());
+    assert_eq!(
+        std::fs::read(&original_path).expect("original source must remain"),
+        original_bytes
+    );
+    assert_eq!(
+        std::fs::read(root.join(replacement_path)).expect("replacement source must remain"),
+        replacement_bytes
+    );
+
+    let loaded = app
+        .load_material_graph_document_for_asset(asset)
+        .expect("new source identity should resolve");
+    app.material_lab_runtime_mut().set_active_source_document(asset, loaded);
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn selected_material_switch_cannot_delete_old_graph_selection_in_other_source() {
     let root = unique_temp_dir("material_source_switch_rejects_retained_selection");
     let first = asset_id(281);

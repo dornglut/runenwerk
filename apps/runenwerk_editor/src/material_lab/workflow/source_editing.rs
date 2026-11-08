@@ -144,6 +144,21 @@ impl RunenwerkEditorApp {
             "edit",
             "failed to load material graph source for edit",
         )?;
+        if self
+            .material_lab_runtime()
+            .active_source_document()
+            .is_some_and(|(active_asset, active_document)| {
+                active_asset == asset_id && active_document.document_id != before.document_id
+            })
+        {
+            self.record_material_workflow_diagnostics([material_diagnostic(
+                AssetDiagnosticCode::RatificationRejected,
+                "selected material graph source changed since the active edit session",
+            )]);
+            return Err(editor_core::EditorMutationError::runtime_rejected(
+                "material graph source changed; reload before editing",
+            ));
+        }
         let mut document = before.clone();
         let selected_nodes = self
             .material_lab_runtime()
