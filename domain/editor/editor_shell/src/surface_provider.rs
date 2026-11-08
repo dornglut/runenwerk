@@ -252,7 +252,10 @@ impl SurfaceLocalRoute {
     }
 
     pub const fn is_provider_owned_graph_canvas(&self) -> bool {
-        matches!(self, Self::ProviderOwnedGraphCanvas | Self::ProviderOwnedGraphCanvasBound { .. })
+        matches!(
+            self,
+            Self::ProviderOwnedGraphCanvas | Self::ProviderOwnedGraphCanvasBound { .. }
+        )
     }
 }
 

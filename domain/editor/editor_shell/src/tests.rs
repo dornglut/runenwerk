@@ -1739,7 +1739,10 @@ fn graph_canvas_source_origin_survives_shell_interaction_routing() {
         surface_instance_id: Some(surface_id),
     };
     let mut frame_model = frame_model_for_fixture(&fixture);
-    let frame = frame_model.surfaces.get_mut(&surface_id).expect("fixture surface");
+    let frame = frame_model
+        .surfaces
+        .get_mut(&surface_id)
+        .expect("fixture surface");
     frame.routes.insert(
         widget_id,
         SurfaceLocalRoute::provider_owned_graph_canvas_bound(origin),
