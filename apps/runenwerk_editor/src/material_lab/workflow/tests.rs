@@ -89,6 +89,19 @@ fn material_graph_node_move_persists_source_layout() {
     );
 }
 
+fn apply_bound_material_action(
+    app: &mut RunenwerkEditorApp,
+    action: MaterialSurfaceAction,
+) -> Result<(), editor_core::EditorMutationError> {
+    let origin = app
+        .material_source_origin_for_selected(None)
+        .expect("test must have a valid selected source origin");
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin,
+        action: Box::new(action),
+    })
+}
+
 #[test]
 fn material_source_edit_records_load_failure_diagnostic() {
     let mut app = RunenwerkEditorApp::new();
@@ -106,7 +119,7 @@ fn material_source_edit_records_load_failure_diagnostic() {
             .diagnostics()
             .iter()
             .any(|diagnostic| diagnostic.message.contains(
-                "failed to load material graph source for edit: cannot load material graph document: no asset project session"
+                "Material source action requires its originating source"
             )),
         "source-backed edit load failures should preserve the concrete cause"
     );
@@ -211,8 +224,11 @@ fn same_asset_source_rebinding_rejects_stale_graph_delete_and_projection() {
     let original_source = asset_source_id(295);
     let replacement_source = asset_source_id(296);
     let mut app = material_edit_app(&root, asset, original_source, command_test_document());
+    let old_origin = app
+        .material_source_origin_for_selected(None)
+        .expect("original source origin should form");
 
-    app.apply_material_surface_action(MaterialSurfaceAction::SelectGraphNode {
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::SelectGraphNode {
         node_id: graph::NodeId::new(1),
     })
     .expect("original source graph selection must succeed");
@@ -252,8 +268,11 @@ fn same_asset_source_rebinding_rejects_stale_graph_delete_and_projection() {
     );
 
     assert!(
-        app.apply_material_surface_action(MaterialSurfaceAction::DeleteSelectedGraphSelection)
-            .is_err(),
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: old_origin,
+            action: Box::new(MaterialSurfaceAction::DeleteSelectedGraphSelection),
+        })
+        .is_err(),
         "old selection must not be interpreted against the same asset's new source"
     );
     assert!(
@@ -310,7 +329,10 @@ fn selected_material_switch_cannot_delete_old_graph_selection_in_other_source() 
         .expect("first source must exist");
     let second_bytes = std::fs::read(root.join(second_path)).expect("second source must exist");
 
-    app.apply_material_surface_action(MaterialSurfaceAction::SelectGraphNode {
+    let first_origin = app
+        .material_source_origin_for_selected(None)
+        .expect("first source origin should form");
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::SelectGraphNode {
         node_id: graph::NodeId::new(1),
     })
     .expect("first source node selection must succeed");
@@ -318,8 +340,42 @@ fn selected_material_switch_cannot_delete_old_graph_selection_in_other_source() 
         asset_id: second,
     })
     .expect("switch to second material source must succeed");
-    app.apply_material_surface_action(MaterialSurfaceAction::DeleteSelectedGraphSelection)
-        .expect("old empty selection must not commit any source edit");
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: first_origin,
+            action: Box::new(MaterialSurfaceAction::DeleteSelectedGraphSelection),
+        })
+        .is_err(),
+        "the earlier source must not retarget the new source, even with empty selection"
+    );
+    for action in [
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 11,
+            delta_y: -4,
+        },
+        MaterialSurfaceAction::ConnectPorts {
+            from_port_id: graph::PortId::new(1),
+            to_port_id: graph::PortId::new(2),
+        },
+        MaterialSurfaceAction::SetNodeValue {
+            node_id: graph::NodeId::new(1),
+            key: "roughness".to_string(),
+            value: "0.9".to_string(),
+        },
+        MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        },
+    ] {
+        assert!(
+            app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+                origin: first_origin,
+                action: Box::new(action),
+            })
+            .is_err(),
+            "old A-origin intent must not mutate the currently selected B"
+        );
+    }
 
     assert_eq!(
         std::fs::read(root.join(second_path)).expect("second source must remain"),
@@ -333,11 +389,11 @@ fn selected_material_switch_cannot_delete_old_graph_selection_in_other_source() 
     assert!(!app.material_lab_runtime().can_undo());
     assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
 
-    app.apply_material_surface_action(MaterialSurfaceAction::SelectGraphNode {
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::SelectGraphNode {
         node_id: graph::NodeId::new(1),
     })
     .expect("explicit second source node selection must succeed");
-    app.apply_material_surface_action(MaterialSurfaceAction::DeleteSelectedGraphSelection)
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::DeleteSelectedGraphSelection)
         .expect("explicit selected source deletion must commit");
     assert!(
         !app.load_material_graph_document_for_asset(second)
@@ -365,15 +421,21 @@ fn wrong_material_document_identity_rejects_edit_and_write_without_mutating_sour
         wrong_document.document_id,
         material_document_id_for_source(selected, source_id)
     );
+    let valid_origin = app
+        .material_source_origin_for_selected(None)
+        .expect("valid source origin before external replacement");
     write_material_graph_document(&path, &wrong_document)
         .expect("mismatched test source should be written");
     let wrong_bytes = std::fs::read(&path).expect("mismatched source must exist");
 
     assert!(
-        app.apply_material_surface_action(MaterialSurfaceAction::MoveGraphNode {
-            node_id: graph::NodeId::new(1),
-            delta_x: 17,
-            delta_y: 1,
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: valid_origin,
+            action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 17,
+                delta_y: 1,
+            }),
         })
         .is_err()
     );
@@ -403,13 +465,75 @@ fn wrong_material_document_identity_rejects_edit_and_write_without_mutating_sour
 }
 
 #[test]
+fn material_source_revision_rejects_external_same_document_byte_change() {
+    let root = unique_temp_dir("material_source_revision");
+    let asset = asset_id(380);
+    let source = asset_source_id(381);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    let origin = app
+        .material_source_origin_for_selected(None)
+        .expect("source origin before external change");
+    let path = root.join("assets/materials/edit.material.ron");
+    let old_bytes = std::fs::read(&path).expect("original source bytes");
+    let mut external_bytes = old_bytes.clone();
+    external_bytes.extend_from_slice(b"\n  ");
+    std::fs::write(&path, &external_bytes).expect("external whitespace change");
+    assert_eq!(
+        app.load_material_graph_document_for_asset(asset)
+            .expect("external whitespace should not change the document")
+            .document_id,
+        origin.document_id
+    );
+
+    for action in [
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 20,
+            delta_y: 3,
+        },
+        MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        },
+    ] {
+        assert!(
+            app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+                origin,
+                action: Box::new(action),
+            })
+            .is_err(),
+            "same document identity is not enough when the observed bytes change"
+        );
+    }
+    assert_eq!(std::fs::read(&path).expect("source bytes"), external_bytes);
+    assert!(!app.material_lab_runtime().can_undo());
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+
+    // A new, explicit origin for the now-current source is admissible.
+    let refreshed = app
+        .material_source_origin_for_selected(None)
+        .expect("fresh source origin after external change");
+    assert_ne!(refreshed.content_digest, origin.content_digest);
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin: refreshed,
+        action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 5,
+            delta_y: 1,
+        }),
+    })
+    .expect("a new exact-source invocation should succeed");
+    assert!(app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn material_graph_node_drag_is_one_undo_transaction() {
     let root = unique_temp_dir("material_graph_node_drag_undo");
     let asset_id = asset_id(41);
     let source_id = asset_source_id(42);
     let mut app = material_edit_app(&root, asset_id, source_id, command_test_document());
 
-    app.apply_material_surface_action(MaterialSurfaceAction::MoveGraphNode {
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::MoveGraphNode {
         node_id: graph::NodeId::new(1),
         delta_x: 10,
         delta_y: 4,
@@ -417,7 +541,7 @@ fn material_graph_node_drag_is_one_undo_transaction() {
     .expect("drag commit should apply as one material edit");
 
     assert!(app.material_lab_runtime().can_undo());
-    app.apply_material_surface_action(MaterialSurfaceAction::UndoMaterialEdit)
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit)
         .expect("one undo should roll back the drag commit");
 
     let document = app
@@ -438,7 +562,7 @@ fn material_graph_property_edit_groups_commit_correctly() {
     let source_id = asset_source_id(52);
     let mut app = material_edit_app(&root, asset_id, source_id, command_test_document());
 
-    app.apply_material_surface_action(MaterialSurfaceAction::SetNodeValue {
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::SetNodeValue {
         node_id: graph::NodeId::new(1),
         key: "roughness".to_string(),
         value: "0.25".to_string(),
@@ -446,7 +570,7 @@ fn material_graph_property_edit_groups_commit_correctly() {
     .expect("property commit should apply as one material edit");
 
     assert!(app.material_lab_runtime().can_undo());
-    app.apply_material_surface_action(MaterialSurfaceAction::UndoMaterialEdit)
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit)
         .expect("one undo should roll back the property commit");
 
     let document = app
@@ -481,7 +605,7 @@ fn material_graph_texture_picker_selection_updates_source_ref() {
         TextureDimension::Texture2D,
     );
 
-    app.apply_material_surface_action(MaterialSurfaceAction::PickTextureResource {
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::PickTextureResource {
         node_id: graph::NodeId::new(1),
         key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
         stable_id: "rock.albedo".to_string(),
@@ -509,7 +633,7 @@ fn material_graph_texture_picker_rejects_missing_texture_product() {
     let source_id = asset_source_id(67);
     let mut app = material_edit_app(&root, asset_id, source_id, texture_edit_command_document());
 
-    let result = app.apply_material_surface_action(MaterialSurfaceAction::PickTextureResource {
+    let result = apply_bound_material_action(&mut app, MaterialSurfaceAction::PickTextureResource {
         node_id: graph::NodeId::new(1),
         key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
         stable_id: "missing.albedo".to_string(),
@@ -757,13 +881,13 @@ fn material_graph_node_picker_confirm_adds_highlighted_node_to_source() {
     let source_id = asset_source_id(69);
     let mut app = material_edit_app(&root, asset_id, source_id, command_test_document());
 
-    app.apply_material_surface_action(MaterialSurfaceAction::OpenNodePicker)
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::OpenNodePicker)
         .expect("node picker should open");
-    app.apply_material_surface_action(MaterialSurfaceAction::HighlightNodePickerNode {
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::HighlightNodePickerNode {
         descriptor_key: "pbr.base_color".to_string(),
     })
     .expect("catalog node should highlight");
-    app.apply_material_surface_action(MaterialSurfaceAction::ConfirmNodePickerSelection)
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::ConfirmNodePickerSelection)
         .expect("highlighted catalog node should be added through source-backed workflow");
 
     let document = app
@@ -801,7 +925,7 @@ fn material_graph_navigate_diagnostic_selects_and_centers_subject() {
         .with_subject("material_graph.port:2"),
     );
 
-    app.apply_material_surface_action(MaterialSurfaceAction::NavigateDiagnostic {
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::NavigateDiagnostic {
         diagnostic_index: 0,
     })
     .expect("diagnostic navigation should load and persist source viewport state");

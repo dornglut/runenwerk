@@ -489,8 +489,26 @@ pub enum MaterialPreviewPublicationStatusKind {
     Unknown,
 }
 
+/// Immutable Material-owned source provenance captured for an interaction.
+///
+/// The editor shell transports this value but does not interpret its owner identity
+/// or content revision. An origin is not a filesystem lock or a write transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MaterialSourceOrigin {
+    pub asset_id: asset::AssetId,
+    pub source_id: asset::AssetSourceId,
+    pub document_id: material_graph::MaterialGraphDocumentId,
+    pub content_digest: [u8; 32],
+    pub surface_instance_id: Option<crate::ToolSurfaceInstanceId>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MaterialSurfaceAction {
+    /// Mutation or source-scoped selection formed against immutable provenance.
+    SourceBound {
+        origin: MaterialSourceOrigin,
+        action: Box<MaterialSurfaceAction>,
+    },
     SelectMaterialAsset {
         asset_id: asset::AssetId,
     },
@@ -576,4 +594,21 @@ pub enum MaterialSurfaceAction {
     UndoMaterialEdit,
     RedoMaterialEdit,
     PersistMaterialLayout,
+}
+
+impl MaterialSurfaceAction {
+    /// Whether this action needs a Material source origin when dispatched.
+    /// Explicit asset selection, asset-targeted builds and Scene-owned binding
+    /// actions have different owners and are not implicitly retargeted here.
+    pub const fn requires_source_origin(&self) -> bool {
+        !matches!(
+            self,
+            Self::SourceBound { .. }
+                | Self::SelectMaterialAsset { .. }
+                | Self::BuildMaterialPreview { .. }
+                | Self::ClearMaterialDiagnostics
+                | Self::AssignSdfPrimitiveMaterialSlot { .. }
+                | Self::AssignModelMeshMaterialSlot { .. }
+        )
+    }
 }

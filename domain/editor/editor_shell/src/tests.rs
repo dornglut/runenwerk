@@ -1727,6 +1727,57 @@ fn graph_canvas_interaction_maps_to_generic_surface_interaction() {
 }
 
 #[test]
+fn graph_canvas_source_origin_survives_shell_interaction_routing() {
+    let fixture = scene_composition_fixture();
+    let (panel_id, surface_id) = panel_and_surface_by_kind(&fixture, PanelKind::Outliner);
+    let widget_id = WidgetId(50_091);
+    let origin = MaterialSourceOrigin {
+        asset_id: asset::asset_id(7),
+        source_id: asset::asset_source_id(8),
+        document_id: material_graph::MaterialGraphDocumentId::new(9),
+        content_digest: [12; 32],
+        surface_instance_id: Some(surface_id),
+    };
+    let mut frame_model = frame_model_for_fixture(&fixture);
+    let frame = frame_model.surfaces.get_mut(&surface_id).expect("fixture surface");
+    frame.routes.insert(
+        widget_id,
+        SurfaceLocalRoute::provider_owned_graph_canvas_bound(origin),
+    );
+    frame.artifact.root = label(
+        widget_id,
+        frame.title.clone(),
+        ThemeTokens::default().body_small_text_style(ui_text::FontId(1)),
+    );
+    let built = build_shell_frame_for_fixture(&frame_model, &ThemeTokens::default(), &fixture);
+    let commands = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::GraphCanvasAction {
+                target: widget_id,
+                action: ui_graph_editor::GraphCanvasAction::EndNodeDrag {
+                    node: ui_graph_editor::GraphNodeKey(3),
+                    delta: ui_graph_editor::GraphVector::new(4, -2),
+                },
+            }],
+        },
+        &built.projection_artifacts,
+    );
+    assert!(matches!(
+        commands.as_slice(),
+        [ShellCommand::DispatchSurfaceInteraction {
+            interaction: SurfaceInteraction::SourceBoundGraphCanvasAction {
+                origin: dispatched,
+                action: ui_graph_editor::GraphCanvasAction::EndNodeDrag { .. },
+            },
+            target,
+            ..
+        }] if *dispatched == origin
+            && target.panel_instance_id == panel_id
+            && target.active_tool_surface == Some(surface_id)
+    ));
+}
+
+#[test]
 fn graph_canvas_shortcut_actions_map_to_generic_surface_interactions() {
     let fixture = scene_composition_fixture();
     let (panel_id, surface_id) = panel_and_surface_by_kind(&fixture, PanelKind::Outliner);

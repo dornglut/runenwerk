@@ -58,7 +58,7 @@ pub use surfaces::{
     MaterialPreviewStatusKind, MaterialPreviewStatusViewModel, MaterialPreviewViewModel,
     MaterialResourceBindingDiagnosticViewModel, MaterialResourceBindingStatusKind,
     MaterialSceneMaterialSlotOptionViewModel, MaterialSdfPrimitiveBindingViewModel,
-    MaterialShortcutAction, MaterialSurfaceAction, MaterialTextureResourceOptionViewModel,
+    MaterialShortcutAction, MaterialSourceOrigin, MaterialSurfaceAction, MaterialTextureResourceOptionViewModel,
     MaterialTextureResourcePickerViewModel, MaterialUndoRedoViewModel, OutlinerDomainMutation,
     OutlinerSurfaceAction, SdfOperationDomainMutation, SdfOperationSessionMutation,
     SdfOperationSurfaceAction, TexturePreviewChannelSelection, TextureSurfaceAction,

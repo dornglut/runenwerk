@@ -17,7 +17,93 @@ impl RunenwerkEditorApp {
         self.append_console_line("[material] diagnostics cleared");
     }
 
+    /// Captures source identity and exact bytes for a specific Material invocation.
+    /// The optional surface instance scopes UI-originated actions; direct callers
+    /// can retain an origin without pretending to own a mounted editor surface.
+    pub fn material_source_origin_for_selected(
+        &self,
+        surface_instance_id: Option<editor_shell::ToolSurfaceInstanceId>,
+    ) -> Result<editor_shell::MaterialSourceOrigin> {
+        let asset_id = self
+            .material_lab_runtime()
+            .selected_material_asset_id()
+            .ok_or_else(|| anyhow::anyhow!("no selected material asset"))?;
+        let session = self
+            .asset_project_session()
+            .ok_or_else(|| anyhow::anyhow!("no asset project session"))?;
+        let source =
+            resolve_material_source_for_asset(self.asset_catalog_runtime().catalog(), asset_id)
+                .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
+        let path = session.project_root().join(&source.relative_path);
+        let (document, content_digest) =
+            crate::material_lab::read_material_graph_document_with_digest(&path)?;
+        let document_id = material_document_id_for_source(asset_id, source.source_id);
+        anyhow::ensure!(
+            document.document_id == document_id,
+            "current Material source does not match catalog identity"
+        );
+        if let Some((active_asset, active_document)) =
+            self.material_lab_runtime().active_source_document()
+        {
+            anyhow::ensure!(
+                active_asset != asset_id || *active_document == document,
+                "current Material source differs from the displayed edit-session document"
+            );
+        }
+        Ok(editor_shell::MaterialSourceOrigin {
+            asset_id,
+            source_id: source.source_id,
+            document_id,
+            content_digest,
+            surface_instance_id,
+        })
+    }
+
+    fn admit_material_source_origin(
+        &mut self,
+        origin: editor_shell::MaterialSourceOrigin,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        let current = self.material_source_origin_for_selected(origin.surface_instance_id);
+        if current.as_ref().is_ok_and(|current| *current == origin) {
+            return Ok(());
+        }
+        self.record_material_workflow_diagnostics([material_diagnostic(
+            AssetDiagnosticCode::RatificationRejected,
+            "Material invocation source identity/revision no longer matches the selected source",
+        )]);
+        Err(editor_core::EditorMutationError::runtime_rejected(
+            "Material source invocation is stale or missing",
+        ))
+    }
+
     pub fn apply_material_surface_action(
+        &mut self,
+        action: MaterialSurfaceAction,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        match action {
+            MaterialSurfaceAction::SourceBound { origin, action } => {
+                if !action.requires_source_origin() {
+                    return Err(editor_core::EditorMutationError::runtime_rejected(
+                        "a source-bound Material action must be a source-scoped operation",
+                    ));
+                }
+                self.admit_material_source_origin(origin)?;
+                self.apply_qualified_material_surface_action(*action)
+            }
+            action if action.requires_source_origin() => {
+                self.record_material_workflow_diagnostics([material_diagnostic(
+                    AssetDiagnosticCode::RatificationRejected,
+                    "Material source action requires its originating source",
+                )]);
+                Err(editor_core::EditorMutationError::runtime_rejected(
+                    "Material source action requires its originating source",
+                ))
+            }
+            action => self.apply_qualified_material_surface_action(action),
+        }
+    }
+
+    fn apply_qualified_material_surface_action(
         &mut self,
         action: MaterialSurfaceAction,
     ) -> Result<(), editor_core::EditorMutationError> {

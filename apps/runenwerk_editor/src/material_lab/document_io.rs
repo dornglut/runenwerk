@@ -44,29 +44,45 @@ pub fn read_material_graph_document(path: &Path) -> Result<MaterialGraphDocument
 pub fn read_material_graph_source(path: &Path) -> Result<MaterialGraphSourceLoadOutcome> {
     let source = std::fs::read_to_string(path)
         .with_context(|| format!("failed to read material graph source: {}", path.display()))?;
-    let version = match ron::from_str::<MaterialGraphSourceVersionProbe>(&source) {
+    Ok(classify_material_graph_source(&source))
+}
+
+/// Returns the decoded document and a content revision of the *same exact read*.
+/// This is an owner admission witness, not an atomic filesystem CAS operation.
+pub fn read_material_graph_document_with_digest(
+    path: &Path,
+) -> Result<(MaterialGraphDocument, [u8; 32])> {
+    let bytes = std::fs::read(path)
+        .with_context(|| format!("failed to read material graph source: {}", path.display()))?;
+    let source = std::str::from_utf8(&bytes).context("material graph source is not UTF-8")?;
+    let document = classify_material_graph_source(source).into_document()?;
+    Ok((document, *blake3::hash(&bytes).as_bytes()))
+}
+
+fn classify_material_graph_source(source: &str) -> MaterialGraphSourceLoadOutcome {
+    let version = match ron::from_str::<MaterialGraphSourceVersionProbe>(source) {
         Ok(probe) => probe.version,
         Err(error) => {
-            return Ok(MaterialGraphSourceLoadOutcome::DecodeRejected {
+            return MaterialGraphSourceLoadOutcome::DecodeRejected {
                 message: error.to_string(),
-            });
+            };
         }
     };
     if version == 1 {
-        return Ok(MaterialGraphSourceLoadOutcome::SupersededV1 { version });
+        return MaterialGraphSourceLoadOutcome::SupersededV1 { version };
     }
     if version != MATERIAL_GRAPH_SOURCE_FILE_VERSION_V2 {
-        return Ok(MaterialGraphSourceLoadOutcome::Unsupported { version });
+        return MaterialGraphSourceLoadOutcome::Unsupported { version };
     }
-    let source_file = match ron::from_str::<MaterialGraphSourceFileV2>(&source) {
+    let source_file = match ron::from_str::<MaterialGraphSourceFileV2>(source) {
         Ok(source_file) => source_file,
         Err(error) => {
-            return Ok(MaterialGraphSourceLoadOutcome::DecodeRejected {
+            return MaterialGraphSourceLoadOutcome::DecodeRejected {
                 message: error.to_string(),
-            });
+            };
         }
     };
-    Ok(match source_file.into_document() {
+    match source_file.into_document() {
         Ok(document) => MaterialGraphSourceLoadOutcome::Ready(document),
         Err(MaterialGraphSourceIssue::SupersededVersion(version)) => {
             MaterialGraphSourceLoadOutcome::SupersededV1 { version }
@@ -77,7 +93,7 @@ pub fn read_material_graph_source(path: &Path) -> Result<MaterialGraphSourceLoad
         Err(issue) => MaterialGraphSourceLoadOutcome::DecodeRejected {
             message: format!("{issue:?}"),
         },
-    })
+    }
 }
 
 pub fn write_material_graph_document(path: &Path, document: &MaterialGraphDocument) -> Result<()> {
@@ -138,6 +154,13 @@ mod tests {
         let restored = read_material_graph_document(&path).expect("document should read");
 
         assert_eq!(restored, document);
+        let (snapshot, digest) =
+            read_material_graph_document_with_digest(&path).expect("revision snapshot should read");
+        assert_eq!(snapshot, restored);
+        assert_eq!(
+            digest,
+            *blake3::hash(&std::fs::read(&path).expect("snapshot bytes")).as_bytes()
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 

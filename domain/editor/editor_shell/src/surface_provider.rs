@@ -221,6 +221,7 @@ pub enum SurfaceLocalAction {
 pub enum SurfaceLocalRoute {
     Static { action: SurfaceLocalAction },
     ProviderOwnedGraphCanvas,
+    ProviderOwnedGraphCanvasBound { origin: crate::MaterialSourceOrigin },
 }
 
 impl SurfaceLocalRoute {
@@ -232,21 +233,36 @@ impl SurfaceLocalRoute {
         Self::ProviderOwnedGraphCanvas
     }
 
+    pub const fn provider_owned_graph_canvas_bound(origin: crate::MaterialSourceOrigin) -> Self {
+        Self::ProviderOwnedGraphCanvasBound { origin }
+    }
+
+    pub const fn source_origin(&self) -> Option<&crate::MaterialSourceOrigin> {
+        match self {
+            Self::ProviderOwnedGraphCanvasBound { origin } => Some(origin),
+            Self::ProviderOwnedGraphCanvas | Self::Static { .. } => None,
+        }
+    }
+
     pub const fn action(&self) -> Option<&SurfaceLocalAction> {
         match self {
             Self::Static { action } => Some(action),
-            Self::ProviderOwnedGraphCanvas => None,
+            Self::ProviderOwnedGraphCanvas | Self::ProviderOwnedGraphCanvasBound { .. } => None,
         }
     }
 
     pub const fn is_provider_owned_graph_canvas(&self) -> bool {
-        matches!(self, Self::ProviderOwnedGraphCanvas)
+        matches!(self, Self::ProviderOwnedGraphCanvas | Self::ProviderOwnedGraphCanvasBound { .. })
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SurfaceInteraction {
     GraphCanvasAction(ui_graph_editor::GraphCanvasAction),
+    SourceBoundGraphCanvasAction {
+        origin: crate::MaterialSourceOrigin,
+        action: ui_graph_editor::GraphCanvasAction,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Default)]
