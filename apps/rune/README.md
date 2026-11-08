@@ -14,7 +14,7 @@ rune run
 
 `rune new` generates an `app.ron` and a `ui/main.ron` containing a static label. The UI file is an existing `ui_definition::AuthoredUiTemplate` with a `UiNodeDefinition` root, serialized without a CLI-specific schema.
 
-Edit `app.ron` to change the native window title or edit `ui/main.ron` to change the label, then close and restart `rune run`. **Live reload is not implemented.** Project files are interpreted at startup; no project-specific Rust build is needed.
+Edit `app.ron` to change the native window title or edit `ui/main.ron` to change the label, then close and restart `rune run`. The initial native UI-only presentation uses a white inherited text foreground against the Engine's black clear; this is a provisional CLI presentation choice, not a global RunenUI default or an authored theme system. **Live reload is not implemented.** Project files are interpreted at startup; no project-specific Rust build is needed.
 
 Minimal manifest shape (schema version 1, experimental):
 

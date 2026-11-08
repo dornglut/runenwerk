@@ -4,12 +4,22 @@ use engine::{
     app::{AppNativeHostExt, NativePrimaryClosePolicy},
     plugins::{
         default_plugins,
-        render::host::RenderSurfaceId,
-        ui::{AppUiExt, UiRuntimeFontConfiguration, UiScreen, UiTypedScreenId, UiTypedSource},
+        render::{
+            ManagedRenderProducerIds, RenderFrameProducerId, RunenUiPaintSubmissionRegistryResource,
+            SurfaceFrameSubmissionRegistryResource,
+            host::RenderSurfaceId,
+        },
+        ui::{
+            AppUiExt, UiRuntimeFontConfiguration, UiRuntimePresentationAssociationsResource,
+            UiRuntimePresentationBinding, UiRuntimeSlotId, UiScreen, UiTypedScreenId,
+            UiTypedSource,
+        },
     },
     prelude::AppRenderExt,
 };
+use runenui_core::{Color, StyleEnvironment, StyleProperties};
 use std::{
+    collections::BTreeSet,
     fs,
     path::{Component, Path},
 };
@@ -17,6 +27,15 @@ use ui_definition::{AuthoredUiTemplate, UiNodeDefinition};
 use ui_program::UiProgramSourceId;
 
 use crate::project;
+
+const DEFAULT_FONT: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../assets/fonts/JetBrainsMono-Regular.ttf"
+));
+
+fn initial_ui_fonts() -> UiRuntimeFontConfiguration {
+    UiRuntimeFontConfiguration::new(vec![DEFAULT_FONT.to_vec()]).with_system_fonts()
+}
 
 struct FileScreen {
     root: UiNodeDefinition,
@@ -77,6 +96,64 @@ fn load_ui(project_root: &Path, source: &str) -> Result<UiNodeDefinition> {
     Ok(template.root)
 }
 
+fn initial_ui_style() -> StyleEnvironment {
+    // The selected native UI-only recipe clears to black. RunenUI's
+    // unstyled text defaults to black, so supply visible host style
+    // without changing the meaning of authored UiNodeDefinition labels.
+    StyleEnvironment::default()
+        .with_framework_defaults(StyleProperties::EMPTY.with_foreground(Color::WHITE))
+}
+
+fn present_initial_ui(app: &mut App, slot: UiRuntimeSlotId) -> Result<()> {
+    // The accepted expert API permits initial styled binding. Until #1405
+    // owns a managed styled-placement convenience, preserve exact managed
+    // producer allocation/retirement rather than rebinding after present():
+    // replacing a binding would queue withdrawal of the same producer lease.
+    let surface = RenderSurfaceId::primary();
+    let mut occupied = BTreeSet::<RenderFrameProducerId>::new();
+    occupied.extend(
+        app.world()
+            .resource::<UiRuntimePresentationAssociationsResource>()?
+            .bindings()
+            .map(|binding| binding.producer_id),
+    );
+    occupied.extend(
+        app.world()
+            .resource::<SurfaceFrameSubmissionRegistryResource>()?
+            .ordered_submissions()
+            .into_iter()
+            .map(|submission| submission.producer_id),
+    );
+    occupied.extend(
+        app.world()
+            .resource::<RunenUiPaintSubmissionRegistryResource>()?
+            .ordered_submissions()
+            .into_iter()
+            .map(|submission| submission.producer_id),
+    );
+
+    let producer = app
+        .world_mut()
+        .resource_mut::<ManagedRenderProducerIds>()?
+        .allocate(slot.value(), &occupied)?;
+    let result = app
+        .world_mut()
+        .resource_mut::<UiRuntimePresentationAssociationsResource>()?
+        .bind(UiRuntimePresentationBinding::new(
+            slot,
+            producer,
+            surface,
+            initial_ui_style(),
+        ));
+    if let Err(error) = result {
+        app.world_mut()
+            .resource_mut::<ManagedRenderProducerIds>()?
+            .release_owned(producer, slot.value());
+        return Err(anyhow!("cannot present styled UI: {error}"));
+    }
+    Ok(())
+}
+
 pub fn run(project_root: &Path) -> Result<()> {
     let manifest = project::load(project_root)?;
     let root = manifest
@@ -94,21 +171,14 @@ pub fn run(project_root: &Path) -> Result<()> {
         app.select_native_ui_only()
             .context("cannot select native UI-only rendering")?;
 
-        const FONT: &[u8] = include_bytes!(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../assets/fonts/JetBrainsMono-Regular.ttf"
-        ));
-
-        let fonts = UiRuntimeFontConfiguration::new(vec![FONT.to_vec()]).with_system_fonts();
-
-        let report = app.ui().mount_with_fonts(FileScreen { root }, &fonts);
+        let report = app
+            .ui()
+            .mount_with_fonts(FileScreen { root }, &initial_ui_fonts());
         let slot = report
             .slot_id()
             .ok_or_else(|| anyhow!("UI mount rejected: {report:?}"))?;
 
-        app.ui()
-            .present(slot, RenderSurfaceId::primary())
-            .context("cannot present UI on native primary surface")?;
+        present_initial_ui(&mut app, slot)?;
         app.ui()
             .bind_native_primary_input(slot)
             .context("cannot bind native primary UI input")?;
@@ -120,6 +190,77 @@ pub fn run(project_root: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn initial_ui_style_is_contrasting_with_native_black_clear() {
+        assert_eq!(
+            initial_ui_style()
+                .framework_defaults()
+                .foreground()
+                .and_then(runenui_core::ColorValue::as_literal),
+            Some(&Color::WHITE)
+        );
+    }
+
+    #[test]
+    fn generated_label_publishes_white_shaped_text_without_native_gpu() -> Result<()> {
+        use engine::{
+            plugins::{
+                RenderPlugin, TimePlugin, UiPlugin, render::host::RenderSurfaceRegistryResource,
+            },
+            runtime::WindowStateRegistryResource,
+        };
+
+        let temp = tempfile::tempdir()?;
+        let project_root = project::create(temp.path(), "app")?;
+        let root = load_ui(&project_root, "ui/main.ron")?;
+
+        let mut app = App::headless();
+        app.add_plugin(TimePlugin);
+        app.add_plugin(UiPlugin);
+        app.add_plugin(RenderPlugin);
+
+        let slot = app
+            .ui()
+            .mount_with_fonts(FileScreen { root }, &initial_ui_fonts())
+            .slot_id()
+            .ok_or_else(|| anyhow!("generated UI was not mounted"))?;
+
+        let surface = RenderSurfaceId::primary();
+        let mut windows = WindowStateRegistryResource::default();
+        let native = windows.register_primary_window("Hello", (320, 160), 1.0, true);
+        app.insert_resource(windows);
+        app.world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()?
+            .confirm_surface_attachment(surface, native, (320, 160))?;
+        app.world_mut()
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()?
+            .bind(UiRuntimePresentationBinding::new(
+                slot,
+                RenderFrameProducerId::try_from_raw(71).expect("valid test producer identity"),
+                surface,
+                initial_ui_style(),
+            ))?;
+
+        let app = app.run_for_frames(1)?;
+        let paints = app
+            .world()
+            .resource::<RunenUiPaintSubmissionRegistryResource>()?;
+        let submitted = paints.ordered_submissions_for_surface(surface);
+        ensure!(
+            submitted.len() == 1,
+            "the generated UI must publish exactly one paint submission"
+        );
+        ensure!(
+            submitted[0].publication.scene().items().iter().any(|item| {
+                item.primitive()
+                    .as_shaped_text_run()
+                    .is_some_and(|run| run.foreground() == Color::WHITE)
+            }),
+            "the generated UI must publish visible white shaped text"
+        );
+        Ok(())
+    }
 
     #[test]
     fn reads_generated_ui_from_ron() -> Result<()> {

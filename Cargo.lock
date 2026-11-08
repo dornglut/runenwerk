@@ -3265,6 +3265,7 @@ dependencies = [
  "anyhow",
  "engine",
  "ron 0.12.3",
+ "runenui_core",
  "serde",
  "tempfile",
  "ui_definition",

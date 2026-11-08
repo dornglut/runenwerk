@@ -8,6 +8,7 @@ license.workspace = true
 anyhow = "1.0.104"
 engine = { path = "../../engine" }
 ron = "0.12.3"
+runenui_core.workspace = true
 serde = { version = "1.0.229", features = ["derive"] }
 ui_definition.workspace = true
 ui_program.workspace = true
