@@ -211,10 +211,12 @@ mod tests {
             .expect("operation log must remain available");
         assert_eq!(operations.operations.len(), 1);
         assert_eq!(operations.by_id.get(&op_id.expect("accepted id")), Some(&0));
-        assert!(!world
-            .resource::<DirtyChunkMapResource>()
-            .expect("dirty map must remain available")
-            .by_chunk
-            .is_empty());
+        assert!(
+            !world
+                .resource::<DirtyChunkMapResource>()
+                .expect("dirty map must remain available")
+                .by_chunk
+                .is_empty()
+        );
     }
 }
