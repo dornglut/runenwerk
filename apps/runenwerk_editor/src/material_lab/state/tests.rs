@@ -28,6 +28,47 @@ use texture::{
 };
 
 #[test]
+fn switching_material_asset_invalidates_selection_and_foreign_source_projection() {
+    let first = asset_id(201);
+    let second = asset_id(202);
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(first, texture_source_document(None));
+    runtime.select_graph_node(NodeId::new(11));
+    assert!(runtime.selected_graph_nodes().contains(&NodeId::new(11)));
+
+    runtime.select_material_asset(Some(second));
+    assert!(runtime.selected_graph_nodes().is_empty());
+    assert!(runtime.selected_graph_edges().is_empty());
+
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(AssetRecord::new(
+        second,
+        "second",
+        "Second Material",
+        AssetKind::MaterialGraph,
+    ));
+    let after_switch = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert!(after_switch.graph.nodes.is_empty());
+    assert_eq!(after_switch.selected.as_ref().map(|row| row.node_count), Some(0));
+    assert!(after_switch.validation_overlays.is_empty());
+
+    runtime.set_active_source_document(second, texture_source_document(None));
+    let after_source = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert_eq!(after_source.graph.nodes.len(), 1);
+    assert_eq!(after_source.selected.as_ref().map(|row| row.node_count), Some(1));
+
+    runtime.select_graph_node(NodeId::new(11));
+    runtime.select_material_asset(Some(second));
+    assert!(
+        runtime.selected_graph_nodes().contains(&NodeId::new(11)),
+        "reselecting the same source must not erase valid selection"
+    );
+    runtime.select_graph_edge(graph::EdgeId::new(9));
+    runtime.select_material_asset(Some(first));
+    assert!(runtime.selected_graph_edges().is_empty());
+}
+
+#[test]
 fn graph_canvas_projects_source_document_without_formed_preview() {
     let asset_id = asset_id(7);
     let color_port = MaterialValueType::Color.port_type_id();

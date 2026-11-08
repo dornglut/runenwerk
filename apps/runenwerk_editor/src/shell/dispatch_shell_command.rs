@@ -260,7 +260,11 @@ pub fn dispatch_shell_command_with_viewport_commands(
             asset_id,
             projection_epoch: _,
         } => {
+            let changed = app.material_lab_runtime().selected_material_asset_id() != Some(asset_id);
             app.select_material_asset(asset_id);
+            if changed && let Some(shell_state) = shell_state.as_deref_mut() {
+                shell_state.clear_cached_projection();
+            }
         }
         ShellCommand::BuildMaterialPreview {
             asset_id,

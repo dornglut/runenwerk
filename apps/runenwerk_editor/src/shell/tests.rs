@@ -1733,6 +1733,80 @@ fn pm_ui_lab_perf_004_direct_manipulation_product_surfaces_cover_normal_workflow
 }
 
 #[test]
+fn material_asset_switch_invalidates_old_shell_epoch_without_spurious_reselect() {
+    let mut app = RunenwerkEditorApp::new();
+    let mut shell_state = RunenwerkEditorShellState::new();
+    let first_epoch = shell_state.current_projection_epoch();
+    let first = asset::asset_id(281);
+    let second = asset::asset_id(282);
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SelectMaterialAsset {
+            asset_id: first,
+            projection_epoch: first_epoch,
+        },
+        None,
+        None,
+        None,
+        Some(first_epoch),
+    )
+    .expect("material asset change must dispatch");
+    let next_epoch = shell_state.current_projection_epoch();
+    assert!(next_epoch > first_epoch);
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SelectMaterialAsset {
+            asset_id: first,
+            projection_epoch: next_epoch,
+        },
+        None,
+        None,
+        None,
+        Some(next_epoch),
+    )
+    .expect("same-asset selection should remain a no-op for projection identity");
+    assert_eq!(shell_state.current_projection_epoch(), next_epoch);
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::SelectMaterialAsset {
+            asset_id: second,
+            projection_epoch: next_epoch,
+        },
+        None,
+        None,
+        None,
+        Some(next_epoch),
+    )
+    .expect("second asset switch must dispatch");
+    let current_epoch = shell_state.current_projection_epoch();
+    assert!(current_epoch > next_epoch);
+    assert_eq!(app.material_lab_runtime().selected_material_asset_id(), Some(second));
+
+    dispatch_shell_command(
+        &mut app,
+        Some(&mut shell_state),
+        ShellCommand::ApplyMaterialSurfaceAction {
+            action: editor_shell::MaterialSurfaceAction::SelectGraphNode {
+                node_id: graph::NodeId::new(1),
+            },
+            projection_epoch: next_epoch,
+        },
+        None,
+        None,
+        None,
+        Some(current_epoch),
+    )
+    .expect("stale graph command must be discarded without mutation");
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+}
+
+#[test]
 fn stale_asset_shell_command_fails_closed() {
     let mut app = RunenwerkEditorApp::new();
     let asset_id = asset::asset_id(1);

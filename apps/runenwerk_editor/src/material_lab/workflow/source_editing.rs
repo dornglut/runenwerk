@@ -383,7 +383,16 @@ impl RunenwerkEditorApp {
         let source =
             resolve_material_source_for_asset(self.asset_catalog_runtime().catalog(), asset_id)
                 .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
-        read_material_graph_document(&session.project_root().join(&source.relative_path))
+        let document =
+            read_material_graph_document(&session.project_root().join(&source.relative_path))?;
+        let expected_document_id = material_document_id_for_source(asset_id, source.source_id);
+        anyhow::ensure!(
+            document.document_id == expected_document_id,
+            "material graph source document id {} does not match asset/source identity {}",
+            document.document_id.raw(),
+            expected_document_id.raw()
+        );
+        Ok(document)
     }
 
     pub fn write_material_graph_document_for_asset(
@@ -397,10 +406,24 @@ impl RunenwerkEditorApp {
         let source =
             resolve_material_source_for_asset(self.asset_catalog_runtime().catalog(), asset_id)
                 .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
-        write_material_graph_document(
-            &session.project_root().join(&source.relative_path),
-            document,
-        )
+        let expected_document_id = material_document_id_for_source(asset_id, source.source_id);
+        anyhow::ensure!(
+            document.document_id == expected_document_id,
+            "material graph source document id {} does not match asset/source identity {}",
+            document.document_id.raw(),
+            expected_document_id.raw()
+        );
+        let path = session.project_root().join(&source.relative_path);
+        if path.exists() {
+            let current = read_material_graph_document(&path)?;
+            anyhow::ensure!(
+                current.document_id == expected_document_id,
+                "existing material graph source document id {} does not match asset/source identity {}",
+                current.document_id.raw(),
+                expected_document_id.raw()
+            );
+        }
+        write_material_graph_document(&path, document)
     }
 
     fn load_material_graph_document_for_action(

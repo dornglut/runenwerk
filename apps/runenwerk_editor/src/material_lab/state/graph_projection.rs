@@ -44,17 +44,25 @@ impl MaterialLabRuntime {
                 }
             })
             .collect::<Vec<_>>();
+        let selected_source_document = self
+            .active_source_document()
+            .and_then(|(source_asset_id, document)| {
+                (Some(source_asset_id) == self.selected_material_asset_id).then_some(document)
+            });
         let selected = self.selected_material_asset_id.and_then(|asset_id| {
             selected_material_detail(
                 catalog,
                 asset_id,
                 self.active_preview.as_ref(),
-                self.active_source_document().map(|(_, document)| document),
+                selected_source_document,
             )
         });
-        let mut validation_overlays =
-            material_graph_validation_overlays(&self.diagnostics, self.active_diagnostic_index);
-        if let Some((_, document)) = self.active_source_document() {
+        let mut validation_overlays = if selected_source_document.is_some() {
+            material_graph_validation_overlays(&self.diagnostics, self.active_diagnostic_index)
+        } else {
+            Vec::new()
+        };
+        if let Some(document) = selected_source_document {
             validation_overlays.extend(material_graph_projection_overlays(document));
         }
         let palette = material_node_palette_view_model(&self.node_palette_search_query);
@@ -81,8 +89,10 @@ impl MaterialLabRuntime {
                 scene_material_assignments,
             ),
             toolbar: material_graph_toolbar_view_model(
-                self.active_source_document().map(|(_, document)| document),
-                self.active_preview.as_ref(),
+                selected_source_document,
+                self.active_preview
+                    .as_ref()
+                    .filter(|preview| Some(preview.asset_id) == self.selected_material_asset_id),
             ),
             validation_overlays,
             active_diagnostic_index: self.active_diagnostic_index,

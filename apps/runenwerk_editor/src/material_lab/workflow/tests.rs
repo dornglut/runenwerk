@@ -205,6 +205,122 @@ fn material_graph_texture_ref_edit_mutates_source_graph() {
 }
 
 #[test]
+fn selected_material_switch_cannot_delete_old_graph_selection_in_other_source() {
+    let root = unique_temp_dir("material_source_switch_rejects_retained_selection");
+    let first = asset_id(281);
+    let first_source = asset_source_id(282);
+    let second = asset_id(283);
+    let second_source = asset_source_id(284);
+    let mut app = material_edit_app(&root, first, first_source, command_test_document());
+
+    let second_path = "assets/materials/other.material.ron";
+    let descriptor = AssetSourceDescriptor::new(
+        second_source,
+        second,
+        AssetKind::MaterialGraph,
+        second_path,
+    );
+    let mut second_document = command_test_document();
+    second_document.document_id = material_document_id_for_source(second, second_source);
+    write_material_graph_document(&root.join(second_path), &second_document)
+        .expect("second source must be available");
+    app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
+        AssetRecord::new(second, "other", "Other Material", AssetKind::MaterialGraph)
+            .with_primary_source(second_source),
+    );
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_source(descriptor);
+
+    let first_bytes = std::fs::read(root.join("assets/materials/edit.material.ron"))
+        .expect("first source must exist");
+    let second_bytes = std::fs::read(root.join(second_path))
+        .expect("second source must exist");
+
+    app.apply_material_surface_action(MaterialSurfaceAction::SelectGraphNode {
+        node_id: graph::NodeId::new(1),
+    })
+    .expect("first source node selection must succeed");
+    app.apply_material_surface_action(MaterialSurfaceAction::SelectMaterialAsset {
+        asset_id: second,
+    })
+    .expect("switch to second material source must succeed");
+    app.apply_material_surface_action(MaterialSurfaceAction::DeleteSelectedGraphSelection)
+        .expect("old empty selection must not commit any source edit");
+
+    assert_eq!(
+        std::fs::read(root.join(second_path)).expect("second source must remain"),
+        second_bytes
+    );
+    assert_eq!(
+        std::fs::read(root.join("assets/materials/edit.material.ron"))
+            .expect("first source must remain"),
+        first_bytes
+    );
+    assert!(!app.material_lab_runtime().can_undo());
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+
+    app.apply_material_surface_action(MaterialSurfaceAction::SelectGraphNode {
+        node_id: graph::NodeId::new(1),
+    })
+    .expect("explicit second source node selection must succeed");
+    app.apply_material_surface_action(MaterialSurfaceAction::DeleteSelectedGraphSelection)
+        .expect("explicit selected source deletion must commit");
+    assert!(
+        !app.load_material_graph_document_for_asset(second)
+            .expect("second edited source must decode")
+            .graph.nodes.iter().any(|node| node.id == graph::NodeId::new(1))
+    );
+    assert!(app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn wrong_material_document_identity_rejects_edit_and_write_without_mutating_source() {
+    let root = unique_temp_dir("material_identity_guard");
+    let selected = asset_id(291);
+    let source_id = asset_source_id(292);
+    let mut app = material_edit_app(&root, selected, source_id, command_test_document());
+    let path = root.join("assets/materials/edit.material.ron");
+
+    let mut wrong_document = command_test_document();
+    wrong_document.document_id = material_graph::MaterialGraphDocumentId::new(77);
+    assert_ne!(
+        wrong_document.document_id,
+        material_document_id_for_source(selected, source_id)
+    );
+    write_material_graph_document(&path, &wrong_document)
+        .expect("mismatched test source should be written");
+    let wrong_bytes = std::fs::read(&path).expect("mismatched source must exist");
+
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 17,
+            delta_y: 1,
+        })
+        .is_err()
+    );
+    assert!(!app.material_lab_runtime().can_undo());
+    assert_eq!(std::fs::read(&path).expect("source must remain"), wrong_bytes);
+    assert!(
+        app.write_material_graph_document_for_asset(selected, &wrong_document)
+            .is_err(),
+        "a caller must not publish a different source document id"
+    );
+
+    let mut correctly_identified = wrong_document;
+    correctly_identified.document_id = material_document_id_for_source(selected, source_id);
+    assert!(
+        app.write_material_graph_document_for_asset(selected, &correctly_identified)
+            .is_err(),
+        "a valid candidate must not overwrite a mismatched existing source"
+    );
+    assert_eq!(std::fs::read(&path).expect("source must remain"), wrong_bytes);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn material_graph_node_drag_is_one_undo_transaction() {
     let root = unique_temp_dir("material_graph_node_drag_undo");
     let asset_id = asset_id(41);
@@ -1117,8 +1233,9 @@ fn material_edit_app(
     root: &std::path::Path,
     asset_id: AssetId,
     source_id: asset::AssetSourceId,
-    document: MaterialGraphDocument,
+    mut document: MaterialGraphDocument,
 ) -> RunenwerkEditorApp {
+    document.document_id = material_document_id_for_source(asset_id, source_id);
     let source = AssetSourceDescriptor::new(
         source_id,
         asset_id,

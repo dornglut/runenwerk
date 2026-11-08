@@ -175,6 +175,12 @@ pub struct MaterialLabRuntime {
 
 impl MaterialLabRuntime {
     pub fn select_material_asset(&mut self, asset_id: Option<AssetId>) {
+        if self.selected_material_asset_id != asset_id {
+            self.clear_graph_selection();
+            self.node_picker_open = false;
+            self.node_picker_highlighted_descriptor_key = None;
+            self.active_diagnostic_index = None;
+        }
         self.selected_material_asset_id = asset_id;
     }
 
@@ -308,7 +314,7 @@ impl MaterialLabRuntime {
     }
 
     pub fn set_active_preview(&mut self, preview: EditorMaterialPreviewProduct) {
-        self.selected_material_asset_id = Some(preview.asset_id);
+        self.select_material_asset(Some(preview.asset_id));
         self.preview_products_by_asset
             .insert(preview.asset_id, preview.clone());
         self.active_preview = Some(preview);
@@ -319,7 +325,7 @@ impl MaterialLabRuntime {
         asset_id: AssetId,
         document: material_graph::MaterialGraphDocument,
     ) {
-        self.selected_material_asset_id = Some(asset_id);
+        self.select_material_asset(Some(asset_id));
         self.active_source_document = Some((asset_id, document));
     }
 
