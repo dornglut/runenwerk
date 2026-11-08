@@ -205,10 +205,10 @@ impl EditorSurfaceProvider for MaterialGraphCanvasProvider {
         let SurfaceLocalAction::Material(action) = action else {
             return Ok(None);
         };
-        if let MaterialSurfaceAction::SourceBound { origin, .. } = &action {
-            if origin.surface_instance_id != Some(request.tool_surface_instance_id) {
-                return Ok(None);
-            }
+        if let MaterialSurfaceAction::SourceBound { origin, .. } = &action
+            && origin.surface_instance_id != Some(request.tool_surface_instance_id)
+        {
+            return Ok(None);
         }
         Ok(
             material_surface_action_command(action, context.projection_epoch)
