@@ -206,6 +206,18 @@ impl NativeWindowRequests {
             result,
         })
     }
+
+    /// Close admission at the Native stopping linearization gate. Pending
+    /// accepted tickets drop with exactly one terminal Cancelled outcome.
+    pub(crate) fn close(&self) {
+        let mut shared = self
+            .shared
+            .lock()
+            .unwrap_or_else(|error| error.into_inner());
+        shared.readiness = NativeWindowRequestReadiness::Closed;
+        shared.wake = None;
+        shared.pending.clear();
+    }
 }
 
 /// The single owning side of request ingress. The selected Native App World
@@ -280,14 +292,7 @@ impl NativeWindowRequestOwner {
     }
 
     pub(crate) fn close(&self) {
-        // A poisoned mutex must not strand accepted work on owner shutdown.
-        let mut shared = self
-            .shared
-            .lock()
-            .unwrap_or_else(|error| error.into_inner());
-        shared.readiness = NativeWindowRequestReadiness::Closed;
-        shared.wake = None;
-        shared.pending.clear();
+        self.handle().close();
     }
 }
 

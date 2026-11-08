@@ -4,6 +4,7 @@
 //! fixed-step state/resources, canonical fixed-step execution, canonical frame
 //! lifecycle execution, publication policy, and window runtime helpers.
 
+pub mod app_shutdown;
 pub(crate) mod fixed_step_executor;
 pub mod fixed_time;
 pub(crate) mod frame_lifecycle;
@@ -26,6 +27,7 @@ pub(crate) mod winit_input;
 pub mod winit_runner;
 pub(crate) mod winit_window_realizer;
 
+pub use app_shutdown::*;
 pub use fixed_time::*;
 pub use frame_pacing::*;
 pub use jobs::*;

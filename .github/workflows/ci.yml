@@ -271,6 +271,42 @@ jobs:
             rm -f "$idle_log"
           done
 
+          shutdown_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_APP_SHUTDOWN_OS_SMOKE=1 \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib native_app_shutdown_zero_window_os_proof --locked -- --nocapture >"$shutdown_log" 2>&1; then
+            cat "$shutdown_log"
+            rm -f "$shutdown_log"
+            exit 1
+          fi
+          cat "$shutdown_log"
+          grep -F "native_app_shutdown=pass physical_x11=true" "$shutdown_log"
+          rm -f "$shutdown_log"
+
+          startup_stop_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_APP_SHUTDOWN_STARTUP_OS_SMOKE=1 \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib native_app_shutdown_during_startup_cancels_legacy_registry_request --locked -- --nocapture >"$startup_stop_log" 2>&1; then
+            cat "$startup_stop_log"
+            rm -f "$startup_stop_log"
+            exit 1
+          fi
+          cat "$startup_stop_log"
+          grep -F "native_app_shutdown_startup=pass physical_x11=true" "$startup_stop_log"
+          rm -f "$startup_stop_log"
+
+          primary_stop_log="$(mktemp)"
+          if ! RUNENWERK_NATIVE_APP_SHUTDOWN_PRIMARY_OS_SMOKE=1 \
+               timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib native_app_shutdown_primary_os_proof --locked -- --nocapture >"$primary_stop_log" 2>&1; then
+            cat "$primary_stop_log"
+            rm -f "$primary_stop_log"
+            exit 1
+          fi
+          cat "$primary_stop_log"
+          grep -F "native_app_shutdown_primary=pass physical_x11=true" "$primary_stop_log"
+          rm -f "$primary_stop_log"
+
       - name: Prove physical X11 primary close approval and veto
         env:
           RUNENWERK_NATIVE_CLOSE_OS_SMOKE: '1'

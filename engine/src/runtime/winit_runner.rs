@@ -15,6 +15,7 @@ use crate::plugins::ui::{
 };
 use crate::plugins::{ActionState, InputState};
 use crate::runtime::PrimaryPresentationMetricsResource;
+use crate::runtime::app_shutdown::AppShutdownOwner;
 use crate::runtime::frame_lifecycle::{run_frame as run_runtime_frame, run_startup_if_needed};
 use crate::runtime::frame_pacing::{
     FramePacingPolicyResource, FramePacingRuntimeStateResource, FramePacingSchedule,
@@ -456,6 +457,15 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
                 .send_event(NativeHostEvent::NativeWindowRequests)
                 .is_ok()
         })?;
+    }
+    if let Ok(owner) = state.world.resource::<AppShutdownOwner>() {
+        let proxy = event_loop.create_proxy();
+        if let Err(error) =
+            owner.attach_wake(move || proxy.send_event(NativeHostEvent::AppShutdown).is_ok())
+        {
+            let cleanup = shutdown_native_ui(&mut state.world);
+            return combine_execution_and_cleanup(Err(error.into()), cleanup);
+        }
     }
     let transport = NativeWakeTransport::new(event_loop.create_proxy());
     if state.world.has_resource::<UiRuntimeSlotsResource>() {
@@ -3920,6 +3930,27 @@ impl WinitRunner {
         if self.shutdown_done {
             return Ok(());
         }
+        // Close new work immediately, but do not publish terminal Closed
+        // until the original Native input/UI cleanup attempt has returned.
+        if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>() {
+            owner.begin_close();
+        }
+        // The legacy ECS registry's queued creations have no typed tickets.
+        // When stopping before their Winit drain, publish their existing
+        // explicit failure records; never retain falsely Requested windows.
+        if let Ok(registry) = self
+            .state
+            .world
+            .resource_mut::<WindowStateRegistryResource>()
+        {
+            for request in registry.take_pending_creation_requests() {
+                if let Some(record) = registry.record_mut(request.native_window_id) {
+                    record.mark_creation_failed(
+                        "native App shutdown cancelled pending window creation",
+                    );
+                }
+            }
+        }
         if let Ok(owner) = self.state.world.resource::<NativeWindowRequestOwner>() {
             owner.close();
         }
@@ -3945,6 +3976,9 @@ impl WinitRunner {
         }
         let cleanup = shutdown_native_ui(&mut self.state.world);
         self.shutdown_done = cleanup.is_ok();
+        if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>() {
+            owner.close();
+        }
         cleanup?;
         if let Some(error) = cancellation_failure {
             return Err(error);
@@ -4012,6 +4046,10 @@ impl WinitRunner {
             Err(_) => return Ok(()),
         };
         for mut command in pending {
+            if self.app_stopping()? {
+                command.finish(NativeWindowRequestOutcome::Cancelled);
+                continue;
+            }
             let request = self
                 .state
                 .world
@@ -4050,6 +4088,15 @@ impl WinitRunner {
             .map(|registry| registry.take_pending_creation_requests())
             .unwrap_or_default();
         for request in requests {
+            if self.app_stopping()? {
+                self.state
+                    .world
+                    .resource_mut::<WindowStateRegistryResource>()?
+                    .record_mut(request.native_window_id)
+                    .context("stopping Native window request has no registry record")?
+                    .mark_creation_failed("native App shutdown cancelled pending window creation");
+                continue;
+            }
             self.create_window_for_request(event_loop, request)?;
         }
         Ok(())
@@ -4162,6 +4209,9 @@ impl WinitRunner {
     }
 
     fn apply_window_effects(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+        if self.app_stopping()? {
+            return Ok(());
+        }
         self.drain_pending_window_requests(event_loop)?;
         self.reconcile_native_cancellation_retirements()?;
 
@@ -4632,7 +4682,35 @@ impl WinitRunner {
         Ok(())
     }
 
+    fn app_stopping(&self) -> Result<bool> {
+        match self.state.world.resource::<AppShutdownOwner>() {
+            Ok(owner) => Ok(owner.is_stopping()?),
+            Err(_) => Ok(false),
+        }
+    }
+
+    fn exit_if_app_stopping(&mut self, event_loop: &ActiveEventLoop) -> bool {
+        match self.app_stopping() {
+            Ok(false) => false,
+            Ok(true) => {
+                // This is the existing Winit execution owner, not a frame or
+                // cross-thread OS exit. Its exiting callback settles cleanup.
+                self.gpu_progress_deadline = None;
+                event_loop.set_control_flow(ControlFlow::Poll);
+                event_loop.exit();
+                true
+            }
+            Err(error) => {
+                self.exit_with_error(event_loop, error);
+                true
+            }
+        }
+    }
+
     fn pace_or_exit(&mut self, event_loop: &ActiveEventLoop) {
+        if self.exit_if_app_stopping(event_loop) {
+            return;
+        }
         if let Err(error) = self
             .project_native_ime()
             .and_then(|_| self.apply_frame_pacing(event_loop))
@@ -4668,7 +4746,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: NativeHostEvent) {
-        if event_loop.exiting() {
+        if event_loop.exiting() || self.exit_if_app_stopping(event_loop) {
             return;
         }
         match event {
@@ -4691,10 +4769,17 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 }
                 self.pace_or_exit(event_loop);
             }
+            NativeHostEvent::AppShutdown => {
+                // An accepted request is observed and exits at callback entry.
+                // A stale wake with a closed gate never resurrects the App.
+            }
         }
     }
 
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        if self.exit_if_app_stopping(event_loop) {
+            return;
+        }
         if self.state.initial_native_window == NativeInitialWindow::None {
             // Winit's wake and owner resources are established before Startup.
             // Startup-authored requests can be accepted now; the Winit owner
@@ -4709,8 +4794,22 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 self.exit_with_error(event_loop, error.into());
                 return;
             }
+            // The shutdown capability becomes ready only after window
+            // ingress is ready; shutdown immediately closes that gate.
+            if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>()
+                && let Err(error) = owner.mark_ready()
+            {
+                self.exit_with_error(event_loop, error.into());
+                return;
+            }
+            if self.exit_if_app_stopping(event_loop) {
+                return;
+            }
             if let Err(err) = self.run_startup_if_needed() {
                 self.exit_with_error(event_loop, anyhow!("runtime startup failed: {err:#}"));
+                return;
+            }
+            if self.exit_if_app_stopping(event_loop) {
                 return;
             }
             // This bounded Native slice has no UI placement/presentation
@@ -4812,6 +4911,15 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             self.exit_with_error(event_loop, error.into());
             return;
         }
+        // Mandatory primary, Startup, declared input and window-request
+        // readiness have now succeeded. Never advertise shutdown readiness
+        // earlier: its first Accepted request seals window ingress.
+        if let Ok(owner) = self.state.world.resource::<AppShutdownOwner>()
+            && let Err(error) = owner.mark_ready()
+        {
+            self.exit_with_error(event_loop, error.into());
+            return;
+        }
         self.pace_or_exit(event_loop);
     }
 
@@ -4821,7 +4929,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
         window_id: WindowId,
         event: WindowEvent,
     ) {
-        if event_loop.exiting() {
+        if event_loop.exiting() || self.exit_if_app_stopping(event_loop) {
             return;
         }
         let Some(window) = self.window_realizer.window(window_id) else {
@@ -5261,6 +5369,9 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
         device_id: winit::event::DeviceId,
         event: DeviceEvent,
     ) {
+        if event_loop.exiting() || self.exit_if_app_stopping(event_loop) {
+            return;
+        }
         self.dispatch_native_device_event(&event);
 
         let result: Result<()> = (|| match event {
@@ -5290,7 +5401,7 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        if event_loop.exiting() {
+        if event_loop.exiting() || self.exit_if_app_stopping(event_loop) {
             return;
         }
         if let Err(error) = self.progress_gpu_if_due(Instant::now()) {

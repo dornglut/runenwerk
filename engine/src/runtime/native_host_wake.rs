@@ -14,6 +14,7 @@ use winit::event_loop::EventLoopProxy;
 pub enum NativeHostEvent {
     RunenUiWake,
     NativeWindowRequests,
+    AppShutdown,
 }
 
 struct NativeClockEpoch {
