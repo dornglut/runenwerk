@@ -59,13 +59,15 @@ impl MaterialLabRuntime {
                     })
                     .unwrap_or(true)
             });
+        let selected_source_id = self.selected_material_asset_id.and_then(|asset_id| {
+            material_source_for_asset(catalog, asset_id).map(|source| source.source_id)
+        });
+        let selected_preview = self.active_preview.as_ref().filter(|preview| {
+            Some(preview.asset_id) == self.selected_material_asset_id
+                && selected_source_id.is_none_or(|source_id| preview.source_id == source_id)
+        });
         let selected = self.selected_material_asset_id.and_then(|asset_id| {
-            selected_material_detail(
-                catalog,
-                asset_id,
-                self.active_preview.as_ref(),
-                selected_source_document,
-            )
+            selected_material_detail(catalog, asset_id, selected_preview, selected_source_document)
         });
         let mut validation_overlays = if selected_source_document.is_some() {
             material_graph_validation_overlays(&self.diagnostics, self.active_diagnostic_index)
@@ -88,6 +90,7 @@ impl MaterialLabRuntime {
                 self,
                 &validation_overlays,
                 selected_source_document,
+                selected_preview,
             ),
             palette,
             texture_picker: material_texture_resource_picker_view_model(
@@ -102,12 +105,7 @@ impl MaterialLabRuntime {
             scene_material_slots: material_scene_material_slot_option_view_model(
                 scene_material_assignments,
             ),
-            toolbar: material_graph_toolbar_view_model(
-                selected_source_document,
-                self.active_preview
-                    .as_ref()
-                    .filter(|preview| Some(preview.asset_id) == self.selected_material_asset_id),
-            ),
+            toolbar: material_graph_toolbar_view_model(selected_source_document, selected_preview),
             validation_overlays,
             active_diagnostic_index: self.active_diagnostic_index,
             node_picker,
@@ -209,6 +207,7 @@ fn material_graph_editor_view_model(
     runtime: &MaterialLabRuntime,
     overlays: &[MaterialGraphValidationOverlayViewModel],
     selected_source_document: Option<&material_graph::MaterialGraphDocument>,
+    selected_preview: Option<&EditorMaterialPreviewProduct>,
 ) -> MaterialGraphEditorViewModel {
     let Some(document) = selected_source_document else {
         return MaterialGraphEditorViewModel::default();
@@ -307,7 +306,7 @@ fn material_graph_editor_view_model(
                             }
                             _ => None,
                         }),
-                        resolved_artifact_id: runtime.active_preview.as_ref().and_then(|preview| {
+                        resolved_artifact_id: selected_preview.and_then(|preview| {
                             preview
                                 .resolved_resources
                                 .iter()

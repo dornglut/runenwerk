@@ -28,6 +28,44 @@ use texture::{
 };
 
 #[test]
+fn same_asset_different_source_preview_cannot_override_graph_toolbar() {
+    let asset = asset_id(204);
+    let selected_source = asset_source_id(23);
+    let mut document = texture_source_document(None);
+    document.document_id = material_document_id_for_source(asset, selected_source);
+    document.editor_state.selected_preview =
+        material_graph::MaterialGraphPreviewSelection::MaterialPreviewProduct;
+
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(asset, document);
+    runtime.set_active_preview(test_preview_product(asset));
+    assert_ne!(
+        runtime.active_preview().expect("test preview must exist").source_id,
+        selected_source,
+    );
+
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(
+        AssetRecord::new(asset, "selected", "Selected", AssetKind::MaterialGraph)
+            .with_primary_source(selected_source),
+    );
+    catalog.insert_source(AssetSourceDescriptor::new(
+        selected_source,
+        asset,
+        AssetKind::MaterialGraph,
+        "assets/materials/selected.material.ron",
+    ));
+
+    let view = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert_eq!(view.graph.nodes.len(), 1);
+    assert_eq!(
+        view.toolbar.selected_preview,
+        material_graph::MaterialGraphPreviewSelection::MaterialPreviewProduct,
+        "a stale preview from a different source cannot override the selected source toolbar",
+    );
+}
+
+#[test]
 fn replacing_material_document_within_same_asset_clears_old_selection() {
     let asset = asset_id(203);
     let mut runtime = MaterialLabRuntime::default();
