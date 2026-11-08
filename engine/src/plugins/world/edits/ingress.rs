@@ -49,6 +49,9 @@ pub fn submit_world_operation(
         quantization_scale,
     )
     .ok()?;
+    if touched_chunks.is_empty() {
+        return None;
+    }
 
     // The operation, dirtiness, and region invalidation journal form one accepted edit.
     // Missing required owners must reject before the operation ID is committed.
@@ -247,6 +250,73 @@ mod tests {
         );
     }
 
+    fn assert_no_edit_publication(world: &World) {
+        let operations = world
+            .resource::<OperationLogResource>()
+            .expect("operation log remains present");
+        assert!(operations.operations.is_empty());
+        assert!(operations.by_id.is_empty());
+        assert_eq!(operations.next_op_id, 0);
+
+        let dirty = world
+            .resource::<DirtyChunkMapResource>()
+            .expect("dirty map remains present");
+        assert!(dirty.by_chunk.is_empty());
+
+        let journal = world
+            .resource::<RegionInvalidationJournalResource>()
+            .expect("region journal remains present");
+        assert!(journal.recent_records.is_empty());
+        assert_eq!(journal.next_sequence, 1);
+    }
+
+    #[test]
+    fn inverted_quantized_bounds_reject_before_any_authoritative_edit() {
+        let mut world = configured_world();
+        let scale = WorldQuantizationScale::try_new(1024).expect("valid quantization scale");
+        let result = submit_world_operation(
+            &mut world,
+            Operation::Stamp {
+                stamp_id: "tests.world-ingress-inverted-bounds".to_string(),
+                anchor_q: Default::default(),
+                payload: vec![1, 2, 3],
+            },
+            quantize_aabb([64.0, 0.0, 0.0], [0.0, 0.0, 0.0], scale),
+            WorldEditIngressMeta::default(),
+        );
+
+        assert_eq!(result, None);
+        assert_no_edit_publication(&world);
+    }
+
+    #[test]
+    fn missing_partition_or_quantization_rejects_without_publication() {
+        let mut without_partition = configured_world();
+        without_partition
+            .remove_resource::<PartitionConfigResource>()
+            .expect("configured World has partition");
+        assert_eq!(submit_sample(&mut without_partition), None);
+        assert_no_edit_publication(&without_partition);
+
+        let mut without_scale = configured_world();
+        without_scale
+            .remove_resource::<WorldQuantizationScaleResource>()
+            .expect("configured World has quantization scale");
+        assert_eq!(submit_sample(&mut without_scale), None);
+        assert_no_edit_publication(&without_scale);
+    }
+
+    #[test]
+    fn explicit_read_only_world_rejects_without_publication() {
+        let mut world = configured_world();
+        world
+            .resource_mut::<WorldRuntimeConfig>()
+            .expect("configured World has runtime mode")
+            .mode = WorldRuntimeMode::ReadOnly;
+        assert_eq!(submit_sample(&mut world), None);
+        assert_no_edit_publication(&world);
+    }
+
     #[test]
     fn writable_ingress_remains_valid_without_optional_render_cache_resources() {
         let mut world = configured_world();
@@ -256,7 +326,15 @@ mod tests {
             .resource::<OperationLogResource>()
             .expect("operation log must remain available");
         assert_eq!(operations.operations.len(), 1);
-        assert_eq!(operations.by_id.get(&op_id.expect("accepted id")), Some(&0));
+        let accepted_id = op_id.expect("accepted id");
+        assert_eq!(operations.by_id.get(&accepted_id), Some(&0));
+        let journal = world
+            .resource::<RegionInvalidationJournalResource>()
+            .expect("region journal must be available");
+        assert_eq!(
+            journal.recent_records.front().expect("one ingress record").op_id,
+            Some(accepted_id)
+        );
         assert_eq!(
             world
                 .resource::<RegionInvalidationJournalResource>()
