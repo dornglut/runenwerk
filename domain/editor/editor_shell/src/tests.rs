@@ -1731,7 +1731,7 @@ fn graph_canvas_source_origin_survives_shell_interaction_routing() {
     let fixture = scene_composition_fixture();
     let (panel_id, surface_id) = panel_and_surface_by_kind(&fixture, PanelKind::Outliner);
     let widget_id = WidgetId(50_091);
-    let origin = MaterialSourceOrigin {
+    let origin = crate::MaterialSourceOrigin {
         asset_id: asset::asset_id(7),
         source_id: asset::asset_source_id(8),
         document_id: material_graph::MaterialGraphDocumentId::new(9),
