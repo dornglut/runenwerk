@@ -81,7 +81,9 @@ mod tests {
             relative_path,
         );
         let document = crate::material_lab::default_material_graph_document_for_source(
-            asset_id, &source, "Identical source",
+            asset_id,
+            &source,
+            "Identical source",
         );
         for root in [&first_root, &second_root] {
             crate::material_lab::write_material_graph_document(
@@ -119,23 +121,38 @@ mod tests {
         app.load_project_file(&first_project)
             .expect("same project reload may preserve last-known-good catalog");
         assert!(
-            app.asset_catalog_runtime().catalog().asset(asset_id).is_some(),
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(asset_id)
+                .is_some(),
             "within-project rejected catalog preserves its last-known-good catalog"
         );
 
         app.load_project_file(&second_project)
             .expect("B missing catalog should be diagnosed without adopting A's catalog");
         assert!(
-            app.asset_catalog_runtime().catalog().asset(asset_id).is_none(),
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(asset_id)
+                .is_none(),
             "project B must not inherit project A's catalog on a missing/invalid B catalog"
         );
-        assert_eq!(app.material_lab_runtime().selected_material_asset_id(), None);
+        assert_eq!(
+            app.material_lab_runtime().selected_material_asset_id(),
+            None
+        );
         assert!(
             app.material_source_origin_for_selected(None).is_err(),
             "identically named B files cannot be edited through stale A catalog descriptors"
         );
-        assert_eq!(std::fs::read(first_root.join(relative_path)).expect("A stable"), original_a);
-        assert_eq!(std::fs::read(second_root.join(relative_path)).expect("B stable"), original_b);
+        assert_eq!(
+            std::fs::read(first_root.join(relative_path)).expect("A stable"),
+            original_a
+        );
+        assert_eq!(
+            std::fs::read(second_root.join(relative_path)).expect("B stable"),
+            original_b
+        );
 
         let _ = std::fs::remove_dir_all(first_root);
         let _ = std::fs::remove_dir_all(second_root);

@@ -1808,7 +1808,9 @@ fn material_graph_canvas_real_project_route_rejects_delayed_a_delete_and_accepts
             .active_tool_surface
             .expect("every Material panel has its own mounted surface identity");
         assert_eq!(
-            mounted_frames.surface(instance).map(|frame| &frame.availability),
+            mounted_frames
+                .surface(instance)
+                .map(|frame| &frame.availability),
             Some(&SurfaceProviderAvailability::Available),
             "all three Material surfaces must be present during the captured action"
         );
@@ -1905,7 +1907,12 @@ fn material_graph_canvas_real_project_route_rejects_delayed_a_delete_and_accepts
         "a current-epoch but source-stale A action must be rejected by Material owner admission"
     );
     assert_eq!(std::fs::read(&b_path).expect("B stays intact"), before_b);
-    assert!(host.app.material_lab_runtime().selected_graph_nodes().is_empty());
+    assert!(
+        host.app
+            .material_lab_runtime()
+            .selected_graph_nodes()
+            .is_empty()
+    );
     assert!(!host.app.material_lab_runtime().can_undo());
 
     host.app.select_material_asset(first);
