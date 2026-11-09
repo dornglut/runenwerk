@@ -447,8 +447,14 @@ pub(super) fn material_surface_action_command(
                 projection_epoch,
             })
         }
+        // The selected-target shortcut is source-scoped. Route even the
+        // unqualified form through app-owned admission rather than the
+        // legacy Shell direct command that bypasses source provenance.
         MaterialSurfaceAction::BuildSelectedMaterialPreview => {
-            Some(ShellCommand::BuildSelectedMaterialPreview { projection_epoch })
+            Some(ShellCommand::ApplyMaterialSurfaceAction {
+                action: MaterialSurfaceAction::BuildSelectedMaterialPreview,
+                projection_epoch,
+            })
         }
         MaterialSurfaceAction::ClearMaterialDiagnostics => {
             Some(ShellCommand::ClearMaterialDiagnostics { projection_epoch })
@@ -767,8 +773,9 @@ mod tests {
         assert_eq!(command.projection_epoch(), Some(29));
         assert!(matches!(
             command,
-            ShellCommand::BuildSelectedMaterialPreview {
-                projection_epoch: 29
+            ShellCommand::ApplyMaterialSurfaceAction {
+                action: MaterialSurfaceAction::BuildSelectedMaterialPreview,
+                projection_epoch: 29,
             }
         ));
     }

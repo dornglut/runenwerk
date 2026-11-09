@@ -523,6 +523,85 @@ fn published_material_origin_is_a_cached_owner_observation_not_frame_time_file_i
 }
 
 #[test]
+fn failed_selected_source_reload_hides_old_document_and_origin_until_restored() {
+    let root = unique_temp_dir("material_owner_failed_selected_reload");
+    let asset = asset_id(411);
+    let source = asset_source_id(412);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    app.select_material_asset(asset);
+    let previous = app
+        .material_published_source_origin_for_selected(None)
+        .expect("initial published source origin");
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        },
+    )
+    .expect("original selection should succeed");
+
+    let path = root.join("assets/materials/edit.material.ron");
+    let absent = root.join("assets/materials/absent.material.ron");
+    std::fs::rename(&path, &absent).expect("isolate original source file");
+
+    app.select_material_asset(asset);
+    assert!(
+        app.material_published_source_origin_for_selected(None).is_err(),
+        "failed explicit reload must invalidate the previous source origin"
+    );
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+    let hidden = app.material_lab_runtime().graph_canvas_view_model(
+        app.asset_catalog_runtime().catalog(),
+        Vec::new(),
+    );
+    assert!(hidden.graph.nodes.is_empty());
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: previous,
+            action: Box::new(MaterialSurfaceAction::DeleteSelectedGraphSelection),
+        })
+        .is_err(),
+        "a failed reload cannot authorize a prior source interaction"
+    );
+
+    std::fs::rename(&absent, &path).expect("restore source");
+    app.select_material_asset(asset);
+    assert!(
+        app.material_published_source_origin_for_selected(None).is_ok(),
+        "explicit successful reload republishes origin"
+    );
+    let restored = app.material_lab_runtime().graph_canvas_view_model(
+        app.asset_catalog_runtime().catalog(),
+        Vec::new(),
+    );
+    assert_eq!(restored.graph.nodes.len(), 2);
+
+    // Removing the catalog binding must not transform previously persisted
+    // content into an apparently current source-less in-memory fixture.
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .sources
+        .remove(&source);
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_asset_record(AssetRecord::new(
+            asset,
+            "unbound",
+            "Unbound",
+            AssetKind::MaterialGraph,
+        ));
+    app.select_material_asset(asset);
+    assert!(app.material_published_source_origin_for_selected(None).is_err());
+    let unbound = app.material_lab_runtime().graph_canvas_view_model(
+        app.asset_catalog_runtime().catalog(),
+        Vec::new(),
+    );
+    assert!(unbound.graph.nodes.is_empty());
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn material_source_observation_reload_invalidates_equal_document_id_old_selection() {
     let root = unique_temp_dir("material_owner_source_revision_reload");
     let asset = asset_id(405);

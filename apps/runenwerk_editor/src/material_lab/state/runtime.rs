@@ -236,6 +236,21 @@ impl MaterialLabRuntime {
         self.selected_material_asset_id
     }
 
+    /// A failed explicit reload of a declared source must not leave an old
+    /// graph/selection presented as the newly selected source. Source-less
+    /// in-memory fixtures are handled by the caller and are not invalidated.
+    pub fn discard_failed_selected_source_reload(&mut self, asset_id: AssetId) {
+        if self.selected_material_asset_id != Some(asset_id) {
+            return;
+        }
+        self.active_source_document = None;
+        self.active_source_observation = None;
+        self.clear_graph_selection();
+        self.node_picker_open = false;
+        self.node_picker_highlighted_descriptor_key = None;
+        self.active_diagnostic_index = None;
+    }
+
     pub(super) fn selected_source_document_for_catalog(
         &self,
         catalog: &AssetCatalog,
