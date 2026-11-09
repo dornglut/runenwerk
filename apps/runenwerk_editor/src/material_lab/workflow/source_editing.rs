@@ -35,7 +35,11 @@ impl RunenwerkEditorApp {
             Ok((document, source_id, digest, context_digest)) => {
                 self.material_lab_runtime_mut()
                     .set_active_source_document_with_observation(
-                        asset_id, source_id, document, digest, context_digest,
+                        asset_id,
+                        source_id,
+                        document,
+                        digest,
+                        context_digest,
                     );
             }
             Err(error) => {
@@ -480,7 +484,11 @@ impl RunenwerkEditorApp {
             Ok((observed, source_id, digest, context_digest)) if observed == document => {
                 self.material_lab_runtime_mut()
                     .set_active_source_document_with_observation(
-                        asset_id, source_id, document, digest, context_digest,
+                        asset_id,
+                        source_id,
+                        document,
+                        digest,
+                        context_digest,
                     );
                 self.material_lab_runtime_mut()
                     .select_graph_node(target_node_id);
