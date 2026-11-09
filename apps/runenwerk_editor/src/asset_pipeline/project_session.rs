@@ -228,7 +228,12 @@ mod tests {
         assert_eq!(session.descriptor().source_roots.len(), 2);
         assert_eq!(session.project_id(), Some("project.test"));
         assert!(session.status_lines()[0].contains("project root"));
-        assert!(session.status_lines().iter().any(|line| line == "project id: project.test"));
+        assert!(
+            session
+                .status_lines()
+                .iter()
+                .any(|line| line == "project id: project.test")
+        );
     }
 
     #[test]
@@ -245,10 +250,8 @@ mod tests {
         assert!(!session_a.shares_catalog_fallback_context(&session_b));
         assert!(session_a.shares_catalog_fallback_context(&session_a));
 
-        let programmatic = EditorAssetProjectSession::new(
-            "C:/shared",
-            session_a.descriptor().clone(),
-        );
+        let programmatic =
+            EditorAssetProjectSession::new("C:/shared", session_a.descriptor().clone());
         assert_eq!(programmatic.project_id(), None);
         assert!(!programmatic.shares_catalog_fallback_context(&session_a));
         assert!(programmatic.shares_catalog_fallback_context(&programmatic));

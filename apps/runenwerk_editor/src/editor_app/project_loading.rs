@@ -389,7 +389,8 @@ mod tests {
             "different project_id at the same catalog path must not inherit unsaved A"
         );
         assert_eq!(
-            app.asset_project_session().and_then(|session| session.project_id()),
+            app.asset_project_session()
+                .and_then(|session| session.project_id()),
             Some("project.A")
         );
         assert_eq!(app.asset_catalog_runtime().catalog(), &unsaved_a);
@@ -421,7 +422,8 @@ mod tests {
         app.load_project_file(&project_b)
             .expect("a clean A can switch to B using the shared accepted physical catalog");
         assert_eq!(
-            app.asset_project_session().and_then(|session| session.project_id()),
+            app.asset_project_session()
+                .and_then(|session| session.project_id()),
             Some("project.B")
         );
         assert!(
