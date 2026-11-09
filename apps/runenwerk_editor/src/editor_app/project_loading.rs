@@ -127,6 +127,7 @@ mod tests {
                 .is_some(),
             "within-project rejected catalog preserves its last-known-good catalog"
         );
+        app.select_material_asset(asset_id);
 
         let prior_origin = app
             .material_source_origin_for_selected(None)
