@@ -539,12 +539,11 @@ impl RunenwerkEditorApp {
     /// Explicit destructive command, available only after the UI has shown
     /// the pending confirmation. A stale project/local/disk revision fails
     /// closed and never consumes any unconfirmed catalog edits.
-    pub fn confirm_asset_catalog_discard(
-        &mut self,
-    ) -> anyhow::Result<AssetCatalogLoadDisposition> {
-        let pending = self.pending_asset_catalog_discard.take().ok_or_else(|| {
-            anyhow::anyhow!("no pending asset catalog discard to confirm")
-        })?;
+    pub fn confirm_asset_catalog_discard(&mut self) -> anyhow::Result<AssetCatalogLoadDisposition> {
+        let pending = self
+            .pending_asset_catalog_discard
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("no pending asset catalog discard to confirm"))?;
         let session = self.asset_project_session.as_ref().ok_or_else(|| {
             anyhow::anyhow!("cannot confirm catalog discard: no active project session")
         })?;

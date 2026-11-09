@@ -124,7 +124,8 @@ mod tests {
                 "Saved",
                 asset::AssetKind::MaterialGraph,
             ));
-        app.save_asset_project_catalog().expect("save accepted catalog");
+        app.save_asset_project_catalog()
+            .expect("save accepted catalog");
         let unsaved_id = asset::asset_id(23002);
         app.asset_catalog_runtime_mut()
             .catalog_mut()
@@ -137,11 +138,15 @@ mod tests {
         let source_generation = app.material_source_context_generation;
         for _ in 0..3 {
             assert_eq!(
-                app.load_asset_project_catalog().expect("Load is never Confirm"),
+                app.load_asset_project_catalog()
+                    .expect("Load is never Confirm"),
                 crate::editor_app::AssetCatalogLoadDisposition::ConfirmationRequired
             );
             assert!(
-                app.asset_catalog_runtime().catalog().asset(unsaved_id).is_some(),
+                app.asset_catalog_runtime()
+                    .catalog()
+                    .asset(unsaved_id)
+                    .is_some(),
                 "repeated Load cannot silently discard local edits"
             );
             assert_eq!(app.material_source_context_generation, source_generation);
@@ -151,11 +156,22 @@ mod tests {
             app.confirm_asset_catalog_discard().is_err(),
             "Confirm without a pending request is rejected"
         );
-        assert!(app.asset_catalog_runtime().catalog().asset(unsaved_id).is_some());
-        app.load_asset_project_catalog().expect("request explicit confirmation");
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(unsaved_id)
+                .is_some()
+        );
+        app.load_asset_project_catalog()
+            .expect("request explicit confirmation");
         app.confirm_asset_catalog_discard()
             .expect("distinct Confirm action restores saved content");
-        assert!(app.asset_catalog_runtime().catalog().asset(unsaved_id).is_none());
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(unsaved_id)
+                .is_none()
+        );
         let _ = std::fs::remove_dir_all(root);
     }
 
