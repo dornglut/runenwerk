@@ -604,6 +604,191 @@ fn failed_selected_source_reload_hides_old_document_and_origin_until_restored() 
 }
 
 #[test]
+fn material_source_origin_does_not_retarget_an_identical_file_in_another_project_session() {
+    let first_root = unique_temp_dir("material_origin_project_first");
+    let second_root = unique_temp_dir("material_origin_project_second");
+    let asset = asset_id(420);
+    let source = asset_source_id(421);
+    let relative = "assets/materials/edit.material.ron";
+    let mut app = material_edit_app(&first_root, asset, source, command_test_document());
+    app.select_material_asset(asset);
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 6,
+            delta_y: -2,
+        },
+    )
+    .expect("first project has an independently persisted edit");
+    assert!(app.material_lab_runtime().can_undo());
+    let old_origin = app
+        .material_published_source_origin_for_selected(None)
+        .expect("first project origin");
+    let first_source = first_root.join(relative);
+    let first_bytes = std::fs::read(&first_source).expect("first source bytes");
+    let second_source = second_root.join(relative);
+    std::fs::create_dir_all(second_source.parent().expect("source parent"))
+        .expect("second source directory");
+    std::fs::write(&second_source, &first_bytes).expect("identical B source bytes");
+
+    let second_session = crate::asset_pipeline::EditorAssetProjectSession::from_project_file(
+        &second_root,
+        &material_project_with_recipe("render", "render_material"),
+    )
+    .expect("second project session");
+    app.set_asset_project_session(second_session);
+    assert!(!app.material_lab_runtime().can_undo());
+    app.select_material_asset(asset);
+    let new_origin = app
+        .material_published_source_origin_for_selected(None)
+        .expect("second project origin");
+    assert_eq!(new_origin.asset_id, old_origin.asset_id);
+    assert_eq!(new_origin.source_id, old_origin.source_id);
+    assert_eq!(new_origin.document_id, old_origin.document_id);
+    assert_eq!(new_origin.content_digest, old_origin.content_digest);
+    assert_ne!(new_origin.source_context_digest, old_origin.source_context_digest);
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: old_origin,
+            action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 100,
+                delta_y: 10,
+            }),
+        })
+        .is_err(),
+        "previous project intent must not mutate identical owner-local IDs in B"
+    );
+    assert_eq!(std::fs::read(&second_source).expect("B unchanged"), first_bytes);
+    assert_eq!(std::fs::read(&first_source).expect("A unchanged"), first_bytes);
+    assert!(!app.material_lab_runtime().can_undo());
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin: new_origin,
+        action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 4,
+            delta_y: 1,
+        }),
+    })
+    .expect("explicit B-origin action still works");
+    assert_ne!(std::fs::read(&second_source).expect("B edited"), first_bytes);
+    assert_eq!(std::fs::read(&first_source).expect("A remains"), first_bytes);
+
+    let before_reopen = app
+        .material_published_source_origin_for_selected(None)
+        .expect("B origin before reopening project");
+    let reloaded_session = crate::asset_pipeline::EditorAssetProjectSession::from_project_file(
+        &second_root,
+        &material_project_with_recipe("render", "render_material"),
+    )
+    .expect("reopened B session");
+    app.set_asset_project_session(reloaded_session);
+    app.select_material_asset(asset);
+    let reopened_origin = app
+        .material_published_source_origin_for_selected(None)
+        .expect("new origin even when project root remains identical");
+    assert_eq!(before_reopen.content_digest, reopened_origin.content_digest);
+    assert_ne!(
+        before_reopen.source_context_digest,
+        reopened_origin.source_context_digest
+    );
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: before_reopen,
+            action: Box::new(MaterialSurfaceAction::SelectGraphNode {
+                node_id: graph::NodeId::new(1),
+            }),
+        })
+        .is_err(),
+        "reopening the same project invalidates old invocation context"
+    );
+
+    let _ = std::fs::remove_dir_all(first_root);
+    let _ = std::fs::remove_dir_all(second_root);
+}
+
+#[test]
+fn material_source_origin_rejects_same_ids_and_bytes_after_catalog_locator_rebind() {
+    let root = unique_temp_dir("material_origin_locator_rebind");
+    let asset = asset_id(425);
+    let source = asset_source_id(426);
+    let original_relative = "assets/materials/edit.material.ron";
+    let new_relative = "assets/materials/relocated.material.ron";
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    app.select_material_asset(asset);
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 3,
+            delta_y: 1,
+        },
+    )
+    .expect("original source edit creates history");
+    let old_origin = app
+        .material_published_source_origin_for_selected(None)
+        .expect("original observed locator");
+    let original_path = root.join(original_relative);
+    let relocated_path = root.join(new_relative);
+    let original_bytes = std::fs::read(&original_path).expect("original bytes");
+    std::fs::write(&relocated_path, &original_bytes).expect("same bytes at new locator");
+
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_source(
+            AssetSourceDescriptor::new(
+                source,
+                asset,
+                AssetKind::MaterialGraph,
+                new_relative,
+            )
+            .with_hash(SourceHash::new("sha256", "edit")),
+        );
+    assert!(
+        app.material_published_source_origin_for_selected(None).is_err(),
+        "a new catalog locator must not inherit the prior file observation"
+    );
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: old_origin,
+            action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 44,
+                delta_y: 0,
+            }),
+        })
+        .is_err(),
+        "old source origin must not write the equally encoded relocated source"
+    );
+    assert_eq!(std::fs::read(&relocated_path).expect("relocated unchanged"), original_bytes);
+
+    app.select_material_asset(asset);
+    let current_origin = app
+        .material_published_source_origin_for_selected(None)
+        .expect("explicit reload should qualify the new locator");
+    assert_eq!(current_origin.content_digest, old_origin.content_digest);
+    assert_ne!(current_origin.source_context_digest, old_origin.source_context_digest);
+    assert!(
+        !app.material_lab_runtime().can_undo(),
+        "old source history cannot apply to another locator with reused IDs"
+    );
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin: current_origin,
+        action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 2,
+            delta_y: 3,
+        }),
+    })
+    .expect("new source locator accepts a freshly qualified edit");
+    assert_eq!(std::fs::read(&original_path).expect("old source unchanged"), original_bytes);
+    assert_ne!(std::fs::read(&relocated_path).expect("new source edited"), original_bytes);
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn material_source_observation_reload_invalidates_equal_document_id_old_selection() {
     let root = unique_temp_dir("material_owner_source_revision_reload");
     let asset = asset_id(405);

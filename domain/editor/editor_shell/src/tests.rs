@@ -1736,6 +1736,7 @@ fn graph_canvas_source_origin_survives_shell_interaction_routing() {
         source_id: asset::asset_source_id(8),
         document_id: material_graph::MaterialGraphDocumentId::new(9),
         content_digest: [12; 32],
+        source_context_digest: [13; 32],
         surface_instance_id: Some(surface_id),
     };
     let mut frame_model = frame_model_for_fixture(&fixture);

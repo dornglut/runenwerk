@@ -1097,6 +1097,7 @@ fn material_preview_and_inspector_routes_keep_source_bound_invocation_identity()
             source_id: asset_source_id(282),
             document_id: material_graph::MaterialGraphDocumentId::new(283),
             content_digest: [29; 32],
+            source_context_digest: [30; 32],
             surface_instance_id: Some(request.tool_surface_instance_id),
         };
         let action = SurfaceLocalAction::Material(MaterialSurfaceAction::SourceBound {

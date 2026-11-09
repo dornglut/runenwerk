@@ -48,6 +48,9 @@ pub struct RunenwerkEditorApp {
     pub(crate) failed_editor_definition_activations: Vec<PendingEditorDefinitionActivation>,
     pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
     pub(crate) asset_project_session: Option<EditorAssetProjectSession>,
+    /// Monotonic owner-local incarnation: even reopening the same root
+    /// invalidates an action captured before the new project context.
+    pub(crate) material_source_context_generation: u64,
     pub(crate) material_lab_runtime: MaterialLabRuntime,
     pub(crate) texture_preview_runtime: TexturePreviewRuntime,
     pub(crate) sdf_operation_workspace: SdfOperationWorkspaceState,
@@ -123,6 +126,7 @@ impl RunenwerkEditorApp {
             failed_editor_definition_activations: Vec::new(),
             asset_catalog_runtime: AssetCatalogRuntime::new(),
             asset_project_session: None,
+            material_source_context_generation: 0,
             material_lab_runtime: MaterialLabRuntime::default(),
             texture_preview_runtime: TexturePreviewRuntime::default(),
             sdf_operation_workspace: SdfOperationWorkspaceState::default(),
@@ -371,6 +375,15 @@ impl RunenwerkEditorApp {
     }
 
     pub fn set_asset_project_session(&mut self, session: EditorAssetProjectSession) {
+        self.material_source_context_generation = self
+            .material_source_context_generation
+            .checked_add(1)
+            .expect("Material project-session incarnation exhausted");
+        // A project-session replacement is not an in-place Material source
+        // refresh: old selected documents, history and queued previews belong
+        // to the old project even when its owner-local IDs are reused.
+        self.material_lab_runtime = MaterialLabRuntime::default();
+        self.pending_material_preview_publications.clear();
         self.asset_project_session = Some(session);
     }
 

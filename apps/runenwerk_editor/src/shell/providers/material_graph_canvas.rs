@@ -789,6 +789,7 @@ mod tests {
             source_id: asset::asset_source_id(12),
             document_id: material_graph::MaterialGraphDocumentId::new(13),
             content_digest: [22; 32],
+            source_context_digest: [23; 32],
             surface_instance_id: Some(request.tool_surface_instance_id),
         };
         let proposal = provider

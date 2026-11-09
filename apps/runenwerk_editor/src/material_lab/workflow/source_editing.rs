@@ -6,16 +6,36 @@ use super::source_resolution::resolve_material_source_for_asset;
 use super::*;
 
 impl RunenwerkEditorApp {
+    /// One project-session incarnation and one catalog source locator.
+    /// Opaque owner provenance; not a filesystem lock or a durable revision.
+    fn material_source_context_digest(&self, relative_path: &str) -> Result<[u8; 32]> {
+        let session = self
+            .asset_project_session()
+            .ok_or_else(|| anyhow::anyhow!("no asset project session"))?;
+        let root_bytes = session.project_root().as_os_str().as_encoded_bytes();
+        let source_bytes = std::path::Path::new(relative_path)
+            .as_os_str()
+            .as_encoded_bytes();
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"runenwerk/material-source-invocation/v1");
+        hasher.update(&self.material_source_context_generation.to_le_bytes());
+        hasher.update(&(root_bytes.len() as u64).to_le_bytes());
+        hasher.update(root_bytes);
+        hasher.update(&(source_bytes.len() as u64).to_le_bytes());
+        hasher.update(source_bytes);
+        Ok(*hasher.finalize().as_bytes())
+    }
+
     pub fn select_material_asset(&mut self, asset_id: AssetId) {
         self.material_lab_runtime_mut()
             .select_material_asset(Some(asset_id));
         // Source loading happens at selection, not repeatedly during frame
         // formation. Missing/invalid sources remain selected but unqualified.
         match self.load_material_graph_document_for_asset_with_digest(asset_id) {
-            Ok((document, source_id, digest)) => {
+            Ok((document, source_id, digest, context_digest)) => {
                 self.material_lab_runtime_mut()
                     .set_active_source_document_with_observation(
-                        asset_id, source_id, document, digest,
+                        asset_id, source_id, document, digest, context_digest,
                     );
             }
             Err(error) => {
@@ -70,6 +90,7 @@ impl RunenwerkEditorApp {
         let path = session.project_root().join(&source.relative_path);
         let (document, content_digest) =
             crate::material_lab::read_material_graph_document_with_digest(&path)?;
+        let source_context_digest = self.material_source_context_digest(&source.relative_path)?;
         let document_id = material_document_id_for_source(asset_id, source.source_id);
         anyhow::ensure!(
             document.document_id == document_id,
@@ -88,6 +109,7 @@ impl RunenwerkEditorApp {
             source_id: source.source_id,
             document_id,
             content_digest,
+            source_context_digest,
             surface_instance_id,
         })
     }
@@ -111,8 +133,10 @@ impl RunenwerkEditorApp {
         anyhow::ensure!(
             source.source_id == observation.source_id
                 && material_document_id_for_source(observation.asset_id, source.source_id)
-                    == observation.document_id,
-            "catalog source identity no longer matches the observed Material document"
+                    == observation.document_id
+                && self.material_source_context_digest(&source.relative_path)?
+                    == observation.source_context_digest,
+            "catalog source/context identity no longer matches the observed Material document"
         );
         let (active_asset, active_document) = self
             .material_lab_runtime()
@@ -128,6 +152,7 @@ impl RunenwerkEditorApp {
             source_id: observation.source_id,
             document_id: observation.document_id,
             content_digest: observation.content_digest,
+            source_context_digest: observation.source_context_digest,
             surface_instance_id,
         })
     }
@@ -136,8 +161,14 @@ impl RunenwerkEditorApp {
         &mut self,
         origin: editor_shell::MaterialSourceOrigin,
     ) -> Result<(), editor_core::EditorMutationError> {
+        let observed_context_matches = self
+            .material_lab_runtime()
+            .active_source_observation()
+            .is_none_or(|observation| {
+                observation.source_context_digest == origin.source_context_digest
+            });
         let current = self.material_source_origin_for_selected(origin.surface_instance_id);
-        if current.as_ref().is_ok_and(|current| *current == origin) {
+        if observed_context_matches && current.as_ref().is_ok_and(|current| *current == origin) {
             return Ok(());
         }
         self.record_material_workflow_diagnostics([material_diagnostic(
@@ -446,10 +477,10 @@ impl RunenwerkEditorApp {
         // exactly the bytes just published before issuing a new UI origin.
         // Otherwise the canvas loses its admitted source after navigation.
         match self.load_material_graph_document_for_asset_with_digest(asset_id) {
-            Ok((observed, source_id, digest)) if observed == document => {
+            Ok((observed, source_id, digest, context_digest)) if observed == document => {
                 self.material_lab_runtime_mut()
                     .set_active_source_document_with_observation(
-                        asset_id, source_id, document, digest,
+                        asset_id, source_id, document, digest, context_digest,
                     );
                 self.material_lab_runtime_mut()
                     .select_graph_node(target_node_id);
@@ -533,11 +564,13 @@ impl RunenwerkEditorApp {
 
         self.material_lab_runtime_mut()
             .select_material_asset(Some(asset_id));
-        if let Ok((document, source_id, digest)) =
+        if let Ok((document, source_id, digest, context_digest)) =
             self.load_material_graph_document_for_asset_with_digest(asset_id)
         {
             self.material_lab_runtime_mut()
-                .set_active_source_document_with_observation(asset_id, source_id, document, digest);
+                .set_active_source_document_with_observation(
+                    asset_id, source_id, document, digest, context_digest,
+                );
         }
         let catalog_snapshot = self.asset_catalog_runtime().catalog().clone();
         let outcome = {
@@ -581,11 +614,13 @@ impl RunenwerkEditorApp {
         let observed = self
             .load_material_graph_document_for_asset_with_digest(asset_id)
             .ok()
-            .filter(|(reloaded, _, _)| *reloaded == document);
+            .filter(|(reloaded, _, _, _)| *reloaded == document);
         self.material_lab_runtime_mut().clear_diagnostics();
-        if let Some((_, source_id, digest)) = observed {
+        if let Some((_, source_id, digest, context_digest)) = observed {
             self.material_lab_runtime_mut()
-                .set_active_source_document_with_observation(asset_id, source_id, document, digest);
+                .set_active_source_document_with_observation(
+                    asset_id, source_id, document, digest, context_digest,
+                );
         } else {
             // Source may have changed immediately after publication; do not
             // manufacture a current revision token for an unobserved file.
@@ -607,13 +642,13 @@ impl RunenwerkEditorApp {
         asset_id: AssetId,
     ) -> Result<MaterialGraphDocument> {
         self.load_material_graph_document_for_asset_with_digest(asset_id)
-            .map(|(document, _, _)| document)
+            .map(|(document, _, _, _)| document)
     }
 
     fn load_material_graph_document_for_asset_with_digest(
         &self,
         asset_id: AssetId,
-    ) -> Result<(MaterialGraphDocument, asset::AssetSourceId, [u8; 32])> {
+    ) -> Result<(MaterialGraphDocument, asset::AssetSourceId, [u8; 32], [u8; 32])> {
         let session = self.asset_project_session().ok_or_else(|| {
             anyhow::anyhow!("cannot load material graph document: no asset project session")
         })?;
@@ -630,7 +665,8 @@ impl RunenwerkEditorApp {
             document.document_id.raw(),
             expected_document_id.raw()
         );
-        Ok((document, source.source_id, digest))
+        let context_digest = self.material_source_context_digest(&source.relative_path)?;
+        Ok((document, source.source_id, digest, context_digest))
     }
 
     pub fn write_material_graph_document_for_asset(

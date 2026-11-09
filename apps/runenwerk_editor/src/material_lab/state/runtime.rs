@@ -193,6 +193,7 @@ pub struct MaterialSourceObservation {
     pub source_id: AssetSourceId,
     pub document_id: material_graph::MaterialGraphDocumentId,
     pub content_digest: [u8; 32],
+    pub source_context_digest: [u8; 32],
 }
 
 #[derive(Debug, Clone, Default)]
@@ -463,17 +464,29 @@ impl MaterialLabRuntime {
         source_id: AssetSourceId,
         document: material_graph::MaterialGraphDocument,
         content_digest: [u8; 32],
+        source_context_digest: [u8; 32],
     ) {
         let next_observation = MaterialSourceObservation {
             asset_id,
             source_id,
             document_id: document.document_id,
             content_digest,
+            source_context_digest,
         };
         let changed_revision = self
             .active_source_observation
             .is_some_and(|prior| prior.asset_id == asset_id && prior != next_observation);
+        let switched_locator = self.active_source_observation.is_some_and(|prior| {
+            prior.asset_id == asset_id
+                && prior.source_context_digest != next_observation.source_context_digest
+        });
         self.set_active_source_document(asset_id, document);
+        if switched_locator {
+            // A different physical source is a distinct history owner even if
+            // AssetId, document ID and serialized bytes happen to match.
+            self.undo_stack.clear();
+            self.redo_stack.clear();
+        }
         if changed_revision {
             self.clear_graph_selection();
             self.node_picker_open = false;

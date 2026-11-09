@@ -499,6 +499,9 @@ pub struct MaterialSourceOrigin {
     pub source_id: asset::AssetSourceId,
     pub document_id: material_graph::MaterialGraphDocumentId,
     pub content_digest: [u8; 32],
+    /// Owner-local invocation context: project-session incarnation and source
+    /// locator. This is intentionally opaque to generic Editor Shell routing.
+    pub source_context_digest: [u8; 32],
     pub surface_instance_id: Option<crate::ToolSurfaceInstanceId>,
 }
 
