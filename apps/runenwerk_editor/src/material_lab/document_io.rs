@@ -100,7 +100,7 @@ fn classify_material_graph_source(source: &str) -> MaterialGraphSourceLoadOutcom
 /// Writes a generated or explicitly created Material source without a prior
 /// revision requirement. Existing sources still use same-directory staging.
 pub fn write_material_graph_document(path: &Path, document: &MaterialGraphDocument) -> Result<()> {
-    write_material_graph_document_if_revision(path, document, None)
+    write_material_graph_document_if_revision(path, document, None).map(|_| ())
 }
 
 /// An authored edit carries the digest observed at action admission. The live
@@ -110,7 +110,7 @@ pub(crate) fn write_material_graph_document_if_revision(
     path: &Path,
     document: &MaterialGraphDocument,
     expected_digest: Option<[u8; 32]>,
-) -> Result<()> {
+) -> Result<[u8; 32]> {
     staged_material_graph_write(
         path,
         document,
@@ -135,7 +135,7 @@ fn staged_material_graph_write<W, S, R>(
     write_staged: W,
     sync_staged: S,
     replace_staged: R,
-) -> Result<()>
+) -> Result<[u8; 32]>
 where
     W: FnOnce(&mut tempfile::NamedTempFile, &[u8]) -> io::Result<()>,
     S: FnOnce(&tempfile::NamedTempFile) -> io::Result<()>,
@@ -207,6 +207,9 @@ where
             path.display()
         );
     }
+    // The serialized bytes are the candidate's history revision, without a
+    // fallible post-commit reread that could falsely report a failed edit.
+    let committed_digest = *blake3::hash(encoded.as_bytes()).as_bytes();
     // Once this replacement succeeds, no fallible post-commit operation is
     // reported as an uncommitted edit. Parent-directory durability is not
     // claimed here; Windows/native filesystem behavior needs its own proof.
@@ -215,7 +218,8 @@ where
             "failed to replace material graph source: {}",
             path.display()
         )
-    })
+    })?;
+    Ok(committed_digest)
 }
 
 #[cfg(test)]

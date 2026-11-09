@@ -58,3 +58,5 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           cargo +stable test --locked -p runenwerk_editor --lib material_lab::workflow::tests::material_failed_post_admission_write_preserves_both_history_stacks_and_disk
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo +stable test --locked -p runenwerk_editor --lib material_lab::workflow::tests::material_history_refuses_external_changes_after_a_fresh_source_reload
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

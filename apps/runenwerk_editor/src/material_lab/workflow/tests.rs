@@ -1027,6 +1027,91 @@ fn material_source_revision_rejects_external_same_document_byte_change() {
 }
 
 #[test]
+fn material_history_refuses_external_changes_after_a_fresh_source_reload() {
+    let root = unique_temp_dir("material_history_external_revision");
+    let asset = asset_id(7721);
+    let source = asset_source_id(7722);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    let file = root.join("assets/materials/edit.material.ron");
+
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 2,
+            delta_y: 3,
+        },
+    )
+    .expect("initial authored edit should commit");
+    assert_eq!(app.material_lab_runtime().history_depths(), (1, 0));
+
+    // Same asset/document ID, but external source revision differs. A fresh
+    // source selection can observe the external edit, not adopt old history.
+    let mut externally_changed =
+        read_material_graph_document(&file).expect("current material document");
+    externally_changed.label = "External Author Change".to_string();
+    write_material_graph_document(&file, &externally_changed)
+        .expect("external writer updates the same document");
+    let external_bytes = std::fs::read(&file).expect("external source bytes");
+    app.select_material_asset(asset);
+    let current_origin = app
+        .material_source_origin_for_selected(None)
+        .expect("fresh origin can observe the external version");
+
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: current_origin,
+            action: Box::new(MaterialSurfaceAction::UndoMaterialEdit),
+        })
+        .is_err(),
+        "old Undo must not overwrite a newer external revision"
+    );
+    assert_eq!(app.material_lab_runtime().history_depths(), (1, 0));
+    assert_eq!(std::fs::read(&file).expect("external content survives"), external_bytes);
+
+    // After an undo and subsequent external write, stale Redo must similarly
+    // be denied rather than replayed into the externally changed document.
+    let root2 = unique_temp_dir("material_redo_external_revision");
+    let mut redo_app = material_edit_app(&root2, asset, source, command_test_document());
+    let redo_file = root2.join("assets/materials/edit.material.ron");
+    apply_bound_material_action(
+        &mut redo_app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 5,
+            delta_y: 1,
+        },
+    )
+    .expect("source edit for redo fixture");
+    apply_bound_material_action(&mut redo_app, MaterialSurfaceAction::UndoMaterialEdit)
+        .expect("undo creates a redo entry");
+    assert_eq!(redo_app.material_lab_runtime().history_depths(), (0, 1));
+
+    let mut external_redo =
+        read_material_graph_document(&redo_file).expect("undone material source");
+    external_redo.label = "External After Undo".to_string();
+    write_material_graph_document(&redo_file, &external_redo)
+        .expect("external update after undo");
+    let redo_external_bytes = std::fs::read(&redo_file).expect("external redo bytes");
+    redo_app.select_material_asset(asset);
+    let redo_origin = redo_app
+        .material_source_origin_for_selected(None)
+        .expect("new current source origin after external edit");
+    assert!(
+        redo_app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: redo_origin,
+            action: Box::new(MaterialSurfaceAction::RedoMaterialEdit),
+        })
+        .is_err(),
+        "old Redo must not overwrite externally authored data"
+    );
+    assert_eq!(redo_app.material_lab_runtime().history_depths(), (0, 1));
+    assert_eq!(std::fs::read(&redo_file).expect("external redo survives"), redo_external_bytes);
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(root2);
+}
+
+#[test]
 fn material_three_step_undo_redo_preserves_each_revision_and_remaining_redo() {
     let root = unique_temp_dir("material_history_three_redos");
     let asset = asset_id(7701);
@@ -1035,7 +1120,7 @@ fn material_three_step_undo_redo_preserves_each_revision_and_remaining_redo() {
     let file = root.join("assets/materials/edit.material.ron");
     let mut versions = vec![std::fs::read(&file).expect("initial material bytes")];
 
-    for (dx, dy) in [(3, 1), (5, -2), (7, 4)] {
+    for (index, (dx, dy)) in [(3, 1), (5, -2), (7, 4)].into_iter().enumerate() {
         apply_bound_material_action(
             &mut app,
             MaterialSurfaceAction::MoveGraphNode {
@@ -1046,6 +1131,7 @@ fn material_three_step_undo_redo_preserves_each_revision_and_remaining_redo() {
         )
         .expect("source-backed edit should commit");
         versions.push(std::fs::read(&file).expect("committed source bytes"));
+        assert_eq!(app.material_lab_runtime().history_depths(), (index + 1, 0));
     }
     assert_eq!(versions.len(), 4);
     assert!(app.material_lab_runtime().can_undo());
@@ -1059,6 +1145,7 @@ fn material_three_step_undo_redo_preserves_each_revision_and_remaining_redo() {
             versions[expected],
             "undo must restore the exact prior committed source bytes"
         );
+        assert_eq!(app.material_lab_runtime().history_depths(), (expected, 3 - expected));
         assert!(app.material_lab_runtime().can_redo());
     }
     assert!(!app.material_lab_runtime().can_undo());
@@ -1072,6 +1159,7 @@ fn material_three_step_undo_redo_preserves_each_revision_and_remaining_redo() {
             bytes.as_slice(),
             "redo must restore the exact prior committed source bytes"
         );
+        assert_eq!(app.material_lab_runtime().history_depths(), (expected, 3 - expected));
         assert_eq!(
             app.material_lab_runtime().can_redo(),
             expected < 3,

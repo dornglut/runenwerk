@@ -409,20 +409,21 @@ impl RunenwerkEditorApp {
         )
         .map_err(editor_core::EditorMutationError::runtime_rejected)?;
         if changed {
-            self.write_material_graph_document_for_asset_if_revision(
-                asset_id,
-                &document,
-                expected_digest,
-            )
-            .map_err(|_| {
-                editor_core::EditorMutationError::runtime_rejected(
-                    "failed to persist material graph source edit",
+            let committed_digest = self
+                .write_material_graph_document_for_asset_if_revision(
+                    asset_id,
+                    &document,
+                    expected_digest,
                 )
-            })?;
+                .map_err(|_| {
+                    editor_core::EditorMutationError::runtime_rejected(
+                        "failed to persist material graph source edit",
+                    )
+                })?;
             // Only a committed new edit establishes a new undo entry and
             // invalidates redo. Rejected I/O leaves both stacks intact.
             self.material_lab_runtime_mut()
-                .push_undo_snapshot(asset_id, before);
+                .push_undo_snapshot(asset_id, before, committed_digest);
             if close_node_picker_after_change {
                 self.material_lab_runtime_mut().close_node_picker();
             }
@@ -527,28 +528,34 @@ impl RunenwerkEditorApp {
         &mut self,
         expected_digest: Option<[u8; 32]>,
     ) -> Result<(), editor_core::EditorMutationError> {
-        let Some((asset_id, previous)) = self.material_lab_runtime().next_undo_snapshot() else {
+        let Some(entry) = self.material_lab_runtime().next_undo_snapshot() else {
             return Ok(());
         };
+        if expected_digest != Some(entry.expected_current_digest) {
+            return Err(editor_core::EditorMutationError::runtime_rejected(
+                "material undo history is stale relative to the current source revision",
+            ));
+        }
         let current = self.load_material_graph_document_for_action(
-            asset_id,
+            entry.asset_id,
             "undo",
             "failed to load material graph source before undo",
         )?;
-        self.write_material_graph_document_for_asset_if_revision(
-            asset_id,
-            &previous,
-            expected_digest,
-        )
-        .map_err(|_| {
-            editor_core::EditorMutationError::runtime_rejected(
-                "failed to persist material graph undo",
+        let committed_digest = self
+            .write_material_graph_document_for_asset_if_revision(
+                entry.asset_id,
+                &entry.document,
+                expected_digest,
             )
-        })?;
+            .map_err(|_| {
+                editor_core::EditorMutationError::runtime_rejected(
+                    "failed to persist material graph undo",
+                )
+            })?;
         let _ = self.material_lab_runtime_mut().pop_undo_snapshot();
         self.material_lab_runtime_mut()
-            .push_redo_snapshot(asset_id, current);
-        self.refresh_material_source_projection(asset_id, previous);
+            .push_redo_snapshot(entry.asset_id, current, committed_digest);
+        self.refresh_material_source_projection(entry.asset_id, entry.document);
         Ok(())
     }
 
@@ -556,15 +563,25 @@ impl RunenwerkEditorApp {
         &mut self,
         expected_digest: Option<[u8; 32]>,
     ) -> Result<(), editor_core::EditorMutationError> {
-        let Some((asset_id, next)) = self.material_lab_runtime().next_redo_snapshot() else {
+        let Some(entry) = self.material_lab_runtime().next_redo_snapshot() else {
             return Ok(());
         };
+        if expected_digest != Some(entry.expected_current_digest) {
+            return Err(editor_core::EditorMutationError::runtime_rejected(
+                "material redo history is stale relative to the current source revision",
+            ));
+        }
         let current = self.load_material_graph_document_for_action(
-            asset_id,
+            entry.asset_id,
             "redo",
             "failed to load material graph source before redo",
         )?;
-        self.write_material_graph_document_for_asset_if_revision(asset_id, &next, expected_digest)
+        let committed_digest = self
+            .write_material_graph_document_for_asset_if_revision(
+                entry.asset_id,
+                &entry.document,
+                expected_digest,
+            )
             .map_err(|_| {
                 editor_core::EditorMutationError::runtime_rejected(
                     "failed to persist material graph redo",
@@ -572,8 +589,8 @@ impl RunenwerkEditorApp {
             })?;
         let _ = self.material_lab_runtime_mut().pop_redo_snapshot();
         self.material_lab_runtime_mut()
-            .push_undo_snapshot_from_redo(asset_id, current);
-        self.refresh_material_source_projection(asset_id, next);
+            .push_undo_snapshot_from_redo(entry.asset_id, current, committed_digest);
+        self.refresh_material_source_projection(entry.asset_id, entry.document);
         Ok(())
     }
 
@@ -751,7 +768,7 @@ impl RunenwerkEditorApp {
         asset_id: AssetId,
         document: &MaterialGraphDocument,
         expected_digest: Option<[u8; 32]>,
-    ) -> Result<()> {
+    ) -> Result<[u8; 32]> {
         let session = self.asset_project_session().ok_or_else(|| {
             anyhow::anyhow!("cannot write material graph document: no asset project session")
         })?;

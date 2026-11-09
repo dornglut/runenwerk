@@ -196,6 +196,15 @@ pub struct MaterialSourceObservation {
     pub source_context_digest: [u8; 32],
 }
 
+/// A source-qualified history state can replay only when the file is still
+/// exactly the byte revision produced by the preceding authored transition.
+#[derive(Debug, Clone)]
+pub(crate) struct MaterialHistorySnapshot {
+    pub asset_id: AssetId,
+    pub document: material_graph::MaterialGraphDocument,
+    pub expected_current_digest: [u8; 32],
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct MaterialLabRuntime {
     pub(super) selected_material_asset_id: Option<AssetId>,
@@ -211,8 +220,8 @@ pub struct MaterialLabRuntime {
     pub(super) node_picker_highlighted_descriptor_key: Option<String>,
     pub(super) active_diagnostic_index: Option<usize>,
     pub(super) texture_resource_search_query: String,
-    pub(super) undo_stack: Vec<(AssetId, material_graph::MaterialGraphDocument)>,
-    pub(super) redo_stack: Vec<(AssetId, material_graph::MaterialGraphDocument)>,
+    pub(super) undo_stack: Vec<MaterialHistorySnapshot>,
+    pub(super) redo_stack: Vec<MaterialHistorySnapshot>,
     pub(super) diagnostics: Vec<AssetDiagnosticRecord>,
     pub(super) publication_journal: Vec<EditorMaterialPreviewPublicationJournalEntry>,
     pub(super) last_workflow_status: Option<String>,
@@ -372,50 +381,61 @@ impl MaterialLabRuntime {
         self.texture_resource_search_query = query.into();
     }
 
-    pub fn push_undo_snapshot(
+    pub(crate) fn push_undo_snapshot(
         &mut self,
         asset_id: AssetId,
         document: material_graph::MaterialGraphDocument,
+        committed_digest: [u8; 32],
     ) {
-        self.undo_stack.push((asset_id, document));
+        self.undo_stack.push(MaterialHistorySnapshot {
+            asset_id,
+            document,
+            expected_current_digest: committed_digest,
+        });
         self.redo_stack.clear();
     }
 
-    pub fn next_undo_snapshot(&self) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
+    pub(crate) fn next_undo_snapshot(&self) -> Option<MaterialHistorySnapshot> {
         self.undo_stack.last().cloned()
     }
 
-    pub fn pop_undo_snapshot(
-        &mut self,
-    ) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
+    pub(crate) fn pop_undo_snapshot(&mut self) -> Option<MaterialHistorySnapshot> {
         self.undo_stack.pop()
     }
 
-    pub fn push_redo_snapshot(
+    pub(crate) fn push_redo_snapshot(
         &mut self,
         asset_id: AssetId,
         document: material_graph::MaterialGraphDocument,
+        committed_digest: [u8; 32],
     ) {
-        self.redo_stack.push((asset_id, document));
+        self.redo_stack.push(MaterialHistorySnapshot {
+            asset_id,
+            document,
+            expected_current_digest: committed_digest,
+        });
     }
 
-    pub fn next_redo_snapshot(&self) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
+    pub(crate) fn next_redo_snapshot(&self) -> Option<MaterialHistorySnapshot> {
         self.redo_stack.last().cloned()
     }
 
-    pub fn pop_redo_snapshot(
-        &mut self,
-    ) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
+    pub(crate) fn pop_redo_snapshot(&mut self) -> Option<MaterialHistorySnapshot> {
         self.redo_stack.pop()
     }
 
     /// Redo is not a fresh edit: the remaining redo chain must survive.
-    pub fn push_undo_snapshot_from_redo(
+    pub(crate) fn push_undo_snapshot_from_redo(
         &mut self,
         asset_id: AssetId,
         document: material_graph::MaterialGraphDocument,
+        committed_digest: [u8; 32],
     ) {
-        self.undo_stack.push((asset_id, document));
+        self.undo_stack.push(MaterialHistorySnapshot {
+            asset_id,
+            document,
+            expected_current_digest: committed_digest,
+        });
     }
 
     /// Source identity of the next history operation, without consuming it.
@@ -424,7 +444,7 @@ impl MaterialLabRuntime {
     ) -> Option<(AssetId, material_graph::MaterialGraphDocumentId)> {
         self.undo_stack
             .last()
-            .map(|(asset_id, document)| (*asset_id, document.document_id))
+            .map(|entry| (entry.asset_id, entry.document.document_id))
     }
 
     pub fn next_redo_source_identity(
@@ -432,7 +452,12 @@ impl MaterialLabRuntime {
     ) -> Option<(AssetId, material_graph::MaterialGraphDocumentId)> {
         self.redo_stack
             .last()
-            .map(|(asset_id, document)| (*asset_id, document.document_id))
+            .map(|entry| (entry.asset_id, entry.document.document_id))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn history_depths(&self) -> (usize, usize) {
+        (self.undo_stack.len(), self.redo_stack.len())
     }
 
     pub fn can_undo(&self) -> bool {
