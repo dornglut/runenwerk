@@ -126,8 +126,7 @@ mod tests {
         let catalog_path = root.join("assets/catalog.ron");
         std::fs::create_dir_all(catalog_path.parent().expect("catalog parent"))
             .expect("create assets");
-        std::fs::write(&catalog_path, "not valid RON ((")
-            .expect("create invalid catalog");
+        std::fs::write(&catalog_path, "not valid RON ((").expect("create invalid catalog");
         assert_eq!(
             app.load_asset_project_catalog()
                 .expect("invalid catalog is a controlled rejection"),
