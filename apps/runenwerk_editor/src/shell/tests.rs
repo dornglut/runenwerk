@@ -1790,6 +1790,29 @@ fn material_graph_canvas_real_project_route_rejects_delayed_a_delete_and_accepts
     let bounds = UiRect::new(0.0, 0.0, 1280.0, 720.0);
     let atlas = UiFontAtlasResource::default();
     let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+    let mounted_frames = build_editor_shell_frame_model(
+        &host.app,
+        &host.shell_state,
+        host.app.surface_provider_registry(),
+        &host.theme,
+        None,
+        None,
+        None,
+    );
+    for panel in [
+        PanelKind::MaterialGraphCanvas,
+        PanelKind::MaterialInspector,
+        PanelKind::MaterialPreview,
+    ] {
+        let instance = composition_target_by_panel_kind(&host.shell_state, panel)
+            .active_tool_surface
+            .expect("every Material panel has its own mounted surface identity");
+        assert_eq!(
+            mounted_frames.surface(instance).map(|frame| &frame.availability),
+            Some(&SurfaceProviderAvailability::Available),
+            "all three Material surfaces must be present during the captured action"
+        );
+    }
 
     let _ = RunenwerkEditorShellController::build_frame(
         &host.app,
@@ -1862,7 +1885,30 @@ fn material_graph_canvas_real_project_route_rejects_delayed_a_delete_and_accepts
         }] if origin.asset_id == first && origin.source_id == first_source
     ));
 
+    // A direct/automation owner selection can change before the Shell rebuilds.
+    // Unlike the normal Shell switch below, the old widget epoch stays current:
+    // the captured Material origin itself must veto the stale A Delete.
     let epoch = host.shell_state.current_projection_epoch();
+    host.app.select_material_asset(second);
+    assert_eq!(host.shell_state.current_projection_epoch(), epoch);
+    assert!(
+        RunenwerkEditorShellController::dispatch_commands(
+            &mut host.app,
+            &mut host.shell_state,
+            old_delete.clone(),
+            &registry,
+            None,
+            None,
+            None,
+        )
+        .is_err(),
+        "a current-epoch but source-stale A action must be rejected by Material owner admission"
+    );
+    assert_eq!(std::fs::read(&b_path).expect("B stays intact"), before_b);
+    assert!(host.app.material_lab_runtime().selected_graph_nodes().is_empty());
+    assert!(!host.app.material_lab_runtime().can_undo());
+
+    host.app.select_material_asset(first);
     dispatch_shell_command(
         &mut host.app,
         Some(&mut host.shell_state),

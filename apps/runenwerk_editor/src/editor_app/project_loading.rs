@@ -60,6 +60,87 @@ mod tests {
         let _ = std::fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn project_catalog_fallback_cannot_follow_a_material_source_into_another_project() {
+        let first_root = unique_temp_dir("material_catalog_owner_project_a");
+        let second_root = unique_temp_dir("material_catalog_owner_project_b");
+        let project = ProjectFileV3::new("project.material", "Material");
+        let project_ron = encode_ron_pretty(&project).expect("project file should encode");
+        let first_project = first_root.join("project.rune.ron");
+        let second_project = second_root.join("project.rune.ron");
+        std::fs::write(&first_project, &project_ron).expect("A project file");
+        std::fs::write(&second_project, &project_ron).expect("B project file");
+
+        let asset_id = asset::asset_id(1541);
+        let source_id = asset::asset_source_id(1542);
+        let relative_path = "assets/materials/source.material.ron";
+        let source = asset::AssetSourceDescriptor::new(
+            source_id,
+            asset_id,
+            asset::AssetKind::MaterialGraph,
+            relative_path,
+        );
+        let document = crate::material_lab::default_material_graph_document_for_source(
+            asset_id, &source, "Identical source",
+        );
+        for root in [&first_root, &second_root] {
+            crate::material_lab::write_material_graph_document(
+                &root.join(relative_path),
+                &document,
+            )
+            .expect("identically addressed Material file should persist");
+        }
+        let original_a = std::fs::read(first_root.join(relative_path)).expect("A bytes");
+        let original_b = std::fs::read(second_root.join(relative_path)).expect("B bytes");
+        assert_eq!(original_a, original_b);
+
+        let mut app = RunenwerkEditorApp::new();
+        app.load_project_file(&first_project)
+            .expect("A missing catalog should be a controlled diagnostic");
+        let mut a_catalog = asset::AssetCatalog::new();
+        a_catalog.insert_asset_record(
+            asset::AssetRecord::new(
+                asset_id,
+                "catalog-from-A",
+                "Material from A",
+                asset::AssetKind::MaterialGraph,
+            )
+            .with_primary_source(source_id),
+        );
+        a_catalog.insert_source(source);
+        app.asset_catalog_runtime_mut().replace_catalog(a_catalog);
+        app.select_material_asset(asset_id);
+        assert!(
+            app.material_published_source_origin_for_selected(None)
+                .is_ok(),
+            "A source is valid under A's in-memory last-known-good catalog"
+        );
+
+        app.load_project_file(&first_project)
+            .expect("same project reload may preserve last-known-good catalog");
+        assert!(
+            app.asset_catalog_runtime().catalog().asset(asset_id).is_some(),
+            "within-project rejected catalog preserves its last-known-good catalog"
+        );
+
+        app.load_project_file(&second_project)
+            .expect("B missing catalog should be diagnosed without adopting A's catalog");
+        assert!(
+            app.asset_catalog_runtime().catalog().asset(asset_id).is_none(),
+            "project B must not inherit project A's catalog on a missing/invalid B catalog"
+        );
+        assert_eq!(app.material_lab_runtime().selected_material_asset_id(), None);
+        assert!(
+            app.material_source_origin_for_selected(None).is_err(),
+            "identically named B files cannot be edited through stale A catalog descriptors"
+        );
+        assert_eq!(std::fs::read(first_root.join(relative_path)).expect("A stable"), original_a);
+        assert_eq!(std::fs::read(second_root.join(relative_path)).expect("B stable"), original_b);
+
+        let _ = std::fs::remove_dir_all(first_root);
+        let _ = std::fs::remove_dir_all(second_root);
+    }
+
     fn unique_temp_dir(label: &str) -> std::path::PathBuf {
         let mut root = std::env::temp_dir();
         let nanos = std::time::SystemTime::now()

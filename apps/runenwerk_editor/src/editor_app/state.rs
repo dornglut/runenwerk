@@ -375,6 +375,10 @@ impl RunenwerkEditorApp {
     }
 
     pub fn set_asset_project_session(&mut self, session: EditorAssetProjectSession) {
+        let replaces_catalog_owner = self.asset_project_session.as_ref().is_some_and(|previous| {
+            previous.project_root() != session.project_root()
+                || previous.descriptor() != session.descriptor()
+        });
         self.material_source_context_generation = self
             .material_source_context_generation
             .checked_add(1)
@@ -384,6 +388,12 @@ impl RunenwerkEditorApp {
         // to the old project even when its owner-local IDs are reused.
         self.material_lab_runtime = MaterialLabRuntime::default();
         self.pending_material_preview_publications.clear();
+        // The last-known-good catalog is a *project-owned* fallback. It may
+        // survive a failed reload within one project, never a project switch:
+        // old source paths under a new root could otherwise admit a new edit.
+        if replaces_catalog_owner {
+            self.asset_catalog_runtime = AssetCatalogRuntime::new();
+        }
         self.asset_project_session = Some(session);
     }
 
