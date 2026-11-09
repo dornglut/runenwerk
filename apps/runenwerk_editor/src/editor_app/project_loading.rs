@@ -105,6 +105,61 @@ mod tests {
     }
 
     #[test]
+    fn repeated_load_commands_cannot_confirm_discard_without_explicit_confirm() {
+        let root = unique_temp_dir("catalog_repeated_load_safe");
+        let project_path = root.join("project.rune.ron");
+        std::fs::write(
+            &project_path,
+            encode_ron_pretty(&ProjectFileV3::new("project.double_load", "Double Load"))
+                .expect("project encoding"),
+        )
+        .expect("project file");
+        let mut app = RunenwerkEditorApp::new();
+        app.load_project_file(&project_path).expect("load project");
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
+                asset::asset_id(23001),
+                "saved",
+                "Saved",
+                asset::AssetKind::MaterialGraph,
+            ));
+        app.save_asset_project_catalog().expect("save accepted catalog");
+        let unsaved_id = asset::asset_id(23002);
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
+                unsaved_id,
+                "unsaved",
+                "Unsaved",
+                asset::AssetKind::MaterialGraph,
+            ));
+        let source_generation = app.material_source_context_generation;
+        for _ in 0..3 {
+            assert_eq!(
+                app.load_asset_project_catalog().expect("Load is never Confirm"),
+                crate::editor_app::AssetCatalogLoadDisposition::ConfirmationRequired
+            );
+            assert!(
+                app.asset_catalog_runtime().catalog().asset(unsaved_id).is_some(),
+                "repeated Load cannot silently discard local edits"
+            );
+            assert_eq!(app.material_source_context_generation, source_generation);
+        }
+        app.cancel_asset_catalog_discard_confirmation();
+        assert!(
+            app.confirm_asset_catalog_discard().is_err(),
+            "Confirm without a pending request is rejected"
+        );
+        assert!(app.asset_catalog_runtime().catalog().asset(unsaved_id).is_some());
+        app.load_asset_project_catalog().expect("request explicit confirmation");
+        app.confirm_asset_catalog_discard()
+            .expect("distinct Confirm action restores saved content");
+        assert!(app.asset_catalog_runtime().catalog().asset(unsaved_id).is_none());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn rejected_catalog_load_reports_preserved_not_loaded() {
         let root = unique_temp_dir("catalog_rejected_load_outcome");
         let project_path = root.join("project.rune.ron");
@@ -288,8 +343,8 @@ mod tests {
         app.load_asset_project_catalog()
             .expect("first click requests confirmation for unsaved A");
         assert!(app.asset_catalog_discard_confirmation_pending());
-        app.load_asset_project_catalog()
-            .expect("second click confirms A's persisted catalog");
+        app.confirm_asset_catalog_discard()
+            .expect("explicit confirmation performs A's persisted catalog");
         app.select_material_asset(asset_id);
 
         // A hard B catalog read failure must not partially commit the
@@ -423,8 +478,8 @@ mod tests {
         app.load_asset_project_catalog()
             .expect("first click requests explicit discard");
         assert!(app.asset_catalog_discard_confirmation_pending());
-        app.load_asset_project_catalog()
-            .expect("second click confirms disk restore");
+        app.confirm_asset_catalog_discard()
+            .expect("explicit confirmation performs disk restore");
         assert!(
             app.asset_catalog_runtime()
                 .catalog()
@@ -510,8 +565,8 @@ mod tests {
         app.load_asset_project_catalog()
             .expect("first click requests restoring A");
         assert!(app.asset_catalog_discard_confirmation_pending());
-        app.load_asset_project_catalog()
-            .expect("second click confirms restoring A");
+        app.confirm_asset_catalog_discard()
+            .expect("explicit confirmation performs restoring A");
         app.load_project_file(&project_b)
             .expect("a clean A can switch to B using the shared accepted physical catalog");
         assert_eq!(
@@ -610,7 +665,7 @@ mod tests {
                 asset::AssetKind::MaterialGraph,
             ));
         assert!(
-            app.load_asset_project_catalog().is_err(),
+            app.confirm_asset_catalog_discard().is_err(),
             "a stale confirmation cannot discard post-request mutations"
         );
         assert!(
@@ -623,7 +678,7 @@ mod tests {
 
         app.load_asset_project_catalog()
             .expect("fresh confirmation request");
-        app.load_asset_project_catalog()
+        app.confirm_asset_catalog_discard()
             .expect("confirmed discard and disk restore");
         assert!(
             app.asset_catalog_runtime()
@@ -691,7 +746,7 @@ mod tests {
             .expect("simulate external catalog write");
         assert!(diagnostics.is_empty());
         let err = app
-            .load_asset_project_catalog()
+            .confirm_asset_catalog_discard()
             .expect_err("stale disk content cannot be silently accepted");
         assert!(err.to_string().contains("changed since confirmation"));
         assert_eq!(app.asset_catalog_runtime().catalog(), &local);

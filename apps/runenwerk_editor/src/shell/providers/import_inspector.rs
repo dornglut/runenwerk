@@ -40,12 +40,7 @@ impl EditorSurfaceProvider for ImportInspectorProvider {
         lines.extend(context.app.asset_catalog_runtime().reload_status_lines());
         let mut actions = vec![
             (
-                (if context.app.asset_catalog_discard_confirmation_pending() {
-                    "Confirm: discard local catalog changes and load saved"
-                } else {
-                    "Load catalog"
-                })
-                .to_string(),
+                "Load catalog".to_string(),
                 SurfaceLocalAction::Asset(AssetSurfaceAction::LoadProjectCatalog),
             ),
             (
@@ -58,6 +53,10 @@ impl EditorSurfaceProvider for ImportInspectorProvider {
             ),
         ];
         if context.app.asset_catalog_discard_confirmation_pending() {
+            actions.push((
+                "Confirm: discard local catalog changes and load saved".to_string(),
+                SurfaceLocalAction::Asset(AssetSurfaceAction::ConfirmProjectCatalogDiscard),
+            ));
             actions.push((
                 "Cancel catalog discard".to_string(),
                 SurfaceLocalAction::Asset(AssetSurfaceAction::CancelProjectCatalogDiscard),

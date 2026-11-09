@@ -49,6 +49,7 @@ pub struct ImportInspectorViewModel {
 pub enum AssetSurfaceAction {
     SelectAsset { asset_id: asset::AssetId },
     LoadProjectCatalog,
+    ConfirmProjectCatalogDiscard,
     SaveProjectCatalog,
     CancelProjectCatalogDiscard,
     ReimportAsset { asset_id: asset::AssetId },

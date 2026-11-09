@@ -480,7 +480,7 @@ impl RunenwerkEditorApp {
             });
         if self.pending_asset_catalog_discard.is_some() {
             lines.push(
-                "Confirmation required: click Load again to discard local catalog edits"
+                "Confirmation required: choose Confirm discard or Cancel; Load alone never discards local edits"
                     .to_string(),
             );
         }
@@ -495,9 +495,13 @@ impl RunenwerkEditorApp {
         self.pending_asset_catalog_discard = None;
     }
 
-    /// A normal load may refresh changed disk content without losing local
-    /// edits. A destructive restore requires a second explicit Load action.
+    /// Load is non-destructive when local edits exist: only the separate
+    /// Confirm command can authorize replacing them. Two queued Load commands
+    /// cannot silently become a destructive double-click.
     pub fn load_asset_project_catalog(&mut self) -> anyhow::Result<AssetCatalogLoadDisposition> {
+        if self.pending_asset_catalog_discard.is_some() {
+            return Ok(AssetCatalogLoadDisposition::ConfirmationRequired);
+        }
         let Some(session) = self.asset_project_session.as_ref() else {
             self.record_missing_asset_project_session("load catalog");
             anyhow::bail!("cannot load asset catalog: no asset project session is active");
@@ -510,26 +514,16 @@ impl RunenwerkEditorApp {
                 |accepted| current == accepted,
             );
             if !unchanged {
-                if let Some(pending) = self.pending_asset_catalog_discard.take() {
-                    anyhow::ensure!(
-                        pending.source_generation == self.material_source_context_generation
-                            && session.shares_catalog_fallback_context(&pending.session)
-                            && current == &pending.current
-                            && persisted == &pending.persisted,
-                        "catalog discard rejected: project, local catalog or disk changed since confirmation; request again"
-                    );
-                } else {
-                    self.pending_asset_catalog_discard = Some(PendingAssetCatalogDiscard {
-                        session: session.clone(),
-                        source_generation: self.material_source_context_generation,
-                        current: current.clone(),
-                        persisted: persisted.clone(),
-                    });
-                    self.append_console_warning(
-                        "[asset] unsaved catalog changes: click Load catalog again to confirm discard",
-                    );
-                    return Ok(AssetCatalogLoadDisposition::ConfirmationRequired);
-                }
+                self.pending_asset_catalog_discard = Some(PendingAssetCatalogDiscard {
+                    session: session.clone(),
+                    source_generation: self.material_source_context_generation,
+                    current: current.clone(),
+                    persisted: persisted.clone(),
+                });
+                self.append_console_warning(
+                    "[asset] unsaved catalog changes: choose Confirm discard to load saved catalog, or Cancel",
+                );
+                return Ok(AssetCatalogLoadDisposition::ConfirmationRequired);
             }
         }
         self.pending_asset_catalog_discard = None;
@@ -540,6 +534,33 @@ impl RunenwerkEditorApp {
         } else {
             Ok(AssetCatalogLoadDisposition::Loaded)
         }
+    }
+
+    /// Explicit destructive command, available only after the UI has shown
+    /// the pending confirmation. A stale project/local/disk revision fails
+    /// closed and never consumes any unconfirmed catalog edits.
+    pub fn confirm_asset_catalog_discard(
+        &mut self,
+    ) -> anyhow::Result<AssetCatalogLoadDisposition> {
+        let pending = self.pending_asset_catalog_discard.take().ok_or_else(|| {
+            anyhow::anyhow!("no pending asset catalog discard to confirm")
+        })?;
+        let session = self.asset_project_session.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("cannot confirm catalog discard: no active project session")
+        })?;
+        let outcome = load_project_catalog(session)?;
+        let Some(persisted) = outcome.accepted_catalog.as_ref() else {
+            anyhow::bail!("catalog discard rejected: saved catalog is no longer accepted");
+        };
+        anyhow::ensure!(
+            pending.source_generation == self.material_source_context_generation
+                && session.shares_catalog_fallback_context(&pending.session)
+                && self.asset_catalog_runtime.catalog() == &pending.current
+                && persisted == &pending.persisted,
+            "catalog discard rejected: project, local catalog or disk changed since confirmation; request again"
+        );
+        self.apply_asset_project_catalog_load_outcome(outcome);
+        Ok(AssetCatalogLoadDisposition::Loaded)
     }
 
     /// Publish a catalog result already read for the active project. Project

@@ -241,6 +241,15 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 }
             }
         }
+        ShellCommand::ConfirmAssetCatalogDiscard {
+            projection_epoch: _,
+        } => {
+            app.confirm_asset_catalog_discard().map_err(|error| {
+                app.append_console_error(format!("[asset] catalog discard failed: {error}"));
+                EditorMutationError::runtime_rejected("asset catalog discard failed")
+            })?;
+            app.append_console_line("[asset] confirmed catalog discard and saved catalog loaded");
+        }
         ShellCommand::SaveAssetCatalog {
             projection_epoch: _,
         } => {
@@ -1323,6 +1332,7 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ToggleDebugLogs => "ToggleDebugLogs",
         ShellCommand::SelectAsset { .. } => "SelectAsset",
         ShellCommand::LoadAssetCatalog { .. } => "LoadAssetCatalog",
+        ShellCommand::ConfirmAssetCatalogDiscard { .. } => "ConfirmAssetCatalogDiscard",
         ShellCommand::SaveAssetCatalog { .. } => "SaveAssetCatalog",
         ShellCommand::CancelAssetCatalogDiscard { .. } => "CancelAssetCatalogDiscard",
         ShellCommand::ReimportAsset { .. } => "ReimportAsset",
