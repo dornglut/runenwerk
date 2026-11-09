@@ -193,8 +193,7 @@ mod tests {
         // A hard B catalog read failure must not partially commit the
         // switch after clearing A's Material and catalog state.
         let invalid_b_catalog = second_root.join("assets/catalog.ron");
-        std::fs::create_dir_all(&invalid_b_catalog)
-            .expect("create B catalog path as a directory");
+        std::fs::create_dir_all(&invalid_b_catalog).expect("create B catalog path as a directory");
         let origin_before_failure = app
             .material_source_origin_for_selected(None)
             .expect("A origin remains active after restoring its catalog");
@@ -217,7 +216,10 @@ mod tests {
             origin_before_failure
         );
         assert!(
-            app.asset_catalog_runtime().catalog().asset(asset_id).is_some(),
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(asset_id)
+                .is_some(),
             "A catalog must survive a hard B catalog read error"
         );
         std::fs::remove_dir(&invalid_b_catalog)
