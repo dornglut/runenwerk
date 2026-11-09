@@ -39,6 +39,7 @@ spines win when an active design contains older conflicting target language.
 
 - [Editor Asset Pipeline and Content Workflow Design](editor-asset-pipeline-and-content-workflow-design.md)
 - [Editor Procedural Content and Simulation Workflow Plan](editor-procedural-content-and-simulation-workflow-plan.md)
+- [Runenwerk PCG Lab Product Design](runenwerk-pcg-lab-product-design.md)
 
 ### Engine Runtime
 
