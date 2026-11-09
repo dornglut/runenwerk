@@ -454,7 +454,7 @@ impl RunenwerkEditorApp {
     pub fn load_asset_project_catalog(&mut self) -> anyhow::Result<()> {
         let Some(session) = self.asset_project_session.as_ref() else {
             self.record_missing_asset_project_session("load catalog");
-            return Ok(());
+            anyhow::bail!("cannot load asset catalog: no asset project session is active");
         };
         let outcome = load_project_catalog(session)?;
         self.apply_asset_project_catalog_load_outcome(outcome);
@@ -485,7 +485,7 @@ impl RunenwerkEditorApp {
     pub fn save_asset_project_catalog(&mut self) -> anyhow::Result<()> {
         let Some(session) = self.asset_project_session.as_ref() else {
             self.record_missing_asset_project_session("save catalog");
-            return Ok(());
+            anyhow::bail!("cannot save asset catalog: no asset project session is active");
         };
         let diagnostics = save_project_catalog(session, self.asset_catalog_runtime.catalog())?;
         if diagnostics.is_empty() {

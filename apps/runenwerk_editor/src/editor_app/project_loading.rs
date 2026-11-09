@@ -59,6 +59,42 @@ mod tests {
     use editor_persistence::{ProjectFileV3, encode_ron_pretty};
 
     #[test]
+    fn catalog_commands_without_project_session_report_errors_not_success() {
+        let mut app = RunenwerkEditorApp::new();
+        assert!(app.asset_project_session().is_none());
+        let original = app.asset_catalog_runtime().catalog().clone();
+        let load_error = app
+            .load_asset_project_catalog()
+            .expect_err("catalog load without a project must not report success");
+        assert!(
+            load_error.to_string().contains("no asset project session"),
+            "{load_error:#}"
+        );
+        let save_error = app
+            .save_asset_project_catalog()
+            .expect_err("catalog save without a project must not report success");
+        assert!(
+            save_error.to_string().contains("no asset project session"),
+            "{save_error:#}"
+        );
+        assert_eq!(
+            app.asset_catalog_runtime().catalog(),
+            &original,
+            "rejected commands must preserve the unsaved in-memory catalog"
+        );
+        assert!(
+            app.asset_catalog_runtime().diagnostics().iter().any(|diagnostic| {
+                diagnostic.message.contains("cannot load catalog: no asset project session")
+            })
+        );
+        assert!(
+            app.asset_catalog_runtime().diagnostics().iter().any(|diagnostic| {
+                diagnostic.message.contains("cannot save catalog: no asset project session")
+            })
+        );
+    }
+
+    #[test]
     fn load_project_file_sets_asset_project_session_and_reports_missing_catalog() {
         let root = unique_temp_dir("project_load_session");
         let project_path = root.join("project.rune.ron");
