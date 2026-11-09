@@ -442,11 +442,33 @@ impl RunenwerkEditorApp {
                     "failed to persist material graph diagnostic navigation",
                 )
             })?;
-        self.material_lab_runtime_mut()
-            .select_graph_node(target_node_id);
-        self.material_lab_runtime_mut()
-            .set_active_source_document(asset_id, document);
-        Ok(())
+        // Diagnostic navigation writes source viewport state too. Re-observe
+        // exactly the bytes just published before issuing a new UI origin.
+        // Otherwise the canvas loses its admitted source after navigation.
+        match self.load_material_graph_document_for_asset_with_digest(asset_id) {
+            Ok((observed, source_id, digest)) if observed == document => {
+                self.material_lab_runtime_mut()
+                    .set_active_source_document_with_observation(
+                        asset_id, source_id, document, digest,
+                    );
+                self.material_lab_runtime_mut()
+                    .select_graph_node(target_node_id);
+                self.material_lab_runtime_mut()
+                    .set_active_diagnostic_index(Some(diagnostic_index));
+                Ok(())
+            }
+            _ => {
+                self.material_lab_runtime_mut()
+                    .discard_failed_selected_source_reload(asset_id);
+                self.record_material_workflow_diagnostics([material_diagnostic(
+                    AssetDiagnosticCode::RatificationRejected,
+                    "material source changed before diagnostic navigation could be observed",
+                )]);
+                Err(editor_core::EditorMutationError::runtime_rejected(
+                    "material graph source could not be observed after diagnostic navigation",
+                ))
+            }
+        }
     }
 
     fn undo_material_edit(&mut self) -> Result<(), editor_core::EditorMutationError> {

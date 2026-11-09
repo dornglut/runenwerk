@@ -1234,6 +1234,19 @@ fn material_graph_navigate_diagnostic_selects_and_centers_subject() {
     );
     assert_eq!(document.editor_state.viewport.pan_x, 100);
     assert_eq!(document.editor_state.viewport.pan_y, 220);
+    let reobserved = app
+        .material_published_source_origin_for_selected(None)
+        .expect("successful diagnostic navigation must republish source identity");
+    assert_eq!(reobserved.document_id, document.document_id);
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::SetGraphZoom { zoom_milli: 1250 },
+    )
+    .expect("next source-bound edit should work without a manual source reload");
+    let updated = app
+        .load_material_graph_document_for_asset(asset_id)
+        .expect("follow-up source graph should persist");
+    assert_eq!(updated.editor_state.viewport.zoom_milli, 1250);
     let _ = std::fs::remove_dir_all(root);
 }
 
