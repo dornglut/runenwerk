@@ -1,0 +1,60 @@
+name: Material source Windows qualification
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "apps/runenwerk_editor/src/material_lab/**"
+      - "apps/runenwerk_editor/src/editor_app/state.rs"
+      - "apps/runenwerk_editor/Cargo.toml"
+      - ".github/workflows/material-source-windows.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: material-windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-replacement-windows:
+    name: Material source replacement / Windows
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - name: Check out exact reviewed feature head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Confirm checked-out feature revision
+        shell: pwsh
+        env:
+          EXPECTED_REVISION: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:EXPECTED_REVISION) {
+            throw "Wrong source revision: expected $env:EXPECTED_REVISION, got $actual"
+          }
+
+      - name: Install stable Rust toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Exercise Material source replacement on Windows
+        shell: pwsh
+        env:
+          RUST_BACKTRACE: "1"
+        run: |
+          cargo +stable test --locked -p runenwerk_editor --lib material_lab::document_io::tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo +stable test --locked -p runenwerk_editor --lib material_lab::workflow::tests::material_three_step_undo_redo_preserves_each_revision_and_remaining_redo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cargo +stable test --locked -p runenwerk_editor --lib material_lab::workflow::tests::material_failed_post_admission_write_preserves_both_history_stacks_and_disk
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

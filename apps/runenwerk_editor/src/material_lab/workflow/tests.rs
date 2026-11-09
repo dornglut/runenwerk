@@ -1063,12 +1063,13 @@ fn material_three_step_undo_redo_preserves_each_revision_and_remaining_redo() {
     }
     assert!(!app.material_lab_runtime().can_undo());
 
-    for expected in 1..=3 {
+    for (expected, bytes) in versions.iter().enumerate().skip(1) {
         apply_bound_material_action(&mut app, MaterialSurfaceAction::RedoMaterialEdit)
             .expect("redo must preserve the remaining redo steps");
+        let observed = std::fs::read(&file).expect("redo source bytes");
         assert_eq!(
-            std::fs::read(&file).expect("redo source bytes"),
-            versions[expected],
+            observed.as_slice(),
+            bytes.as_slice(),
             "redo must restore the exact prior committed source bytes"
         );
         assert_eq!(

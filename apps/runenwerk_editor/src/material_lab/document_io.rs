@@ -342,6 +342,52 @@ mod tests {
     }
 
     #[test]
+    fn read_only_material_target_rejects_replacement_without_losing_source() {
+        let root = unique_temp_dir("material_read_only_source");
+        let path = root.join("assets/materials/read_only.material.ron");
+        let document = MaterialGraphDocument::new(
+            MaterialGraphDocumentId::new(992),
+            "Unchanged",
+            GraphDefinition::new(
+                GraphId::new(1),
+                "readonly",
+                CyclePolicy::RejectDirectedCycles,
+                [NodeDefinition::new(NodeId::new(1), "pbr.output", [])],
+                [],
+            ),
+            MaterialOutputTarget::RenderMaterial,
+        );
+        write_material_graph_document(&path, &document).expect("original source should exist");
+        let accepted = std::fs::read(&path).expect("accepted source bytes");
+        let original_permissions = std::fs::metadata(&path)
+            .expect("accepted source metadata")
+            .permissions();
+        let mut read_only = original_permissions.clone();
+        read_only.set_readonly(true);
+        std::fs::set_permissions(&path, read_only)
+            .expect("make accepted source read-only");
+
+        let mut changed = document.clone();
+        changed.label = "Unexpected".to_string();
+        assert!(
+            write_material_graph_document_if_revision(
+                &path,
+                &changed,
+                Some(*blake3::hash(&accepted).as_bytes()),
+            )
+            .is_err(),
+            "read-only source cannot be replaced by staging around its permission bit"
+        );
+        assert_eq!(
+            std::fs::read(&path).expect("unchanged read-only source"),
+            accepted
+        );
+        std::fs::set_permissions(&path, original_permissions)
+            .expect("restore permissions for cleanup");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn v1_source_returns_recoverable_load_outcome() {
         let root = unique_temp_dir("material_graph_v1_recoverable");
         let path = root.join("assets/materials/legacy.material.ron");
