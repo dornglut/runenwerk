@@ -216,7 +216,7 @@ impl RunenwerkEditorApp {
                         "Material history source differs from the invocation source",
                     ));
                 }
-                self.apply_qualified_material_surface_action(*action)
+                self.apply_qualified_material_surface_action(*action, Some(origin.content_digest))
             }
             action if action.requires_source_origin() => {
                 self.record_material_workflow_diagnostics([material_diagnostic(
@@ -227,13 +227,14 @@ impl RunenwerkEditorApp {
                     "Material source action requires its originating source",
                 ))
             }
-            action => self.apply_qualified_material_surface_action(action),
+            action => self.apply_qualified_material_surface_action(action, None),
         }
     }
 
     fn apply_qualified_material_surface_action(
         &mut self,
         action: MaterialSurfaceAction,
+        expected_digest: Option<[u8; 32]>,
     ) -> Result<(), editor_core::EditorMutationError> {
         match action {
             MaterialSurfaceAction::SelectMaterialAsset { asset_id } => {
@@ -275,13 +276,14 @@ impl RunenwerkEditorApp {
                         "SDF primitive material slot assignment failed",
                     )
                 }),
-            action => self.apply_source_backed_material_edit(action),
+            action => self.apply_source_backed_material_edit(action, expected_digest),
         }
     }
 
     fn apply_source_backed_material_edit(
         &mut self,
         mut action: MaterialSurfaceAction,
+        expected_digest: Option<[u8; 32]>,
     ) -> Result<(), editor_core::EditorMutationError> {
         if let MaterialSurfaceAction::SelectGraphNode { node_id } = action {
             self.material_lab_runtime_mut().select_graph_node(node_id);
@@ -324,14 +326,14 @@ impl RunenwerkEditorApp {
             return Ok(());
         }
         if let MaterialSurfaceAction::NavigateDiagnostic { diagnostic_index } = action {
-            return self.navigate_material_graph_diagnostic(diagnostic_index);
+            return self.navigate_material_graph_diagnostic(diagnostic_index, expected_digest);
         }
 
         if let MaterialSurfaceAction::UndoMaterialEdit = action {
-            return self.undo_material_edit();
+            return self.undo_material_edit(expected_digest);
         }
         if let MaterialSurfaceAction::RedoMaterialEdit = action {
-            return self.redo_material_edit();
+            return self.redo_material_edit(expected_digest);
         }
         let close_node_picker_after_change =
             if matches!(action, MaterialSurfaceAction::ConfirmNodePickerSelection) {
@@ -407,14 +409,20 @@ impl RunenwerkEditorApp {
         )
         .map_err(editor_core::EditorMutationError::runtime_rejected)?;
         if changed {
+            self.write_material_graph_document_for_asset_if_revision(
+                asset_id,
+                &document,
+                expected_digest,
+            )
+            .map_err(|_| {
+                editor_core::EditorMutationError::runtime_rejected(
+                    "failed to persist material graph source edit",
+                )
+            })?;
+            // Only a committed new edit establishes a new undo entry and
+            // invalidates redo. Rejected I/O leaves both stacks intact.
             self.material_lab_runtime_mut()
                 .push_undo_snapshot(asset_id, before);
-            self.write_material_graph_document_for_asset(asset_id, &document)
-                .map_err(|_| {
-                    editor_core::EditorMutationError::runtime_rejected(
-                        "failed to persist material graph source edit",
-                    )
-                })?;
             if close_node_picker_after_change {
                 self.material_lab_runtime_mut().close_node_picker();
             }
@@ -426,6 +434,7 @@ impl RunenwerkEditorApp {
     fn navigate_material_graph_diagnostic(
         &mut self,
         diagnostic_index: usize,
+        expected_digest: Option<[u8; 32]>,
     ) -> Result<(), editor_core::EditorMutationError> {
         let diagnostic = self
             .material_lab_runtime()
@@ -471,12 +480,16 @@ impl RunenwerkEditorApp {
         };
 
         center_material_graph_viewport_on_node(&mut document, target_node_id);
-        self.write_material_graph_document_for_asset(asset_id, &document)
-            .map_err(|_| {
-                editor_core::EditorMutationError::runtime_rejected(
-                    "failed to persist material graph diagnostic navigation",
-                )
-            })?;
+        self.write_material_graph_document_for_asset_if_revision(
+            asset_id,
+            &document,
+            expected_digest,
+        )
+        .map_err(|_| {
+            editor_core::EditorMutationError::runtime_rejected(
+                "failed to persist material graph diagnostic navigation",
+            )
+        })?;
         // Diagnostic navigation writes source viewport state too. Re-observe
         // exactly the bytes just published before issuing a new UI origin.
         // Otherwise the canvas loses its admitted source after navigation.
@@ -510,8 +523,11 @@ impl RunenwerkEditorApp {
         }
     }
 
-    fn undo_material_edit(&mut self) -> Result<(), editor_core::EditorMutationError> {
-        let Some((asset_id, previous)) = self.material_lab_runtime_mut().pop_undo_snapshot() else {
+    fn undo_material_edit(
+        &mut self,
+        expected_digest: Option<[u8; 32]>,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        let Some((asset_id, previous)) = self.material_lab_runtime().next_undo_snapshot() else {
             return Ok(());
         };
         let current = self.load_material_graph_document_for_action(
@@ -519,20 +535,28 @@ impl RunenwerkEditorApp {
             "undo",
             "failed to load material graph source before undo",
         )?;
-        self.write_material_graph_document_for_asset(asset_id, &previous)
-            .map_err(|_| {
-                editor_core::EditorMutationError::runtime_rejected(
-                    "failed to persist material graph undo",
-                )
-            })?;
+        self.write_material_graph_document_for_asset_if_revision(
+            asset_id,
+            &previous,
+            expected_digest,
+        )
+        .map_err(|_| {
+            editor_core::EditorMutationError::runtime_rejected(
+                "failed to persist material graph undo",
+            )
+        })?;
+        let _ = self.material_lab_runtime_mut().pop_undo_snapshot();
         self.material_lab_runtime_mut()
             .push_redo_snapshot(asset_id, current);
         self.refresh_material_source_projection(asset_id, previous);
         Ok(())
     }
 
-    fn redo_material_edit(&mut self) -> Result<(), editor_core::EditorMutationError> {
-        let Some((asset_id, next)) = self.material_lab_runtime_mut().pop_redo_snapshot() else {
+    fn redo_material_edit(
+        &mut self,
+        expected_digest: Option<[u8; 32]>,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        let Some((asset_id, next)) = self.material_lab_runtime().next_redo_snapshot() else {
             return Ok(());
         };
         let current = self.load_material_graph_document_for_action(
@@ -540,14 +564,19 @@ impl RunenwerkEditorApp {
             "redo",
             "failed to load material graph source before redo",
         )?;
-        self.write_material_graph_document_for_asset(asset_id, &next)
-            .map_err(|_| {
-                editor_core::EditorMutationError::runtime_rejected(
-                    "failed to persist material graph redo",
-                )
-            })?;
+        self.write_material_graph_document_for_asset_if_revision(
+            asset_id,
+            &next,
+            expected_digest,
+        )
+        .map_err(|_| {
+            editor_core::EditorMutationError::runtime_rejected(
+                "failed to persist material graph redo",
+            )
+        })?;
+        let _ = self.material_lab_runtime_mut().pop_redo_snapshot();
         self.material_lab_runtime_mut()
-            .push_undo_snapshot(asset_id, current);
+            .push_undo_snapshot_from_redo(asset_id, current);
         self.refresh_material_source_projection(asset_id, next);
         Ok(())
     }
@@ -719,6 +748,40 @@ impl RunenwerkEditorApp {
             );
         }
         write_material_graph_document(&path, document)
+    }
+
+    fn write_material_graph_document_for_asset_if_revision(
+        &self,
+        asset_id: AssetId,
+        document: &MaterialGraphDocument,
+        expected_digest: Option<[u8; 32]>,
+    ) -> Result<()> {
+        let session = self.asset_project_session().ok_or_else(|| {
+            anyhow::anyhow!("cannot write material graph document: no asset project session")
+        })?;
+        let source =
+            resolve_material_source_for_asset(self.asset_catalog_runtime().catalog(), asset_id)
+                .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
+        let expected_document_id = material_document_id_for_source(asset_id, source.source_id);
+        anyhow::ensure!(
+            document.document_id == expected_document_id,
+            "material graph source document id does not match asset/source identity"
+        );
+        let path = session.project_root().join(&source.relative_path);
+        let (current, _) = crate::material_lab::read_material_graph_document_with_digest(&path)?;
+        anyhow::ensure!(
+            current.document_id == expected_document_id,
+            "existing material graph source document id does not match asset/source identity"
+        );
+        #[cfg(test)]
+        if self.fail_next_material_source_write.replace(false) {
+            anyhow::bail!("injected Material source writer failure before replacement");
+        }
+        crate::material_lab::write_material_graph_document_if_revision(
+            &path,
+            document,
+            expected_digest,
+        )
     }
 
     fn load_material_graph_document_for_action(

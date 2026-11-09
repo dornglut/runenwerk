@@ -1027,6 +1027,121 @@ fn material_source_revision_rejects_external_same_document_byte_change() {
 }
 
 #[test]
+fn material_three_step_undo_redo_preserves_each_revision_and_remaining_redo() {
+    let root = unique_temp_dir("material_history_three_redos");
+    let asset = asset_id(7701);
+    let source = asset_source_id(7702);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    let file = root.join("assets/materials/edit.material.ron");
+    let mut versions = vec![std::fs::read(&file).expect("initial material bytes")];
+
+    for (dx, dy) in [(3, 1), (5, -2), (7, 4)] {
+        apply_bound_material_action(
+            &mut app,
+            MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: dx,
+                delta_y: dy,
+            },
+        )
+        .expect("source-backed edit should commit");
+        versions.push(std::fs::read(&file).expect("committed source bytes"));
+    }
+    assert_eq!(versions.len(), 4);
+    assert!(app.material_lab_runtime().can_undo());
+    assert!(!app.material_lab_runtime().can_redo());
+
+    for expected in (0..3).rev() {
+        apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit)
+            .expect("undo must preserve remaining undo steps");
+        assert_eq!(
+            std::fs::read(&file).expect("undo source bytes"),
+            versions[expected],
+            "undo must restore the exact prior committed source bytes"
+        );
+        assert!(app.material_lab_runtime().can_redo());
+    }
+    assert!(!app.material_lab_runtime().can_undo());
+
+    for expected in 1..=3 {
+        apply_bound_material_action(&mut app, MaterialSurfaceAction::RedoMaterialEdit)
+            .expect("redo must preserve the remaining redo steps");
+        assert_eq!(
+            std::fs::read(&file).expect("redo source bytes"),
+            versions[expected],
+            "redo must restore the exact prior committed source bytes"
+        );
+        assert_eq!(
+            app.material_lab_runtime().can_redo(),
+            expected < 3,
+            "remaining redo entries cannot be cleared by a successful redo"
+        );
+    }
+    assert!(app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn material_failed_post_admission_write_preserves_both_history_stacks_and_disk() {
+    let root = unique_temp_dir("material_history_writer_failure");
+    let asset = asset_id(7711);
+    let source = asset_source_id(7712);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    let file = root.join("assets/materials/edit.material.ron");
+    let original = std::fs::read(&file).expect("initial source bytes");
+
+    app.fail_next_material_source_write.set(true);
+    assert!(
+        apply_bound_material_action(
+            &mut app,
+            MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 4,
+                delta_y: 2,
+            },
+        )
+        .is_err(),
+        "injected write rejection happens only after source admission"
+    );
+    assert_eq!(std::fs::read(&file).expect("source bytes"), original);
+    assert!(!app.material_lab_runtime().can_undo());
+    assert!(!app.material_lab_runtime().can_redo());
+
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 4,
+            delta_y: 2,
+        },
+    )
+    .expect("valid edit after failed publication");
+    let edited = std::fs::read(&file).expect("edited source bytes");
+    app.fail_next_material_source_write.set(true);
+    assert!(
+        apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit).is_err()
+    );
+    assert_eq!(std::fs::read(&file).expect("failed undo source"), edited);
+    assert!(app.material_lab_runtime().can_undo());
+    assert!(!app.material_lab_runtime().can_redo());
+
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit)
+        .expect("undo retry should succeed");
+    assert_eq!(std::fs::read(&file).expect("undone source"), original);
+    app.fail_next_material_source_write.set(true);
+    assert!(
+        apply_bound_material_action(&mut app, MaterialSurfaceAction::RedoMaterialEdit).is_err()
+    );
+    assert_eq!(std::fs::read(&file).expect("failed redo source"), original);
+    assert!(app.material_lab_runtime().can_redo());
+    assert!(!app.material_lab_runtime().can_undo());
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::RedoMaterialEdit)
+        .expect("redo retry must still work");
+    assert_eq!(std::fs::read(&file).expect("restored redo source"), edited);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn material_graph_node_drag_is_one_undo_transaction() {
     let root = unique_temp_dir("material_graph_node_drag_undo");
     let asset_id = asset_id(41);

@@ -381,6 +381,12 @@ impl MaterialLabRuntime {
         self.redo_stack.clear();
     }
 
+    pub fn next_undo_snapshot(
+        &self,
+    ) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
+        self.undo_stack.last().cloned()
+    }
+
     pub fn pop_undo_snapshot(
         &mut self,
     ) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
@@ -395,10 +401,25 @@ impl MaterialLabRuntime {
         self.redo_stack.push((asset_id, document));
     }
 
+    pub fn next_redo_snapshot(
+        &self,
+    ) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
+        self.redo_stack.last().cloned()
+    }
+
     pub fn pop_redo_snapshot(
         &mut self,
     ) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
         self.redo_stack.pop()
+    }
+
+    /// Redo is not a fresh edit: the remaining redo chain must survive.
+    pub fn push_undo_snapshot_from_redo(
+        &mut self,
+        asset_id: AssetId,
+        document: material_graph::MaterialGraphDocument,
+    ) {
+        self.undo_stack.push((asset_id, document));
     }
 
     /// Source identity of the next history operation, without consuming it.

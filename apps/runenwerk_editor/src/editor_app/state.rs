@@ -53,6 +53,8 @@ pub struct RunenwerkEditorApp {
     /// invalidates an action captured before the new project context.
     pub(crate) material_source_context_generation: u64,
     pub(crate) material_lab_runtime: MaterialLabRuntime,
+    #[cfg(test)]
+    pub(crate) fail_next_material_source_write: std::cell::Cell<bool>,
     pub(crate) texture_preview_runtime: TexturePreviewRuntime,
     pub(crate) sdf_operation_workspace: SdfOperationWorkspaceState,
     pub(crate) pending_field_product_publications: Vec<EditorFieldProductPublication>,
@@ -129,6 +131,8 @@ impl RunenwerkEditorApp {
             asset_project_session: None,
             material_source_context_generation: 0,
             material_lab_runtime: MaterialLabRuntime::default(),
+            #[cfg(test)]
+            fail_next_material_source_write: std::cell::Cell::new(false),
             texture_preview_runtime: TexturePreviewRuntime::default(),
             sdf_operation_workspace: SdfOperationWorkspaceState::default(),
             pending_field_product_publications: Vec::new(),

@@ -1,3 +1,4 @@
+use std::io::{self, Write};
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -96,23 +97,108 @@ fn classify_material_graph_source(source: &str) -> MaterialGraphSourceLoadOutcom
     }
 }
 
+/// Writes a generated or explicitly created Material source without a prior
+/// revision requirement. Existing sources still use same-directory staging.
 pub fn write_material_graph_document(path: &Path, document: &MaterialGraphDocument) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).with_context(|| {
-            format!(
-                "failed to create material graph source parent: {}",
-                parent.display()
-            )
-        })?;
-    }
+    write_material_graph_document_if_revision(path, document, None)
+}
+
+/// An authored edit carries the digest observed at action admission. The live
+/// path is rechecked after staging and before replacement. This does not
+/// implement cross-process compare-and-swap or power-loss durability.
+pub(crate) fn write_material_graph_document_if_revision(
+    path: &Path,
+    document: &MaterialGraphDocument,
+    expected_digest: Option<[u8; 32]>,
+) -> Result<()> {
+    staged_material_graph_write(
+        path,
+        document,
+        expected_digest,
+        |staged, bytes| staged.write_all(bytes),
+        |staged| staged.as_file().sync_all(),
+        |staged, target| staged.persist(target).map(|_| ()).map_err(|error| error.error),
+    )
+}
+
+/// Three explicit I/O seams let tests fail a partial staging write, staging
+/// sync, and replacement without ever truncating the accepted source.
+fn staged_material_graph_write<W, S, R>(
+    path: &Path,
+    document: &MaterialGraphDocument,
+    expected_digest: Option<[u8; 32]>,
+    write_staged: W,
+    sync_staged: S,
+    replace_staged: R,
+) -> Result<()>
+where
+    W: FnOnce(&mut tempfile::NamedTempFile, &[u8]) -> io::Result<()>,
+    S: FnOnce(&tempfile::NamedTempFile) -> io::Result<()>,
+    R: FnOnce(tempfile::NamedTempFile, &Path) -> io::Result<()>,
+{
+    let parent = path.parent().unwrap_or_else(|| Path::new("."));
+    std::fs::create_dir_all(parent).with_context(|| {
+        format!(
+            "failed to create material graph source parent: {}",
+            parent.display()
+        )
+    })?;
     let config = ron::ser::PrettyConfig::new()
         .separate_tuple_members(true)
         .enumerate_arrays(true);
     let source = MaterialGraphSourceFileV2::from_document(document);
-    let ron = ron::ser::to_string_pretty(&source, config)
+    let encoded = ron::ser::to_string_pretty(&source, config)
         .context("failed to encode material graph source")?;
-    std::fs::write(path, ron)
-        .with_context(|| format!("failed to write material graph source: {}", path.display()))
+
+    // A failed write/sync/permission operation affects only a disposable
+    // staging file. The original source is not opened for writing.
+    let mut staged = tempfile::NamedTempFile::new_in(parent)
+        .with_context(|| format!("failed to stage material graph source: {}", path.display()))?;
+    write_staged(&mut staged, encoded.as_bytes())
+        .with_context(|| format!("failed to stage material graph bytes: {}", path.display()))?;
+    staged.flush().context("failed to flush staged material graph source")?;
+
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) => {
+            anyhow::ensure!(
+                !metadata.file_type().is_symlink(),
+                "material source replacement refuses a symlink target: {}",
+                path.display()
+            );
+            anyhow::ensure!(
+                !metadata.permissions().readonly(),
+                "material source replacement refuses a read-only target: {}",
+                path.display()
+            );
+            staged
+                .as_file()
+                .set_permissions(metadata.permissions())
+                .context("failed to preserve material graph source permissions")?;
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => {
+            return Err(error).with_context(|| {
+                format!("failed to inspect material graph source: {}", path.display())
+            });
+        }
+    }
+    sync_staged(&staged).context("failed to sync staged material graph source")?;
+
+    if let Some(expected) = expected_digest {
+        let current = std::fs::read(path).with_context(|| {
+            format!("failed to recheck material graph source revision: {}", path.display())
+        })?;
+        anyhow::ensure!(
+            blake3::hash(&current).as_bytes() == &expected,
+            "material graph source revision changed before replacement: {}",
+            path.display()
+        );
+    }
+    // Once this replacement succeeds, no fallible post-commit operation is
+    // reported as an uncommitted edit. Parent-directory durability is not
+    // claimed here; Windows/native filesystem behavior needs its own proof.
+    replace_staged(staged, path)
+        .with_context(|| format!("failed to replace material graph source: {}", path.display()))
 }
 
 #[cfg(test)]
@@ -160,6 +246,78 @@ mod tests {
         assert_eq!(
             digest,
             *blake3::hash(&std::fs::read(&path).expect("snapshot bytes")).as_bytes()
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn failed_staged_io_and_stale_revision_preserve_accepted_material_bytes() {
+        let root = unique_temp_dir("material_source_failed_staging");
+        let path = root.join("assets/materials/rock.material.ron");
+        let mut document = MaterialGraphDocument::new(
+            MaterialGraphDocumentId::new(991),
+            "Original",
+            GraphDefinition::new(
+                GraphId::new(1),
+                "source",
+                CyclePolicy::RejectDirectedCycles,
+                [NodeDefinition::new(NodeId::new(1), "pbr.output", [])],
+                [],
+            ),
+            MaterialOutputTarget::RenderMaterial,
+        );
+        write_material_graph_document(&path, &document).expect("initial source should persist");
+        let initial = std::fs::read(&path).expect("accepted bytes");
+        let expected = *blake3::hash(&initial).as_bytes();
+        document.label = "Candidate".to_string();
+
+        for failure in ["write", "sync", "replace"] {
+            let result = staged_material_graph_write(
+                &path,
+                &document,
+                Some(expected),
+                |staged, bytes| {
+                    if failure == "write" {
+                        staged.write_all(&bytes[..bytes.len() / 2])?;
+                        return Err(io::Error::other("injected short staging write"));
+                    }
+                    staged.write_all(bytes)
+                },
+                |staged| {
+                    if failure == "sync" {
+                        return Err(io::Error::other("injected staging sync failure"));
+                    }
+                    staged.as_file().sync_all()
+                },
+                |staged, target| {
+                    if failure == "replace" {
+                        return Err(io::Error::other("injected replacement failure"));
+                    }
+                    staged.persist(target).map(|_| ()).map_err(|error| error.error)
+                },
+            );
+            assert!(result.is_err(), "injected {failure} must reject commit");
+            assert_eq!(
+                std::fs::read(&path).expect("accepted file still readable"),
+                initial,
+                "failed {failure} must not truncate or overwrite prior bytes"
+            );
+        }
+
+        let stale = write_material_graph_document_if_revision(
+            &path,
+            &document,
+            Some([42_u8; 32]),
+        );
+        assert!(stale.is_err(), "stale source byte digest must reject replacement");
+        assert_eq!(std::fs::read(&path).expect("unchanged source"), initial);
+        write_material_graph_document_if_revision(&path, &document, Some(expected))
+            .expect("current revision permits a staged replacement");
+        assert_eq!(
+            read_material_graph_document(&path)
+                .expect("updated document")
+                .label,
+            "Candidate"
         );
         let _ = std::fs::remove_dir_all(root);
     }
