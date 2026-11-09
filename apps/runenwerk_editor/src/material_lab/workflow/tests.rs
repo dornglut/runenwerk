@@ -639,6 +639,20 @@ fn material_source_origin_does_not_retarget_an_identical_file_in_another_project
     .expect("second project session");
     app.set_asset_project_session(second_session);
     assert!(!app.material_lab_runtime().can_undo());
+    assert!(
+        app.asset_catalog_runtime().catalog().asset(asset).is_none(),
+        "new project must not inherit the old project's catalog"
+    );
+    let mut second_catalog = AssetCatalog::new();
+    second_catalog.insert_asset_record(
+        AssetRecord::new(asset, "edit-b", "Edit B", AssetKind::MaterialGraph)
+            .with_primary_source(source),
+    );
+    second_catalog.insert_source(
+        AssetSourceDescriptor::new(source, asset, AssetKind::MaterialGraph, relative)
+            .with_hash(SourceHash::new("sha256", "edit-b")),
+    );
+    app.asset_catalog_runtime_mut().replace_catalog(second_catalog);
     app.select_material_asset(asset);
     let new_origin = app
         .material_published_source_origin_for_selected(None)
