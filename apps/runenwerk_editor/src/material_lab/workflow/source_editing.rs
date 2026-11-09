@@ -564,16 +564,12 @@ impl RunenwerkEditorApp {
             "redo",
             "failed to load material graph source before redo",
         )?;
-        self.write_material_graph_document_for_asset_if_revision(
-            asset_id,
-            &next,
-            expected_digest,
-        )
-        .map_err(|_| {
-            editor_core::EditorMutationError::runtime_rejected(
-                "failed to persist material graph redo",
-            )
-        })?;
+        self.write_material_graph_document_for_asset_if_revision(asset_id, &next, expected_digest)
+            .map_err(|_| {
+                editor_core::EditorMutationError::runtime_rejected(
+                    "failed to persist material graph redo",
+                )
+            })?;
         let _ = self.material_lab_runtime_mut().pop_redo_snapshot();
         self.material_lab_runtime_mut()
             .push_undo_snapshot_from_redo(asset_id, current);

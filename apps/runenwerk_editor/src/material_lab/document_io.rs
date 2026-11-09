@@ -117,7 +117,12 @@ pub(crate) fn write_material_graph_document_if_revision(
         expected_digest,
         |staged, bytes| staged.write_all(bytes),
         |staged| staged.as_file().sync_all(),
-        |staged, target| staged.persist(target).map(|_| ()).map_err(|error| error.error),
+        |staged, target| {
+            staged
+                .persist(target)
+                .map(|_| ())
+                .map_err(|error| error.error)
+        },
     )
 }
 
@@ -156,7 +161,9 @@ where
         .with_context(|| format!("failed to stage material graph source: {}", path.display()))?;
     write_staged(&mut staged, encoded.as_bytes())
         .with_context(|| format!("failed to stage material graph bytes: {}", path.display()))?;
-    staged.flush().context("failed to flush staged material graph source")?;
+    staged
+        .flush()
+        .context("failed to flush staged material graph source")?;
 
     match std::fs::symlink_metadata(path) {
         Ok(metadata) => {
@@ -178,7 +185,10 @@ where
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => {
             return Err(error).with_context(|| {
-                format!("failed to inspect material graph source: {}", path.display())
+                format!(
+                    "failed to inspect material graph source: {}",
+                    path.display()
+                )
             });
         }
     }
@@ -186,7 +196,10 @@ where
 
     if let Some(expected) = expected_digest {
         let current = std::fs::read(path).with_context(|| {
-            format!("failed to recheck material graph source revision: {}", path.display())
+            format!(
+                "failed to recheck material graph source revision: {}",
+                path.display()
+            )
         })?;
         anyhow::ensure!(
             blake3::hash(&current).as_bytes() == &expected,
@@ -197,8 +210,12 @@ where
     // Once this replacement succeeds, no fallible post-commit operation is
     // reported as an uncommitted edit. Parent-directory durability is not
     // claimed here; Windows/native filesystem behavior needs its own proof.
-    replace_staged(staged, path)
-        .with_context(|| format!("failed to replace material graph source: {}", path.display()))
+    replace_staged(staged, path).with_context(|| {
+        format!(
+            "failed to replace material graph source: {}",
+            path.display()
+        )
+    })
 }
 
 #[cfg(test)]
@@ -293,7 +310,10 @@ mod tests {
                     if failure == "replace" {
                         return Err(io::Error::other("injected replacement failure"));
                     }
-                    staged.persist(target).map(|_| ()).map_err(|error| error.error)
+                    staged
+                        .persist(target)
+                        .map(|_| ())
+                        .map_err(|error| error.error)
                 },
             );
             assert!(result.is_err(), "injected {failure} must reject commit");
@@ -304,12 +324,11 @@ mod tests {
             );
         }
 
-        let stale = write_material_graph_document_if_revision(
-            &path,
-            &document,
-            Some([42_u8; 32]),
+        let stale = write_material_graph_document_if_revision(&path, &document, Some([42_u8; 32]));
+        assert!(
+            stale.is_err(),
+            "stale source byte digest must reject replacement"
         );
-        assert!(stale.is_err(), "stale source byte digest must reject replacement");
         assert_eq!(std::fs::read(&path).expect("unchanged source"), initial);
         write_material_graph_document_if_revision(&path, &document, Some(expected))
             .expect("current revision permits a staged replacement");

@@ -381,9 +381,7 @@ impl MaterialLabRuntime {
         self.redo_stack.clear();
     }
 
-    pub fn next_undo_snapshot(
-        &self,
-    ) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
+    pub fn next_undo_snapshot(&self) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
         self.undo_stack.last().cloned()
     }
 
@@ -401,9 +399,7 @@ impl MaterialLabRuntime {
         self.redo_stack.push((asset_id, document));
     }
 
-    pub fn next_redo_snapshot(
-        &self,
-    ) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
+    pub fn next_redo_snapshot(&self) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
         self.redo_stack.last().cloned()
     }
 
