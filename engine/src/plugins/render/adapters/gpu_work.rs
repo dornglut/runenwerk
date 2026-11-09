@@ -27,6 +27,16 @@ pub enum RenderGpuWorkAdapterError {
     Authoring(#[from] GpuWorkAuthoringError),
     #[error(transparent)]
     Graph(#[from] GpuWorkGraphError),
+    /// Augments G3's exact typed rejection with a source-declared descriptor
+    /// label when that rejected resource is discoverable from renderer work.
+    /// RunenGPU remains the sole initialization/hazard authority.
+    #[error("render GPU work resource '{resource_label}' ({resource_id}): {source}")]
+    GraphResource {
+        resource_id: GpuWorkResourceId,
+        resource_label: String,
+        #[source]
+        source: GpuWorkGraphError,
+    },
     #[error(
         "resolved render GPU work reuses logical resource identity '{resource_id}' for incompatible kind-preserving handles"
     )]
@@ -605,10 +615,6 @@ fn prepare_resolved_render_gpu_work(
     // The last graph-preparation call produces the selected submission graph.
     // Count its actual fragment vector rather than inferring from node ordinals.
     let selected_fragment_count = std::cell::Cell::new(0);
-    let mut prepare_counted_graph = |label, fragments: Vec<GpuWorkFragment>, orders| {
-        selected_fragment_count.set(fragments.len());
-        prepare_graph(label, fragments, orders)
-    };
     let RenderGpuExternalWork {
         producer_fragments,
         imports,
@@ -639,6 +645,48 @@ fn prepare_resolved_render_gpu_work(
             )?)
         })
         .collect::<Result<Vec<_>, RenderGpuWorkAdapterError>>()?;
+    // Keep the original, typed G3 error and its exact source location. When a
+    // failed resource comes from renderer-owned logical operations, append its
+    // actual descriptor label. Opaque process-local "owner:local" identities
+    // alone cannot tell a surface from a sampled UI texture.
+    let mut prepare_counted_graph = |label, fragments: Vec<GpuWorkFragment>, orders| {
+        selected_fragment_count.set(fragments.len());
+        prepare_graph(label, fragments, orders).map_err(|error| match error {
+            RenderGpuWorkAdapterError::Graph(source) => {
+                let qualified = source.resource().and_then(|resource_id| {
+                    resources.values().find_map(|resource| {
+                        let (normalized_id, descriptor_label) = match resource {
+                            GpuResourceRef::TextureView(view) => {
+                                let texture = view.descriptor().texture();
+                                (
+                                    texture.diagnostic_identity(),
+                                    texture.descriptor().common().label().as_str(),
+                                )
+                            }
+                            other => (
+                                other.diagnostic_identity(),
+                                other.common().label().as_str(),
+                            ),
+                        };
+                        (normalized_id == resource_id).then(|| {
+                            (resource_id, descriptor_label.to_string())
+                        })
+                    })
+                });
+                match qualified {
+                    Some((resource_id, resource_label)) => {
+                        RenderGpuWorkAdapterError::GraphResource {
+                            resource_id,
+                            resource_label,
+                            source,
+                        }
+                    }
+                    None => RenderGpuWorkAdapterError::Graph(source),
+                }
+            }
+            other => other,
+        })
+    };
     let desired_control_orders = collect_desired_control_orders(&nodes);
 
     if let Some(mixed_work) = mixed.take() {
@@ -1589,6 +1637,73 @@ mod tests {
                 .expect("test surface view descriptor should be valid"),
             )
             .expect("test surface view handle should allocate")
+    }
+
+    #[test]
+    fn uninitialized_color_load_identifies_exact_source_descriptor() {
+        let mut ids = GpuWorkResourceIdAllocator::new();
+        let texture = ids
+            .allocate_texture_handle(
+                GpuTextureDescriptor::ordinary_owned_2d(
+                    "uninitialized Material color sample",
+                    GpuResourceLifetime::Transient,
+                    GpuReconstruction::SourceBacked,
+                    4,
+                    4,
+                    GpuTextureFormat::Rgba8Unorm,
+                    [GpuTextureUsage::ColorAttachment],
+                    GpuTextureInitialization::Uninitialized,
+                )
+                .expect("uninitialized texture descriptor"),
+            )
+            .expect("allocate texture");
+        let view = ids
+            .allocate_texture_view_handle(
+                GpuTextureViewDescriptor::ordinary_full_owned(
+                    "uninitialized Material color sample view",
+                    &texture,
+                )
+                .expect("create view descriptor"),
+            )
+            .expect("allocate view");
+        let pass = GpuWorkOperation::Render(
+            GpuRenderOperation::new(
+                [GpuRenderColorAttachment::new(
+                    view,
+                    GpuColorAttachmentLoad::Load,
+                    GpuAttachmentStore::Store,
+                    None,
+                )
+                .expect("load attachment")],
+                None,
+                std::iter::empty::<GpuRenderDraw>(),
+                None,
+            )
+            .expect("render operation"),
+        );
+        let err = prepare_render_gpu_frame_work_for_test(
+            label("uninitialized Material color diagnostic"),
+            [ResolvedRenderGpuWorkNode::pass(
+                RenderGpuWorkOccurrenceId::new(1),
+                label("Material UI compositor without a producer"),
+                pass,
+                GpuExecutionPreference::GraphicsRequired,
+                [],
+            )],
+        )
+        .expect_err("uninitialized color Load must never be admitted");
+        match err {
+            RenderGpuWorkAdapterError::GraphResource {
+                resource_id,
+                resource_label,
+                source,
+            } => {
+                assert_eq!(resource_id, texture.diagnostic_identity());
+                assert_eq!(resource_label, "uninitialized Material color sample");
+                assert_eq!(source.cause(), GpuWorkGraphCause::ReadBeforeInitialization);
+            }
+            other => panic!("expected typed graph rejection with descriptor context: {other}"),
+        }
     }
 
     #[test]
