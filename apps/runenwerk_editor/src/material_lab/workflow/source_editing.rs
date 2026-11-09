@@ -14,18 +14,26 @@ impl RunenwerkEditorApp {
         match self.load_material_graph_document_for_asset_with_digest(asset_id) {
             Ok((document, source_id, digest)) => {
                 self.material_lab_runtime_mut()
-                    .set_active_source_document_with_observation(asset_id, source_id, document, digest);
+                    .set_active_source_document_with_observation(
+                        asset_id, source_id, document, digest,
+                    );
             }
             Err(error) => {
                 let catalog = self.asset_catalog_runtime().catalog();
                 let source_declared = catalog
                     .asset(asset_id)
                     .is_some_and(|record| record.primary_source_id.is_some())
-                    || catalog.sources.values().any(|source| source.asset_id == asset_id);
+                    || catalog
+                        .sources
+                        .values()
+                        .any(|source| source.asset_id == asset_id);
                 // Previously observed project source is not silently
                 // reclassified as a source-less in-memory fixture if its
                 // catalog binding disappears between selections.
-                let had_observation = self.material_lab_runtime().active_source_observation().is_some();
+                let had_observation = self
+                    .material_lab_runtime()
+                    .active_source_observation()
+                    .is_some();
                 if source_declared || had_observation {
                     self.material_lab_runtime_mut()
                         .discard_failed_selected_source_reload(asset_id);

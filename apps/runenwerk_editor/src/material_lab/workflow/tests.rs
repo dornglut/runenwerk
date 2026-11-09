@@ -546,14 +546,14 @@ fn failed_selected_source_reload_hides_old_document_and_origin_until_restored() 
 
     app.select_material_asset(asset);
     assert!(
-        app.material_published_source_origin_for_selected(None).is_err(),
+        app.material_published_source_origin_for_selected(None)
+            .is_err(),
         "failed explicit reload must invalidate the previous source origin"
     );
     assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
-    let hidden = app.material_lab_runtime().graph_canvas_view_model(
-        app.asset_catalog_runtime().catalog(),
-        Vec::new(),
-    );
+    let hidden = app
+        .material_lab_runtime()
+        .graph_canvas_view_model(app.asset_catalog_runtime().catalog(), Vec::new());
     assert!(hidden.graph.nodes.is_empty());
     assert!(
         app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
@@ -567,13 +567,13 @@ fn failed_selected_source_reload_hides_old_document_and_origin_until_restored() 
     std::fs::rename(&absent, &path).expect("restore source");
     app.select_material_asset(asset);
     assert!(
-        app.material_published_source_origin_for_selected(None).is_ok(),
+        app.material_published_source_origin_for_selected(None)
+            .is_ok(),
         "explicit successful reload republishes origin"
     );
-    let restored = app.material_lab_runtime().graph_canvas_view_model(
-        app.asset_catalog_runtime().catalog(),
-        Vec::new(),
-    );
+    let restored = app
+        .material_lab_runtime()
+        .graph_canvas_view_model(app.asset_catalog_runtime().catalog(), Vec::new());
     assert_eq!(restored.graph.nodes.len(), 2);
 
     // Removing the catalog binding must not transform previously persisted
@@ -591,11 +591,13 @@ fn failed_selected_source_reload_hides_old_document_and_origin_until_restored() 
             AssetKind::MaterialGraph,
         ));
     app.select_material_asset(asset);
-    assert!(app.material_published_source_origin_for_selected(None).is_err());
-    let unbound = app.material_lab_runtime().graph_canvas_view_model(
-        app.asset_catalog_runtime().catalog(),
-        Vec::new(),
+    assert!(
+        app.material_published_source_origin_for_selected(None)
+            .is_err()
     );
+    let unbound = app
+        .material_lab_runtime()
+        .graph_canvas_view_model(app.asset_catalog_runtime().catalog(), Vec::new());
     assert!(unbound.graph.nodes.is_empty());
 
     let _ = std::fs::remove_dir_all(root);
