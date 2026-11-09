@@ -32,6 +32,19 @@ impl RunenwerkEditorApp {
                 path.display()
             )
         })?;
+        // Reopening an existing catalog owner is not an implicit discard of
+        // in-memory changes or an unreviewed external disk replacement.
+        // Explicit catalog reload remains the separate restore operation.
+        let same_catalog_owner = self.asset_project_session().is_some_and(|current| {
+            current.project_root() == session.project_root()
+                && current.descriptor() == session.descriptor()
+        });
+        if same_catalog_owner && let Some(persisted) = catalog_outcome.accepted_catalog.as_ref() {
+            anyhow::ensure!(
+                self.asset_catalog_runtime().catalog() == persisted,
+                "project reload rejected: the in-memory asset catalog differs from the accepted on-disk catalog; save or explicitly reload the asset catalog first"
+            );
+        }
         self.set_asset_project_session(session)?;
         self.apply_asset_project_catalog_load_outcome(catalog_outcome);
         Ok(())
@@ -253,6 +266,89 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(first_root);
         let _ = std::fs::remove_dir_all(second_root);
+    }
+
+    #[test]
+    fn same_project_reload_rejects_newer_in_memory_catalog_without_discarding_it() {
+        let root = unique_temp_dir("same_project_catalog_reload_guard");
+        let project_path = root.join("project.rune.ron");
+        let project = ProjectFileV3::new("project.reload", "Reload");
+        std::fs::write(
+            &project_path,
+            encode_ron_pretty(&project).expect("project should encode"),
+        )
+        .expect("project file should be writable");
+
+        let mut app = RunenwerkEditorApp::new();
+        app.load_project_file(&project_path)
+            .expect("initial project load should succeed");
+        let initial_id = asset::asset_id(2501);
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
+                initial_id,
+                "persisted-material",
+                "Persisted Material",
+                asset::AssetKind::MaterialGraph,
+            ));
+        app.save_asset_project_catalog()
+            .expect("valid catalog should be saved");
+        let catalog_path = root.join("assets/catalog.ron");
+        let saved_bytes = std::fs::read(&catalog_path).expect("catalog file exists");
+
+        let unsaved_id = asset::asset_id(2502);
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
+                unsaved_id,
+                "unsaved-material",
+                "Unsaved Material",
+                asset::AssetKind::MaterialGraph,
+            ));
+        let unsaved_catalog = app.asset_catalog_runtime().catalog().clone();
+        let err = app
+            .load_project_file(&project_path)
+            .expect_err("reopening the project cannot silently lose newer catalog edits");
+        assert!(
+            err.to_string().contains("project reload rejected"),
+            "failure must identify the guarded reload: {err:#}"
+        );
+        assert_eq!(
+            app.asset_project_session()
+                .expect("project session must remain active")
+                .project_root(),
+            root.as_path()
+        );
+        assert_eq!(
+            app.asset_catalog_runtime().catalog(),
+            &unsaved_catalog,
+            "rejection must retain the in-memory catalog"
+        );
+        assert_eq!(
+            std::fs::read(&catalog_path).expect("accepted disk catalog remains readable"),
+            saved_bytes,
+            "project reload rejection cannot write a catalog"
+        );
+
+        // This explicit action is the existing discard/restore path.
+        app.load_asset_project_catalog()
+            .expect("explicit catalog reload should restore disk state");
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(unsaved_id)
+                .is_none(),
+            "explicit restore discards only the unsaved test entry"
+        );
+        app.load_project_file(&project_path)
+            .expect("a clean same-project reload should still succeed");
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(initial_id)
+                .is_some()
+        );
+        let _ = std::fs::remove_dir_all(root);
     }
 
     #[test]
