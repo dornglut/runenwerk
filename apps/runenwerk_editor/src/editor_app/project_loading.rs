@@ -83,14 +83,24 @@ mod tests {
             "rejected commands must preserve the unsaved in-memory catalog"
         );
         assert!(
-            app.asset_catalog_runtime().diagnostics().iter().any(|diagnostic| {
-                diagnostic.message.contains("cannot load catalog: no asset project session")
-            })
+            app.asset_catalog_runtime()
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| {
+                    diagnostic
+                        .message
+                        .contains("cannot load catalog: no asset project session")
+                })
         );
         assert!(
-            app.asset_catalog_runtime().diagnostics().iter().any(|diagnostic| {
-                diagnostic.message.contains("cannot save catalog: no asset project session")
-            })
+            app.asset_catalog_runtime()
+                .diagnostics()
+                .iter()
+                .any(|diagnostic| {
+                    diagnostic
+                        .message
+                        .contains("cannot save catalog: no asset project session")
+                })
         );
     }
 
