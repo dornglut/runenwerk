@@ -515,8 +515,9 @@ mod tests {
         let mut app = RunenwerkEditorApp::new();
         app.load_project_file(&path).expect("load new project");
         let persisted_id = asset::asset_id(21801);
-        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
-            asset::AssetRecord::new(
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
                 persisted_id,
                 "persisted",
                 "Persisted",

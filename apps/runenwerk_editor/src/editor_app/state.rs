@@ -497,9 +497,7 @@ impl RunenwerkEditorApp {
 
     /// A normal load may refresh changed disk content without losing local
     /// edits. A destructive restore requires a second explicit Load action.
-    pub fn load_asset_project_catalog(
-        &mut self,
-    ) -> anyhow::Result<AssetCatalogLoadDisposition> {
+    pub fn load_asset_project_catalog(&mut self) -> anyhow::Result<AssetCatalogLoadDisposition> {
         let Some(session) = self.asset_project_session.as_ref() else {
             self.record_missing_asset_project_session("load catalog");
             anyhow::bail!("cannot load asset catalog: no asset project session is active");
