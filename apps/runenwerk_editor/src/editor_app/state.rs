@@ -374,11 +374,38 @@ impl RunenwerkEditorApp {
         self.asset_project_session.as_mut()
     }
 
-    pub fn set_asset_project_session(&mut self, session: EditorAssetProjectSession) {
+    /// Refuse a change of catalog owner while it would discard an in-memory
+    /// catalog not proven equal to the previous project's accepted disk copy.
+    /// This does not interpret dirty_assets as a save-state marker: it tracks
+    /// reload work, while direct catalog_mut callers may change catalog data.
+    /// An explicit save or restoration of the previous catalog is required.
+    pub fn set_asset_project_session(
+        &mut self,
+        session: EditorAssetProjectSession,
+    ) -> anyhow::Result<()> {
         let replaces_catalog_owner = self.asset_project_session.as_ref().is_some_and(|previous| {
             previous.project_root() != session.project_root()
                 || previous.descriptor() != session.descriptor()
         });
+        if replaces_catalog_owner {
+            let previous = self
+                .asset_project_session
+                .as_ref()
+                .expect("catalog-owner replacement requires a previous session");
+            let accepted = load_project_catalog(previous).map_err(|error| {
+                anyhow::anyhow!(
+                    "cannot verify previous project catalog before switching projects: {error}"
+                )
+            })?;
+            let catalog_is_persisted = match accepted.accepted_catalog {
+                Some(persisted) => persisted == *self.asset_catalog_runtime.catalog(),
+                None => self.asset_catalog_runtime.catalog() == &asset::AssetCatalog::new(),
+            };
+            anyhow::ensure!(
+                catalog_is_persisted,
+                "project switch rejected: current asset catalog differs from the previous project's accepted on-disk catalog; save or restore that catalog first"
+            );
+        }
         self.material_source_context_generation = self
             .material_source_context_generation
             .checked_add(1)
@@ -395,6 +422,7 @@ impl RunenwerkEditorApp {
             self.asset_catalog_runtime = AssetCatalogRuntime::new();
         }
         self.asset_project_session = Some(session);
+        Ok(())
     }
 
     pub fn material_lab_runtime(&self) -> &MaterialLabRuntime {

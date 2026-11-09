@@ -611,6 +611,12 @@ fn material_source_origin_does_not_retarget_an_identical_file_in_another_project
     let source = asset_source_id(421);
     let relative = "assets/materials/edit.material.ron";
     let mut app = material_edit_app(&first_root, asset, source, command_test_document());
+    app.save_asset_project_catalog()
+        .expect("first project's catalog save must be attempted");
+    assert!(
+        first_root.join("assets/catalog.ron").is_file(),
+        "first project's catalog must be accepted on disk before switching"
+    );
     app.select_material_asset(asset);
     apply_bound_material_action(
         &mut app,
@@ -637,7 +643,8 @@ fn material_source_origin_does_not_retarget_an_identical_file_in_another_project
         &material_project_with_recipe("render", "render_material"),
     )
     .expect("second project session");
-    app.set_asset_project_session(second_session);
+    app.set_asset_project_session(second_session)
+        .expect("clean first project may switch to second project");
     assert!(!app.material_lab_runtime().can_undo());
     assert!(
         app.asset_catalog_runtime().catalog().asset(asset).is_none(),
@@ -713,7 +720,8 @@ fn material_source_origin_does_not_retarget_an_identical_file_in_another_project
         &material_project_with_recipe("render", "render_material"),
     )
     .expect("reopened B session");
-    app.set_asset_project_session(reloaded_session);
+    app.set_asset_project_session(reloaded_session)
+        .expect("same-project session may be reopened");
     app.select_material_asset(asset);
     let reopened_origin = app
         .material_published_source_origin_for_selected(None)
@@ -1987,7 +1995,8 @@ fn material_edit_app(
     catalog.insert_source(source);
 
     let mut app = RunenwerkEditorApp::new();
-    app.set_asset_project_session(session);
+    app.set_asset_project_session(session)
+        .expect("first project session must install");
     app.asset_catalog_runtime_mut().replace_catalog(catalog);
     app.material_lab_runtime_mut()
         .select_material_asset(Some(asset_id));

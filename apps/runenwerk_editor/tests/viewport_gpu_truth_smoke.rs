@@ -949,7 +949,8 @@ fn material_graph_source_edit_workflow_app(
     let session = EditorAssetProjectSession::from_project_file(repo_root(), &project)
         .expect("source-backed material proof project session should form");
     let mut app = RunenwerkEditorApp::new();
-    app.set_asset_project_session(session);
+    app.set_asset_project_session(session)
+        .expect("source-backed GPU proof session must install");
     app.asset_catalog_runtime_mut().replace_catalog(catalog);
     app.material_lab_runtime_mut()
         .select_material_asset(Some(material_asset_id));

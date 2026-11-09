@@ -23,7 +23,7 @@ impl RunenwerkEditorApp {
                 );
             }
         };
-        self.set_asset_project_session(session);
+        self.set_asset_project_session(session)?;
         self.load_asset_project_catalog().with_context(|| {
             format!(
                 "failed to load asset catalog for project: {}",
@@ -128,8 +128,64 @@ mod tests {
             "within-project rejected catalog preserves its last-known-good catalog"
         );
 
+        let prior_origin = app
+            .material_source_origin_for_selected(None)
+            .expect("A selected source origin must exist before rejected switch");
+        let rejected = app.load_project_file(&second_project);
+        assert!(
+            rejected.is_err(),
+            "switching projects must not silently discard an unsaved A catalog"
+        );
+        assert_eq!(
+            app.asset_project_session()
+                .expect("A session retained")
+                .project_root(),
+            first_root.as_path(),
+            "failed switch must not change the active project"
+        );
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(asset_id)
+                .is_some(),
+            "failed switch must preserve the unsaved catalog"
+        );
+        assert_eq!(
+            app.material_source_origin_for_selected(None)
+                .expect("A origin retained after rejection"),
+            prior_origin,
+            "failed switch must preserve Material invocation identity"
+        );
+
+        app.save_asset_project_catalog()
+            .expect("save of A catalog should complete");
+        let catalog_path = first_root.join("assets/catalog.ron");
+        assert!(
+            catalog_path.is_file(),
+            "A catalog must be ratified and persisted before switching projects"
+        );
+        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
+            asset::AssetRecord::new(
+                asset::asset_id(1543),
+                "unsaved-catalog-entry",
+                "Unsaved Catalog Entry",
+                asset::AssetKind::MaterialGraph,
+            ),
+        );
+        assert!(
+            app.load_project_file(&second_project).is_err(),
+            "even an existing disk catalog must not hide newer in-memory changes"
+        );
+        assert_eq!(
+            app.material_source_origin_for_selected(None)
+                .expect("A origin retained after stale-disk rejection"),
+            prior_origin
+        );
+        app.load_asset_project_catalog()
+            .expect("discard test mutation by loading A's persisted catalog");
+
         app.load_project_file(&second_project)
-            .expect("B missing catalog should be diagnosed without adopting A's catalog");
+            .expect("clean A catalog permits B switch despite missing B catalog");
         assert!(
             app.asset_catalog_runtime()
                 .catalog()
