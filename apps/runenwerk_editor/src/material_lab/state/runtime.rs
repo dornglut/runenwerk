@@ -455,9 +455,9 @@ impl MaterialLabRuntime {
             document_id: document.document_id,
             content_digest,
         };
-        let changed_revision = self.active_source_observation.is_some_and(|prior| {
-            prior.asset_id == asset_id && prior != next_observation
-        });
+        let changed_revision = self
+            .active_source_observation
+            .is_some_and(|prior| prior.asset_id == asset_id && prior != next_observation);
         self.set_active_source_document(asset_id, document);
         if changed_revision {
             self.clear_graph_selection();

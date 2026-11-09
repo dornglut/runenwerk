@@ -15,9 +15,7 @@ impl RunenwerkEditorApp {
             self.load_material_graph_document_for_asset_with_digest(asset_id)
         {
             self.material_lab_runtime_mut()
-                .set_active_source_document_with_observation(
-                    asset_id, source_id, document, digest,
-                );
+                .set_active_source_document_with_observation(asset_id, source_id, document, digest);
         }
         self.append_console_line(format!("[material] selected asset {}", asset_id.raw()));
     }
@@ -492,9 +490,7 @@ impl RunenwerkEditorApp {
             self.load_material_graph_document_for_asset_with_digest(asset_id)
         {
             self.material_lab_runtime_mut()
-                .set_active_source_document_with_observation(
-                    asset_id, source_id, document, digest,
-                );
+                .set_active_source_document_with_observation(asset_id, source_id, document, digest);
         }
         let catalog_snapshot = self.asset_catalog_runtime().catalog().clone();
         let outcome = {
@@ -542,9 +538,7 @@ impl RunenwerkEditorApp {
         self.material_lab_runtime_mut().clear_diagnostics();
         if let Some((_, source_id, digest)) = observed {
             self.material_lab_runtime_mut()
-                .set_active_source_document_with_observation(
-                    asset_id, source_id, document, digest,
-                );
+                .set_active_source_document_with_observation(asset_id, source_id, document, digest);
         } else {
             // Source may have changed immediately after publication; do not
             // manufacture a current revision token for an unobserved file.
@@ -572,7 +566,7 @@ impl RunenwerkEditorApp {
     fn load_material_graph_document_for_asset_with_digest(
         &self,
         asset_id: AssetId,
-    ) -> Result<(MaterialGraphDocument, AssetSourceId, [u8; 32])> {
+    ) -> Result<(MaterialGraphDocument, asset::AssetSourceId, [u8; 32])> {
         let session = self.asset_project_session().ok_or_else(|| {
             anyhow::anyhow!("cannot load material graph document: no asset project session")
         })?;

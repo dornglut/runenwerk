@@ -66,7 +66,9 @@ impl EditorSurfaceProvider for MaterialInspectorProvider {
         if view_model.selected_asset_id.is_some()
             && let Ok(origin) = context
                 .app
-                .material_published_source_origin_for_selected(Some(request.tool_surface_instance_id))
+                .material_published_source_origin_for_selected(Some(
+                    request.tool_surface_instance_id,
+                ))
         {
             actions.push((
                 "Build selected preview".to_string(),
