@@ -1733,6 +1733,216 @@ fn pm_ui_lab_perf_004_direct_manipulation_product_surfaces_cover_normal_workflow
 }
 
 #[test]
+fn material_graph_canvas_real_project_route_rejects_delayed_a_delete_and_accepts_b_drag() {
+    let root = std::env::temp_dir().join(format!(
+        "runenwerk_material_shell_origin_{}_{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("time must be after epoch")
+            .as_nanos()
+    ));
+    let first = asset::asset_id(1181);
+    let first_source = asset::asset_source_id(1182);
+    let second = asset::asset_id(1183);
+    let second_source = asset::asset_source_id(1184);
+    let first_rel = "assets/materials/a.material.ron";
+    let second_rel = "assets/materials/b.material.ron";
+    let mut catalog = asset::AssetCatalog::new();
+    for (id, source_id, path, name) in [
+        (first, first_source, first_rel, "A"),
+        (second, second_source, second_rel, "B"),
+    ] {
+        let descriptor =
+            asset::AssetSourceDescriptor::new(source_id, id, asset::AssetKind::MaterialGraph, path);
+        let document =
+            crate::material_lab::default_material_graph_document_for_source(id, &descriptor, name);
+        crate::material_lab::write_material_graph_document(&root.join(path), &document)
+            .expect("fixture source should persist");
+        catalog.insert_asset_record(
+            asset::AssetRecord::new(id, name, name, asset::AssetKind::MaterialGraph)
+                .with_primary_source(source_id),
+        );
+        catalog.insert_source(descriptor);
+    }
+    let a_path = root.join(first_rel);
+    let b_path = root.join(second_rel);
+    let before_a = std::fs::read(&a_path).expect("A bytes");
+    let before_b = std::fs::read(&b_path).expect("B bytes");
+
+    let mut host = EditorHostResource::material_lab_workbench();
+    host.app.set_asset_project_session(
+        crate::asset_pipeline::EditorAssetProjectSession::new(
+            &root,
+            asset::AssetProjectCatalogDescriptor::new(
+                Vec::<asset::AssetSourceRoot>::new(),
+                ".runenwerk/artifacts",
+                ".runenwerk/field-products",
+                "assets/catalog.ron",
+            ),
+        ),
+    );
+    host.app.asset_catalog_runtime_mut().replace_catalog(catalog);
+    host.app.select_material_asset(first);
+    let surface =
+        surface_id_by_kind(&host.shell_state, PanelKind::MaterialGraphCanvas);
+    let graph_target = surface_widget_id(surface, editor_shell::MATERIAL_GRAPH_CANVAS_WIDGET_ID);
+    let bounds = UiRect::new(0.0, 0.0, 1280.0, 720.0);
+    let atlas = UiFontAtlasResource::default();
+    let registry = EditorSurfaceProviderRegistry::runenwerk_default();
+
+    let _ = RunenwerkEditorShellController::build_frame(
+        &host.app,
+        &mut host.shell_state,
+        bounds,
+        &host.theme,
+        &atlas,
+    );
+    let a_artifacts = host
+        .shell_state
+        .last_projection_artifacts()
+        .expect("A projection routes must exist")
+        .clone();
+    let select_a = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::GraphCanvasAction {
+                target: graph_target,
+                action: ui_graph_editor::GraphCanvasAction::SelectNode {
+                    node: ui_graph_editor::GraphNodeKey(1),
+                    additive: false,
+                },
+            }],
+        },
+        &a_artifacts,
+    );
+    assert!(matches!(
+        select_a.as_slice(),
+        [ShellCommand::DispatchSurfaceInteraction {
+            interaction: editor_shell::SurfaceInteraction::SourceBoundGraphCanvasAction {
+                origin,
+                ..
+            },
+            ..
+        }] if origin.asset_id == first && origin.source_id == first_source
+    ));
+    RunenwerkEditorShellController::dispatch_commands(
+        &mut host.app,
+        &mut host.shell_state,
+        select_a,
+        &registry,
+        None,
+        None,
+        None,
+    )
+    .expect("real graph canvas A selection should dispatch");
+    assert!(host
+        .app
+        .material_lab_runtime()
+        .selected_graph_nodes()
+        .contains(&graph::NodeId::new(1)));
+
+    let old_delete = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::GraphCanvasAction {
+                target: graph_target,
+                action: ui_graph_editor::GraphCanvasAction::KeyboardDeleteSelection,
+            }],
+        },
+        &a_artifacts,
+    );
+    assert!(matches!(
+        old_delete.as_slice(),
+        [ShellCommand::DispatchSurfaceInteraction {
+            interaction: editor_shell::SurfaceInteraction::SourceBoundGraphCanvasAction {
+                origin,
+                ..
+            },
+            ..
+        }] if origin.asset_id == first && origin.source_id == first_source
+    ));
+
+    let epoch = host.shell_state.current_projection_epoch();
+    dispatch_shell_command(
+        &mut host.app,
+        Some(&mut host.shell_state),
+        ShellCommand::SelectMaterialAsset {
+            asset_id: second,
+            projection_epoch: epoch,
+        },
+        None,
+        None,
+        None,
+        Some(epoch),
+    )
+    .expect("B selection through Shell must succeed");
+    assert!(host.shell_state.current_projection_epoch() > epoch);
+    assert!(host.app.material_lab_runtime().selected_graph_nodes().is_empty());
+
+    RunenwerkEditorShellController::dispatch_commands(
+        &mut host.app,
+        &mut host.shell_state,
+        old_delete,
+        &registry,
+        None,
+        None,
+        None,
+    )
+    .expect("old A epoch must fail closed without touching B");
+    assert_eq!(std::fs::read(&a_path).expect("A unchanged"), before_a);
+    assert_eq!(std::fs::read(&b_path).expect("B unchanged"), before_b);
+    assert!(!host.app.material_lab_runtime().can_undo());
+
+    let _ = RunenwerkEditorShellController::build_frame(
+        &host.app,
+        &mut host.shell_state,
+        bounds,
+        &host.theme,
+        &atlas,
+    );
+    let b_artifacts = host
+        .shell_state
+        .last_projection_artifacts()
+        .expect("B projection routes must exist")
+        .clone();
+    let move_b = map_interactions_to_shell_commands(
+        &UiInteractionResults {
+            items: vec![UiInteraction::GraphCanvasAction {
+                target: graph_target,
+                action: ui_graph_editor::GraphCanvasAction::EndNodeDrag {
+                    node: ui_graph_editor::GraphNodeKey(1),
+                    delta: ui_graph_editor::GraphVector::new(8, -3),
+                },
+            }],
+        },
+        &b_artifacts,
+    );
+    assert!(matches!(
+        move_b.as_slice(),
+        [ShellCommand::DispatchSurfaceInteraction {
+            interaction: editor_shell::SurfaceInteraction::SourceBoundGraphCanvasAction {
+                origin,
+                ..
+            },
+            ..
+        }] if origin.asset_id == second && origin.source_id == second_source
+    ));
+    RunenwerkEditorShellController::dispatch_commands(
+        &mut host.app,
+        &mut host.shell_state,
+        move_b,
+        &registry,
+        None,
+        None,
+        None,
+    )
+    .expect("current B canvas drag should persist through provider and Shell");
+    assert_eq!(std::fs::read(&a_path).expect("A preserved"), before_a);
+    assert_ne!(std::fs::read(&b_path).expect("B edited"), before_b);
+    assert!(host.app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn material_asset_switch_invalidates_old_shell_epoch_without_spurious_reselect() {
     let mut app = RunenwerkEditorApp::new();
     let mut shell_state = RunenwerkEditorShellState::new();
