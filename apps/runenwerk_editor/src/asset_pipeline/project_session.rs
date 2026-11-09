@@ -14,6 +14,7 @@ pub struct EditorAssetProjectSession {
     /// Logical project identity is distinct from the physical catalog path.
     /// Programmatically formed sessions without a project file have no ID.
     project_id: Option<String>,
+    accepted_catalog: Option<asset::AssetCatalog>,
     descriptor: AssetProjectCatalogDescriptor,
     import_profile_registry: EditorImportProfileRegistry,
     import_ledger: EditorImportExecutionLedger,
@@ -42,6 +43,7 @@ impl EditorAssetProjectSession {
         Self {
             project_root: project_root.into(),
             project_id: None,
+            accepted_catalog: None,
             descriptor,
             import_profile_registry,
             import_ledger: EditorImportExecutionLedger::default(),
@@ -71,6 +73,16 @@ impl EditorAssetProjectSession {
 
     pub fn project_id(&self) -> Option<&str> {
         self.project_id.as_deref()
+    }
+
+    /// Accepted source snapshot; unrelated import dirty markers are not a
+    /// reliable measure of unpersisted catalog edits.
+    pub fn accepted_catalog(&self) -> Option<&asset::AssetCatalog> {
+        self.accepted_catalog.as_ref()
+    }
+
+    pub fn record_accepted_catalog(&mut self, catalog: &asset::AssetCatalog) {
+        self.accepted_catalog = Some(catalog.clone());
     }
 
     /// A last-known-good in-memory catalog may survive a controlled reload

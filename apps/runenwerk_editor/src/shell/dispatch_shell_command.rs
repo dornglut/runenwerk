@@ -234,6 +234,12 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 EditorMutationError::runtime_rejected("asset catalog save failed")
             })?;
         }
+        ShellCommand::CancelAssetCatalogDiscard {
+            projection_epoch: _,
+        } => {
+            app.cancel_asset_catalog_discard_confirmation();
+            app.append_console_line("[asset] catalog discard cancelled");
+        }
         ShellCommand::ReimportAsset {
             asset_id,
             projection_epoch: _,
@@ -1303,6 +1309,7 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::SelectAsset { .. } => "SelectAsset",
         ShellCommand::LoadAssetCatalog { .. } => "LoadAssetCatalog",
         ShellCommand::SaveAssetCatalog { .. } => "SaveAssetCatalog",
+        ShellCommand::CancelAssetCatalogDiscard { .. } => "CancelAssetCatalogDiscard",
         ShellCommand::ReimportAsset { .. } => "ReimportAsset",
         ShellCommand::ReimportSelectedAsset { .. } => "ReimportSelectedAsset",
         ShellCommand::ClearAssetDiagnostics { .. } => "ClearAssetDiagnostics",

@@ -249,7 +249,11 @@ mod tests {
             prior_origin
         );
         app.load_asset_project_catalog()
-            .expect("discard test mutation by loading A's persisted catalog");
+            .expect("first click requests confirmation for unsaved A");
+        assert!(app.asset_catalog_discard_confirmation_pending());
+        app.load_asset_project_catalog()
+            .expect("second click confirms A's persisted catalog");
+        app.select_material_asset(asset_id);
 
         // A hard B catalog read failure must not partially commit the
         // switch after clearing A's Material and catalog state.
@@ -380,7 +384,10 @@ mod tests {
 
         // This explicit action is the existing discard/restore path.
         app.load_asset_project_catalog()
-            .expect("explicit catalog reload should restore disk state");
+            .expect("first click requests explicit discard");
+        assert!(app.asset_catalog_discard_confirmation_pending());
+        app.load_asset_project_catalog()
+            .expect("second click confirms disk restore");
         assert!(
             app.asset_catalog_runtime()
                 .catalog()
@@ -464,7 +471,10 @@ mod tests {
             accepted_bytes
         );
         app.load_asset_project_catalog()
-            .expect("explicit restore of A's persisted catalog");
+            .expect("first click requests restoring A");
+        assert!(app.asset_catalog_discard_confirmation_pending());
+        app.load_asset_project_catalog()
+            .expect("second click confirms restoring A");
         app.load_project_file(&project_b)
             .expect("a clean A can switch to B using the shared accepted physical catalog");
         assert_eq!(
@@ -489,6 +499,129 @@ mod tests {
             std::fs::read(&disk_path).expect("shared disk catalog unchanged"),
             accepted_bytes
         );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn catalog_two_step_reload_preserves_unpersisted_edits_and_material_context() {
+        let root = unique_temp_dir("catalog_two_step_reload");
+        let path = root.join("project.rune.ron");
+        std::fs::write(
+            &path,
+            encode_ron_pretty(&ProjectFileV3::new("project.reload", "Reload"))
+                .expect("project encoding"),
+        )
+        .expect("project file");
+        let mut app = RunenwerkEditorApp::new();
+        app.load_project_file(&path).expect("load new project");
+        let persisted_id = asset::asset_id(21801);
+        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
+            asset::AssetRecord::new(
+                persisted_id,
+                "persisted",
+                "Persisted",
+                asset::AssetKind::MaterialGraph,
+            ),
+        );
+        app.save_asset_project_catalog().expect("persist initial catalog");
+        let disk_path = root.join("assets/catalog.ron");
+        let disk_before = std::fs::read(&disk_path).expect("disk catalog");
+        let unsaved_id = asset::asset_id(21802);
+        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
+            asset::AssetRecord::new(
+                unsaved_id,
+                "unsaved",
+                "Unsaved",
+                asset::AssetKind::MaterialGraph,
+            ),
+        );
+        app.select_material_asset(persisted_id);
+        let generation_before = app.material_source_context_generation;
+        app.load_asset_project_catalog().expect("request confirmation");
+        assert!(app.asset_catalog_discard_confirmation_pending());
+        assert!(app.asset_catalog_runtime().catalog().asset(unsaved_id).is_some());
+        assert_eq!(app.material_source_context_generation, generation_before);
+
+        app.cancel_asset_catalog_discard_confirmation();
+        assert!(!app.asset_catalog_discard_confirmation_pending());
+        assert!(app.asset_catalog_runtime().catalog().asset(unsaved_id).is_some());
+
+        app.load_asset_project_catalog().expect("new confirmation request");
+        let after_request_id = asset::asset_id(21803);
+        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
+            asset::AssetRecord::new(
+                after_request_id,
+                "later",
+                "Later",
+                asset::AssetKind::MaterialGraph,
+            ),
+        );
+        assert!(
+            app.load_asset_project_catalog().is_err(),
+            "a stale confirmation cannot discard post-request mutations"
+        );
+        assert!(app.asset_catalog_runtime().catalog().asset(after_request_id).is_some());
+        assert!(!app.asset_catalog_discard_confirmation_pending());
+
+        app.load_asset_project_catalog().expect("fresh confirmation request");
+        app.load_asset_project_catalog().expect("confirmed discard and disk restore");
+        assert!(app.asset_catalog_runtime().catalog().asset(unsaved_id).is_none());
+        assert!(app.asset_catalog_runtime().catalog().asset(persisted_id).is_some());
+        assert!(app.material_source_context_generation > generation_before);
+        assert!(!app.asset_catalog_discard_confirmation_pending());
+        assert_eq!(std::fs::read(&disk_path).expect("disk catalog"), disk_before);
+        app.load_asset_project_catalog().expect("clean reload");
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn catalog_confirmation_rejects_external_disk_change() {
+        let root = unique_temp_dir("catalog_confirmation_external_change");
+        let path = root.join("project.rune.ron");
+        std::fs::write(
+            &path,
+            encode_ron_pretty(&ProjectFileV3::new("project.stale", "Stale"))
+                .expect("project encoding"),
+        )
+        .expect("project file");
+        let mut app = RunenwerkEditorApp::new();
+        app.load_project_file(&path).expect("load new project");
+        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
+            asset::AssetRecord::new(
+                asset::asset_id(21901),
+                "persisted",
+                "Persisted",
+                asset::AssetKind::MaterialGraph,
+            ),
+        );
+        app.save_asset_project_catalog().expect("persist baseline");
+        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
+            asset::AssetRecord::new(
+                asset::asset_id(21902),
+                "local",
+                "Local",
+                asset::AssetKind::MaterialGraph,
+            ),
+        );
+        let local = app.asset_catalog_runtime().catalog().clone();
+        app.load_asset_project_catalog().expect("request discard confirmation");
+        let mut external = local.clone();
+        external.insert_asset_record(asset::AssetRecord::new(
+            asset::asset_id(21903),
+            "external",
+            "External",
+            asset::AssetKind::MaterialGraph,
+        ));
+        let session = app.asset_project_session().expect("active project");
+        let diagnostics = crate::asset_pipeline::save_project_catalog(session, &external)
+            .expect("simulate external catalog write");
+        assert!(diagnostics.is_empty());
+        let err = app
+            .load_asset_project_catalog()
+            .expect_err("stale disk content cannot be silently accepted");
+        assert!(err.to_string().contains("changed since confirmation"));
+        assert_eq!(app.asset_catalog_runtime().catalog(), &local);
+        assert!(!app.asset_catalog_discard_confirmation_pending());
         let _ = std::fs::remove_dir_all(root);
     }
 

@@ -63,7 +63,12 @@ impl EditorSurfaceProvider for AssetBrowserProvider {
         lines.extend(context.app.asset_catalog_runtime().reload_status_lines());
         let mut actions = vec![
             (
-                "Load catalog".to_string(),
+                (if context.app.asset_catalog_discard_confirmation_pending() {
+                    "Confirm: discard local catalog changes and load saved"
+                } else {
+                    "Load catalog"
+                })
+                .to_string(),
                 SurfaceLocalAction::Asset(AssetSurfaceAction::LoadProjectCatalog),
             ),
             (
@@ -71,6 +76,12 @@ impl EditorSurfaceProvider for AssetBrowserProvider {
                 SurfaceLocalAction::Asset(AssetSurfaceAction::SaveProjectCatalog),
             ),
         ];
+        if context.app.asset_catalog_discard_confirmation_pending() {
+            actions.push((
+                "Cancel catalog discard".to_string(),
+                SurfaceLocalAction::Asset(AssetSurfaceAction::CancelProjectCatalogDiscard),
+            ));
+        }
         actions.extend(view_model.rows.iter().map(|row| {
             (
                 format!("Select {}", row.display_name),
@@ -128,6 +139,9 @@ pub(super) fn asset_surface_action_command(
         }
         AssetSurfaceAction::SaveProjectCatalog => {
             Some(ShellCommand::SaveAssetCatalog { projection_epoch })
+        }
+        AssetSurfaceAction::CancelProjectCatalogDiscard => {
+            Some(ShellCommand::CancelAssetCatalogDiscard { projection_epoch })
         }
         AssetSurfaceAction::ReimportAsset { asset_id } => Some(ShellCommand::ReimportAsset {
             asset_id,

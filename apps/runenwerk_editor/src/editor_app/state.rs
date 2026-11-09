@@ -34,6 +34,15 @@ use crate::texture_preview::TexturePreviewRuntime;
 
 use super::sdf_operations::SdfOperationWorkspaceState;
 
+/// An explicit second Load click may discard only the exact previously
+/// observed in-memory version into the exact previously observed disk version.
+struct PendingAssetCatalogDiscard {
+    session: EditorAssetProjectSession,
+    source_generation: u64,
+    current: asset::AssetCatalog,
+    persisted: asset::AssetCatalog,
+}
+
 pub struct RunenwerkEditorApp {
     pub(crate) runtime: RunenwerkEditorRuntime,
     pub(crate) scene_persistence: ScenePersistenceContext,
@@ -49,6 +58,7 @@ pub struct RunenwerkEditorApp {
     pub(crate) failed_editor_definition_activations: Vec<PendingEditorDefinitionActivation>,
     pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
     pub(crate) asset_project_session: Option<EditorAssetProjectSession>,
+    pending_asset_catalog_discard: Option<PendingAssetCatalogDiscard>,
     /// Monotonic owner-local incarnation: even reopening the same root
     /// invalidates an action captured before the new project context.
     pub(crate) material_source_context_generation: u64,
@@ -129,6 +139,7 @@ impl RunenwerkEditorApp {
             failed_editor_definition_activations: Vec::new(),
             asset_catalog_runtime: AssetCatalogRuntime::new(),
             asset_project_session: None,
+            pending_asset_catalog_discard: None,
             material_source_context_generation: 0,
             material_lab_runtime: MaterialLabRuntime::default(),
             #[cfg(test)]
@@ -387,7 +398,7 @@ impl RunenwerkEditorApp {
     /// An explicit save or restoration of the previous catalog is required.
     pub fn set_asset_project_session(
         &mut self,
-        session: EditorAssetProjectSession,
+        mut session: EditorAssetProjectSession,
     ) -> anyhow::Result<()> {
         let replaces_catalog_fallback_owner = self
             .asset_project_session
@@ -412,6 +423,16 @@ impl RunenwerkEditorApp {
                 "project switch rejected: current asset catalog differs from the previous project's accepted on-disk catalog; save or restore that catalog first"
             );
         }
+        if !replaces_catalog_fallback_owner {
+            if let Some(accepted) = self
+                .asset_project_session
+                .as_ref()
+                .and_then(EditorAssetProjectSession::accepted_catalog)
+            {
+                session.record_accepted_catalog(accepted);
+            }
+        }
+        self.pending_asset_catalog_discard = None;
         self.material_source_context_generation = self
             .material_source_context_generation
             .checked_add(1)
@@ -440,7 +461,8 @@ impl RunenwerkEditorApp {
     }
 
     pub fn asset_catalog_status_lines(&self) -> Vec<String> {
-        self.asset_project_session
+        let mut lines = self
+            .asset_project_session
             .as_ref()
             .map(EditorAssetProjectSession::status_lines)
             .unwrap_or_else(|| {
@@ -448,15 +470,62 @@ impl RunenwerkEditorApp {
                     "No asset project session".to_string(),
                     "Load a project file before catalog IO or import execution".to_string(),
                 ]
-            })
+            });
+        if self.pending_asset_catalog_discard.is_some() {
+            lines.push(
+                "Confirmation required: click Load again to discard local catalog edits"
+                    .to_string(),
+            );
+        }
+        lines
     }
 
+    pub fn asset_catalog_discard_confirmation_pending(&self) -> bool {
+        self.pending_asset_catalog_discard.is_some()
+    }
+
+    pub fn cancel_asset_catalog_discard_confirmation(&mut self) {
+        self.pending_asset_catalog_discard = None;
+    }
+
+    /// A normal load may refresh changed disk content without losing local
+    /// edits. A destructive restore requires a second explicit Load action.
     pub fn load_asset_project_catalog(&mut self) -> anyhow::Result<()> {
         let Some(session) = self.asset_project_session.as_ref() else {
             self.record_missing_asset_project_session("load catalog");
             anyhow::bail!("cannot load asset catalog: no asset project session is active");
         };
         let outcome = load_project_catalog(session)?;
+        if let Some(persisted) = outcome.accepted_catalog.as_ref() {
+            let current = self.asset_catalog_runtime.catalog();
+            let unchanged = session.accepted_catalog().map_or_else(
+                || current == &asset::AssetCatalog::new(),
+                |accepted| current == accepted,
+            );
+            if !unchanged {
+                if let Some(pending) = self.pending_asset_catalog_discard.take() {
+                    anyhow::ensure!(
+                        pending.source_generation == self.material_source_context_generation
+                            && session.shares_catalog_fallback_context(&pending.session)
+                            && current == &pending.current
+                            && persisted == &pending.persisted,
+                        "catalog discard rejected: project, local catalog or disk changed since confirmation; request again"
+                    );
+                } else {
+                    self.pending_asset_catalog_discard = Some(PendingAssetCatalogDiscard {
+                        session: session.clone(),
+                        source_generation: self.material_source_context_generation,
+                        current: current.clone(),
+                        persisted: persisted.clone(),
+                    });
+                    self.append_console_warning(
+                        "[asset] unsaved catalog changes: click Load catalog again to confirm discard",
+                    );
+                    return Ok(());
+                }
+            }
+        }
+        self.pending_asset_catalog_discard = None;
         self.apply_asset_project_catalog_load_outcome(outcome);
         Ok(())
     }
@@ -468,10 +537,20 @@ impl RunenwerkEditorApp {
         outcome: CatalogPersistenceOutcome,
     ) {
         if let Some(catalog) = outcome.accepted_catalog {
-            self.asset_catalog_runtime.replace_catalog(catalog);
+            if self.asset_catalog_runtime.catalog() != &catalog {
+                self.material_source_context_generation = self
+                    .material_source_context_generation
+                    .checked_add(1)
+                    .expect("Material catalog-replacement incarnation exhausted");
+                self.material_lab_runtime = MaterialLabRuntime::default();
+                self.pending_material_preview_publications.clear();
+                self.asset_catalog_runtime.select_asset(None);
+            }
             if let Some(session) = self.asset_project_session.as_mut() {
+                session.record_accepted_catalog(&catalog);
                 session.set_catalog_load_status("accepted");
             }
+            self.asset_catalog_runtime.replace_catalog(catalog);
         } else {
             for diagnostic in outcome.diagnostics {
                 self.asset_catalog_runtime.record_diagnostic(diagnostic);
@@ -490,8 +569,10 @@ impl RunenwerkEditorApp {
         let diagnostics = save_project_catalog(session, self.asset_catalog_runtime.catalog())?;
         if diagnostics.is_empty() {
             if let Some(session) = self.asset_project_session.as_mut() {
+                session.record_accepted_catalog(self.asset_catalog_runtime.catalog());
                 session.set_catalog_save_status("written");
             }
+            self.pending_asset_catalog_discard = None;
         } else {
             let count = diagnostics.len();
             for diagnostic in diagnostics {

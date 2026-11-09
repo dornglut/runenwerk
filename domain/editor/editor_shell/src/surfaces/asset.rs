@@ -50,6 +50,7 @@ pub enum AssetSurfaceAction {
     SelectAsset { asset_id: asset::AssetId },
     LoadProjectCatalog,
     SaveProjectCatalog,
+    CancelProjectCatalogDiscard,
     ReimportAsset { asset_id: asset::AssetId },
     ReimportSelectedAsset,
     ClearDiagnostics,
