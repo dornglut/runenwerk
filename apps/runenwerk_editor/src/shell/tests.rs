@@ -1771,8 +1771,8 @@ fn material_graph_canvas_real_project_route_rejects_delayed_a_delete_and_accepts
     let before_b = std::fs::read(&b_path).expect("B bytes");
 
     let mut host = EditorHostResource::material_lab_workbench();
-    host.app.set_asset_project_session(
-        crate::asset_pipeline::EditorAssetProjectSession::new(
+    host.app
+        .set_asset_project_session(crate::asset_pipeline::EditorAssetProjectSession::new(
             &root,
             asset::AssetProjectCatalogDescriptor::new(
                 Vec::<asset::AssetSourceRoot>::new(),
@@ -1780,12 +1780,12 @@ fn material_graph_canvas_real_project_route_rejects_delayed_a_delete_and_accepts
                 ".runenwerk/field-products",
                 "assets/catalog.ron",
             ),
-        ),
-    );
-    host.app.asset_catalog_runtime_mut().replace_catalog(catalog);
+        ));
+    host.app
+        .asset_catalog_runtime_mut()
+        .replace_catalog(catalog);
     host.app.select_material_asset(first);
-    let surface =
-        surface_id_by_kind(&host.shell_state, PanelKind::MaterialGraphCanvas);
+    let surface = surface_id_by_kind(&host.shell_state, PanelKind::MaterialGraphCanvas);
     let graph_target = surface_widget_id(surface, editor_shell::MATERIAL_GRAPH_CANVAS_WIDGET_ID);
     let bounds = UiRect::new(0.0, 0.0, 1280.0, 720.0);
     let atlas = UiFontAtlasResource::default();
@@ -1835,11 +1835,12 @@ fn material_graph_canvas_real_project_route_rejects_delayed_a_delete_and_accepts
         None,
     )
     .expect("real graph canvas A selection should dispatch");
-    assert!(host
-        .app
-        .material_lab_runtime()
-        .selected_graph_nodes()
-        .contains(&graph::NodeId::new(1)));
+    assert!(
+        host.app
+            .material_lab_runtime()
+            .selected_graph_nodes()
+            .contains(&graph::NodeId::new(1))
+    );
 
     let old_delete = map_interactions_to_shell_commands(
         &UiInteractionResults {
@@ -1876,7 +1877,12 @@ fn material_graph_canvas_real_project_route_rejects_delayed_a_delete_and_accepts
     )
     .expect("B selection through Shell must succeed");
     assert!(host.shell_state.current_projection_epoch() > epoch);
-    assert!(host.app.material_lab_runtime().selected_graph_nodes().is_empty());
+    assert!(
+        host.app
+            .material_lab_runtime()
+            .selected_graph_nodes()
+            .is_empty()
+    );
 
     RunenwerkEditorShellController::dispatch_commands(
         &mut host.app,
