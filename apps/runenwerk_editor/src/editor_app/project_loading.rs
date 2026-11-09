@@ -164,14 +164,14 @@ mod tests {
             catalog_path.is_file(),
             "A catalog must be ratified and persisted before switching projects"
         );
-        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
-            asset::AssetRecord::new(
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
                 asset::asset_id(1543),
                 "unsaved-catalog-entry",
                 "Unsaved Catalog Entry",
                 asset::AssetKind::MaterialGraph,
-            ),
-        );
+            ));
         assert!(
             app.load_project_file(&second_project).is_err(),
             "even an existing disk catalog must not hide newer in-memory changes"
