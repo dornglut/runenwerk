@@ -9,9 +9,10 @@ use editor_shell::EditorCompositionRuntime;
 
 use super::console::{ConsoleMessage, ConsoleMessageKind};
 use crate::asset_pipeline::{
-    AssetCatalogRuntime, EditorAssetProjectSession, EditorFieldProductPublication,
-    EditorFieldProductPublicationJournalEntry, ImportJobStatus, catalog_with_import_artifact,
-    execute_import_for_asset, load_project_catalog, save_project_catalog,
+    AssetCatalogRuntime, CatalogPersistenceOutcome, EditorAssetProjectSession,
+    EditorFieldProductPublication, EditorFieldProductPublicationJournalEntry, ImportJobStatus,
+    catalog_with_import_artifact, execute_import_for_asset, load_project_catalog,
+    save_project_catalog,
 };
 use crate::material_lab::{
     EditorMaterialPreviewPublication, EditorMaterialPreviewPublicationJournalEntry,
@@ -446,11 +447,21 @@ impl RunenwerkEditorApp {
     }
 
     pub fn load_asset_project_catalog(&mut self) -> anyhow::Result<()> {
-        let Some(session) = self.asset_project_session.as_mut() else {
+        let Some(session) = self.asset_project_session.as_ref() else {
             self.record_missing_asset_project_session("load catalog");
             return Ok(());
         };
         let outcome = load_project_catalog(session)?;
+        self.apply_asset_project_catalog_load_outcome(outcome);
+        Ok(())
+    }
+
+    /// Publish a catalog result already read for the active project. Project
+    /// loading stages this fallible I/O before replacing the old session.
+    pub(crate) fn apply_asset_project_catalog_load_outcome(
+        &mut self,
+        outcome: CatalogPersistenceOutcome,
+    ) {
         if let Some(catalog) = outcome.accepted_catalog {
             self.asset_catalog_runtime.replace_catalog(catalog);
             if let Some(session) = self.asset_project_session.as_mut() {
@@ -464,7 +475,6 @@ impl RunenwerkEditorApp {
                 session.set_catalog_load_status("rejected; previous catalog preserved");
             }
         }
-        Ok(())
     }
 
     pub fn save_asset_project_catalog(&mut self) -> anyhow::Result<()> {
@@ -478,12 +488,14 @@ impl RunenwerkEditorApp {
                 session.set_catalog_save_status("written");
             }
         } else {
+            let count = diagnostics.len();
             for diagnostic in diagnostics {
                 self.asset_catalog_runtime.record_diagnostic(diagnostic);
             }
             if let Some(session) = self.asset_project_session.as_mut() {
                 session.set_catalog_save_status("rejected; invalid catalog not written");
             }
+            anyhow::bail!("asset catalog save rejected: {count} blocking validation issue(s)");
         }
         Ok(())
     }

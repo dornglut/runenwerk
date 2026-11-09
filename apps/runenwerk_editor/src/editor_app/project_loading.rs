@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-use crate::asset_pipeline::EditorAssetProjectSession;
+use crate::asset_pipeline::{EditorAssetProjectSession, load_project_catalog};
 use crate::editor_app::RunenwerkEditorApp;
 use crate::persistence::read_project_file;
 
@@ -23,13 +23,18 @@ impl RunenwerkEditorApp {
                 );
             }
         };
-        self.set_asset_project_session(session)?;
-        self.load_asset_project_catalog().with_context(|| {
+        // A hard read failure in B must not discard the active A session,
+        // catalog, Material selection, or history before returning an error.
+        // Publish this exact staged result instead of reading B again.
+        let catalog_outcome = load_project_catalog(&session).with_context(|| {
             format!(
                 "failed to load asset catalog for project: {}",
                 path.display()
             )
-        })
+        })?;
+        self.set_asset_project_session(session)?;
+        self.apply_asset_project_catalog_load_outcome(catalog_outcome);
+        Ok(())
     }
 }
 
@@ -185,6 +190,39 @@ mod tests {
         app.load_asset_project_catalog()
             .expect("discard test mutation by loading A's persisted catalog");
 
+        // A hard B catalog read failure must not partially commit the
+        // switch after clearing A's Material and catalog state.
+        let invalid_b_catalog = second_root.join("assets/catalog.ron");
+        std::fs::create_dir_all(&invalid_b_catalog)
+            .expect("create B catalog path as a directory");
+        let origin_before_failure = app
+            .material_source_origin_for_selected(None)
+            .expect("A origin remains active after restoring its catalog");
+        let failed = app
+            .load_project_file(&second_project)
+            .expect_err("unreadable B catalog must fail without switching projects");
+        assert!(
+            format!("{failed:#}").contains("failed to read asset catalog"),
+            "failure must come from the incoming catalog read: {failed:#}"
+        );
+        assert_eq!(
+            app.asset_project_session()
+                .expect("A session preserved after B read failure")
+                .project_root(),
+            first_root.as_path()
+        );
+        assert_eq!(
+            app.material_source_origin_for_selected(None)
+                .expect("A Material origin preserved after B read failure"),
+            origin_before_failure
+        );
+        assert!(
+            app.asset_catalog_runtime().catalog().asset(asset_id).is_some(),
+            "A catalog must survive a hard B catalog read error"
+        );
+        std::fs::remove_dir(&invalid_b_catalog)
+            .expect("remove B directory fixture before successful switch");
+
         app.load_project_file(&second_project)
             .expect("clean A catalog permits B switch despite missing B catalog");
         assert!(
@@ -213,6 +251,63 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(first_root);
         let _ = std::fs::remove_dir_all(second_root);
+    }
+
+    #[test]
+    fn rejected_catalog_save_reports_error_without_overwriting_valid_source() {
+        let root = unique_temp_dir("material_catalog_save_rejection");
+        let project_path = root.join("project.rune.ron");
+        let project = ProjectFileV3::new("project.catalog", "Catalog");
+        std::fs::write(
+            &project_path,
+            encode_ron_pretty(&project).expect("project should encode"),
+        )
+        .expect("project file should be writable");
+
+        let mut app = RunenwerkEditorApp::new();
+        app.load_project_file(&project_path)
+            .expect("new project catalog may be absent");
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
+                asset::asset_id(1981),
+                "valid-material",
+                "Valid Material",
+                asset::AssetKind::MaterialGraph,
+            ));
+        app.save_asset_project_catalog()
+            .expect("valid catalog save must succeed");
+        let catalog_path = root.join("assets/catalog.ron");
+        let persisted = std::fs::read(&catalog_path).expect("saved catalog bytes");
+
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(
+                asset::AssetRecord::new(
+                    asset::asset_id(1982),
+                    "invalid-material",
+                    "Invalid Material",
+                    asset::AssetKind::MaterialGraph,
+                )
+                .with_primary_source(asset::asset_source_id(1983)),
+            );
+        assert!(
+            app.save_asset_project_catalog().is_err(),
+            "ratification-rejected save must return an error"
+        );
+        assert_eq!(
+            std::fs::read(&catalog_path).expect("previously valid catalog remains readable"),
+            persisted,
+            "rejected save cannot overwrite the accepted disk catalog"
+        );
+        assert!(
+            app.asset_catalog_status_lines()
+                .iter()
+                .any(|line| line.contains("rejected; invalid catalog not written")),
+            "save status must explicitly report rejection"
+        );
+
+        let _ = std::fs::remove_dir_all(root);
     }
 
     fn unique_temp_dir(label: &str) -> std::path::PathBuf {
