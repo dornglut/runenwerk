@@ -106,3 +106,81 @@ jobs:
           name: material-lab-native-startup
           path: material-native-startup.log
           if-no-files-found: warn
+
+  material-lab-native-windows:
+    name: Material Lab / real Windows startup
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - name: Check out the exact feature revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          clean: true
+          persist-credentials: false
+
+      - name: Verify exact head SHA
+        shell: pwsh
+        env:
+          EXPECTED_REVISION: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:EXPECTED_REVISION) {
+            throw "Wrong revision: expected $env:EXPECTED_REVISION, found $actual"
+          }
+
+      - name: Install maintained stable Rust
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build native Material Lab binary
+        shell: pwsh
+        run: |
+          cargo +stable build --locked -p runenwerk_editor --bin runenwerk_material_lab
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Execute Windows native window and prove a submitted frame
+        shell: pwsh
+        env:
+          RUST_BACKTRACE: "1"
+          GROTTO_RENDER_PRIMARY_REDRAW_INTERVAL_LOG: "1"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stdout = Join-Path $PWD "material-native-windows-stdout.log"
+          $stderr = Join-Path $PWD "material-native-windows-stderr.log"
+          $binary = Join-Path $PWD "target/debug/runenwerk_material_lab.exe"
+          $process = Start-Process -FilePath $binary -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          try {
+            for ($i = 0; $i -lt 20; $i++) {
+              Start-Sleep -Seconds 1
+              $process.Refresh()
+              if ($process.HasExited) {
+                throw "Material Lab terminated before startup observation completed (exit=$($process.ExitCode))"
+              }
+            }
+          } finally {
+            $process.Refresh()
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+            if (Test-Path $stdout) { Get-Content $stdout }
+            if (Test-Path $stderr) { Get-Content $stderr }
+          }
+          $combined = (Get-Content $stdout -Raw) + (Get-Content $stderr -Raw)
+          if ($combined -match "panicked|runtime frame failed|ReadBeforeInitialization|render backend execution failed") {
+            throw "Windows native Material Lab reported a fatal frame"
+          }
+          if ($combined -notmatch "runenwerk_render_lab_primary_redraw_start_interval frame=") {
+            throw "No physically submitted Windows Material Lab frame observed"
+          }
+
+      - name: Upload Windows native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: material-lab-native-windows
+          path: material-native-windows-*.log
+          if-no-files-found: warn
