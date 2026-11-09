@@ -72,6 +72,7 @@ jobs:
         env:
           RUST_BACKTRACE: "1"
           LIBGL_ALWAYS_SOFTWARE: "1"
+          GROTTO_RENDER_PRIMARY_REDRAW_INTERVAL_LOG: "1"
         run: |
           set -euo pipefail
           set +e
@@ -89,7 +90,14 @@ jobs:
             echo "Native Material Lab exited before the bounded 20-second observation (exit=$status)" >&2
             exit 1
           fi
-          echo "Native Material Lab remained alive through the 20-second X11/Vulkan startup interval"
+          # A process that merely stays alive has not proved any GPU work.
+          # This maintained Engine frame-submit witness is emitted only on
+          # physically accepted primary-surface render submissions.
+          if ! grep -q 'runenwerk_render_lab_primary_redraw_start_interval frame=' material-native-startup.log; then
+            echo "No physically submitted Material Lab frame observed" >&2
+            exit 1
+          fi
+          echo "Material Lab physically submitted a frame and remained alive through the bounded X11/Vulkan interval"
 
       - name: Upload native startup evidence
         if: always()
