@@ -553,8 +553,11 @@ impl RunenwerkEditorApp {
                 )
             })?;
         let _ = self.material_lab_runtime_mut().pop_undo_snapshot();
-        self.material_lab_runtime_mut()
-            .push_redo_snapshot(entry.asset_id, current, committed_digest);
+        self.material_lab_runtime_mut().push_redo_snapshot(
+            entry.asset_id,
+            current,
+            committed_digest,
+        );
         self.refresh_material_source_projection(entry.asset_id, entry.document);
         Ok(())
     }

@@ -1067,7 +1067,10 @@ fn material_history_refuses_external_changes_after_a_fresh_source_reload() {
         "old Undo must not overwrite a newer external revision"
     );
     assert_eq!(app.material_lab_runtime().history_depths(), (1, 0));
-    assert_eq!(std::fs::read(&file).expect("external content survives"), external_bytes);
+    assert_eq!(
+        std::fs::read(&file).expect("external content survives"),
+        external_bytes
+    );
 
     // After an undo and subsequent external write, stale Redo must similarly
     // be denied rather than replayed into the externally changed document.
@@ -1090,23 +1093,26 @@ fn material_history_refuses_external_changes_after_a_fresh_source_reload() {
     let mut external_redo =
         read_material_graph_document(&redo_file).expect("undone material source");
     external_redo.label = "External After Undo".to_string();
-    write_material_graph_document(&redo_file, &external_redo)
-        .expect("external update after undo");
+    write_material_graph_document(&redo_file, &external_redo).expect("external update after undo");
     let redo_external_bytes = std::fs::read(&redo_file).expect("external redo bytes");
     redo_app.select_material_asset(asset);
     let redo_origin = redo_app
         .material_source_origin_for_selected(None)
         .expect("new current source origin after external edit");
     assert!(
-        redo_app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
-            origin: redo_origin,
-            action: Box::new(MaterialSurfaceAction::RedoMaterialEdit),
-        })
-        .is_err(),
+        redo_app
+            .apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+                origin: redo_origin,
+                action: Box::new(MaterialSurfaceAction::RedoMaterialEdit),
+            })
+            .is_err(),
         "old Redo must not overwrite externally authored data"
     );
     assert_eq!(redo_app.material_lab_runtime().history_depths(), (0, 1));
-    assert_eq!(std::fs::read(&redo_file).expect("external redo survives"), redo_external_bytes);
+    assert_eq!(
+        std::fs::read(&redo_file).expect("external redo survives"),
+        redo_external_bytes
+    );
     let _ = std::fs::remove_dir_all(root);
     let _ = std::fs::remove_dir_all(root2);
 }
@@ -1145,7 +1151,10 @@ fn material_three_step_undo_redo_preserves_each_revision_and_remaining_redo() {
             versions[expected],
             "undo must restore the exact prior committed source bytes"
         );
-        assert_eq!(app.material_lab_runtime().history_depths(), (expected, 3 - expected));
+        assert_eq!(
+            app.material_lab_runtime().history_depths(),
+            (expected, 3 - expected)
+        );
         assert!(app.material_lab_runtime().can_redo());
     }
     assert!(!app.material_lab_runtime().can_undo());
@@ -1159,7 +1168,10 @@ fn material_three_step_undo_redo_preserves_each_revision_and_remaining_redo() {
             bytes.as_slice(),
             "redo must restore the exact prior committed source bytes"
         );
-        assert_eq!(app.material_lab_runtime().history_depths(), (expected, 3 - expected));
+        assert_eq!(
+            app.material_lab_runtime().history_depths(),
+            (expected, 3 - expected)
+        );
         assert_eq!(
             app.material_lab_runtime().can_redo(),
             expected < 3,
