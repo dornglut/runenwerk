@@ -1780,7 +1780,8 @@ fn material_graph_canvas_real_project_route_rejects_delayed_a_delete_and_accepts
                 ".runenwerk/field-products",
                 "assets/catalog.ron",
             ),
-        ));
+        ))
+        .expect("the first Material Shell project session must install");
     host.app
         .asset_catalog_runtime_mut()
         .replace_catalog(catalog);
