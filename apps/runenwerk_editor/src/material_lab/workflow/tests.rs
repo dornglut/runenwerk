@@ -647,7 +647,10 @@ fn material_source_origin_does_not_retarget_an_identical_file_in_another_project
     assert_eq!(new_origin.source_id, old_origin.source_id);
     assert_eq!(new_origin.document_id, old_origin.document_id);
     assert_eq!(new_origin.content_digest, old_origin.content_digest);
-    assert_ne!(new_origin.source_context_digest, old_origin.source_context_digest);
+    assert_ne!(
+        new_origin.source_context_digest,
+        old_origin.source_context_digest
+    );
     assert!(
         app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
             origin: old_origin,
@@ -660,8 +663,14 @@ fn material_source_origin_does_not_retarget_an_identical_file_in_another_project
         .is_err(),
         "previous project intent must not mutate identical owner-local IDs in B"
     );
-    assert_eq!(std::fs::read(&second_source).expect("B unchanged"), first_bytes);
-    assert_eq!(std::fs::read(&first_source).expect("A unchanged"), first_bytes);
+    assert_eq!(
+        std::fs::read(&second_source).expect("B unchanged"),
+        first_bytes
+    );
+    assert_eq!(
+        std::fs::read(&first_source).expect("A unchanged"),
+        first_bytes
+    );
     assert!(!app.material_lab_runtime().can_undo());
     app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
         origin: new_origin,
@@ -672,8 +681,14 @@ fn material_source_origin_does_not_retarget_an_identical_file_in_another_project
         }),
     })
     .expect("explicit B-origin action still works");
-    assert_ne!(std::fs::read(&second_source).expect("B edited"), first_bytes);
-    assert_eq!(std::fs::read(&first_source).expect("A remains"), first_bytes);
+    assert_ne!(
+        std::fs::read(&second_source).expect("B edited"),
+        first_bytes
+    );
+    assert_eq!(
+        std::fs::read(&first_source).expect("A remains"),
+        first_bytes
+    );
 
     let before_reopen = app
         .material_published_source_origin_for_selected(None)
@@ -734,19 +749,13 @@ fn material_source_origin_rejects_same_ids_and_bytes_after_catalog_locator_rebin
     let original_bytes = std::fs::read(&original_path).expect("original bytes");
     std::fs::write(&relocated_path, &original_bytes).expect("same bytes at new locator");
 
-    app.asset_catalog_runtime_mut()
-        .catalog_mut()
-        .insert_source(
-            AssetSourceDescriptor::new(
-                source,
-                asset,
-                AssetKind::MaterialGraph,
-                new_relative,
-            )
+    app.asset_catalog_runtime_mut().catalog_mut().insert_source(
+        AssetSourceDescriptor::new(source, asset, AssetKind::MaterialGraph, new_relative)
             .with_hash(SourceHash::new("sha256", "edit")),
-        );
+    );
     assert!(
-        app.material_published_source_origin_for_selected(None).is_err(),
+        app.material_published_source_origin_for_selected(None)
+            .is_err(),
         "a new catalog locator must not inherit the prior file observation"
     );
     assert!(
@@ -761,14 +770,20 @@ fn material_source_origin_rejects_same_ids_and_bytes_after_catalog_locator_rebin
         .is_err(),
         "old source origin must not write the equally encoded relocated source"
     );
-    assert_eq!(std::fs::read(&relocated_path).expect("relocated unchanged"), original_bytes);
+    assert_eq!(
+        std::fs::read(&relocated_path).expect("relocated unchanged"),
+        original_bytes
+    );
 
     app.select_material_asset(asset);
     let current_origin = app
         .material_published_source_origin_for_selected(None)
         .expect("explicit reload should qualify the new locator");
     assert_eq!(current_origin.content_digest, old_origin.content_digest);
-    assert_ne!(current_origin.source_context_digest, old_origin.source_context_digest);
+    assert_ne!(
+        current_origin.source_context_digest,
+        old_origin.source_context_digest
+    );
     assert!(
         !app.material_lab_runtime().can_undo(),
         "old source history cannot apply to another locator with reused IDs"
@@ -782,8 +797,14 @@ fn material_source_origin_rejects_same_ids_and_bytes_after_catalog_locator_rebin
         }),
     })
     .expect("new source locator accepts a freshly qualified edit");
-    assert_eq!(std::fs::read(&original_path).expect("old source unchanged"), original_bytes);
-    assert_ne!(std::fs::read(&relocated_path).expect("new source edited"), original_bytes);
+    assert_eq!(
+        std::fs::read(&original_path).expect("old source unchanged"),
+        original_bytes
+    );
+    assert_ne!(
+        std::fs::read(&relocated_path).expect("new source edited"),
+        original_bytes
+    );
 
     let _ = std::fs::remove_dir_all(root);
 }
