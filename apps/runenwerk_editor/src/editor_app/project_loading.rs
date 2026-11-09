@@ -521,55 +521,87 @@ mod tests {
                 "persisted",
                 "Persisted",
                 asset::AssetKind::MaterialGraph,
-            ),
-        );
-        app.save_asset_project_catalog().expect("persist initial catalog");
+            ));
+        app.save_asset_project_catalog()
+            .expect("persist initial catalog");
         let disk_path = root.join("assets/catalog.ron");
         let disk_before = std::fs::read(&disk_path).expect("disk catalog");
         let unsaved_id = asset::asset_id(21802);
-        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
-            asset::AssetRecord::new(
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
                 unsaved_id,
                 "unsaved",
                 "Unsaved",
                 asset::AssetKind::MaterialGraph,
-            ),
-        );
+            ));
         app.select_material_asset(persisted_id);
         let generation_before = app.material_source_context_generation;
-        app.load_asset_project_catalog().expect("request confirmation");
+        app.load_asset_project_catalog()
+            .expect("request confirmation");
         assert!(app.asset_catalog_discard_confirmation_pending());
-        assert!(app.asset_catalog_runtime().catalog().asset(unsaved_id).is_some());
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(unsaved_id)
+                .is_some()
+        );
         assert_eq!(app.material_source_context_generation, generation_before);
 
         app.cancel_asset_catalog_discard_confirmation();
         assert!(!app.asset_catalog_discard_confirmation_pending());
-        assert!(app.asset_catalog_runtime().catalog().asset(unsaved_id).is_some());
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(unsaved_id)
+                .is_some()
+        );
 
-        app.load_asset_project_catalog().expect("new confirmation request");
+        app.load_asset_project_catalog()
+            .expect("new confirmation request");
         let after_request_id = asset::asset_id(21803);
-        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
-            asset::AssetRecord::new(
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
                 after_request_id,
                 "later",
                 "Later",
                 asset::AssetKind::MaterialGraph,
-            ),
-        );
+            ));
         assert!(
             app.load_asset_project_catalog().is_err(),
             "a stale confirmation cannot discard post-request mutations"
         );
-        assert!(app.asset_catalog_runtime().catalog().asset(after_request_id).is_some());
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(after_request_id)
+                .is_some()
+        );
         assert!(!app.asset_catalog_discard_confirmation_pending());
 
-        app.load_asset_project_catalog().expect("fresh confirmation request");
-        app.load_asset_project_catalog().expect("confirmed discard and disk restore");
-        assert!(app.asset_catalog_runtime().catalog().asset(unsaved_id).is_none());
-        assert!(app.asset_catalog_runtime().catalog().asset(persisted_id).is_some());
+        app.load_asset_project_catalog()
+            .expect("fresh confirmation request");
+        app.load_asset_project_catalog()
+            .expect("confirmed discard and disk restore");
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(unsaved_id)
+                .is_none()
+        );
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(persisted_id)
+                .is_some()
+        );
         assert!(app.material_source_context_generation > generation_before);
         assert!(!app.asset_catalog_discard_confirmation_pending());
-        assert_eq!(std::fs::read(&disk_path).expect("disk catalog"), disk_before);
+        assert_eq!(
+            std::fs::read(&disk_path).expect("disk catalog"),
+            disk_before
+        );
         app.load_asset_project_catalog().expect("clean reload");
         let _ = std::fs::remove_dir_all(root);
     }
@@ -586,25 +618,26 @@ mod tests {
         .expect("project file");
         let mut app = RunenwerkEditorApp::new();
         app.load_project_file(&path).expect("load new project");
-        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
-            asset::AssetRecord::new(
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
                 asset::asset_id(21901),
                 "persisted",
                 "Persisted",
                 asset::AssetKind::MaterialGraph,
-            ),
-        );
+            ));
         app.save_asset_project_catalog().expect("persist baseline");
-        app.asset_catalog_runtime_mut().catalog_mut().insert_asset_record(
-            asset::AssetRecord::new(
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
                 asset::asset_id(21902),
                 "local",
                 "Local",
                 asset::AssetKind::MaterialGraph,
-            ),
-        );
+            ));
         let local = app.asset_catalog_runtime().catalog().clone();
-        app.load_asset_project_catalog().expect("request discard confirmation");
+        app.load_asset_project_catalog()
+            .expect("request discard confirmation");
         let mut external = local.clone();
         external.insert_asset_record(asset::AssetRecord::new(
             asset::asset_id(21903),
