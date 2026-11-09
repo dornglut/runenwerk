@@ -50,7 +50,18 @@ jobs:
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools xvfb xauth libxkbcommon-x11-0
-          vulkaninfo --summary
+          icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
+          test -n "$icd"
+          echo "Lavapipe ICD: $icd"
+          echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+          echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
+          echo "WGPU_BACKEND=vulkan" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=${RUNNER_TEMP}/runenrender-vulkan-xdg" >> "$GITHUB_ENV"
+          mkdir -p "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+          chmod 700 "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+
+      - name: Prove Vulkan software adapter
+        run: vulkaninfo --summary
 
       - name: Build the actual Material Lab binary
         run: |
@@ -61,7 +72,6 @@ jobs:
         env:
           RUST_BACKTRACE: "1"
           LIBGL_ALWAYS_SOFTWARE: "1"
-          VK_DRIVER_FILES: "/usr/share/vulkan/icd.d/lvp_icd.x86_64.json"
         run: |
           set -euo pipefail
           set +e
