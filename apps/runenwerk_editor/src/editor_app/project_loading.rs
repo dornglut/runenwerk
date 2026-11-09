@@ -105,6 +105,44 @@ mod tests {
     }
 
     #[test]
+    fn rejected_catalog_load_reports_preserved_not_loaded() {
+        let root = unique_temp_dir("catalog_rejected_load_outcome");
+        let project_path = root.join("project.rune.ron");
+        std::fs::write(
+            &project_path,
+            encode_ron_pretty(&ProjectFileV3::new("project.rejected", "Rejected"))
+                .expect("project encoding"),
+        )
+        .expect("project file");
+        let mut app = RunenwerkEditorApp::new();
+        app.load_project_file(&project_path)
+            .expect("opening a missing catalog is controlled");
+        assert_eq!(
+            app.load_asset_project_catalog()
+                .expect("missing catalog is a controlled rejection"),
+            crate::editor_app::AssetCatalogLoadDisposition::RejectedPreserved
+        );
+        let original = app.asset_catalog_runtime().catalog().clone();
+        let catalog_path = root.join("assets/catalog.ron");
+        std::fs::create_dir_all(catalog_path.parent().expect("catalog parent"))
+            .expect("create assets");
+        std::fs::write(&catalog_path, "not valid RON ((")
+            .expect("create invalid catalog");
+        assert_eq!(
+            app.load_asset_project_catalog()
+                .expect("invalid catalog is a controlled rejection"),
+            crate::editor_app::AssetCatalogLoadDisposition::RejectedPreserved
+        );
+        assert_eq!(app.asset_catalog_runtime().catalog(), &original);
+        assert!(
+            app.asset_catalog_status_lines()
+                .iter()
+                .any(|line| line.contains("rejected; previous catalog preserved"))
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn load_project_file_sets_asset_project_session_and_reports_missing_catalog() {
         let root = unique_temp_dir("project_load_session");
         let project_path = root.join("project.rune.ron");

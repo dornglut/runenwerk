@@ -234,6 +234,11 @@ pub fn dispatch_shell_command_with_viewport_commands(
                         "[asset] load NOT committed: confirm the discard action or cancel",
                     );
                 }
+                crate::editor_app::AssetCatalogLoadDisposition::RejectedPreserved => {
+                    app.append_console_warning(
+                        "[asset] catalog load rejected: previous catalog preserved",
+                    );
+                }
             }
         }
         ShellCommand::SaveAssetCatalog {

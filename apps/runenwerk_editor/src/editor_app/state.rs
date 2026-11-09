@@ -39,6 +39,7 @@ use super::sdf_operations::SdfOperationWorkspaceState;
 pub enum AssetCatalogLoadDisposition {
     Loaded,
     ConfirmationRequired,
+    RejectedPreserved,
 }
 
 /// An explicit second Load click may discard only the exact previously
@@ -430,14 +431,13 @@ impl RunenwerkEditorApp {
                 "project switch rejected: current asset catalog differs from the previous project's accepted on-disk catalog; save or restore that catalog first"
             );
         }
-        if !replaces_catalog_fallback_owner {
-            if let Some(accepted) = self
+        if !replaces_catalog_fallback_owner
+            && let Some(accepted) = self
                 .asset_project_session
                 .as_ref()
                 .and_then(EditorAssetProjectSession::accepted_catalog)
-            {
-                session.record_accepted_catalog(accepted);
-            }
+        {
+            session.record_accepted_catalog(accepted);
         }
         self.pending_asset_catalog_discard = None;
         self.material_source_context_generation = self
@@ -533,8 +533,13 @@ impl RunenwerkEditorApp {
             }
         }
         self.pending_asset_catalog_discard = None;
+        let rejected = outcome.accepted_catalog.is_none();
         self.apply_asset_project_catalog_load_outcome(outcome);
-        Ok(AssetCatalogLoadDisposition::Loaded)
+        if rejected {
+            Ok(AssetCatalogLoadDisposition::RejectedPreserved)
+        } else {
+            Ok(AssetCatalogLoadDisposition::Loaded)
+        }
     }
 
     /// Publish a catalog result already read for the active project. Project
