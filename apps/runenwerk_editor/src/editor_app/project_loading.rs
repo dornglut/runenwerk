@@ -537,8 +537,11 @@ mod tests {
             ));
         app.select_material_asset(persisted_id);
         let generation_before = app.material_source_context_generation;
-        app.load_asset_project_catalog()
-            .expect("request confirmation");
+        assert_eq!(
+            app.load_asset_project_catalog()
+                .expect("request confirmation"),
+            crate::editor_app::AssetCatalogLoadDisposition::ConfirmationRequired
+        );
         assert!(app.asset_catalog_discard_confirmation_pending());
         assert!(
             app.asset_catalog_runtime()

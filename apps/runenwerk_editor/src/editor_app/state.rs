@@ -34,6 +34,13 @@ use crate::texture_preview::TexturePreviewRuntime;
 
 use super::sdf_operations::SdfOperationWorkspaceState;
 
+/// Distinguishes a completed catalog load from a pending destructive reload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssetCatalogLoadDisposition {
+    Loaded,
+    ConfirmationRequired,
+}
+
 /// An explicit second Load click may discard only the exact previously
 /// observed in-memory version into the exact previously observed disk version.
 struct PendingAssetCatalogDiscard {
@@ -490,7 +497,9 @@ impl RunenwerkEditorApp {
 
     /// A normal load may refresh changed disk content without losing local
     /// edits. A destructive restore requires a second explicit Load action.
-    pub fn load_asset_project_catalog(&mut self) -> anyhow::Result<()> {
+    pub fn load_asset_project_catalog(
+        &mut self,
+    ) -> anyhow::Result<AssetCatalogLoadDisposition> {
         let Some(session) = self.asset_project_session.as_ref() else {
             self.record_missing_asset_project_session("load catalog");
             anyhow::bail!("cannot load asset catalog: no asset project session is active");
@@ -521,13 +530,13 @@ impl RunenwerkEditorApp {
                     self.append_console_warning(
                         "[asset] unsaved catalog changes: click Load catalog again to confirm discard",
                     );
-                    return Ok(());
+                    return Ok(AssetCatalogLoadDisposition::ConfirmationRequired);
                 }
             }
         }
         self.pending_asset_catalog_discard = None;
         self.apply_asset_project_catalog_load_outcome(outcome);
-        Ok(())
+        Ok(AssetCatalogLoadDisposition::Loaded)
     }
 
     /// Publish a catalog result already read for the active project. Project

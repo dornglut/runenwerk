@@ -221,10 +221,20 @@ pub fn dispatch_shell_command_with_viewport_commands(
         ShellCommand::LoadAssetCatalog {
             projection_epoch: _,
         } => {
-            app.load_asset_project_catalog().map_err(|error| {
+            let disposition = app.load_asset_project_catalog().map_err(|error| {
                 app.append_console_error(format!("[asset] catalog load failed: {error}"));
                 EditorMutationError::runtime_rejected("asset catalog load failed")
             })?;
+            match disposition {
+                crate::editor_app::AssetCatalogLoadDisposition::Loaded => {
+                    app.append_console_line("[asset] catalog load completed");
+                }
+                crate::editor_app::AssetCatalogLoadDisposition::ConfirmationRequired => {
+                    app.append_console_warning(
+                        "[asset] load NOT committed: confirm the discard action or cancel",
+                    );
+                }
+            }
         }
         ShellCommand::SaveAssetCatalog {
             projection_epoch: _,
