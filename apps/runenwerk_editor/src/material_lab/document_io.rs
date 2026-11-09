@@ -364,8 +364,7 @@ mod tests {
             .permissions();
         let mut read_only = original_permissions.clone();
         read_only.set_readonly(true);
-        std::fs::set_permissions(&path, read_only)
-            .expect("make accepted source read-only");
+        std::fs::set_permissions(&path, read_only).expect("make accepted source read-only");
 
         let mut changed = document.clone();
         changed.label = "Unexpected".to_string();
