@@ -150,7 +150,7 @@ impl EditorSurfaceProvider for MaterialGraphCanvasProvider {
         // input event executes. Generic Shell routing only transports it.
         let origin = context
             .app
-            .material_source_origin_for_selected(Some(request.tool_surface_instance_id))
+            .material_published_source_origin_for_selected(Some(request.tool_surface_instance_id))
             .ok();
         if let Some(origin) = origin {
             let source_bound_routes = routes

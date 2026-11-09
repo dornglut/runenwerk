@@ -9,6 +9,16 @@ impl RunenwerkEditorApp {
     pub fn select_material_asset(&mut self, asset_id: AssetId) {
         self.material_lab_runtime_mut()
             .select_material_asset(Some(asset_id));
+        // Source loading happens at selection, not repeatedly during frame
+        // formation. Missing/invalid sources remain selected but unqualified.
+        if let Ok((document, source_id, digest)) =
+            self.load_material_graph_document_for_asset_with_digest(asset_id)
+        {
+            self.material_lab_runtime_mut()
+                .set_active_source_document_with_observation(
+                    asset_id, source_id, document, digest,
+                );
+        }
         self.append_console_line(format!("[material] selected asset {}", asset_id.raw()));
     }
 
@@ -55,6 +65,46 @@ impl RunenwerkEditorApp {
             source_id: source.source_id,
             document_id,
             content_digest,
+            surface_instance_id,
+        })
+    }
+
+    /// Returns only owner-observed provenance already published by a source
+    /// load/edit. Frame formation performs no source filesystem access.
+    /// A later mutation separately re-reads live bytes before admission.
+    pub fn material_published_source_origin_for_selected(
+        &self,
+        surface_instance_id: Option<editor_shell::ToolSurfaceInstanceId>,
+    ) -> Result<editor_shell::MaterialSourceOrigin> {
+        let observation = self
+            .material_lab_runtime()
+            .active_source_observation()
+            .ok_or_else(|| anyhow::anyhow!("selected source has no admitted observation"))?;
+        let source = resolve_material_source_for_asset(
+            self.asset_catalog_runtime().catalog(),
+            observation.asset_id,
+        )
+        .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
+        anyhow::ensure!(
+            source.source_id == observation.source_id
+                && material_document_id_for_source(observation.asset_id, source.source_id)
+                    == observation.document_id,
+            "catalog source identity no longer matches the observed Material document"
+        );
+        let (active_asset, active_document) = self
+            .material_lab_runtime()
+            .active_source_document()
+            .ok_or_else(|| anyhow::anyhow!("no active Material source document"))?;
+        anyhow::ensure!(
+            active_asset == observation.asset_id
+                && active_document.document_id == observation.document_id,
+            "active Material document no longer matches source observation"
+        );
+        Ok(editor_shell::MaterialSourceOrigin {
+            asset_id: observation.asset_id,
+            source_id: observation.source_id,
+            document_id: observation.document_id,
+            content_digest: observation.content_digest,
             surface_instance_id,
         })
     }
@@ -438,9 +488,13 @@ impl RunenwerkEditorApp {
 
         self.material_lab_runtime_mut()
             .select_material_asset(Some(asset_id));
-        if let Ok(document) = self.load_material_graph_document_for_asset(asset_id) {
+        if let Ok((document, source_id, digest)) =
+            self.load_material_graph_document_for_asset_with_digest(asset_id)
+        {
             self.material_lab_runtime_mut()
-                .set_active_source_document(asset_id, document);
+                .set_active_source_document_with_observation(
+                    asset_id, source_id, document, digest,
+                );
         }
         let catalog_snapshot = self.asset_catalog_runtime().catalog().clone();
         let outcome = {
@@ -481,9 +535,22 @@ impl RunenwerkEditorApp {
                 )
             })
             .collect::<Vec<_>>();
+        let observed = self
+            .load_material_graph_document_for_asset_with_digest(asset_id)
+            .ok()
+            .filter(|(reloaded, _, _)| *reloaded == document);
         self.material_lab_runtime_mut().clear_diagnostics();
-        self.material_lab_runtime_mut()
-            .set_active_source_document(asset_id, document);
+        if let Some((_, source_id, digest)) = observed {
+            self.material_lab_runtime_mut()
+                .set_active_source_document_with_observation(
+                    asset_id, source_id, document, digest,
+                );
+        } else {
+            // Source may have changed immediately after publication; do not
+            // manufacture a current revision token for an unobserved file.
+            self.material_lab_runtime_mut()
+                .set_active_source_document(asset_id, document);
+        }
         self.record_material_workflow_diagnostics(diagnostics);
         if lowering.report.has_blocking_issues() {
             self.material_lab_runtime_mut()
@@ -498,14 +565,23 @@ impl RunenwerkEditorApp {
         &self,
         asset_id: AssetId,
     ) -> Result<MaterialGraphDocument> {
+        self.load_material_graph_document_for_asset_with_digest(asset_id)
+            .map(|(document, _, _)| document)
+    }
+
+    fn load_material_graph_document_for_asset_with_digest(
+        &self,
+        asset_id: AssetId,
+    ) -> Result<(MaterialGraphDocument, AssetSourceId, [u8; 32])> {
         let session = self.asset_project_session().ok_or_else(|| {
             anyhow::anyhow!("cannot load material graph document: no asset project session")
         })?;
         let source =
             resolve_material_source_for_asset(self.asset_catalog_runtime().catalog(), asset_id)
                 .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
-        let document =
-            read_material_graph_document(&session.project_root().join(&source.relative_path))?;
+        let (document, digest) = crate::material_lab::read_material_graph_document_with_digest(
+            &session.project_root().join(&source.relative_path),
+        )?;
         let expected_document_id = material_document_id_for_source(asset_id, source.source_id);
         anyhow::ensure!(
             document.document_id == expected_document_id,
@@ -513,7 +589,7 @@ impl RunenwerkEditorApp {
             document.document_id.raw(),
             expected_document_id.raw()
         );
-        Ok(document)
+        Ok((document, source.source_id, digest))
     }
 
     pub fn write_material_graph_document_for_asset(

@@ -477,6 +477,112 @@ fn wrong_material_document_identity_rejects_edit_and_write_without_mutating_sour
 }
 
 #[test]
+fn published_material_origin_is_a_cached_owner_observation_not_frame_time_file_io() {
+    let root = unique_temp_dir("material_owner_snapshot_no_frame_io");
+    let asset = asset_id(400);
+    let source = asset_source_id(401);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+
+    // Explicit source selection publishes a snapshot once.
+    app.select_material_asset(asset);
+    let published = app
+        .material_published_source_origin_for_selected(None)
+        .expect("source observation must be published after selection");
+    assert_eq!(
+        published,
+        app.material_source_origin_for_selected(None)
+            .expect("initial live source should match published observation")
+    );
+    let path = root.join("assets/materials/edit.material.ron");
+    let absent = root.join("assets/materials/temporarily-absent.material.ron");
+    std::fs::rename(&path, &absent).expect("isolate source after owner observation");
+
+    // Frame formation can still transport the last observed source revision
+    // without accessing the unavailable path. Admission rechecks the live file.
+    assert_eq!(
+        app.material_published_source_origin_for_selected(None)
+            .expect("published source observation must remain readable"),
+        published
+    );
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: published,
+            action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 4,
+                delta_y: 1,
+            }),
+        })
+        .is_err(),
+        "an observed origin does not authorize editing an unavailable source"
+    );
+    assert!(!app.material_lab_runtime().can_undo());
+
+    std::fs::rename(absent, path).expect("restore isolated source");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn material_source_observation_reload_invalidates_equal_document_id_old_selection() {
+    let root = unique_temp_dir("material_owner_source_revision_reload");
+    let asset = asset_id(405);
+    let source = asset_source_id(406);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    app.select_material_asset(asset);
+    let original = app
+        .material_published_source_origin_for_selected(None)
+        .expect("source observation should exist");
+
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin: original,
+        action: Box::new(MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        }),
+    })
+    .expect("initial graph selection should succeed");
+    assert!(!app.material_lab_runtime().selected_graph_nodes().is_empty());
+
+    let path = root.join("assets/materials/edit.material.ron");
+    let mut bytes = std::fs::read(&path).expect("source bytes before external revision");
+    bytes.extend_from_slice(b"\n  ");
+    std::fs::write(&path, &bytes).expect("simulate external same-document byte update");
+    app.select_material_asset(asset);
+    let updated = app
+        .material_published_source_origin_for_selected(None)
+        .expect("source observation should refresh");
+    assert_eq!(original.document_id, updated.document_id);
+    assert_ne!(original.content_digest, updated.content_digest);
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: original,
+            action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 6,
+                delta_y: 1,
+            }),
+        })
+        .is_err(),
+        "old exact-byte origin must still reject after reload"
+    );
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+    assert!(!app.material_lab_runtime().can_undo());
+
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin: updated,
+        action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 6,
+            delta_y: 1,
+        }),
+    })
+    .expect("new source observation should authorize a live edit");
+    assert!(app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn material_history_from_old_asset_cannot_undo_through_new_asset_binding() {
     let root = unique_temp_dir("material_history_wrong_source");
     let first = asset_id(390);

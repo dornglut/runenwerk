@@ -183,12 +183,25 @@ pub enum PreviewSceneProductRuntimeStatus {
     LastValidPreserved { product_identity: String },
 }
 
+/// Source bytes observed during an explicit owner load/publication.
+///
+/// This is derived projection provenance, not an authoritative disk revision:
+/// mutation admission still compares the live file against the captured digest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MaterialSourceObservation {
+    pub asset_id: AssetId,
+    pub source_id: AssetSourceId,
+    pub document_id: material_graph::MaterialGraphDocumentId,
+    pub content_digest: [u8; 32],
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct MaterialLabRuntime {
     pub(super) selected_material_asset_id: Option<AssetId>,
     pub(super) active_preview: Option<EditorMaterialPreviewProduct>,
     pub(super) preview_products_by_asset: BTreeMap<AssetId, EditorMaterialPreviewProduct>,
     pub(super) active_source_document: Option<(AssetId, material_graph::MaterialGraphDocument)>,
+    pub(super) active_source_observation: Option<MaterialSourceObservation>,
     pub(super) selected_graph_nodes: BTreeSet<graph::NodeId>,
     pub(super) selected_graph_edges: BTreeSet<graph::EdgeId>,
     pub(super) node_palette_search_query: String,
@@ -210,6 +223,7 @@ pub struct MaterialLabRuntime {
 impl MaterialLabRuntime {
     pub fn select_material_asset(&mut self, asset_id: Option<AssetId>) {
         if self.selected_material_asset_id != asset_id {
+            self.active_source_observation = None;
             self.clear_graph_selection();
             self.node_picker_open = false;
             self.node_picker_highlighted_descriptor_key = None;
@@ -422,6 +436,41 @@ impl MaterialLabRuntime {
         }
         self.select_material_asset(Some(asset_id));
         self.active_source_document = Some((asset_id, document));
+        self.active_source_observation = None;
+    }
+
+    /// Bind a successfully observed source snapshot to its in-memory document.
+    /// Changing bytes or source identity within one asset invalidates old local
+    /// graph IDs and selection even if the document ID itself is unchanged.
+    pub fn set_active_source_document_with_observation(
+        &mut self,
+        asset_id: AssetId,
+        source_id: AssetSourceId,
+        document: material_graph::MaterialGraphDocument,
+        content_digest: [u8; 32],
+    ) {
+        let next_observation = MaterialSourceObservation {
+            asset_id,
+            source_id,
+            document_id: document.document_id,
+            content_digest,
+        };
+        let changed_revision = self.active_source_observation.is_some_and(|prior| {
+            prior.asset_id == asset_id && prior != next_observation
+        });
+        self.set_active_source_document(asset_id, document);
+        if changed_revision {
+            self.clear_graph_selection();
+            self.node_picker_open = false;
+            self.node_picker_highlighted_descriptor_key = None;
+            self.active_diagnostic_index = None;
+        }
+        self.active_source_observation = Some(next_observation);
+    }
+
+    pub fn active_source_observation(&self) -> Option<MaterialSourceObservation> {
+        self.active_source_observation
+            .filter(|observation| self.selected_material_asset_id == Some(observation.asset_id))
     }
 
     pub fn active_source_document(
