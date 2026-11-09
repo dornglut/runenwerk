@@ -379,20 +379,21 @@ impl RunenwerkEditorApp {
         self.asset_project_session.as_mut()
     }
 
-    /// Refuse a change of catalog owner while it would discard an in-memory
-    /// catalog not proven equal to the previous project's accepted disk copy.
-    /// This does not interpret dirty_assets as a save-state marker: it tracks
-    /// reload work, while direct catalog_mut callers may change catalog data.
+    /// Refuse a change of catalog fallback context while it would discard an
+    /// in-memory catalog not proven equal to the old project's accepted disk copy.
+    /// Two logical projects may share one physical catalog path without sharing
+    /// in-memory, last-known-good editor state. This does not interpret
+    /// dirty_assets as a save-state marker; direct catalog_mut callers may edit.
     /// An explicit save or restoration of the previous catalog is required.
     pub fn set_asset_project_session(
         &mut self,
         session: EditorAssetProjectSession,
     ) -> anyhow::Result<()> {
-        let replaces_catalog_owner = self.asset_project_session.as_ref().is_some_and(|previous| {
-            previous.project_root() != session.project_root()
-                || previous.descriptor() != session.descriptor()
-        });
-        if replaces_catalog_owner {
+        let replaces_catalog_fallback_owner = self
+            .asset_project_session
+            .as_ref()
+            .is_some_and(|previous| !previous.shares_catalog_fallback_context(&session));
+        if replaces_catalog_fallback_owner {
             let previous = self
                 .asset_project_session
                 .as_ref()
@@ -423,7 +424,7 @@ impl RunenwerkEditorApp {
         // The last-known-good catalog is a *project-owned* fallback. It may
         // survive a failed reload within one project, never a project switch:
         // old source paths under a new root could otherwise admit a new edit.
-        if replaces_catalog_owner {
+        if replaces_catalog_fallback_owner {
             self.asset_catalog_runtime = AssetCatalogRuntime::new();
         }
         self.asset_project_session = Some(session);

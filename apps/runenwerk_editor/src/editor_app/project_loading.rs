@@ -32,14 +32,16 @@ impl RunenwerkEditorApp {
                 path.display()
             )
         })?;
-        // Reopening an existing catalog owner is not an implicit discard of
-        // in-memory changes or an unreviewed external disk replacement.
+        // Only a reload of the same logical project/catalog context may
+        // preserve its in-memory last-known-good fallback. Distinct project
+        // IDs do not share that state just because their catalog path matches.
         // Explicit catalog reload remains the separate restore operation.
-        let same_catalog_owner = self.asset_project_session().is_some_and(|current| {
-            current.project_root() == session.project_root()
-                && current.descriptor() == session.descriptor()
-        });
-        if same_catalog_owner && let Some(persisted) = catalog_outcome.accepted_catalog.as_ref() {
+        let same_catalog_fallback_context = self
+            .asset_project_session()
+            .is_some_and(|current| current.shares_catalog_fallback_context(&session));
+        if same_catalog_fallback_context
+            && let Some(persisted) = catalog_outcome.accepted_catalog.as_ref()
+        {
             anyhow::ensure!(
                 self.asset_catalog_runtime().catalog() == persisted,
                 "project reload rejected: the in-memory asset catalog differs from the accepted on-disk catalog; save or explicitly reload the asset catalog first"
@@ -347,6 +349,97 @@ mod tests {
                 .catalog()
                 .asset(initial_id)
                 .is_some()
+        );
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn distinct_project_ids_at_same_catalog_path_cannot_share_unsaved_fallback() {
+        let root = unique_temp_dir("catalog_distinct_logical_project_id");
+        let project_a = root.join("a.project.ron");
+        let project_b = root.join("b.project.ron");
+        std::fs::write(
+            &project_a,
+            encode_ron_pretty(&ProjectFileV3::new("project.A", "Project A"))
+                .expect("encode project A"),
+        )
+        .expect("write A project file");
+        std::fs::write(
+            &project_b,
+            encode_ron_pretty(&ProjectFileV3::new("project.B", "Project B"))
+                .expect("encode project B"),
+        )
+        .expect("write B project file");
+
+        let mut app = RunenwerkEditorApp::new();
+        app.load_project_file(&project_a)
+            .expect("A may open without a catalog");
+        let persisted_id = asset::asset_id(18811);
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
+                persisted_id,
+                "a-material",
+                "A Material",
+                asset::AssetKind::MaterialGraph,
+            ));
+        let unsaved_a = app.asset_catalog_runtime().catalog().clone();
+        assert!(
+            app.load_project_file(&project_b).is_err(),
+            "different project_id at the same catalog path must not inherit unsaved A"
+        );
+        assert_eq!(
+            app.asset_project_session().and_then(|session| session.project_id()),
+            Some("project.A")
+        );
+        assert_eq!(app.asset_catalog_runtime().catalog(), &unsaved_a);
+
+        app.save_asset_project_catalog()
+            .expect("persist the approved shared physical catalog");
+        let disk_path = root.join("assets/catalog.ron");
+        let accepted_bytes = std::fs::read(&disk_path).expect("accepted catalog bytes");
+
+        let unpersisted_id = asset::asset_id(18812);
+        app.asset_catalog_runtime_mut()
+            .catalog_mut()
+            .insert_asset_record(asset::AssetRecord::new(
+                unpersisted_id,
+                "unpersisted-material",
+                "Unpersisted Material",
+                asset::AssetKind::MaterialGraph,
+            ));
+        assert!(
+            app.load_project_file(&project_b).is_err(),
+            "accepted physical catalog cannot hide newer A memory edits"
+        );
+        assert_eq!(
+            std::fs::read(&disk_path).expect("disk catalog retained"),
+            accepted_bytes
+        );
+        app.load_asset_project_catalog()
+            .expect("explicit restore of A's persisted catalog");
+        app.load_project_file(&project_b)
+            .expect("a clean A can switch to B using the shared accepted physical catalog");
+        assert_eq!(
+            app.asset_project_session().and_then(|session| session.project_id()),
+            Some("project.B")
+        );
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(persisted_id)
+                .is_some()
+        );
+        assert!(
+            app.asset_catalog_runtime()
+                .catalog()
+                .asset(unpersisted_id)
+                .is_none(),
+            "B must see only the accepted catalog bytes, not unsaved A state"
+        );
+        assert_eq!(
+            std::fs::read(&disk_path).expect("shared disk catalog unchanged"),
+            accepted_bytes
         );
         let _ = std::fs::remove_dir_all(root);
     }
