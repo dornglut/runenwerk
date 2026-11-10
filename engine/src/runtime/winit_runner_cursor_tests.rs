@@ -15,11 +15,15 @@ struct NativeCursorFixture {
 
 struct NativeCursorProbe;
 
+struct NativeCursorProbeState {
+    activations: usize,
+    todo_scale_budgets: bool,
+}
+
 // Mirrors the conservative authored-node declaration of a fully expanded
 // 10,000-row Todo UI (6 base nodes + 4 nodes per task). This is intentionally
 // a Winit-owner test fixture, not an import of downstream Todo source.
 const LARGE_UI_RECONCILIATION_BOUND: usize = 6 + 4 * 10_000;
-const LARGE_UI_PROFILE_STATE: usize = 42;
 
 impl runenui_core::UiApp for NativeCursorProbe {
     // One existing mounted actionable button; no initial effects or subscriptions.
@@ -31,7 +35,7 @@ impl runenui_core::UiApp for NativeCursorProbe {
         state: &Self::State,
         _action: &Self::Action,
     ) -> runenui_core::ProducerBudget {
-        if *state >= LARGE_UI_PROFILE_STATE {
+        if state.todo_scale_budgets {
             return runenui_core::ProducerBudget::new(28, 1).with_reconciliation(
                 LARGE_UI_RECONCILIATION_BOUND,
                 LARGE_UI_RECONCILIATION_BOUND,
@@ -42,7 +46,7 @@ impl runenui_core::UiApp for NativeCursorProbe {
     }
 
     fn interaction_producer_budget(state: &Self::State) -> runenui_core::ProducerBudget {
-        if *state >= LARGE_UI_PROFILE_STATE {
+        if state.todo_scale_budgets {
             return runenui_core::ProducerBudget::new(28, 13)
                 .with_reconciliation(
                     LARGE_UI_RECONCILIATION_BOUND,
@@ -58,7 +62,7 @@ impl runenui_core::UiApp for NativeCursorProbe {
             .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
     }
 
-    type State = usize;
+    type State = NativeCursorProbeState;
     type Action = ();
     type HostProtocol = runenui_core::NoHostProtocol;
 
@@ -70,16 +74,16 @@ impl runenui_core::UiApp for NativeCursorProbe {
         state: &mut Self::State,
         _: Self::Action,
     ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
-        *state += 1;
+        state.activations += 1;
     }
 }
 
 fn native_cursor_fixture() -> NativeCursorFixture {
-    native_cursor_fixture_with_options(0, false)
+    native_cursor_fixture_with_options(false, false)
 }
 
 fn native_cursor_fixture_with_options(
-    initial_state: usize,
+    todo_scale_budgets: bool,
     native_clock: bool,
 ) -> NativeCursorFixture {
     use crate::plugins::render::RenderFrameProducerId;
@@ -110,7 +114,10 @@ fn native_cursor_fixture_with_options(
     let slot = slots
         .mount_app::<NativeCursorProbe>(
             UiTypedScreenId::new("native.cursor.stale-display"),
-            initial_state,
+            NativeCursorProbeState {
+                activations: 0,
+                todo_scale_budgets,
+            },
             &UiRuntimeFontConfiguration::default(),
         )
         .slot_id()
@@ -371,7 +378,7 @@ fn activation_count(fixture: &NativeCursorFixture) -> usize {
         .world
         .resource::<UiRuntimeSlotsResource>()
         .expect("same M13 owner")
-        .observe_app::<NativeCursorProbe, _>(fixture.slot, |app| *app.state())
+        .observe_app::<NativeCursorProbe, _>(fixture.slot, |app| app.state().activations)
         .expect("observe actual activation probe state")
 }
 
@@ -384,17 +391,17 @@ fn winit_native_button_uses_exact_m13_with_large_declared_ui_budget_and_native_c
     use winit::event::{ElementState, MouseButton};
 
     for native_clock in [false, true] {
-        let mut fixture = native_cursor_fixture_with_options(LARGE_UI_PROFILE_STATE, native_clock);
+        let mut fixture = native_cursor_fixture_with_options(true, native_clock);
         let position = fixture.button_position;
         route_cursor(&mut fixture, position);
-        assert_eq!(activation_count(&fixture), LARGE_UI_PROFILE_STATE);
+        assert_eq!(activation_count(&fixture), 0);
 
         admit_and_route_button(&mut fixture, ElementState::Pressed, MouseButton::Left);
-        assert_eq!(activation_count(&fixture), LARGE_UI_PROFILE_STATE);
+        assert_eq!(activation_count(&fixture), 0);
         assert_eq!(pointer_ownership(&mut fixture).pointers().len(), 1);
 
         admit_and_route_button(&mut fixture, ElementState::Released, MouseButton::Left);
-        assert_eq!(activation_count(&fixture), LARGE_UI_PROFILE_STATE + 1);
+        assert_eq!(activation_count(&fixture), 1);
         assert!(
             pointer_ownership(&mut fixture).pointers().is_empty(),
             "native button Up must settle its original pointer without a leaked claim"
