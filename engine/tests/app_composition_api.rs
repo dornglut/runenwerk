@@ -44,9 +44,38 @@ struct CompositionProbe {
     mounts: Vec<PendingMount>,
 }
 
+/// Test-only scope; declarations are lowered into the real App at admission.
+struct CompositionScope<'a> {
+    draft: &'a mut CompositionProbe,
+}
+
+impl CompositionScope<'_> {
+    fn ui<A>(&mut self, intent: UiIntent<A>)
+    where
+        A: UiApp + 'static,
+        A::State: 'static,
+    {
+        self.draft.register_ui(intent);
+    }
+}
+
 impl CompositionProbe {
     fn new() -> Self {
         Self::default()
+    }
+
+    /// One fallible composition scope: on error return unadmitted typed
+    /// declarations to the caller, without claiming owner-side rollback.
+    /// Does not prove failures after real Engine mount or consuming run.
+    fn compose<E>(
+        mut self,
+        configure: impl FnOnce(&mut CompositionScope<'_>) -> std::result::Result<(), E>,
+    ) -> std::result::Result<Self, (Self, E)> {
+        let outcome = configure(&mut CompositionScope { draft: &mut self });
+        match outcome {
+            Ok(()) => Ok(self),
+            Err(error) => Err((self, error)),
+        }
     }
 
     fn native_window(mut self) -> Self {
@@ -65,13 +94,23 @@ impl CompositionProbe {
     /// Test-only intent registration. Runtime slot identity is allocated by the
     /// existing Engine owner on admission; this provisional screen ID is
     /// for the local proof and is not a durable or cross-session identity.
-    fn ui<A>(self, intent: UiIntent<A>) -> Self
+    fn ui<A>(mut self, intent: UiIntent<A>) -> Self
+    where
+        A: UiApp + 'static,
+        A::State: 'static,
+    {
+        self.register_ui(intent);
+        self
+    }
+
+    fn register_ui<A>(&mut self, intent: UiIntent<A>)
     where
         A: UiApp + 'static,
         A::State: 'static,
     {
         let screen_id = UiTypedScreenId::new(format!("proof.intent.{}", self.mounts.len()));
-        self.ui_with_state::<A>(screen_id, intent.state)
+        let draft = std::mem::take(self).ui_with_state::<A>(screen_id, intent.state);
+        *self = draft;
     }
 
     fn ui_with_state<A>(mut self, screen_id: UiTypedScreenId, state: A::State) -> Self
@@ -323,5 +362,123 @@ fn constructor_style_ui_intent_lowers_into_existing_native_ui_only_owner() {
             .flow_count(),
         1
     );
+    assert!(!app.world().has_resource::<Gfx>());
+}
+
+/// Real Rust method resolution favors an inherent new() over a blanket
+/// UiConstruct::new(state). The preferred spelling is not universally valid.
+struct ExistingNewUi;
+
+impl ExistingNewUi {
+    fn new() -> Self {
+        Self
+    }
+}
+
+impl UiApp for ExistingNewUi {
+    type State = PersistedState;
+    type Action = ();
+    type HostProtocol = NoHostProtocol;
+
+    fn root(state: &Self::State) -> impl View<Self::Action> {
+        text(format!("existing {}", state.0.get()))
+    }
+
+    fn update(
+        _: &mut Self::State,
+        (): Self::Action,
+    ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+        Effects::none()
+    }
+
+    fn initial_producer_budget(_: &Self::State) -> ProducerBudget {
+        ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+    }
+
+    fn action_producer_budget(_: &Self::State, _: &Self::Action) -> ProducerBudget {
+        ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+    }
+
+    fn interaction_producer_budget(_: &Self::State) -> ProducerBudget {
+        ProducerBudget::new(1, 0)
+    }
+}
+
+#[test]
+fn inherent_new_requires_explicit_trait_constructor_to_register_typed_state() {
+    let _existing_inherent_constructor = ExistingNewUi::new();
+    let state = PersistedState(Rc::new(Cell::new(49)));
+    let app = accepted(CompositionProbe::new().ui(<ExistingNewUi as UiConstruct>::new(state)));
+    let slots = app.world().resource::<UiRuntimeSlotsResource>().unwrap();
+    assert_eq!(slots.len(), 1);
+    let slot = slots.slot_ids().next().unwrap();
+    assert_eq!(
+        slots
+            .observe_app::<ExistingNewUi, _>(slot, |view| view.state().0.get())
+            .unwrap(),
+        49
+    );
+}
+
+#[test]
+fn fallible_compose_returns_staged_state_and_original_error_before_owner_admission() {
+    let shared = Rc::new(Cell::new(73));
+    let attempted = CompositionProbe::new().compose(|scope| {
+        scope.ui(PersistedUi::new(PersistedState(Rc::clone(&shared))));
+        // A later fallible state load propagates with ?. The earlier
+        // registration was staged, not mounted into a partial Engine App.
+        let unavailable: Option<PersistedState> = None;
+        scope.ui(PersistedUi::new(
+            unavailable.ok_or_else(|| anyhow!("additional state unavailable"))?,
+        ));
+        Ok::<(), anyhow::Error>(())
+    });
+    let (draft, error) = match attempted {
+        Ok(_) => panic!("failed composed state load must not claim success"),
+        Err(failure) => failure,
+    };
+    assert_eq!(error.to_string(), "additional state unavailable");
+    assert_eq!(draft.mounts.len(), 1);
+
+    // Explicit recovery mounts the still-owned draft into one real owner.
+    let app = accepted(draft);
+    let slots = app.world().resource::<UiRuntimeSlotsResource>().unwrap();
+    assert_eq!(slots.len(), 1);
+    let slot = slots.slot_ids().next().unwrap();
+    assert_eq!(
+        slots
+            .observe_app::<PersistedUi, _>(slot, |view| view.state().0.get())
+            .unwrap(),
+        73
+    );
+    assert!(app.world().resource::<RenderFlowRegistryResource>().is_err());
+    assert!(!app.world().has_resource::<Gfx>());
+}
+
+#[test]
+fn fallible_compose_admits_two_independent_headless_ui_states_without_render() {
+    let first = Rc::new(Cell::new(11));
+    let second = Rc::new(Cell::new(29));
+    let draft = CompositionProbe::new()
+        .compose(|scope| {
+            scope.ui(PersistedUi::new(PersistedState(Rc::clone(&first))));
+            scope.ui(PersistedUi::new(PersistedState(Rc::clone(&second))));
+            Ok::<(), anyhow::Error>(())
+        })
+        .unwrap_or_else(|(_, error)| panic!("valid typed declarations rejected: {error:#}"));
+
+    let app = accepted(draft);
+    let slots = app.world().resource::<UiRuntimeSlotsResource>().unwrap();
+    assert_eq!(slots.len(), 2);
+    let values = slots
+        .slot_ids()
+        .map(|slot| {
+            slots
+                .observe_app::<PersistedUi, _>(slot, |view| view.state().0.get())
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(values, vec![11, 29]);
+    assert!(app.world().resource::<RenderFlowRegistryResource>().is_err());
     assert!(!app.world().has_resource::<Gfx>());
 }
