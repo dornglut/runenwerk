@@ -319,7 +319,10 @@ mod tests {
     fn idle_end_is_idempotent_without_advancing_session_identity() {
         let mut session = DrawingToolSession::default();
         assert_eq!(
-            session.phase.transition(DrawingToolSessionEvent::End).unwrap(),
+            session
+                .phase
+                .transition(DrawingToolSessionEvent::End)
+                .unwrap(),
             state_machine::Transition::Unchanged
         );
         assert_eq!(session.phase(), &DrawingToolSessionPhase::Idle);
