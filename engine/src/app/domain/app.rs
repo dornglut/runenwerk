@@ -1,5 +1,5 @@
 use crate::app::domain::host::AppHostSelection;
-use crate::app::domain::lifecycle::{AppLifecycle, AppLifecycleState};
+use crate::app::{AppLifecycle, AppLifecycleState};
 use crate::app::domain::state::{NativeInitialWindow, WindowedAppState};
 use crate::prelude::IntoPlugins;
 use crate::runtime::system::IntoSystemConfigs;
