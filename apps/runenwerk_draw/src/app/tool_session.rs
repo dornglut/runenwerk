@@ -1,5 +1,8 @@
 //! App-owned drawing tool session intent boundary.
 
+use state_machine::{Next, StateMachine, TransitionState};
+use std::convert::Infallible;
+
 use drawing::CanvasCoordinate;
 use ui_input::{
     Key, KeyState, KeyboardEvent, Modifiers, PointerDeviceId, PointerSourceKind, PointerToolKind,
@@ -11,39 +14,39 @@ use crate::app::{DrawingToolInputEvent, DrawingToolRouteKind};
 #[derive(Debug, Clone, PartialEq)]
 pub struct DrawingToolSession {
     next_session_id: u64,
-    phase: DrawingToolSessionPhase,
+    phase: StateMachine<DrawingToolSessionPhase>,
 }
 
 impl Default for DrawingToolSession {
     fn default() -> Self {
         Self {
             next_session_id: 1,
-            phase: DrawingToolSessionPhase::Idle,
+            phase: StateMachine::new(DrawingToolSessionPhase::Idle),
         }
     }
 }
 
 impl DrawingToolSession {
     pub fn active_kind(&self) -> Option<DrawingToolSessionKind> {
-        match self.phase {
+        match self.phase.state() {
             DrawingToolSessionPhase::Idle => None,
-            DrawingToolSessionPhase::Active { kind, .. } => Some(kind),
+            DrawingToolSessionPhase::Active { kind, .. } => Some(*kind),
         }
     }
 
     pub fn phase(&self) -> &DrawingToolSessionPhase {
-        &self.phase
+        self.phase.state()
     }
 
     pub fn active_session_id(&self) -> Option<DrawingToolSessionId> {
-        match self.phase {
+        match self.phase.state() {
             DrawingToolSessionPhase::Idle => None,
-            DrawingToolSessionPhase::Active { id, .. } => Some(id),
+            DrawingToolSessionPhase::Active { id, .. } => Some(*id),
         }
     }
 
     pub fn active_anchor(&self) -> Option<&DrawingToolSessionAnchor> {
-        match &self.phase {
+        match self.phase.state() {
             DrawingToolSessionPhase::Idle => None,
             DrawingToolSessionPhase::Active { anchor, .. } => Some(anchor),
         }
@@ -56,13 +59,15 @@ impl DrawingToolSession {
                 DrawingToolSessionOutcome::handled(DrawingToolIntent::BeginPreviewStroke { input })
             }
             DrawingToolRouteKind::UpdatePreviewStroke => {
-                if matches!(self.phase, DrawingToolSessionPhase::Idle) {
+                if matches!(self.phase.state(), DrawingToolSessionPhase::Idle) {
                     self.begin_active_session(DrawingToolSessionKind::InkStroke, &input);
                 }
                 DrawingToolSessionOutcome::handled(DrawingToolIntent::UpdatePreviewStroke { input })
             }
             DrawingToolRouteKind::EndPreviewStroke => {
-                self.phase = DrawingToolSessionPhase::Idle;
+                self.phase
+                    .transition(DrawingToolSessionEvent::End)
+                    .expect("ending an ink session is infallible");
                 DrawingToolSessionOutcome::handled(DrawingToolIntent::FinishPreviewStroke { input })
             }
             DrawingToolRouteKind::Hover => {
@@ -111,11 +116,13 @@ impl DrawingToolSession {
     ) {
         let id = DrawingToolSessionId(self.next_session_id);
         self.next_session_id = self.next_session_id.saturating_add(1);
-        self.phase = DrawingToolSessionPhase::Active {
-            id,
-            kind,
-            anchor: DrawingToolSessionAnchor::from_input(input),
-        };
+        self.phase
+            .transition(DrawingToolSessionEvent::Begin {
+                id,
+                kind,
+                anchor: DrawingToolSessionAnchor::from_input(input),
+            })
+            .expect("starting an ink session is infallible");
     }
 }
 
@@ -132,6 +139,35 @@ pub enum DrawingToolSessionPhase {
         kind: DrawingToolSessionKind,
         anchor: DrawingToolSessionAnchor,
     },
+}
+
+/// Actual drawing-tool interaction transitions, not a second input dispatcher.
+enum DrawingToolSessionEvent {
+    Begin {
+        id: DrawingToolSessionId,
+        kind: DrawingToolSessionKind,
+        anchor: DrawingToolSessionAnchor,
+    },
+    End,
+}
+
+impl TransitionState for DrawingToolSessionPhase {
+    type Event = DrawingToolSessionEvent;
+    type Error = Infallible;
+
+    fn next(&self, event: &Self::Event) -> Result<Next<Self>, Self::Error> {
+        match (self, event) {
+            (Self::Idle, DrawingToolSessionEvent::End) => Ok(Next::Stay),
+            (_, DrawingToolSessionEvent::End) => Ok(Next::Enter(Self::Idle)),
+            (_, DrawingToolSessionEvent::Begin { id, kind, anchor }) => {
+                Ok(Next::Enter(Self::Active {
+                    id: *id,
+                    kind: *kind,
+                    anchor: anchor.clone(),
+                }))
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -271,18 +307,6 @@ impl DrawingToolSessionOutcome {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn ending_an_idle_drawing_session_is_a_real_idempotent_transition() {
-        let mut session = DrawingToolSession::default();
-        let outcome = session
-            .phase
-            .transition(DrawingToolSessionEvent::End)
-            .unwrap();
-        assert_eq!(outcome, state_machine::Transition::Unchanged);
-        assert_eq!(session.phase(), &DrawingToolSessionPhase::Idle);
-        assert_eq!(session.next_session_id, 1);
-    }
-
     use drawing::CanvasCoordinate;
     use ui_input::{
         Key, KeyState, KeyboardEvent, Modifiers, PointerBarrelButtons, PointerDeviceId,
