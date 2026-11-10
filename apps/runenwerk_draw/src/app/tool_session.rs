@@ -1,9 +1,8 @@
 //! App-owned drawing tool session intent boundary.
 
+use drawing::CanvasCoordinate;
 use state_machine::{Next, StateMachine, TransitionState};
 use std::convert::Infallible;
-
-use drawing::CanvasCoordinate;
 use ui_input::{
     Key, KeyState, KeyboardEvent, Modifiers, PointerDeviceId, PointerSourceKind, PointerToolKind,
 };
@@ -315,6 +314,17 @@ mod tests {
     use ui_math::UiPoint;
 
     use super::*;
+
+    #[test]
+    fn idle_end_is_idempotent_without_advancing_session_identity() {
+        let mut session = DrawingToolSession::default();
+        assert_eq!(
+            session.phase.transition(DrawingToolSessionEvent::End).unwrap(),
+            state_machine::Transition::Unchanged
+        );
+        assert_eq!(session.phase(), &DrawingToolSessionPhase::Idle);
+        assert_eq!(session.next_session_id, 1);
+    }
 
     #[test]
     fn tool_session_records_active_session_id_phase_and_anchor() {
