@@ -1,5 +1,5 @@
 use crate::app::domain::host::AppHostSelection;
-use crate::app::domain::lifecycle::AppLifecycle;
+use crate::app::domain::lifecycle::{AppLifecycle, AppLifecycleState};
 use crate::app::domain::state::{NativeInitialWindow, WindowedAppState};
 use crate::prelude::IntoPlugins;
 use crate::runtime::system::IntoSystemConfigs;
@@ -217,7 +217,7 @@ impl App {
             .push(AppCompositionError::LateTopologyMutation {
                 operation,
                 target,
-                lifecycle: self.lifecycle,
+                lifecycle: self.lifecycle.state(),
             });
         false
     }
@@ -239,7 +239,7 @@ enum AppCompositionError {
     LateTopologyMutation {
         operation: &'static str,
         target: Option<&'static str>,
-        lifecycle: AppLifecycle,
+        lifecycle: AppLifecycleState,
     },
 }
 
