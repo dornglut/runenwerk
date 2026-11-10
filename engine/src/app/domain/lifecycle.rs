@@ -28,7 +28,7 @@ impl AppLifecycleState {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-enum AppLifecycleEvent {
+pub(crate) enum AppLifecycleEvent {
     Prepare,
     BeginStartup,
     StartupSucceeded,
@@ -37,7 +37,7 @@ enum AppLifecycleEvent {
 
 /// Transition-specific diagnostics; no second admission decision table.
 #[derive(Debug, thiserror::Error)]
-enum AppTransitionError {
+pub(crate) enum AppTransitionError {
     #[error("App lifecycle is Starting; the same Startup attempt cannot be prepared again")]
     PreparationDuringStartup,
     #[error("App lifecycle is Failed; the same runtime instance cannot be advanced again")]

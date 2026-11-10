@@ -141,7 +141,8 @@ pub enum DrawingToolSessionPhase {
 }
 
 /// Actual drawing-tool interaction transitions, not a second input dispatcher.
-enum DrawingToolSessionEvent {
+#[doc(hidden)]
+pub enum DrawingToolSessionEvent {
     Begin {
         id: DrawingToolSessionId,
         kind: DrawingToolSessionKind,
