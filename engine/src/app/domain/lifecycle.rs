@@ -35,12 +35,32 @@ enum AppLifecycleEvent {
     StartupFailed,
 }
 
+/// Transition-specific diagnostics; no second admission decision table.
+#[derive(Debug, thiserror::Error)]
+enum AppTransitionError {
+    #[error("App lifecycle is Starting; the same Startup attempt cannot be prepared again")]
+    PreparationDuringStartup,
+    #[error("App lifecycle is Failed; the same runtime instance cannot be advanced again")]
+    PreparationAfterFailure,
+    #[error("Startup requires prepared App composition; lifecycle is Configuring")]
+    StartupWithoutPreparation,
+    #[error("Startup was already attempted for this App; lifecycle is Starting")]
+    DuplicateStartupAttempt,
+    #[error("Startup previously failed for this App; the same runtime instance is non-runnable")]
+    StartupAfterFailure,
+    #[error("invalid App lifecycle transition from {from:?} using {event:?}")]
+    Invalid {
+        from: AppLifecycleState,
+        event: AppLifecycleEvent,
+    },
+}
+
 impl TransitionState for AppLifecycleState {
     type Event = AppLifecycleEvent;
-    type Error = anyhow::Error;
+    type Error = AppTransitionError;
 
     /// Single authority for both state changes and accepted idempotent events.
-    fn next(&self, event: &Self::Event) -> Result<Next<Self>> {
+    fn next(&self, event: &Self::Event) -> std::result::Result<Next<Self>, Self::Error> {
         use AppLifecycleEvent as E;
         use AppLifecycleState as S;
 
@@ -51,26 +71,12 @@ impl TransitionState for AppLifecycleState {
             (S::Running, E::BeginStartup) => Ok(Next::Stay),
             (S::Starting, E::StartupSucceeded) => Ok(Next::Enter(S::Running)),
             (S::Starting, E::StartupFailed) => Ok(Next::Enter(S::Failed)),
-            (S::Starting, E::Prepare) => Err(anyhow!(
-                "App lifecycle is Starting; the same Startup attempt cannot be prepared again"
-            )),
-            (S::Failed, E::Prepare) => Err(anyhow!(
-                "App lifecycle is Failed; the same runtime instance cannot be advanced again"
-            )),
-            (S::Configuring, E::BeginStartup) => Err(anyhow!(
-                "Startup requires prepared App composition; lifecycle is Configuring"
-            )),
-            (S::Starting, E::BeginStartup) => Err(anyhow!(
-                "Startup was already attempted for this App; lifecycle is Starting"
-            )),
-            (S::Failed, E::BeginStartup) => Err(anyhow!(
-                "Startup previously failed for this App; the same runtime instance is non-runnable"
-            )),
-            _ => Err(anyhow!(
-                "invalid App lifecycle transition from {} using {:?}",
-                self.name(),
-                event
-            )),
+            (S::Starting, E::Prepare) => Err(AppTransitionError::PreparationDuringStartup),
+            (S::Failed, E::Prepare) => Err(AppTransitionError::PreparationAfterFailure),
+            (S::Configuring, E::BeginStartup) => Err(AppTransitionError::StartupWithoutPreparation),
+            (S::Starting, E::BeginStartup) => Err(AppTransitionError::DuplicateStartupAttempt),
+            (S::Failed, E::BeginStartup) => Err(AppTransitionError::StartupAfterFailure),
+            _ => Err(AppTransitionError::Invalid { from: *self, event: *event }),
         }
     }
 }
