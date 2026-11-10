@@ -74,7 +74,7 @@ fn invalid_event_does_not_modify_state_or_consume_borrowed_data() {
 }
 
 #[test]
-fn validated_restoration_and_owned_extraction_do_not_need_clone_or_copy() {
+fn caller_supplied_initial_state_and_owned_extraction_need_no_clone_or_copy() {
     let recovered = Mode::Active {
         name: "restored".to_owned(),
         weight: 0.25,

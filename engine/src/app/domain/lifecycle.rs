@@ -1,5 +1,5 @@
 use anyhow::{Result, anyhow};
-use state_machine::{Lifecycle, LifecycleState, Next, Transition, TransitionState};
+use state_machine::{Next, StateMachine, Transition, TransitionState};
 
 /// States currently supported by the Engine's App execution owner.
 ///
@@ -84,14 +84,6 @@ impl TransitionState for AppLifecycleState {
     }
 }
 
-impl LifecycleState for AppLifecycleState {
-    fn is_terminal(&self) -> bool {
-        // Failed prevents further Startup but does not prove Host cleanup
-        // and outstanding owner obligations have been settled.
-        false
-    }
-}
-
 /// Explicit disposition: a running instance does not execute Startup again.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum StartupAdmission {
@@ -102,13 +94,13 @@ pub(crate) enum StartupAdmission {
 /// The domain facade exposes App verbs, never raw generic transition access.
 #[derive(Debug)]
 pub(crate) struct AppLifecycle {
-    machine: Lifecycle<AppLifecycleState>,
+    machine: StateMachine<AppLifecycleState>,
 }
 
 impl Default for AppLifecycle {
     fn default() -> Self {
         Self {
-            machine: Lifecycle::new(AppLifecycleState::Configuring),
+            machine: StateMachine::new(AppLifecycleState::Configuring),
         }
     }
 }
@@ -206,7 +198,7 @@ mod tests {
         lifecycle.begin_startup().unwrap();
         lifecycle.startup_failed().unwrap();
         assert_eq!(lifecycle.state(), AppLifecycleState::Failed);
-        assert!(!lifecycle.machine.is_terminal());
+        // Failed remains non-runnable, but physical shutdown settlement is not modeled here.
         assert!(lifecycle.begin_startup().is_err());
         assert!(lifecycle.prepare_for_execution().is_err());
         assert!(lifecycle.startup_succeeded().is_err());

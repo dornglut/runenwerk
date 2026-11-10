@@ -99,22 +99,29 @@ assert!(work.is_terminal());
 
 - **App** implements `TransitionState` directly on `AppLifecycleState`;
   its facade exposes named prepare/Startup methods and a typed
-  `StartupAdmission` outcome. `Starting` is recorded **before** executing
-  the RunenECS Startup schedule. Returned errors mark `Failed`, while
+  `StartupAdmission` outcome. Current App states have no settled terminal
+  state, so the facade uses `StateMachine` until owner-confirmed shutdown
+  semantics justify `Lifecycle`. `Starting` is recorded **before**
+  executing RunenECS Startup. Returned errors mark `Failed`, while
   unwinding leaves `Starting`; neither can be retried.
-- **Runenwerk Draw** uses `StateMachine<DrawingToolSessionPhase>` for its
-  actual data-bearing gesture session, while input routing, session identity,
-  tool intents and drawing authority stay in the app. The model permits
-  idempotent End and restarts a session on Begin.
+- **Runenwerk Draw** uses `StateMachine<DrawingToolSessionState>` around a
+  private state that holds **both** session identity and its data-bearing
+  active phase. They commit together rather than updating a separate
+  counter before changing the phase. Public `DrawingToolSessionPhase` stays
+  a read-only observation, while transition events stay private. Input
+  routing, tool intents and drawing authority remain in the App.
+  End is idempotent; Begin starts a new session.
 - **Future terminal App** requires actual, owner-confirmed Host and
   resource settlement under accepted ADR 0026. Current `Failed` is not
   a terminal state.
 
 ## Correctness and ergonomics
 
-`StateMachine::new(initial)` is an **owner-authorized** initializer; it
-supports domain-validated restoration, not unrestricted post-construction
-mutation. The library intentionally has no `set_state` API.
+`StateMachine::new(initial)` is **unchecked**: it trusts the initial
+state supplied by the owning domain. A restoring domain must validate
+persisted state and all correlated data before invoking the constructor.
+The mechanism supports restoration but does not implement validation
+or migration. The library intentionally has no `set_state` API.
 `TransitionState::next` must not mutate external state; all fallible
 checks should happen before owner effects. If a domain needs to change
 several correlated fields, their owner must validate and commit the whole

@@ -1,4 +1,4 @@
-//! Synchronous, allocation-free state storage and transition commitment.
+//! Synchronous state storage and transition commitment without core-managed allocation.
 
 use std::borrow::Borrow;
 
