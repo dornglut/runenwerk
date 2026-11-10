@@ -76,7 +76,10 @@ impl TransitionState for AppLifecycleState {
             (S::Configuring, E::BeginStartup) => Err(AppTransitionError::StartupWithoutPreparation),
             (S::Starting, E::BeginStartup) => Err(AppTransitionError::DuplicateStartupAttempt),
             (S::Failed, E::BeginStartup) => Err(AppTransitionError::StartupAfterFailure),
-            _ => Err(AppTransitionError::Invalid { from: *self, event: *event }),
+            _ => Err(AppTransitionError::Invalid {
+                from: *self,
+                event: *event,
+            }),
         }
     }
 }
