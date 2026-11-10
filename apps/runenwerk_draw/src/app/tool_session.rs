@@ -1,7 +1,7 @@
 //! App-owned drawing tool session intent boundary.
 
 use drawing::CanvasCoordinate;
-use state_machine::{Next, StateMachine, TransitionOutcome};
+use state_machine::{Next, StateMachine};
 use std::convert::Infallible;
 use ui_input::{
     Key, KeyState, KeyboardEvent, Modifiers, PointerDeviceId, PointerSourceKind, PointerToolKind,
@@ -347,7 +347,7 @@ mod tests {
                 .state
                 .transition(DrawingToolSessionEvent::End)
                 .unwrap(),
-            TransitionOutcome::Stayed
+            state_machine::TransitionOutcome::Stayed
         );
         assert_eq!(session.phase(), &DrawingToolSessionPhase::Idle);
         assert_eq!(session.state.state().next_session_id, 1);
