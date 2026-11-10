@@ -1,65 +1,57 @@
-//! A single typed state machine instance.
+//! Synchronous, allocation-free state storage and transition commitment.
 
-use std::fmt;
-use std::marker::PhantomData;
+use std::borrow::Borrow;
 
-use crate::TransitionModel;
+use crate::{Next, TransitionState};
 
-/// Accepted transition, including explicitly allowed idempotent transitions.
+/// Outcome of an accepted event; a domain may deliberately accept a no-op.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Transition<S> {
-    pub from: S,
-    pub to: S,
+pub enum Transition {
+    Changed,
+    Unchanged,
 }
 
-impl<S: Eq> Transition<S> {
-    pub fn changed(&self) -> bool {
-        self.from != self.to
+impl Transition {
+    pub const fn changed(self) -> bool {
+        matches!(self, Self::Changed)
     }
 }
 
-/// Stores state; it is not a scheduler, event queue or transaction manager.
-pub struct StateMachine<M: TransitionModel> {
-    state: M::State,
-    model: PhantomData<fn() -> M>,
+/// Stores a domain state and commits only fully evaluated transitions.
+///
+/// `StateMachine<S>` has no `Clone`, `Copy`, `Eq`, `Send` or `Sync`
+/// requirement on `S`. Trait implementations on this wrapper remain
+/// conditional on whether the domain state supports those operations.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateMachine<S> {
+    state: S,
 }
 
-impl<M: TransitionModel> Default for StateMachine<M> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<M: TransitionModel> StateMachine<M> {
-    pub fn new() -> Self {
-        Self {
-            state: M::initial(),
-            model: PhantomData,
-        }
+impl<S: TransitionState> StateMachine<S> {
+    /// Initial state must be admitted by its domain owner. This also supports
+    /// domain-validated restoration without a privileged mutable-state setter.
+    pub fn new(initial: S) -> Self {
+        Self { state: initial }
     }
 
-    pub fn state(&self) -> M::State {
+    pub const fn state(&self) -> &S {
+        &self.state
+    }
+
+    pub fn into_state(self) -> S {
         self.state
     }
 
-    /// A rejection or an unwind in the reducer leaves this state unchanged.
-    /// No external side effects are rolled back by this method.
-    pub fn transition(&mut self, event: M::Event) -> Result<Transition<M::State>, M::Error> {
-        let from = self.state;
-        let to = M::next(from, &event)?;
-        self.state = to;
-        Ok(Transition { from, to })
-    }
-}
-
-impl<M: TransitionModel> fmt::Debug for StateMachine<M>
-where
-    M::State: fmt::Debug,
-{
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("StateMachine")
-            .field("state", &self.state)
-            .finish()
+    /// Accept borrowed or owned events. Borrowing retains non-`Copy` event data
+    /// when an event is rejected and allows callers to reuse the same event.
+    pub fn transition(&mut self, event: impl Borrow<S::Event>) -> Result<Transition, S::Error> {
+        let decision = self.state.next(event.borrow())?;
+        match decision {
+            Next::Stay => Ok(Transition::Unchanged),
+            Next::Enter(next) => {
+                self.state = next;
+                Ok(Transition::Changed)
+            }
+        }
     }
 }

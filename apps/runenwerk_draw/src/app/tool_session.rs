@@ -271,6 +271,18 @@ impl DrawingToolSessionOutcome {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn ending_an_idle_drawing_session_is_a_real_idempotent_transition() {
+        let mut session = DrawingToolSession::default();
+        let outcome = session
+            .phase
+            .transition(DrawingToolSessionEvent::End)
+            .unwrap();
+        assert_eq!(outcome, state_machine::Transition::Unchanged);
+        assert_eq!(session.phase(), &DrawingToolSessionPhase::Idle);
+        assert_eq!(session.next_session_id, 1);
+    }
+
     use drawing::CanvasCoordinate;
     use ui_input::{
         Key, KeyState, KeyboardEvent, Modifiers, PointerBarrelButtons, PointerDeviceId,

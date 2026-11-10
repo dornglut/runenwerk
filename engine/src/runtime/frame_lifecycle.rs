@@ -1,4 +1,4 @@
-use crate::app::AppLifecycle;
+use crate::app::{AppLifecycle, StartupAdmission};
 use crate::plugins::fixed_step::fixed_step_is_active;
 use crate::runtime::fixed_step_executor::run_fixed_update_frame;
 use crate::runtime::schedules::{
@@ -13,7 +13,7 @@ pub(crate) fn run_startup_if_needed(
     scheduler: &mut Runtime,
     lifecycle: &mut AppLifecycle,
 ) -> Result<()> {
-    if !lifecycle.begin_startup()? {
+    if lifecycle.begin_startup()? == StartupAdmission::AlreadyRunning {
         return Ok(());
     }
 

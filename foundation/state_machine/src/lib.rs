@@ -1,11 +1,12 @@
-//! Typed, synchronous state transitions and optional lifecycle terminality.
+//! Stateless typed transition policies, stored state, and lifetime terminality.
 //!
-//! No callbacks, scheduler, resource acquisition or ECS semantics.
+//! Domain owners decide which events are meaningful and when external work has
+//! actually completed. No scheduler, callback dispatcher or runtime graph.
 
 mod lifecycle;
 mod machine;
 mod model;
 
-pub use lifecycle::{Lifecycle, LifecycleError, LifecycleModel};
+pub use lifecycle::{Lifecycle, LifecycleError, LifecycleState};
 pub use machine::{StateMachine, Transition};
-pub use model::TransitionModel;
+pub use model::{Next, TransitionState};

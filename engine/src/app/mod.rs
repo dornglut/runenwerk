@@ -8,7 +8,7 @@ mod platform;
 mod runtime;
 
 pub use domain::app::*;
-pub(crate) use domain::lifecycle::{AppLifecycle, AppLifecycleState};
+pub(crate) use domain::lifecycle::{AppLifecycle, AppLifecycleState, StartupAdmission};
 pub use domain::plugins::*;
 pub(crate) use domain::state::{NativeInitialWindow, WindowedAppState};
 pub use platform::native_launch::NativeHostLaunchOverrides;

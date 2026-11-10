@@ -1,13 +1,18 @@
-//! Lifetime-specific terminality built on the general state machine.
+//! Terminal lifetime specialization; delegates transitions to StateMachine.
 
+use std::borrow::Borrow;
 use std::error::Error;
 use std::fmt;
 
-use crate::{StateMachine, Transition, TransitionModel};
+use crate::{StateMachine, Transition, TransitionState};
 
-/// A state machine whose owning domain declares terminal states.
-pub trait LifecycleModel: TransitionModel {
-    fn is_terminal(state: Self::State) -> bool;
+/// Adds genuine lifetime finality to a domain transition state.
+///
+/// A state may be non-runnable, failed, closing, or suspended without being
+/// terminal. Only return `true` when that domain has actually reached a
+/// state from which *no* further transitions are permitted.
+pub trait LifecycleState: TransitionState {
+    fn is_terminal(&self) -> bool;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,53 +39,43 @@ impl<E: Error + 'static> Error for LifecycleError<E> {
     }
 }
 
-/// Enforces terminality without imposing universal phases or cleanup behavior.
-pub struct Lifecycle<M: LifecycleModel> {
-    machine: StateMachine<M>,
+/// A lifecycle uses the *same* transition storage and commit mechanism.
+/// Its only additional responsibility is to reject events after finality.
+///
+/// This does not coordinate cleanup, shutdown tickets, workers or the host.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Lifecycle<S> {
+    machine: StateMachine<S>,
 }
 
-impl<M: LifecycleModel> Default for Lifecycle<M> {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl<M: LifecycleModel> Lifecycle<M> {
-    pub fn new() -> Self {
+impl<S: LifecycleState> Lifecycle<S> {
+    pub fn new(initial: S) -> Self {
         Self {
-            machine: StateMachine::new(),
+            machine: StateMachine::new(initial),
         }
     }
 
-    pub fn state(&self) -> M::State {
+    pub const fn state(&self) -> &S {
         self.machine.state()
     }
 
     pub fn is_terminal(&self) -> bool {
-        M::is_terminal(self.state())
+        self.state().is_terminal()
+    }
+
+    pub fn into_state(self) -> S {
+        self.machine.into_state()
     }
 
     pub fn transition(
         &mut self,
-        event: M::Event,
-    ) -> Result<Transition<M::State>, LifecycleError<M::Error>> {
+        event: impl Borrow<S::Event>,
+    ) -> Result<Transition, LifecycleError<S::Error>> {
         if self.is_terminal() {
             return Err(LifecycleError::Terminal);
         }
         self.machine
             .transition(event)
             .map_err(LifecycleError::Rejected)
-    }
-}
-
-impl<M: LifecycleModel> fmt::Debug for Lifecycle<M>
-where
-    M::State: fmt::Debug,
-{
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("Lifecycle")
-            .field("state", &self.state())
-            .finish()
     }
 }

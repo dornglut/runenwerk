@@ -1,13 +1,10 @@
-use std::error::Error;
-use std::fmt;
-
 use anyhow::{Result, anyhow};
-use state_machine::{Lifecycle, LifecycleModel, TransitionModel};
+use state_machine::{Lifecycle, LifecycleState, Next, Transition, TransitionState};
 
-/// The five states actually supported by the current Engine runtime.
+/// States currently supported by the Engine's App execution owner.
 ///
-/// `ShuttingDown` and `Terminated` must only be added when owner-correct
-/// Host shutdown and settlement are implemented and verified (ADR 0026).
+/// Failure is non-runnable, *not* completed termination: actual shutdown and
+/// settlement are still owned by Host and resource owners (ADR 0026).
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum AppLifecycleState {
     #[default]
@@ -38,75 +35,78 @@ enum AppLifecycleEvent {
     StartupFailed,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-struct InvalidAppTransition {
-    from: AppLifecycleState,
-    event: AppLifecycleEvent,
-}
-
-impl fmt::Display for InvalidAppTransition {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "invalid App lifecycle transition from {} using {:?}",
-            self.from.name(),
-            self.event
-        )
-    }
-}
-
-impl Error for InvalidAppTransition {}
-
-#[derive(Debug)]
-struct AppLifecyclePolicy;
-
-impl TransitionModel for AppLifecyclePolicy {
-    type State = AppLifecycleState;
+impl TransitionState for AppLifecycleState {
     type Event = AppLifecycleEvent;
-    type Error = InvalidAppTransition;
+    type Error = anyhow::Error;
 
-    fn initial() -> Self::State {
-        AppLifecycleState::Configuring
-    }
-
-    fn next(
-        from: Self::State,
-        event: &Self::Event,
-    ) -> std::result::Result<Self::State, Self::Error> {
+    /// Single authority for both state changes and accepted idempotent events.
+    fn next(&self, event: &Self::Event) -> Result<Next<Self>> {
         use AppLifecycleEvent as E;
         use AppLifecycleState as S;
 
-        match (from, event) {
-            (S::Configuring, E::Prepare) => Ok(S::Prepared),
-            (S::Prepared, E::BeginStartup) => Ok(S::Starting),
-            (S::Starting, E::StartupSucceeded) => Ok(S::Running),
-            (S::Starting, E::StartupFailed) => Ok(S::Failed),
-            _ => Err(InvalidAppTransition {
-                from,
-                event: *event,
-            }),
+        match (*self, event) {
+            (S::Configuring, E::Prepare) => Ok(Next::Enter(S::Prepared)),
+            (S::Prepared | S::Running, E::Prepare) => Ok(Next::Stay),
+            (S::Prepared, E::BeginStartup) => Ok(Next::Enter(S::Starting)),
+            (S::Running, E::BeginStartup) => Ok(Next::Stay),
+            (S::Starting, E::StartupSucceeded) => Ok(Next::Enter(S::Running)),
+            (S::Starting, E::StartupFailed) => Ok(Next::Enter(S::Failed)),
+            (S::Starting, E::Prepare) => Err(anyhow!(
+                "App lifecycle is Starting; the same Startup attempt cannot be prepared again"
+            )),
+            (S::Failed, E::Prepare) => Err(anyhow!(
+                "App lifecycle is Failed; the same runtime instance cannot be advanced again"
+            )),
+            (S::Configuring, E::BeginStartup) => Err(anyhow!(
+                "Startup requires prepared App composition; lifecycle is Configuring"
+            )),
+            (S::Starting, E::BeginStartup) => Err(anyhow!(
+                "Startup was already attempted for this App; lifecycle is Starting"
+            )),
+            (S::Failed, E::BeginStartup) => Err(anyhow!(
+                "Startup previously failed for this App; the same runtime instance is non-runnable"
+            )),
+            _ => Err(anyhow!(
+                "invalid App lifecycle transition from {} using {:?}",
+                self.name(),
+                event
+            )),
         }
     }
 }
 
-impl LifecycleModel for AppLifecyclePolicy {
-    fn is_terminal(state: Self::State) -> bool {
-        state == AppLifecycleState::Failed
+impl LifecycleState for AppLifecycleState {
+    fn is_terminal(&self) -> bool {
+        // Failed prevents further Startup but does not prove Host cleanup
+        // and outstanding owner obligations have been settled.
+        false
     }
 }
 
-/// App-owned facade around reusable state validation.
-///
-/// The Engine owns when to report preparation/startup facts. No generic
-/// machine is permitted to execute Startup or to retire App resources.
-#[derive(Debug, Default)]
+/// Explicit disposition: a running instance does not execute Startup again.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub(crate) enum StartupAdmission {
+    Execute,
+    AlreadyRunning,
+}
+
+/// The domain facade exposes App verbs, never raw generic transition access.
+#[derive(Debug)]
 pub(crate) struct AppLifecycle {
-    machine: Lifecycle<AppLifecyclePolicy>,
+    machine: Lifecycle<AppLifecycleState>,
+}
+
+impl Default for AppLifecycle {
+    fn default() -> Self {
+        Self {
+            machine: Lifecycle::new(AppLifecycleState::Configuring),
+        }
+    }
 }
 
 impl AppLifecycle {
     pub(crate) fn state(&self) -> AppLifecycleState {
-        self.machine.state()
+        *self.machine.state()
     }
 
     pub(crate) fn is_configuring(&self) -> bool {
@@ -118,39 +118,14 @@ impl AppLifecycle {
     }
 
     pub(crate) fn prepare_for_execution(&mut self) -> Result<()> {
-        match self.state() {
-            AppLifecycleState::Configuring => {
-                self.machine.transition(AppLifecycleEvent::Prepare)?;
-                Ok(())
-            }
-            AppLifecycleState::Prepared | AppLifecycleState::Running => Ok(()),
-            AppLifecycleState::Starting => Err(anyhow!(
-                "App lifecycle is Starting; the same Startup attempt cannot be prepared again"
-            )),
-            AppLifecycleState::Failed => Err(anyhow!(
-                "App lifecycle is Failed; the same runtime instance cannot be advanced again"
-            )),
-        }
+        self.machine.transition(AppLifecycleEvent::Prepare)?;
+        Ok(())
     }
 
-    /// True means the Startup schedule may now be executed exactly once.
-    /// False means successful Startup was already performed.
-    pub(crate) fn begin_startup(&mut self) -> Result<bool> {
-        match self.state() {
-            AppLifecycleState::Running => Ok(false),
-            AppLifecycleState::Prepared => {
-                self.machine.transition(AppLifecycleEvent::BeginStartup)?;
-                Ok(true)
-            }
-            AppLifecycleState::Configuring => Err(anyhow!(
-                "Startup requires prepared App composition; lifecycle is Configuring"
-            )),
-            AppLifecycleState::Starting => Err(anyhow!(
-                "Startup was already attempted for this App; lifecycle is Starting"
-            )),
-            AppLifecycleState::Failed => Err(anyhow!(
-                "Startup previously failed for this App; the same runtime instance is non-runnable"
-            )),
+    pub(crate) fn begin_startup(&mut self) -> Result<StartupAdmission> {
+        match self.machine.transition(AppLifecycleEvent::BeginStartup)? {
+            Transition::Changed => Ok(StartupAdmission::Execute),
+            Transition::Unchanged => Ok(StartupAdmission::AlreadyRunning),
         }
     }
 
@@ -169,7 +144,6 @@ impl AppLifecycle {
         if self.state() == AppLifecycleState::Running {
             return Ok(());
         }
-
         Err(anyhow!(
             "App frame advancement requires Running lifecycle state; current lifecycle is {}",
             self.name()
@@ -182,7 +156,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn preparation_seals_composition_and_is_repeatable() {
+    fn preparation_seals_composition_and_is_idempotent() {
         let mut lifecycle = AppLifecycle::default();
         assert!(lifecycle.is_configuring());
         lifecycle.prepare_for_execution().unwrap();
@@ -195,9 +169,15 @@ mod tests {
     fn successful_startup_is_a_single_attempt() {
         let mut lifecycle = AppLifecycle::default();
         lifecycle.prepare_for_execution().unwrap();
-        assert!(lifecycle.begin_startup().unwrap());
+        assert_eq!(
+            lifecycle.begin_startup().unwrap(),
+            StartupAdmission::Execute
+        );
         lifecycle.startup_succeeded().unwrap();
-        assert!(!lifecycle.begin_startup().unwrap());
+        assert_eq!(
+            lifecycle.begin_startup().unwrap(),
+            StartupAdmission::AlreadyRunning
+        );
         lifecycle.prepare_for_execution().unwrap();
         lifecycle.require_running().unwrap();
     }
@@ -211,12 +191,13 @@ mod tests {
     }
 
     #[test]
-    fn failed_startup_is_non_retryable() {
+    fn failed_startup_is_non_retryable_but_not_settled() {
         let mut lifecycle = AppLifecycle::default();
         lifecycle.prepare_for_execution().unwrap();
         lifecycle.begin_startup().unwrap();
         lifecycle.startup_failed().unwrap();
         assert_eq!(lifecycle.state(), AppLifecycleState::Failed);
+        assert!(!lifecycle.machine.is_terminal());
         assert!(lifecycle.begin_startup().is_err());
         assert!(lifecycle.prepare_for_execution().is_err());
         assert!(lifecycle.startup_succeeded().is_err());
@@ -231,5 +212,13 @@ mod tests {
         assert!(lifecycle.begin_startup().is_err());
         assert!(lifecycle.prepare_for_execution().is_err());
         assert!(lifecycle.require_running().is_err());
+    }
+
+    #[test]
+    fn errors_do_not_change_state() {
+        let mut lifecycle = AppLifecycle::default();
+        let error = lifecycle.begin_startup().unwrap_err();
+        assert!(error.to_string().contains("requires prepared App composition"));
+        assert_eq!(lifecycle.state(), AppLifecycleState::Configuring);
     }
 }
