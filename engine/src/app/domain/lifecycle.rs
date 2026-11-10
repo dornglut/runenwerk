@@ -218,7 +218,11 @@ mod tests {
     fn errors_do_not_change_state() {
         let mut lifecycle = AppLifecycle::default();
         let error = lifecycle.begin_startup().unwrap_err();
-        assert!(error.to_string().contains("requires prepared App composition"));
+        assert!(
+            error
+                .to_string()
+                .contains("requires prepared App composition")
+        );
         assert_eq!(lifecycle.state(), AppLifecycleState::Configuring);
     }
 }

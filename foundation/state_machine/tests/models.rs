@@ -52,8 +52,14 @@ fn data_bearing_non_copy_state_and_event_are_supported() {
     );
     // The caller retained its non-Copy event.
     assert!(matches!(event, Message::Activate(_)));
-    assert_eq!(machine.transition(Message::Observe), Ok(Transition::Unchanged));
-    assert_eq!(machine.transition(Message::Deactivate), Ok(Transition::Changed));
+    assert_eq!(
+        machine.transition(Message::Observe),
+        Ok(Transition::Unchanged)
+    );
+    assert_eq!(
+        machine.transition(Message::Deactivate),
+        Ok(Transition::Changed)
+    );
     assert_eq!(machine.state(), &Mode::Idle);
 }
 
@@ -106,9 +112,7 @@ impl TransitionState for Job {
     fn next(&self, event: &JobEvent) -> Result<Next<Self>, Rejected> {
         match (self, event) {
             (Self::Queued, JobEvent::Fail) => Ok(Next::Enter(Self::Failed)),
-            (Self::Queued | Self::Failed, JobEvent::RequestStop) => {
-                Ok(Next::Enter(Self::Stopping))
-            }
+            (Self::Queued | Self::Failed, JobEvent::RequestStop) => Ok(Next::Enter(Self::Stopping)),
             (Self::Stopping, JobEvent::FinishSettlement) => Ok(Next::Enter(Self::Settled)),
             (Self::Failed, JobEvent::Retry) => Err(Rejected),
             _ => Err(Rejected),
@@ -127,12 +131,18 @@ fn failure_is_non_runnable_but_cleanup_remains_possible() {
     let mut job = Lifecycle::new(Job::Queued);
     job.transition(JobEvent::Fail).unwrap();
     assert!(!job.is_terminal());
-    assert_eq!(job.transition(JobEvent::Retry), Err(LifecycleError::Rejected(Rejected)));
+    assert_eq!(
+        job.transition(JobEvent::Retry),
+        Err(LifecycleError::Rejected(Rejected))
+    );
     job.transition(JobEvent::RequestStop).unwrap();
     assert!(!job.is_terminal());
     job.transition(JobEvent::FinishSettlement).unwrap();
     assert!(job.is_terminal());
-    assert_eq!(job.transition(JobEvent::RequestStop), Err(LifecycleError::Terminal));
+    assert_eq!(
+        job.transition(JobEvent::RequestStop),
+        Err(LifecycleError::Terminal)
+    );
     assert_eq!(job.state(), &Job::Settled);
 }
 
@@ -164,7 +174,10 @@ fn terminal_lifecycle_rejects_every_event_even_if_domain_would_allow_one() {
     }
     let mut lifetime = Lifecycle::new(Reopen::Open);
     lifetime.transition(Operation::Close).unwrap();
-    assert_eq!(lifetime.transition(Operation::Reopen), Err(LifecycleError::Terminal));
+    assert_eq!(
+        lifetime.transition(Operation::Reopen),
+        Err(LifecycleError::Terminal)
+    );
 }
 
 #[test]
