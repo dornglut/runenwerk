@@ -1,161 +1,238 @@
 # State machine and lifecycle foundation
 
-## Purpose
+## The single authoring style
 
-Typed, synchronous **state transition authoring** without an auxiliary
-policy-marker type, lifecycle executor, global event bus, or callback runtime.
-Authors define a state, its domain events and one transition function.
-
-- `TransitionState::next(&self, &Event)` decides `Next::Stay`,
-  `Next::Enter(next)`, or `Err(domain_error)`.
-- `StateMachine<State>` stores the state, commits accepted updates atomically
-  from the perspective of its own state, and reports `Transition::Changed`
-  or `Unchanged`.
-- `LifecycleState` states when a **lifetime has actually settled**.
-  `Lifecycle<State>` uses the same machine but blocks events after finality.
-
-The generic layer never interprets App, Window, Render, gameplay, ECS,
-system schedules, resource lifetimes or external effects. Domain-owned
-external work is **not** rolled back or made atomic by this library.
-
-## Author experience: small gameplay state
+A state machine defines **one** closure for its domain's transition rules.
+A lifecycle uses the **same** closure and adds a predicate for terminality.
 
 ```rust
-use state_machine::{Next, StateMachine, TransitionState};
+use state_machine::{InvalidTransition, Next, StateMachine};
 
-#[derive(Debug, PartialEq)]
-enum Enemy {
+#[derive(Debug, PartialEq, Eq)]
+enum EnemyState {
     Idle,
-    Chasing { target: String },
+    Chasing { target: u64 },
 }
 
 enum EnemyEvent {
-    Detect(String),
+    Detect(u64),
     LoseTarget,
 }
 
-impl TransitionState for Enemy {
-    type Event = EnemyEvent;
-    type Error = &'static str;
+let mut enemy = StateMachine::new(EnemyState::Idle)
+    .transitions(|state, event: &EnemyEvent| match (state, event) {
+        (EnemyState::Idle, EnemyEvent::Detect(target)) =>
+            Ok(Next::Enter(EnemyState::Chasing { target: *target })),
+        (EnemyState::Chasing { .. }, EnemyEvent::LoseTarget) =>
+            Ok(Next::Enter(EnemyState::Idle)),
+        _ => Err(InvalidTransition),
+    });
 
-    fn next(&self, event: &Self::Event) -> Result<Next<Self>, Self::Error> {
-        match (self, event) {
-            (Self::Idle, EnemyEvent::Detect(target)) => Ok(
-                Next::Enter(Self::Chasing { target: target.clone() })
-            ),
-            (Self::Chasing { .. }, EnemyEvent::LoseTarget) => Ok(Next::Enter(Self::Idle)),
-            _ => Err("event is not valid in current state"),
-        }
-    }
-}
-
-let mut enemy = StateMachine::new(Enemy::Idle);
-enemy.transition(EnemyEvent::Detect("player-1".into())).unwrap();
-assert!(matches!(enemy.state(), Enemy::Chasing { .. }));
+enemy.transition(EnemyEvent::Detect(42))?;
+assert!(matches!(enemy.state(), EnemyState::Chasing { target: 42 }));
+# Ok::<(), InvalidTransition>(())
 ```
 
-No `Copy`, `Clone`, `Eq`, or `Default` requirement is imposed by the
-transition mechanism. `Next::Stay` is explicit and does not duplicate a
-non-Copy state. An event can be supplied by value or borrowed; prefer
-borrowing when the original is needed for diagnostics or replay. A
-`Transition::Changed` result means the model committed a newly entered
-logical state; it does **not** imply GPU, window, job or other physical
-completion.
+No `impl TransitionState`, zero-sized policy marker, macro-generated
+transition table, or custom builder language. The closure is **the only**
+policy authority. States and events are ordinary Rust types.
 
-## Lifecycle: failed is not terminated
+## Lifecycle uses the same authoring syntax
 
 ```rust
-use state_machine::{Lifecycle, LifecycleState, Next, TransitionState};
+use state_machine::{InvalidTransition, Next, StateMachine};
 
-#[derive(Debug)]
-enum Work { Running, Failed, Stopping, Settled }
-enum WorkEvent { Fail, Stop, Finish }
+#[derive(Debug, PartialEq, Eq)]
+enum ServiceState {
+    Running,
+    Failed,
+    Stopping,
+    Terminated,
+}
 
-impl TransitionState for Work {
-    type Event = WorkEvent;
-    type Error = &'static str;
+enum ServiceEvent {
+    Fail,
+    Stop,
+    Settled,
+}
 
-    fn next(&self, event: &WorkEvent) -> Result<Next<Self>, Self::Error> {
-        match (self, event) {
-            (Self::Running, WorkEvent::Fail) => Ok(Next::Enter(Self::Failed)),
-            (Self::Running | Self::Failed, WorkEvent::Stop) => Ok(Next::Enter(Self::Stopping)),
-            (Self::Stopping, WorkEvent::Finish) => Ok(Next::Enter(Self::Settled)),
-            _ => Err("not allowed"),
+let mut service = StateMachine::new(ServiceState::Running)
+    .transitions(|state, event: &ServiceEvent| match (state, event) {
+        (ServiceState::Running, ServiceEvent::Fail) =>
+            Ok(Next::Enter(ServiceState::Failed)),
+        (ServiceState::Running | ServiceState::Failed, ServiceEvent::Stop) =>
+            Ok(Next::Enter(ServiceState::Stopping)),
+        (ServiceState::Stopping, ServiceEvent::Settled) =>
+            Ok(Next::Enter(ServiceState::Terminated)),
+        _ => Err(InvalidTransition),
+    })
+    .terminal_when(|state| matches!(state, ServiceState::Terminated));
+
+service.transition(ServiceEvent::Fail)?;
+assert!(!service.is_terminal()); // Failure is not completed termination.
+service.transition(ServiceEvent::Stop)?;
+service.transition(ServiceEvent::Settled)?;
+assert!(service.is_terminal());
+# Ok::<(), state_machine::LifecycleError<InvalidTransition>>(())
+```
+
+`terminal_when` **consumes** the configured machine and returns a
+`Lifecycle` that retains its state and transition closure. Once genuinely
+terminal, every event is rejected with `LifecycleError::Terminal`
+**before** evaluating the transition policy. This does not start shutdown,
+perform cleanup, settle work or schedule anything.
+
+Do not mark `Failed`, `Stopping`, or `StopRequested` terminal if their
+owner still has legal transitions or cleanup obligations.
+
+## Core operations
+
+| Operation | Meaning |
+| --- | --- |
+| `StateMachine::new(initial)` | Unchecked, owner-supplied initial state |
+| `.transitions(|state, event| ...)` | Defines one statically typed policy |
+| `.transition(event)` | Accepts a borrowed or owned event and returns an outcome |
+| `.apply(event)` | Returns `&mut Self` for fluent execution |
+| `.state()` | Borrow current domain state |
+| `.into_state()` | Consume the machine and recover owned state |
+| `.terminal_when(|state| ...)` | Convert into a terminally guarded `Lifecycle` |
+| `.is_terminal()` | Observe a lifecycle's domain-defined finality |
+
+`transition` reports `TransitionOutcome::Stayed` for an accepted
+`Next::Stay`, or `TransitionOutcome::Replaced` for a committed
+`Next::Enter(next)`. These names describe **commit behavior**, not
+`PartialEq`: replacing a state with an equal value still reports
+`Replaced`. A rejected event returns the domain error, not `Stayed`.
+
+`apply` deliberately does **not** form a multi-event transaction:
+```rust,ignore
+machine
+    .apply(Event::Prepare)?
+    .apply(Event::Start)?;
+```
+If `Start` fails, the successful `Prepare` remains committed. Use
+`transition` when callers need `Stayed` versus `Replaced`.
+
+## Owned payloads, errors and configuration
+
+- State and event payloads need not be `Copy`, `Clone`, `Eq`, or `Default`.
+- A policy takes `&State` and `&Event`; it returns an owned `Next<State>`.
+  Copy or clone payloads **only if the domain needs to carry them forward**.
+  This contract does not promise zero-copy payload transfer.
+- A simple machine may reject with the provided `InvalidTransition`.
+  Richer domains return their own typed `Error`; error types are inferred
+  from the closure's result.
+- Closures can capture immutable configuration. The policy is stored by
+  value and dispatched statically; the foundation itself does not allocate
+  or require a `dyn Fn` trait object.
+- `Fn` prevents directly mutable captured variables but does **not**
+  prohibit interior mutability or external side effects. Authors must
+  keep policy evaluation free of owner effects that require rollback.
+- `StateMachine::new(initial)` does **not** validate persisted state or
+  correlated fields. Domains validate restoration before construction.
+
+## Storing a reusable machine as a struct field
+
+A closure has an unnameable concrete type. When no runtime configuration
+needs capturing, a local function-pointer type is a straightforward way
+to name the **same closure-authored policy** in a private struct field:
+
+```rust
+use state_machine::{InvalidTransition, Next, StateMachine};
+
+#[derive(Clone, Copy)]
+enum Phase {
+    Idle,
+    Running,
+}
+enum Event {
+    Start,
+}
+type Rules = fn(&Phase, &Event) -> Result<Next<Phase>, InvalidTransition>;
+type Machine = StateMachine<Phase, Event, InvalidTransition, Rules>;
+
+struct Session {
+    machine: Machine,
+}
+
+impl Session {
+    fn new() -> Self {
+        let rules: Rules = |state, event| match (state, event) {
+            (Phase::Idle, Event::Start) => Ok(Next::Enter(Phase::Running)),
+            _ => Err(InvalidTransition),
+        };
+        Self {
+            machine: StateMachine::new(Phase::Idle).transitions(rules),
         }
     }
 }
-impl LifecycleState for Work {
-    fn is_terminal(&self) -> bool { matches!(self, Self::Settled) }
-}
-let mut work = Lifecycle::new(Work::Running);
-work.transition(WorkEvent::Fail).unwrap();
-assert!(!work.is_terminal()); // cleanup can still happen
-work.transition(WorkEvent::Stop).unwrap();
-work.transition(WorkEvent::Finish).unwrap();
-assert!(work.is_terminal());
+
+let mut session = Session::new();
+session.machine.transition(Event::Start)?;
+# Ok::<(), InvalidTransition>(())
 ```
 
-## Integration contracts
+A function pointer does not capture configuration. If a machine must hold a
+capturing closure, store the resulting concrete generic machine inside a
+generic domain owner. The authoring expression stays the same; do not
+silently allocate or erase the policy merely to simplify a field type.
+In ECS, the owning component's `Send`, `Sync` and `'static` constraints
+must be satisfied by the captured policy and state as required by that ECS.
 
-- **App** implements `TransitionState` directly on `AppLifecycleState`;
-  its facade exposes named prepare/Startup methods and a typed
-  `StartupAdmission` outcome. Current App states have no settled terminal
-  state, so the facade uses `StateMachine` until owner-confirmed shutdown
-  semantics justify `Lifecycle`. `Starting` is recorded **before**
-  executing RunenECS Startup. Returned errors mark `Failed`, while
-  unwinding leaves `Starting`; neither can be retried.
-- **Runenwerk Draw** uses `StateMachine<DrawingToolSessionState>` around a
-  private state that holds **both** session identity and its data-bearing
-  active phase. They commit together rather than updating a separate
-  counter before changing the phase. Public `DrawingToolSessionPhase` stays
-  a read-only observation, while transition events stay private. Input
-  routing, tool intents and drawing authority remain in the App.
-  End is idempotent; Begin starts a new session.
-- **Future terminal App** requires actual, owner-confirmed Host and
-  resource settlement under accepted ADR 0026. Current `Failed` is not
-  a terminal state.
+## Failure, ownership and cleanup guarantees
 
-## Correctness and ergonomics
+A rejected event or panic **inside the closure** does not change the
+machine's state. When `Next::Enter` succeeds, the replacement is stored
+before the previous state is dropped. A panic from the previous state's
+destructor therefore leaves the **replacement** committed, even though
+the caller observes a panic. Avoid fallible side effects in destructors.
+No external effect is made atomic or rolled back by the machine.
 
-`StateMachine::new(initial)` is **unchecked**: it trusts the initial
-state supplied by the owning domain. A restoring domain must validate
-persisted state and all correlated data before invoking the constructor.
-The mechanism supports restoration but does not implement validation
-or migration. The library intentionally has no `set_state` API.
-`TransitionState::next` must not mutate external state; all fallible
-checks should happen before owner effects. If a domain needs to change
-several correlated fields, their owner must validate and commit the whole
-record rather than modifying only one generic phase field.
+`StateMachine` supports conditional `Clone` only when its state and
+policy can be cloned (useful for deliberate simulation snapshots);
+`Lifecycle` is intentionally not `Clone` because it represents one
+authoritative lifetime. Neither type provides unrestricted mutable
+state access or a `set_state` bypass. Errors, events and terminal
+predicates are domain-owned—not global engine policy.
 
-A panic during `next` does not update machine state. An accepted new
-state is installed before the previous state is dropped. If the old state's
-destructor panics, the **new** state remains committed. Do not perform
-fallible side effects in destructors; a panic after commitment is not a
-rejected transition and does not roll back external effects.
+## Production integrations
 
-`Lifecycle` is intentionally **not Clone**: copying a live lifetime would
-create independent transition histories. Borrow or clone the state for
-read-only projections instead. `StateMachine` remains conditionally Clone
-for explicit simulation snapshots and rollback use cases.
+- **Engine App**: `AppLifecycle` wraps
+  `StateMachine::new(Configuring).transitions(|state, event| ...)`.
+  One policy defines idempotent Prepare, one-shot Startup admission,
+  returned-error `Failed` and panic-left-`Starting` semantics.
+  The App exposes named domain operations. Current `Failed` is
+  **non-runnable, not physically terminated**.
+- **Runenwerk Draw**: `DrawingToolSession` wraps a private state containing
+  both its session ID counter and its data-bearing phase, plus the same
+  `.transitions(|state, event| ...)` authoring syntax. It commits
+  correlated identity and phase together; input dispatch and drawing
+  effects remain app-owned.
 
-The implementation adds no automatic concurrency or event scheduling.
-Synchronization and ECS storage are separate owner concerns; `Send` /
-`Sync` remain derived from the stored state, not universal requirements.
+Neither integration gives the foundation authority over ECS, App Startup
+execution, Host identity, UI/window creation, rendering, GPU progress,
+job/resource settlement, or lifecycle callbacks.
 
-## Rejected alternatives
+## Design choices and rejected alternatives
 
-- Separate zero-sized policy markers: increased author types without a
-  benefit for the existing App owner.
-- Copy/Eq-only states and before/after snapshots on every transition:
-  excluded actual drawing session payloads and forced unnecessary copies.
-- Unrestricted transition setter: invalidates all domain transition rules.
-- Universal Lifecycle phases: not all domain objects have the same lifetime.
-- Derive macro, auto-executing callbacks, hierarchy, event bus and runtime
-  graph: unproven additional machinery, not needed to author these models.
+- Mandatory `TransitionState`/`LifecycleState` implementations: too
+  much repeated associated-type and implementation boilerplate.
+- A second authoring macro/builder DSL: would fracture the single mental
+  model and obscure data-bearing guarded rules.
+- Boxed policy as the only construction route: unnecessary allocation and
+  dynamic dispatch for ordinary models.
+- `FnMut` policy: directly permits hidden mutable transition history.
+  Use a domain state field and `Fn` rules instead.
+- Generic automatic entry/exit callbacks or event scheduling: would
+  silently transfer domain execution and resource ownership.
+- A universal terminal state or failed-is-terminal shortcut: conflicts
+  with accepted App/Host lifetime distinctions.
 
 ## Validation
 
-Run `cargo test -p state_machine --all-targets`, relevant
-`engine` App lifecycle and `runenwerk_draw` tests, then the canonical
-`cargo +stable validate` and exact-head CI. Keep the PR draft for
-independent source review and acceptance under issue #1476.
+Compile-test the simple closure API, capturing policy, non-Copy states
+and events, typed errors, value replacement, idempotence, rejection,
+destructor/reducer panics, terminal finality, stored function-pointer
+policies and both production integrations. The canonical
+`cargo +stable validate` and exact-head native/GPU/documentation CI
+must pass before critical review and protected acceptance of PR #1477.

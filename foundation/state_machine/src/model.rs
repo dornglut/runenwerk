@@ -1,25 +1,29 @@
-//! An author-facing, directly implemented transition contract.
+//! Decisions made by an author-supplied transition closure.
 
-/// Defines one domain's transitions without a separate marker/policy type.
+use std::error::Error;
+use std::fmt;
+
+/// The complete logical decision proposed by the transition closure.
 ///
-/// `next` must be pure with respect to externally owned state. It receives a
-/// borrow of the current state and event, and returns either a complete new
-/// state, a deliberate no-op, or an error. No partial state is committed on
-/// rejection or panic. Actual IO, rendering, ECS and cleanup remain with the
-/// owning domain; successful evaluation does not make those effects atomic.
-pub trait TransitionState: Sized {
-    type Event;
-    type Error;
-
-    fn next(&self, event: &Self::Event) -> Result<Next<Self>, Self::Error>;
-}
-
-/// The complete logical state update proposed by a transition policy.
-///
-/// `Stay` makes an allowed, idempotent event explicit without requiring
-/// cloning potentially large or non-`Copy` states.
+/// `Stay` explicitly accepts an event without copying or replacing state.
+/// `Enter` proposes a new state, even when that value compares equal to the
+/// previous state. The mechanism never requires `S: Copy + Clone + Eq`.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[must_use]
 pub enum Next<S> {
     Stay,
     Enter(S),
 }
+
+/// Default error for simple models that do not need domain-specific diagnostics.
+/// A custom error type remains an equally supported closure result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InvalidTransition;
+
+impl fmt::Display for InvalidTransition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("invalid state transition")
+    }
+}
+
+impl Error for InvalidTransition {}

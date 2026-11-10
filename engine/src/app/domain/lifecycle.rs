@@ -1,5 +1,5 @@
 use anyhow::{Result, anyhow};
-use state_machine::{Next, StateMachine, Transition, TransitionState};
+use state_machine::{Next, StateMachine, TransitionOutcome};
 
 /// States currently supported by the Engine's App execution owner.
 ///
@@ -28,7 +28,7 @@ impl AppLifecycleState {
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub(crate) enum AppLifecycleEvent {
+enum AppLifecycleEvent {
     Prepare,
     BeginStartup,
     StartupSucceeded,
@@ -37,7 +37,7 @@ pub(crate) enum AppLifecycleEvent {
 
 /// Transition-specific diagnostics; no second admission decision table.
 #[derive(Debug, thiserror::Error)]
-pub(crate) enum AppTransitionError {
+enum AppTransitionError {
     #[error("App lifecycle is Starting; the same Startup attempt cannot be prepared again")]
     PreparationDuringStartup,
     #[error("App lifecycle is Failed; the same runtime instance cannot be advanced again")]
@@ -55,35 +55,6 @@ pub(crate) enum AppTransitionError {
     },
 }
 
-impl TransitionState for AppLifecycleState {
-    type Event = AppLifecycleEvent;
-    type Error = AppTransitionError;
-
-    /// Single authority for both state changes and accepted idempotent events.
-    fn next(&self, event: &Self::Event) -> std::result::Result<Next<Self>, Self::Error> {
-        use AppLifecycleEvent as E;
-        use AppLifecycleState as S;
-
-        match (*self, event) {
-            (S::Configuring, E::Prepare) => Ok(Next::Enter(S::Prepared)),
-            (S::Prepared | S::Running, E::Prepare) => Ok(Next::Stay),
-            (S::Prepared, E::BeginStartup) => Ok(Next::Enter(S::Starting)),
-            (S::Running, E::BeginStartup) => Ok(Next::Stay),
-            (S::Starting, E::StartupSucceeded) => Ok(Next::Enter(S::Running)),
-            (S::Starting, E::StartupFailed) => Ok(Next::Enter(S::Failed)),
-            (S::Starting, E::Prepare) => Err(AppTransitionError::PreparationDuringStartup),
-            (S::Failed, E::Prepare) => Err(AppTransitionError::PreparationAfterFailure),
-            (S::Configuring, E::BeginStartup) => Err(AppTransitionError::StartupWithoutPreparation),
-            (S::Starting, E::BeginStartup) => Err(AppTransitionError::DuplicateStartupAttempt),
-            (S::Failed, E::BeginStartup) => Err(AppTransitionError::StartupAfterFailure),
-            _ => Err(AppTransitionError::Invalid {
-                from: *self,
-                event: *event,
-            }),
-        }
-    }
-}
-
 /// Explicit disposition: a running instance does not execute Startup again.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub(crate) enum StartupAdmission {
@@ -91,16 +62,48 @@ pub(crate) enum StartupAdmission {
     AlreadyRunning,
 }
 
+type AppTransitionRule = fn(
+    &AppLifecycleState,
+    &AppLifecycleEvent,
+) -> std::result::Result<Next<AppLifecycleState>, AppTransitionError>;
+
+type AppMachine =
+    StateMachine<AppLifecycleState, AppLifecycleEvent, AppTransitionError, AppTransitionRule>;
+
 /// The domain facade exposes App verbs, never raw generic transition access.
 #[derive(Debug)]
 pub(crate) struct AppLifecycle {
-    machine: StateMachine<AppLifecycleState>,
+    machine: AppMachine,
 }
 
 impl Default for AppLifecycle {
     fn default() -> Self {
+        let transitions: AppTransitionRule = |state, event| {
+            use AppLifecycleEvent as E;
+            use AppLifecycleState as S;
+
+            match (*state, event) {
+                (S::Configuring, E::Prepare) => Ok(Next::Enter(S::Prepared)),
+                (S::Prepared | S::Running, E::Prepare) => Ok(Next::Stay),
+                (S::Prepared, E::BeginStartup) => Ok(Next::Enter(S::Starting)),
+                (S::Running, E::BeginStartup) => Ok(Next::Stay),
+                (S::Starting, E::StartupSucceeded) => Ok(Next::Enter(S::Running)),
+                (S::Starting, E::StartupFailed) => Ok(Next::Enter(S::Failed)),
+                (S::Starting, E::Prepare) => Err(AppTransitionError::PreparationDuringStartup),
+                (S::Failed, E::Prepare) => Err(AppTransitionError::PreparationAfterFailure),
+                (S::Configuring, E::BeginStartup) => Err(AppTransitionError::StartupWithoutPreparation),
+                (S::Starting, E::BeginStartup) => Err(AppTransitionError::DuplicateStartupAttempt),
+                (S::Failed, E::BeginStartup) => Err(AppTransitionError::StartupAfterFailure),
+                _ => Err(AppTransitionError::Invalid {
+                    from: *state,
+                    event: *event,
+                }),
+            }
+        };
+
         Self {
-            machine: StateMachine::new(AppLifecycleState::Configuring),
+            machine: StateMachine::new(AppLifecycleState::Configuring)
+                .transitions(transitions),
         }
     }
 }
@@ -125,8 +128,8 @@ impl AppLifecycle {
 
     pub(crate) fn begin_startup(&mut self) -> Result<StartupAdmission> {
         match self.machine.transition(AppLifecycleEvent::BeginStartup)? {
-            Transition::Changed => Ok(StartupAdmission::Execute),
-            Transition::Unchanged => Ok(StartupAdmission::AlreadyRunning),
+            TransitionOutcome::Replaced => Ok(StartupAdmission::Execute),
+            TransitionOutcome::Stayed => Ok(StartupAdmission::AlreadyRunning),
         }
     }
 

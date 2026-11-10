@@ -1,7 +1,7 @@
 //! App-owned drawing tool session intent boundary.
 
 use drawing::CanvasCoordinate;
-use state_machine::{Next, StateMachine, TransitionState};
+use state_machine::{Next, StateMachine, TransitionOutcome};
 use std::convert::Infallible;
 use ui_input::{
     Key, KeyState, KeyboardEvent, Modifiers, PointerDeviceId, PointerSourceKind, PointerToolKind,
@@ -10,9 +10,29 @@ use ui_math::UiPoint;
 
 use crate::app::{DrawingToolInputEvent, DrawingToolRouteKind};
 
-#[derive(Debug, Clone, PartialEq)]
+type DrawingTransitionRule = fn(
+    &DrawingToolSessionState,
+    &DrawingToolSessionEvent,
+) -> Result<Next<DrawingToolSessionState>, Infallible>;
+
+type DrawingMachine = StateMachine<
+    DrawingToolSessionState,
+    DrawingToolSessionEvent,
+    Infallible,
+    DrawingTransitionRule,
+>;
+
+#[derive(Debug, Clone)]
 pub struct DrawingToolSession {
-    state: StateMachine<DrawingToolSessionState>,
+    state: DrawingMachine,
+}
+
+// Session equality compares owned domain state; it does not compare
+// function pointers (which do not have a reliable policy identity).
+impl PartialEq for DrawingToolSession {
+    fn eq(&self, other: &Self) -> bool {
+        self.state.state() == other.state.state()
+    }
 }
 
 /// One coherent owner for gesture identity and active phase.
@@ -24,11 +44,30 @@ struct DrawingToolSessionState {
 
 impl Default for DrawingToolSession {
     fn default() -> Self {
+        let transitions: DrawingTransitionRule = |state, event| {
+            match (&state.phase, event) {
+                (DrawingToolSessionPhase::Idle, DrawingToolSessionEvent::End) => Ok(Next::Stay),
+                (_, DrawingToolSessionEvent::End) => Ok(Next::Enter(DrawingToolSessionState {
+                    next_session_id: state.next_session_id,
+                    phase: DrawingToolSessionPhase::Idle,
+                })),
+                (_, DrawingToolSessionEvent::Begin { kind, anchor }) => Ok(Next::Enter(DrawingToolSessionState {
+                    next_session_id: state.next_session_id.saturating_add(1),
+                    phase: DrawingToolSessionPhase::Active {
+                        id: DrawingToolSessionId(state.next_session_id),
+                        kind: *kind,
+                        anchor: anchor.clone(),
+                    },
+                })),
+            }
+        };
+
         Self {
             state: StateMachine::new(DrawingToolSessionState {
                 next_session_id: 1,
                 phase: DrawingToolSessionPhase::Idle,
-            }),
+            })
+            .transitions(transitions),
         }
     }
 }
@@ -152,29 +191,6 @@ enum DrawingToolSessionEvent {
         anchor: DrawingToolSessionAnchor,
     },
     End,
-}
-
-impl TransitionState for DrawingToolSessionState {
-    type Event = DrawingToolSessionEvent;
-    type Error = Infallible;
-
-    fn next(&self, event: &Self::Event) -> Result<Next<Self>, Self::Error> {
-        match (&self.phase, event) {
-            (DrawingToolSessionPhase::Idle, DrawingToolSessionEvent::End) => Ok(Next::Stay),
-            (_, DrawingToolSessionEvent::End) => Ok(Next::Enter(Self {
-                next_session_id: self.next_session_id,
-                phase: DrawingToolSessionPhase::Idle,
-            })),
-            (_, DrawingToolSessionEvent::Begin { kind, anchor }) => Ok(Next::Enter(Self {
-                next_session_id: self.next_session_id.saturating_add(1),
-                phase: DrawingToolSessionPhase::Active {
-                    id: DrawingToolSessionId(self.next_session_id),
-                    kind: *kind,
-                    anchor: anchor.clone(),
-                },
-            })),
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -331,7 +347,7 @@ mod tests {
                 .state
                 .transition(DrawingToolSessionEvent::End)
                 .unwrap(),
-            state_machine::Transition::Unchanged
+            TransitionOutcome::Stayed
         );
         assert_eq!(session.phase(), &DrawingToolSessionPhase::Idle);
         assert_eq!(session.state.state().next_session_id, 1);

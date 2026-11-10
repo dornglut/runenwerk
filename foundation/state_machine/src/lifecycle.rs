@@ -1,20 +1,12 @@
-//! Terminal lifetime specialization; delegates transitions to StateMachine.
+//! Terminal guard around the same author-supplied transition closure.
 
 use std::borrow::Borrow;
 use std::error::Error;
 use std::fmt;
 
-use crate::{StateMachine, Transition, TransitionState};
+use crate::{StateMachine, TransitionOutcome};
 
-/// Adds genuine lifetime finality to a domain transition state.
-///
-/// A state may be non-runnable, failed, closing, or suspended without being
-/// terminal. Only return `true` when that domain has actually reached a
-/// state from which *no* further transitions are permitted.
-pub trait LifecycleState: TransitionState {
-    fn is_terminal(&self) -> bool;
-}
-
+/// Distinguishes a terminal lifetime from a domain-specific rejection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LifecycleError<E> {
     Terminal,
@@ -39,45 +31,73 @@ impl<E: Error + 'static> Error for LifecycleError<E> {
     }
 }
 
-/// A lifecycle uses the *same* transition storage and commit mechanism.
-/// Its only additional responsibility is to reject events after finality.
+/// A state machine with an additional finality predicate.
 ///
-/// This does not coordinate cleanup, shutdown tickets, workers or the host.
-/// Intentionally not Clone: duplicating a lifetime creates independent
-/// transition histories. Clone or snapshot the observed state instead.
-#[derive(Debug, PartialEq, Eq)]
-pub struct Lifecycle<S> {
-    machine: StateMachine<S>,
+/// Construct with
+/// `StateMachine::new(initial).transitions(|state, event| ...).terminal_when(|state| ...)`.
+/// Terminality is a *domain-owned* fact, not failure, non-runnability, or
+/// initiation of shutdown. No scheduler or cleanup effects are implied.
+///
+/// Deliberately not `Clone`: cloning a live lifetime would create
+/// independent authoritative transition histories.
+pub struct Lifecycle<S, E, Err, Policy, Terminal> {
+    machine: StateMachine<S, E, Err, Policy>,
+    terminal: Terminal,
 }
 
-impl<S: LifecycleState> Lifecycle<S> {
-    pub fn new(initial: S) -> Self {
-        Self {
-            machine: StateMachine::new(initial),
-        }
+impl<S, E, Err, Policy, Terminal> Lifecycle<S, E, Err, Policy, Terminal> {
+    pub(crate) fn from_machine(
+        machine: StateMachine<S, E, Err, Policy>,
+        terminal: Terminal,
+    ) -> Self {
+        Self { machine, terminal }
     }
 
     pub const fn state(&self) -> &S {
         self.machine.state()
     }
 
-    pub fn is_terminal(&self) -> bool {
-        self.state().is_terminal()
-    }
-
     pub fn into_state(self) -> S {
         self.machine.into_state()
+    }
+}
+
+impl<S, E, Err, Policy, Terminal> Lifecycle<S, E, Err, Policy, Terminal>
+where
+    Policy: Fn(&S, &E) -> Result<crate::Next<S>, Err>,
+    Terminal: Fn(&S) -> bool,
+{
+    pub fn is_terminal(&self) -> bool {
+        (self.terminal)(self.state())
     }
 
     pub fn transition(
         &mut self,
-        event: impl Borrow<S::Event>,
-    ) -> Result<Transition, LifecycleError<S::Error>> {
+        event: impl Borrow<E>,
+    ) -> Result<TransitionOutcome, LifecycleError<Err>> {
         if self.is_terminal() {
             return Err(LifecycleError::Terminal);
         }
         self.machine
             .transition(event)
             .map_err(LifecycleError::Rejected)
+    }
+
+    pub fn apply(
+        &mut self,
+        event: impl Borrow<E>,
+    ) -> Result<&mut Self, LifecycleError<Err>> {
+        self.transition(event)?;
+        Ok(self)
+    }
+}
+
+impl<S: fmt::Debug, E, Err, Policy, Terminal> fmt::Debug
+    for Lifecycle<S, E, Err, Policy, Terminal>
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Lifecycle")
+            .field("state", self.machine.state())
+            .finish_non_exhaustive()
     }
 }

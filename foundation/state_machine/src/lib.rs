@@ -1,12 +1,13 @@
-//! Stateless typed transition policies, stored state, and lifetime terminality.
+//! Typed, closure-authored logical state transitions and optional lifetime finality.
 //!
-//! Domain owners decide which events are meaningful and when external work has
-//! actually completed. No scheduler, callback dispatcher or runtime graph.
+//! Domain owners define transition rules; this crate stores state, commits accepted
+//! replacements, and optionally seals a genuinely terminal lifetime. It never
+//! schedules work, executes callbacks, or owns external resource settlement.
 
 mod lifecycle;
 mod machine;
 mod model;
 
-pub use lifecycle::{Lifecycle, LifecycleError, LifecycleState};
-pub use machine::{StateMachine, Transition};
-pub use model::{Next, TransitionState};
+pub use lifecycle::{Lifecycle, LifecycleError};
+pub use machine::{StateMachine, TransitionOutcome};
+pub use model::{InvalidTransition, Next};
