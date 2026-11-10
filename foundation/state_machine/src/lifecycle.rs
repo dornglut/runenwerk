@@ -83,10 +83,7 @@ where
             .map_err(LifecycleError::Rejected)
     }
 
-    pub fn apply(
-        &mut self,
-        event: impl Borrow<E>,
-    ) -> Result<&mut Self, LifecycleError<Err>> {
+    pub fn apply(&mut self, event: impl Borrow<E>) -> Result<&mut Self, LifecycleError<Err>> {
         self.transition(event)?;
         Ok(self)
     }

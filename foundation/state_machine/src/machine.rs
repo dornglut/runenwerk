@@ -55,10 +55,7 @@ impl<S> StateMachine<S> {
     /// The policy must be callable through `Fn`; it is passed shared
     /// references to state and event and must avoid externally visible
     /// effects. `Fn` does not mechanically prohibit interior mutability.
-    pub fn transitions<E, Err, Policy>(
-        self,
-        policy: Policy,
-    ) -> StateMachine<S, E, Err, Policy>
+    pub fn transitions<E, Err, Policy>(self, policy: Policy) -> StateMachine<S, E, Err, Policy>
     where
         Policy: Fn(&S, &E) -> Result<Next<S>, Err>,
     {
@@ -90,10 +87,7 @@ where
     /// `Enter` installs the new state before dropping the old state. A panic
     /// from the old state's destructor thus leaves the replacement committed.
     /// No external effects are rolled back.
-    pub fn transition(
-        &mut self,
-        event: impl Borrow<E>,
-    ) -> Result<TransitionOutcome, Err> {
+    pub fn transition(&mut self, event: impl Borrow<E>) -> Result<TransitionOutcome, Err> {
         let decision = (self.policy)(&self.state, event.borrow())?;
         match decision {
             Next::Stay => Ok(TransitionOutcome::Stayed),
@@ -135,9 +129,7 @@ impl<S: Clone, E, Err, Policy: Clone> Clone for StateMachine<S, E, Err, Policy> 
     }
 }
 
-impl<S: fmt::Debug, E, Err, Policy> fmt::Debug
-    for StateMachine<S, E, Err, Policy>
-{
+impl<S: fmt::Debug, E, Err, Policy> fmt::Debug for StateMachine<S, E, Err, Policy> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StateMachine")
             .field("state", &self.state)

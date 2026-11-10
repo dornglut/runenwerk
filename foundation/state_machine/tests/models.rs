@@ -161,9 +161,7 @@ type JobLifetime = Lifecycle<Job, JobEvent, Rejected, JobRule, JobTerminal>;
 fn job_lifecycle(initial: Job) -> JobLifetime {
     let transitions: JobRule = |state, event| match (state, event) {
         (Job::Queued, JobEvent::Fail) => Ok(Next::Enter(Job::Failed)),
-        (Job::Queued | Job::Failed, JobEvent::RequestStop) => {
-            Ok(Next::Enter(Job::Stopping))
-        }
+        (Job::Queued | Job::Failed, JobEvent::RequestStop) => Ok(Next::Enter(Job::Stopping)),
         (Job::Stopping, JobEvent::FinishSettlement) => Ok(Next::Enter(Job::Settled)),
         _ => Err(Rejected),
     };
@@ -248,10 +246,11 @@ fn generic_lifecycle_predicate_can_capture_configuration() {
 
 #[test]
 fn policy_panic_does_not_commit_a_partial_transition() {
-    let mut machine = StateMachine::new("original".to_owned())
-        .transitions(|_: &String, _: &()| -> Result<Next<String>, Rejected> {
+    let mut machine = StateMachine::new("original".to_owned()).transitions(
+        |_: &String, _: &()| -> Result<Next<String>, Rejected> {
             panic!("interrupted model transition")
-        });
+        },
+    );
 
     let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = machine.transition(());

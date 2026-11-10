@@ -91,7 +91,9 @@ impl Default for AppLifecycle {
                 (S::Starting, E::StartupFailed) => Ok(Next::Enter(S::Failed)),
                 (S::Starting, E::Prepare) => Err(AppTransitionError::PreparationDuringStartup),
                 (S::Failed, E::Prepare) => Err(AppTransitionError::PreparationAfterFailure),
-                (S::Configuring, E::BeginStartup) => Err(AppTransitionError::StartupWithoutPreparation),
+                (S::Configuring, E::BeginStartup) => {
+                    Err(AppTransitionError::StartupWithoutPreparation)
+                }
                 (S::Starting, E::BeginStartup) => Err(AppTransitionError::DuplicateStartupAttempt),
                 (S::Failed, E::BeginStartup) => Err(AppTransitionError::StartupAfterFailure),
                 _ => Err(AppTransitionError::Invalid {
@@ -102,8 +104,7 @@ impl Default for AppLifecycle {
         };
 
         Self {
-            machine: StateMachine::new(AppLifecycleState::Configuring)
-                .transitions(transitions),
+            machine: StateMachine::new(AppLifecycleState::Configuring).transitions(transitions),
         }
     }
 }

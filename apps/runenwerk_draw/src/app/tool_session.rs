@@ -44,21 +44,21 @@ struct DrawingToolSessionState {
 
 impl Default for DrawingToolSession {
     fn default() -> Self {
-        let transitions: DrawingTransitionRule = |state, event| {
-            match (&state.phase, event) {
-                (DrawingToolSessionPhase::Idle, DrawingToolSessionEvent::End) => Ok(Next::Stay),
-                (_, DrawingToolSessionEvent::End) => Ok(Next::Enter(DrawingToolSessionState {
-                    next_session_id: state.next_session_id,
-                    phase: DrawingToolSessionPhase::Idle,
-                })),
-                (_, DrawingToolSessionEvent::Begin { kind, anchor }) => Ok(Next::Enter(DrawingToolSessionState {
+        let transitions: DrawingTransitionRule = |state, event| match (&state.phase, event) {
+            (DrawingToolSessionPhase::Idle, DrawingToolSessionEvent::End) => Ok(Next::Stay),
+            (_, DrawingToolSessionEvent::End) => Ok(Next::Enter(DrawingToolSessionState {
+                next_session_id: state.next_session_id,
+                phase: DrawingToolSessionPhase::Idle,
+            })),
+            (_, DrawingToolSessionEvent::Begin { kind, anchor }) => {
+                Ok(Next::Enter(DrawingToolSessionState {
                     next_session_id: state.next_session_id.saturating_add(1),
                     phase: DrawingToolSessionPhase::Active {
                         id: DrawingToolSessionId(state.next_session_id),
                         kind: *kind,
                         anchor: anchor.clone(),
                     },
-                })),
+                }))
             }
         };
 
