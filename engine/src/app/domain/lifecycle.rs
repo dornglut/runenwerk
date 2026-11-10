@@ -155,7 +155,8 @@ impl AppLifecycle {
     }
 
     pub(crate) fn startup_succeeded(&mut self) -> Result<()> {
-        self.machine.transition(AppLifecycleEvent::StartupSucceeded)?;
+        self.machine
+            .transition(AppLifecycleEvent::StartupSucceeded)?;
         Ok(())
     }
 

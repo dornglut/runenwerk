@@ -1,5 +1,6 @@
 //! A single typed state machine instance.
 
+use std::fmt;
 use std::marker::PhantomData;
 
 use crate::TransitionModel;
@@ -18,7 +19,6 @@ impl<S: Eq> Transition<S> {
 }
 
 /// Stores state; it is not a scheduler, event queue or transaction manager.
-#[derive(Debug)]
 pub struct StateMachine<M: TransitionModel> {
     state: M::State,
     model: PhantomData<fn() -> M>,
@@ -44,13 +44,22 @@ impl<M: TransitionModel> StateMachine<M> {
 
     /// A rejection or an unwind in the reducer leaves this state unchanged.
     /// No external side effects are rolled back by this method.
-    pub fn transition(
-        &mut self,
-        event: M::Event,
-    ) -> Result<Transition<M::State>, M::Error> {
+    pub fn transition(&mut self, event: M::Event) -> Result<Transition<M::State>, M::Error> {
         let from = self.state;
         let to = M::next(from, &event)?;
         self.state = to;
         Ok(Transition { from, to })
+    }
+}
+
+impl<M: TransitionModel> fmt::Debug for StateMachine<M>
+where
+    M::State: fmt::Debug,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("StateMachine")
+            .field("state", &self.state)
+            .finish()
     }
 }

@@ -11,8 +11,5 @@ pub trait TransitionModel {
 
     fn initial() -> Self::State;
 
-    fn next(
-        from: Self::State,
-        event: &Self::Event,
-    ) -> Result<Self::State, Self::Error>;
+    fn next(from: Self::State, event: &Self::Event) -> Result<Self::State, Self::Error>;
 }

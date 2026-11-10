@@ -35,7 +35,6 @@ impl<E: Error + 'static> Error for LifecycleError<E> {
 }
 
 /// Enforces terminality without imposing universal phases or cleanup behavior.
-#[derive(Debug)]
 pub struct Lifecycle<M: LifecycleModel> {
     machine: StateMachine<M>,
 }
@@ -71,5 +70,17 @@ impl<M: LifecycleModel> Lifecycle<M> {
         self.machine
             .transition(event)
             .map_err(LifecycleError::Rejected)
+    }
+}
+
+impl<M: LifecycleModel> fmt::Debug for Lifecycle<M>
+where
+    M::State: fmt::Debug,
+{
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("Lifecycle")
+            .field("state", &self.state())
+            .finish()
     }
 }

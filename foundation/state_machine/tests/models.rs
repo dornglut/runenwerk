@@ -1,6 +1,4 @@
-use state_machine::{
-    Lifecycle, LifecycleError, LifecycleModel, StateMachine, TransitionModel,
-};
+use state_machine::{Lifecycle, LifecycleError, LifecycleModel, StateMachine, TransitionModel};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -42,10 +40,12 @@ fn gameplay_machine_cycles_without_a_runtime_or_copyable_event() {
     let mut machine = StateMachine::<Gameplay>::new();
     assert_eq!(machine.transition(Message::Invalid), Err(Rejected));
     assert_eq!(machine.state(), Mode::Idle);
-    assert!(machine
-        .transition(Message::Activate("enemy-01".into()))
-        .unwrap()
-        .changed());
+    assert!(
+        machine
+            .transition(Message::Activate("enemy-01".into()))
+            .unwrap()
+            .changed()
+    );
     machine.transition(Message::Deactivate).unwrap();
     assert_eq!(machine.state(), Mode::Idle);
 }
