@@ -43,7 +43,9 @@ impl<E: Error + 'static> Error for LifecycleError<E> {
 /// Its only additional responsibility is to reject events after finality.
 ///
 /// This does not coordinate cleanup, shutdown tickets, workers or the host.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Intentionally not Clone: duplicating a lifetime creates independent
+/// transition histories. Clone or snapshot the observed state instead.
+#[derive(Debug, PartialEq, Eq)]
 pub struct Lifecycle<S> {
     machine: StateMachine<S>,
 }

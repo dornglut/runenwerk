@@ -28,8 +28,8 @@ pub struct StateMachine<S> {
 }
 
 impl<S: TransitionState> StateMachine<S> {
-    /// Initial state must be admitted by its domain owner. This also supports
-    /// domain-validated restoration without a privileged mutable-state setter.
+    /// Initializes from owner-provided state without validating it. Restored
+    /// state and correlated fields must already be validated by the caller.
     pub fn new(initial: S) -> Self {
         Self { state: initial }
     }
@@ -44,12 +44,15 @@ impl<S: TransitionState> StateMachine<S> {
 
     /// Accept borrowed or owned events. Borrowing retains non-`Copy` event data
     /// when an event is rejected and allows callers to reuse the same event.
+    /// A reducer error/panic leaves state unchanged. Once accepted, the next
+    /// state is installed before the previous state's destructor runs.
     pub fn transition(&mut self, event: impl Borrow<S::Event>) -> Result<Transition, S::Error> {
         let decision = self.state.next(event.borrow())?;
         match decision {
             Next::Stay => Ok(Transition::Unchanged),
             Next::Enter(next) => {
-                self.state = next;
+                let previous = std::mem::replace(&mut self.state, next);
+                drop(previous);
                 Ok(Transition::Changed)
             }
         }

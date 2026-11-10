@@ -127,9 +127,16 @@ checks should happen before owner effects. If a domain needs to change
 several correlated fields, their owner must validate and commit the whole
 record rather than modifying only one generic phase field.
 
-A panic during `next` does not update machine state. No guarantee is made
-against a panicking destructor when replacing a state; do not perform
-side-effectful fallible work in `Drop`.
+A panic during `next` does not update machine state. An accepted new
+state is installed before the previous state is dropped. If the old state's
+destructor panics, the **new** state remains committed. Do not perform
+fallible side effects in destructors; a panic after commitment is not a
+rejected transition and does not roll back external effects.
+
+`Lifecycle` is intentionally **not Clone**: copying a live lifetime would
+create independent transition histories. Borrow or clone the state for
+read-only projections instead. `StateMachine` remains conditionally Clone
+for explicit simulation snapshots and rollback use cases.
 
 The implementation adds no automatic concurrency or event scheduling.
 Synchronization and ECS storage are separate owner concerns; `Send` /

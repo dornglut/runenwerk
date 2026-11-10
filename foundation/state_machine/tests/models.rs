@@ -210,6 +210,56 @@ fn panic_in_domain_rule_does_not_commit_a_partial_state() {
 }
 
 #[test]
+fn old_state_destructor_panic_leaves_the_new_state_committed() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+
+    struct Owned {
+        generation: u32,
+        panic_on_drop: bool,
+        observed: Rc<Cell<u32>>,
+    }
+
+    impl Drop for Owned {
+        fn drop(&mut self) {
+            if self.panic_on_drop {
+                self.panic_on_drop = false;
+                self.observed.set(self.observed.get() + 1);
+                panic!("old-state destructor");
+            }
+        }
+    }
+
+    impl TransitionState for Owned {
+        type Event = ();
+        type Error = Rejected;
+
+        fn next(&self, _: &()) -> Result<Next<Self>, Rejected> {
+            Ok(Next::Enter(Self {
+                generation: self.generation + 1,
+                panic_on_drop: false,
+                observed: self.observed.clone(),
+            }))
+        }
+    }
+
+    let observed = Rc::new(Cell::new(0));
+    let mut machine = StateMachine::new(Owned {
+        generation: 0,
+        panic_on_drop: true,
+        observed: observed.clone(),
+    });
+
+    let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _ = machine.transition(());
+    }));
+
+    assert!(caught.is_err());
+    assert_eq!(machine.state().generation, 1);
+    assert_eq!(observed.get(), 1);
+}
+
+#[test]
 fn duplicate_idempotent_events_do_not_copy_state() {
     struct LargeState {
         data: Vec<u8>,
