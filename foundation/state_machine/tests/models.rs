@@ -147,6 +147,17 @@ fn failure_is_non_runnable_but_cleanup_remains_possible() {
 }
 
 #[test]
+fn restored_terminal_lifetime_is_already_closed() {
+    let mut restored = Lifecycle::new(Job::Settled);
+    assert!(restored.is_terminal());
+    assert_eq!(
+        restored.transition(JobEvent::RequestStop),
+        Err(LifecycleError::Terminal)
+    );
+    assert_eq!(restored.into_state(), Job::Settled);
+}
+
+#[test]
 fn terminal_lifecycle_rejects_every_event_even_if_domain_would_allow_one() {
     enum Reopen {
         Open,
