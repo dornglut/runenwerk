@@ -78,7 +78,10 @@ fn native_cursor_fixture() -> NativeCursorFixture {
     native_cursor_fixture_with_options(0, false)
 }
 
-fn native_cursor_fixture_with_options(initial_state: usize, native_clock: bool) -> NativeCursorFixture {
+fn native_cursor_fixture_with_options(
+    initial_state: usize,
+    native_clock: bool,
+) -> NativeCursorFixture {
     use crate::plugins::render::RenderFrameProducerId;
     use crate::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
     use crate::plugins::ui::{
