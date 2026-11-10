@@ -451,7 +451,11 @@ fn fallible_compose_returns_staged_state_and_original_error_before_owner_admissi
             .unwrap(),
         73
     );
-    assert!(app.world().resource::<RenderFlowRegistryResource>().is_err());
+    assert!(
+        app.world()
+            .resource::<RenderFlowRegistryResource>()
+            .is_err()
+    );
     assert!(!app.world().has_resource::<Gfx>());
 }
 
@@ -479,6 +483,10 @@ fn fallible_compose_admits_two_independent_headless_ui_states_without_render() {
         })
         .collect::<Vec<_>>();
     assert_eq!(values, vec![11, 29]);
-    assert!(app.world().resource::<RenderFlowRegistryResource>().is_err());
+    assert!(
+        app.world()
+            .resource::<RenderFlowRegistryResource>()
+            .is_err()
+    );
     assert!(!app.world().has_resource::<Gfx>());
 }
