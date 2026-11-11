@@ -28,6 +28,211 @@ use texture::{
 };
 
 #[test]
+fn same_asset_different_source_preview_cannot_override_graph_toolbar() {
+    let asset = asset_id(204);
+    let selected_source = asset_source_id(23);
+    let mut document = texture_source_document(None);
+    document.document_id = material_document_id_for_source(asset, selected_source);
+    document.editor_state.selected_preview =
+        material_graph::MaterialGraphPreviewSelection::MaterialPreviewProduct;
+
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(asset, document);
+    runtime.set_active_preview(test_preview_product(asset));
+    assert_ne!(
+        runtime
+            .active_preview()
+            .expect("test preview must exist")
+            .source_id,
+        selected_source,
+    );
+
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(
+        AssetRecord::new(asset, "selected", "Selected", AssetKind::MaterialGraph)
+            .with_primary_source(selected_source),
+    );
+    catalog.insert_source(AssetSourceDescriptor::new(
+        selected_source,
+        asset,
+        AssetKind::MaterialGraph,
+        "assets/materials/selected.material.ron",
+    ));
+
+    let view = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert_eq!(view.graph.nodes.len(), 1);
+    assert_eq!(
+        view.toolbar.selected_preview,
+        material_graph::MaterialGraphPreviewSelection::MaterialPreviewProduct,
+        "a stale preview from a different source cannot override the selected source toolbar",
+    );
+}
+
+#[test]
+fn unresolved_declared_material_source_hides_cached_graph_and_preview() {
+    let asset = asset_id(205);
+    let source_id = asset_source_id(22);
+    let mut document = texture_source_document(None);
+    document.document_id = material_document_id_for_source(asset, source_id);
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(asset, document);
+    runtime.set_active_preview(test_preview_product(asset));
+
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(
+        AssetRecord::new(asset, "selected", "Selected", AssetKind::MaterialGraph)
+            .with_primary_source(source_id),
+    );
+
+    // A missing source descriptor is not a legitimate source-less fixture.
+    assert!(
+        runtime
+            .selected_source_document_for_catalog(&catalog)
+            .is_none()
+    );
+    assert!(runtime.selected_preview_for_catalog(&catalog).is_none());
+    let missing = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert!(missing.graph.nodes.is_empty());
+    assert_eq!(
+        missing.selected.as_ref().map(|item| item.node_count),
+        Some(0)
+    );
+
+    // A descriptor for another asset also cannot qualify this selected source.
+    catalog.insert_source(AssetSourceDescriptor::new(
+        source_id,
+        asset_id(206),
+        AssetKind::MaterialGraph,
+        "assets/materials/foreign.ron",
+    ));
+    assert!(
+        runtime
+            .selected_source_document_for_catalog(&catalog)
+            .is_none()
+    );
+    assert!(runtime.selected_preview_for_catalog(&catalog).is_none());
+
+    // The exact source descriptor restores qualified selected projection.
+    catalog.insert_source(AssetSourceDescriptor::new(
+        source_id,
+        asset,
+        AssetKind::MaterialGraph,
+        "assets/materials/selected.ron",
+    ));
+    assert!(
+        runtime
+            .selected_source_document_for_catalog(&catalog)
+            .is_some()
+    );
+    assert!(runtime.selected_preview_for_catalog(&catalog).is_some());
+    let restored = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert_eq!(restored.graph.nodes.len(), 1);
+}
+
+#[test]
+fn ambiguous_declared_material_sources_hide_cached_selected_source() {
+    let asset = asset_id(207);
+    let first_source = asset_source_id(25);
+    let second_source = asset_source_id(26);
+    let mut document = texture_source_document(None);
+    document.document_id = material_document_id_for_source(asset, first_source);
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(asset, document);
+
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(AssetRecord::new(
+        asset,
+        "ambiguous",
+        "Ambiguous",
+        AssetKind::MaterialGraph,
+    ));
+    catalog.insert_source(AssetSourceDescriptor::new(
+        first_source,
+        asset,
+        AssetKind::MaterialGraph,
+        "assets/materials/first.ron",
+    ));
+    catalog.insert_source(AssetSourceDescriptor::new(
+        second_source,
+        asset,
+        AssetKind::MaterialGraph,
+        "assets/materials/second.ron",
+    ));
+
+    assert!(
+        runtime
+            .selected_source_document_for_catalog(&catalog)
+            .is_none()
+    );
+    let view = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert!(view.graph.nodes.is_empty());
+    assert_eq!(view.selected.as_ref().map(|item| item.node_count), Some(0));
+}
+
+#[test]
+fn replacing_material_document_within_same_asset_clears_old_selection() {
+    let asset = asset_id(203);
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(asset, texture_source_document(None));
+    runtime.select_graph_node(NodeId::new(11));
+    assert!(runtime.selected_graph_nodes().contains(&NodeId::new(11)));
+
+    let mut replacement = texture_source_document(None);
+    replacement.document_id = material_graph::MaterialGraphDocumentId::new(902);
+    runtime.set_active_source_document(asset, replacement);
+    assert!(runtime.selected_graph_nodes().is_empty());
+    assert!(runtime.selected_graph_edges().is_empty());
+    assert_eq!(runtime.selected_material_asset_id(), Some(asset));
+}
+
+#[test]
+fn switching_material_asset_invalidates_selection_and_foreign_source_projection() {
+    let first = asset_id(201);
+    let second = asset_id(202);
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(first, texture_source_document(None));
+    runtime.select_graph_node(NodeId::new(11));
+    assert!(runtime.selected_graph_nodes().contains(&NodeId::new(11)));
+
+    runtime.select_material_asset(Some(second));
+    assert!(runtime.selected_graph_nodes().is_empty());
+    assert!(runtime.selected_graph_edges().is_empty());
+
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(AssetRecord::new(
+        second,
+        "second",
+        "Second Material",
+        AssetKind::MaterialGraph,
+    ));
+    let after_switch = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert!(after_switch.graph.nodes.is_empty());
+    assert_eq!(
+        after_switch.selected.as_ref().map(|row| row.node_count),
+        Some(0)
+    );
+    assert!(after_switch.validation_overlays.is_empty());
+
+    runtime.set_active_source_document(second, texture_source_document(None));
+    let after_source = runtime.graph_canvas_view_model(&catalog, Vec::new());
+    assert_eq!(after_source.graph.nodes.len(), 1);
+    assert_eq!(
+        after_source.selected.as_ref().map(|row| row.node_count),
+        Some(1)
+    );
+
+    runtime.select_graph_node(NodeId::new(11));
+    runtime.select_material_asset(Some(second));
+    assert!(
+        runtime.selected_graph_nodes().contains(&NodeId::new(11)),
+        "reselecting the same source must not erase valid selection"
+    );
+    runtime.select_graph_edge(graph::EdgeId::new(9));
+    runtime.select_material_asset(Some(first));
+    assert!(runtime.selected_graph_edges().is_empty());
+}
+
+#[test]
 fn graph_canvas_projects_source_document_without_formed_preview() {
     let asset_id = asset_id(7);
     let color_port = MaterialValueType::Color.port_type_id();
@@ -294,6 +499,68 @@ fn material_graph_texture_picker_lists_catalog_texture_products() {
     assert!(option.valid);
     assert_eq!(option.artifact_uri, ".runenwerk/artifacts/rock-albedo.ktx2");
     assert!(!option.descriptor_hash.is_empty());
+}
+
+#[test]
+fn selected_material_resource_diagnostics_follow_source_identity() {
+    let first = asset_id(208);
+    let second = asset_id(209);
+    let second_source = asset_source_id(210);
+    let replacement_source = asset_source_id(211);
+    let mut runtime = MaterialLabRuntime::default();
+    runtime.set_active_source_document(first, texture_source_document(None));
+    let mut catalog = AssetCatalog::new();
+    catalog.insert_asset_record(
+        AssetRecord::new(second, "second", "Second", AssetKind::MaterialGraph)
+            .with_primary_source(second_source),
+    );
+    catalog.insert_source(AssetSourceDescriptor::new(
+        second_source,
+        second,
+        AssetKind::MaterialGraph,
+        "assets/materials/second.material.ron",
+    ));
+
+    assert_eq!(
+        runtime
+            .material_resource_binding_diagnostic_rows(&catalog)
+            .len(),
+        1
+    );
+    runtime.select_material_asset(Some(second));
+    assert!(
+        runtime
+            .material_resource_binding_diagnostic_rows(&catalog)
+            .is_empty(),
+        "the previous material's resource diagnostics must not appear on the selected asset"
+    );
+
+    let mut second_document = texture_source_document(None);
+    second_document.document_id = material_document_id_for_source(second, second_source);
+    runtime.set_active_source_document(second, second_document);
+    assert_eq!(
+        runtime
+            .material_resource_binding_diagnostic_rows(&catalog)
+            .len(),
+        1
+    );
+
+    catalog.insert_source(AssetSourceDescriptor::new(
+        replacement_source,
+        second,
+        AssetKind::MaterialGraph,
+        "assets/materials/replacement.material.ron",
+    ));
+    catalog.insert_asset_record(
+        AssetRecord::new(second, "second", "Second", AssetKind::MaterialGraph)
+            .with_primary_source(replacement_source),
+    );
+    assert!(
+        runtime
+            .material_resource_binding_diagnostic_rows(&catalog)
+            .is_empty(),
+        "old source resource diagnostics must not appear after source replacement"
+    );
 }
 
 #[test]

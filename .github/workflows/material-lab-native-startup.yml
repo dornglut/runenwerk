@@ -1,0 +1,186 @@
+name: Material Lab native startup proof
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/material-lab-native-startup.yml"
+      - "apps/runenwerk_editor/src/**"
+      - "apps/runenwerk_editor/Cargo.toml"
+      - "engine/src/plugins/render/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: material-lab-native-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  material-lab-native:
+    name: Material Lab / real X11 Vulkan startup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Check out the exact feature revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          clean: true
+          persist-credentials: false
+
+      - name: Verify exact head SHA
+        env:
+          EXPECTED_REVISION: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_REVISION"
+
+      - name: Install stable Rust toolchain
+        run: |
+          set -euo pipefail
+          rustup toolchain install stable --profile minimal
+
+      - name: Install native X11 and software Vulkan runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes mesa-vulkan-drivers vulkan-tools xvfb xauth libxkbcommon-x11-0
+          icd="$(find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name 'lvp_icd*.json' -print -quit)"
+          test -n "$icd"
+          echo "Lavapipe ICD: $icd"
+          echo "VK_DRIVER_FILES=$icd" >> "$GITHUB_ENV"
+          echo "VK_ICD_FILENAMES=$icd" >> "$GITHUB_ENV"
+          echo "WGPU_BACKEND=vulkan" >> "$GITHUB_ENV"
+          echo "XDG_RUNTIME_DIR=${RUNNER_TEMP}/runenrender-vulkan-xdg" >> "$GITHUB_ENV"
+          mkdir -p "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+          chmod 700 "${RUNNER_TEMP}/runenrender-vulkan-xdg"
+
+      - name: Prove Vulkan software adapter
+        run: vulkaninfo --summary
+
+      - name: Build the actual Material Lab binary
+        run: |
+          set -euo pipefail
+          cargo +stable build --locked -p runenwerk_editor --bin runenwerk_material_lab
+
+      - name: Execute Material Lab through a real X11 window
+        env:
+          RUST_BACKTRACE: "1"
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          GROTTO_RENDER_PRIMARY_REDRAW_INTERVAL_LOG: "1"
+        run: |
+          set -euo pipefail
+          set +e
+          timeout --signal=TERM --kill-after=3s 20s \
+            xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+            ./target/debug/runenwerk_material_lab > material-native-startup.log 2>&1
+          status=$?
+          set -e
+          cat material-native-startup.log
+          if grep -E -i 'thread .* panicked|runtime frame failed|ReadBeforeInitialization|render backend execution failed' material-native-startup.log; then
+            echo "Native Material Lab reported a fatal frame error" >&2
+            exit 1
+          fi
+          if test "$status" -ne 124; then
+            echo "Native Material Lab exited before the bounded 20-second observation (exit=$status)" >&2
+            exit 1
+          fi
+          # A process that merely stays alive has not proved any GPU work.
+          # This maintained Engine frame-submit witness is emitted only on
+          # physically accepted primary-surface render submissions.
+          if ! grep -q 'runenwerk_render_lab_primary_redraw_start_interval frame=' material-native-startup.log; then
+            echo "No physically submitted Material Lab frame observed" >&2
+            exit 1
+          fi
+          echo "Material Lab physically submitted a frame and remained alive through the bounded X11/Vulkan interval"
+
+      - name: Upload native startup evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: material-lab-native-startup
+          path: material-native-startup.log
+          if-no-files-found: warn
+
+  material-lab-native-windows:
+    name: Material Lab / real Windows startup
+    runs-on: windows-2025
+    timeout-minutes: 40
+    steps:
+      - name: Check out the exact feature revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+          clean: true
+          persist-credentials: false
+
+      - name: Verify exact head SHA
+        shell: pwsh
+        env:
+          EXPECTED_REVISION: ${{ github.event.pull_request.head.sha }}
+        run: |
+          $actual = (git rev-parse HEAD).Trim()
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:EXPECTED_REVISION) {
+            throw "Wrong revision: expected $env:EXPECTED_REVISION, found $actual"
+          }
+
+      - name: Install maintained stable Rust
+        shell: pwsh
+        run: |
+          rustup toolchain install stable --profile minimal
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build native Material Lab binary
+        shell: pwsh
+        run: |
+          cargo +stable build --locked -p runenwerk_editor --bin runenwerk_material_lab
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Execute Windows native window and prove a submitted frame
+        shell: pwsh
+        env:
+          RUST_BACKTRACE: "1"
+          GROTTO_RENDER_PRIMARY_REDRAW_INTERVAL_LOG: "1"
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stdout = Join-Path $PWD "material-native-windows-stdout.log"
+          $stderr = Join-Path $PWD "material-native-windows-stderr.log"
+          $binary = Join-Path $PWD "target/debug/runenwerk_material_lab.exe"
+          $process = Start-Process -FilePath $binary -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          try {
+            for ($i = 0; $i -lt 20; $i++) {
+              Start-Sleep -Seconds 1
+              $process.Refresh()
+              if ($process.HasExited) {
+                throw "Material Lab terminated before startup observation completed (exit=$($process.ExitCode))"
+              }
+            }
+          } finally {
+            $process.Refresh()
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force
+            }
+            if (Test-Path $stdout) { Get-Content $stdout }
+            if (Test-Path $stderr) { Get-Content $stderr }
+          }
+          $combined = (Get-Content $stdout -Raw) + (Get-Content $stderr -Raw)
+          if ($combined -match "panicked|runtime frame failed|ReadBeforeInitialization|render backend execution failed") {
+            throw "Windows native Material Lab reported a fatal frame"
+          }
+          if ($combined -notmatch "runenwerk_render_lab_primary_redraw_start_interval frame=") {
+            throw "No physically submitted Windows Material Lab frame observed"
+          }
+
+      - name: Upload Windows native evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: material-lab-native-windows
+          path: material-native-windows-*.log
+          if-no-files-found: warn

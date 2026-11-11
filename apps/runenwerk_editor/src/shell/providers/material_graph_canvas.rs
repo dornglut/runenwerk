@@ -138,13 +138,56 @@ impl EditorSurfaceProvider for MaterialGraphCanvasProvider {
             SurfaceLocalAction::Material(MaterialSurfaceAction::ClearMaterialDiagnostics),
         ));
 
-        let (root, routes) = build_material_graph_surface(
+        let (root, mut routes) = build_material_graph_surface(
             context.theme,
             request.tool_surface_instance_id,
             &view_model,
             lines,
             actions,
         );
+
+        // Capture provenance when this projection is formed, not when a later
+        // input event executes. Generic Shell routing only transports it.
+        let origin = context
+            .app
+            .material_published_source_origin_for_selected(Some(request.tool_surface_instance_id))
+            .ok();
+        if let Some(origin) = origin {
+            let source_bound_routes = routes
+                .iter()
+                .filter_map(|(widget_id, route)| {
+                    let SurfaceLocalAction::Material(action) = route.action()? else {
+                        return None;
+                    };
+                    action.requires_source_origin().then(|| {
+                        (
+                            *widget_id,
+                            SurfaceLocalRoute::new(SurfaceLocalAction::Material(
+                                MaterialSurfaceAction::SourceBound {
+                                    origin,
+                                    action: Box::new(action.clone()),
+                                },
+                            )),
+                        )
+                    })
+                })
+                .collect::<Vec<_>>();
+            for (widget_id, route) in source_bound_routes {
+                routes.insert(widget_id, route);
+            }
+            let canvas_widget_id =
+                editor_shell::SurfaceWidgetScope::new(request.tool_surface_instance_id)
+                    .widget_id(editor_shell::MATERIAL_GRAPH_CANVAS_WIDGET_ID);
+            if routes
+                .get(&canvas_widget_id)
+                .is_some_and(SurfaceLocalRoute::is_provider_owned_graph_canvas)
+            {
+                routes.insert(
+                    canvas_widget_id,
+                    SurfaceLocalRoute::provider_owned_graph_canvas_bound(origin),
+                );
+            }
+        }
 
         Ok(ProviderSurfaceFrame {
             title: "Material Graph Canvas".to_string(),
@@ -156,12 +199,17 @@ impl EditorSurfaceProvider for MaterialGraphCanvasProvider {
     fn map_action(
         &self,
         context: &SurfaceProviderDispatchContext<'_>,
-        _request: &SurfaceProviderRequest,
+        request: &SurfaceProviderRequest,
         action: SurfaceLocalAction,
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
         let SurfaceLocalAction::Material(action) = action else {
             return Ok(None);
         };
+        if let MaterialSurfaceAction::SourceBound { origin, .. } = &action
+            && origin.surface_instance_id != Some(request.tool_surface_instance_id)
+        {
+            return Ok(None);
+        }
         Ok(
             material_surface_action_command(action, context.projection_epoch)
                 .map(SurfaceCommandProposal::Shell),
@@ -174,9 +222,28 @@ impl EditorSurfaceProvider for MaterialGraphCanvasProvider {
         _request: &SurfaceProviderRequest,
         interaction: SurfaceInteraction,
     ) -> Result<Option<SurfaceCommandProposal>, SurfaceProviderDiagnostic> {
-        let SurfaceInteraction::GraphCanvasAction(action) = interaction;
+        let (action, origin) = match interaction {
+            SurfaceInteraction::GraphCanvasAction(action) => (action, None),
+            SurfaceInteraction::SourceBoundGraphCanvasAction { origin, action } => {
+                if origin.surface_instance_id != Some(_request.tool_surface_instance_id) {
+                    return Ok(None);
+                }
+                (action, Some(origin))
+            }
+        };
         Ok(material_action_for_graph_canvas_action(action)
-            .and_then(|action| material_surface_action_command(action, context.projection_epoch))
+            .and_then(|action| {
+                let action = match origin {
+                    Some(origin) if action.requires_source_origin() => {
+                        MaterialSurfaceAction::SourceBound {
+                            origin,
+                            action: Box::new(action),
+                        }
+                    }
+                    _ => action,
+                };
+                material_surface_action_command(action, context.projection_epoch)
+            })
             .map(SurfaceCommandProposal::Shell))
     }
 }
@@ -380,8 +447,14 @@ pub(super) fn material_surface_action_command(
                 projection_epoch,
             })
         }
+        // The selected-target shortcut is source-scoped. Route even the
+        // unqualified form through app-owned admission rather than the
+        // legacy Shell direct command that bypasses source provenance.
         MaterialSurfaceAction::BuildSelectedMaterialPreview => {
-            Some(ShellCommand::BuildSelectedMaterialPreview { projection_epoch })
+            Some(ShellCommand::ApplyMaterialSurfaceAction {
+                action: MaterialSurfaceAction::BuildSelectedMaterialPreview,
+                projection_epoch,
+            })
         }
         MaterialSurfaceAction::ClearMaterialDiagnostics => {
             Some(ShellCommand::ClearMaterialDiagnostics { projection_epoch })
@@ -700,10 +773,72 @@ mod tests {
         assert_eq!(command.projection_epoch(), Some(29));
         assert!(matches!(
             command,
-            ShellCommand::BuildSelectedMaterialPreview {
-                projection_epoch: 29
+            ShellCommand::ApplyMaterialSurfaceAction {
+                action: MaterialSurfaceAction::BuildSelectedMaterialPreview,
+                projection_epoch: 29,
             }
         ));
+    }
+
+    #[test]
+    fn material_graph_provider_preserves_original_bound_source_on_delayed_interaction() {
+        let provider = MaterialGraphCanvasProvider;
+        let request = material_graph_request();
+        let origin = editor_shell::MaterialSourceOrigin {
+            asset_id: asset_id(11),
+            source_id: asset::asset_source_id(12),
+            document_id: material_graph::MaterialGraphDocumentId::new(13),
+            content_digest: [22; 32],
+            source_context_digest: [23; 32],
+            surface_instance_id: Some(request.tool_surface_instance_id),
+        };
+        let proposal = provider
+            .map_interaction(
+                &dispatch_context(46),
+                &request,
+                SurfaceInteraction::SourceBoundGraphCanvasAction {
+                    origin,
+                    action: ui_graph_editor::GraphCanvasAction::EndNodeDrag {
+                        node: ui_graph_editor::GraphNodeKey(1),
+                        delta: ui_graph_editor::GraphVector::new(7, -3),
+                    },
+                },
+            )
+            .expect("bound action maps")
+            .expect("bound action proposal exists");
+        assert!(matches!(
+            proposal,
+            SurfaceCommandProposal::Shell(ShellCommand::ApplyMaterialSurfaceAction {
+                action: MaterialSurfaceAction::SourceBound {
+                    origin: dispatched,
+                    action,
+                },
+                projection_epoch: 46,
+            }) if dispatched == origin && matches!(
+                *action,
+                MaterialSurfaceAction::MoveGraphNode {
+                    node_id,
+                    delta_x: 7,
+                    delta_y: -3,
+                } if node_id == graph::NodeId::new(1)
+            )
+        ));
+
+        let mut foreign = origin;
+        foreign.surface_instance_id = None;
+        assert!(
+            provider
+                .map_interaction(
+                    &dispatch_context(46),
+                    &request,
+                    SurfaceInteraction::SourceBoundGraphCanvasAction {
+                        origin: foreign,
+                        action: ui_graph_editor::GraphCanvasAction::KeyboardDeleteSelection,
+                    },
+                )
+                .expect("wrong surface is a rejected interaction")
+                .is_none()
+        );
     }
 
     #[test]

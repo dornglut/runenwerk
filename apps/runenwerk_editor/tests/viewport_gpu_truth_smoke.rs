@@ -677,11 +677,17 @@ fn source_backed_texture_material_preview_product(
     );
     let mut workflow_app =
         material_graph_source_edit_workflow_app(catalog, material_asset_id, document.clone());
+    let source_origin = workflow_app
+        .material_source_origin_for_selected(None)
+        .expect("source-backed texture edit must have a current source origin");
     workflow_app
-        .apply_material_surface_action(editor_shell::MaterialSurfaceAction::PickTextureResource {
-            node_id: graph::NodeId::new(7),
-            key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
-            stable_id: stable_texture_id.to_string(),
+        .apply_material_surface_action(editor_shell::MaterialSurfaceAction::SourceBound {
+            origin: source_origin,
+            action: Box::new(editor_shell::MaterialSurfaceAction::PickTextureResource {
+                node_id: graph::NodeId::new(7),
+                key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
+                stable_id: stable_texture_id.to_string(),
+            }),
         })
         .expect("source-backed texture pick should flow through material workflow");
     document = workflow_app
@@ -943,7 +949,8 @@ fn material_graph_source_edit_workflow_app(
     let session = EditorAssetProjectSession::from_project_file(repo_root(), &project)
         .expect("source-backed material proof project session should form");
     let mut app = RunenwerkEditorApp::new();
-    app.set_asset_project_session(session);
+    app.set_asset_project_session(session)
+        .expect("source-backed GPU proof session must install");
     app.asset_catalog_runtime_mut().replace_catalog(catalog);
     app.material_lab_runtime_mut()
         .select_material_asset(Some(material_asset_id));

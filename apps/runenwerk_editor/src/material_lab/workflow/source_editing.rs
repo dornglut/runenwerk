@@ -6,9 +6,66 @@ use super::source_resolution::resolve_material_source_for_asset;
 use super::*;
 
 impl RunenwerkEditorApp {
+    /// One project-session incarnation and one catalog source locator.
+    /// Opaque owner provenance; not a filesystem lock or a durable revision.
+    fn material_source_context_digest(&self, relative_path: &str) -> Result<[u8; 32]> {
+        let session = self
+            .asset_project_session()
+            .ok_or_else(|| anyhow::anyhow!("no asset project session"))?;
+        let root_bytes = session.project_root().as_os_str().as_encoded_bytes();
+        let source_bytes = std::path::Path::new(relative_path)
+            .as_os_str()
+            .as_encoded_bytes();
+        let mut hasher = blake3::Hasher::new();
+        hasher.update(b"runenwerk/material-source-invocation/v1");
+        hasher.update(&self.material_source_context_generation.to_le_bytes());
+        hasher.update(&(root_bytes.len() as u64).to_le_bytes());
+        hasher.update(root_bytes);
+        hasher.update(&(source_bytes.len() as u64).to_le_bytes());
+        hasher.update(source_bytes);
+        Ok(*hasher.finalize().as_bytes())
+    }
+
     pub fn select_material_asset(&mut self, asset_id: AssetId) {
         self.material_lab_runtime_mut()
             .select_material_asset(Some(asset_id));
+        // Source loading happens at selection, not repeatedly during frame
+        // formation. Missing/invalid sources remain selected but unqualified.
+        match self.load_material_graph_document_for_asset_with_digest(asset_id) {
+            Ok((document, source_id, digest, context_digest)) => {
+                self.material_lab_runtime_mut()
+                    .set_active_source_document_with_observation(
+                        asset_id,
+                        source_id,
+                        document,
+                        digest,
+                        context_digest,
+                    );
+            }
+            Err(error) => {
+                let catalog = self.asset_catalog_runtime().catalog();
+                let source_declared = catalog
+                    .asset(asset_id)
+                    .is_some_and(|record| record.primary_source_id.is_some())
+                    || catalog
+                        .sources
+                        .values()
+                        .any(|source| source.asset_id == asset_id);
+                // Previously observed project source is not silently
+                // reclassified as a source-less in-memory fixture if its
+                // catalog binding disappears between selections.
+                let had_observation = self
+                    .material_lab_runtime()
+                    .active_source_observation()
+                    .is_some();
+                if source_declared || had_observation {
+                    self.material_lab_runtime_mut()
+                        .discard_failed_selected_source_reload(asset_id);
+                    let diagnostic = material_source_load_diagnostic("selection", &error);
+                    self.record_material_workflow_diagnostics([diagnostic]);
+                }
+            }
+        }
         self.append_console_line(format!("[material] selected asset {}", asset_id.raw()));
     }
 
@@ -17,9 +74,167 @@ impl RunenwerkEditorApp {
         self.append_console_line("[material] diagnostics cleared");
     }
 
+    /// Captures source identity and exact bytes for a specific Material invocation.
+    /// The optional surface instance scopes UI-originated actions; direct callers
+    /// can retain an origin without pretending to own a mounted editor surface.
+    pub fn material_source_origin_for_selected(
+        &self,
+        surface_instance_id: Option<editor_shell::ToolSurfaceInstanceId>,
+    ) -> Result<editor_shell::MaterialSourceOrigin> {
+        let asset_id = self
+            .material_lab_runtime()
+            .selected_material_asset_id()
+            .ok_or_else(|| anyhow::anyhow!("no selected material asset"))?;
+        let session = self
+            .asset_project_session()
+            .ok_or_else(|| anyhow::anyhow!("no asset project session"))?;
+        let source =
+            resolve_material_source_for_asset(self.asset_catalog_runtime().catalog(), asset_id)
+                .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
+        let path = session.project_root().join(&source.relative_path);
+        let (document, content_digest) =
+            crate::material_lab::read_material_graph_document_with_digest(&path)?;
+        let source_context_digest = self.material_source_context_digest(&source.relative_path)?;
+        let document_id = material_document_id_for_source(asset_id, source.source_id);
+        anyhow::ensure!(
+            document.document_id == document_id,
+            "current Material source does not match catalog identity"
+        );
+        if let Some((active_asset, active_document)) =
+            self.material_lab_runtime().active_source_document()
+        {
+            anyhow::ensure!(
+                active_asset != asset_id || *active_document == document,
+                "current Material source differs from the displayed edit-session document"
+            );
+        }
+        Ok(editor_shell::MaterialSourceOrigin {
+            asset_id,
+            source_id: source.source_id,
+            document_id,
+            content_digest,
+            source_context_digest,
+            surface_instance_id,
+        })
+    }
+
+    /// Returns only owner-observed provenance already published by a source
+    /// load/edit. Frame formation performs no source filesystem access.
+    /// A later mutation separately re-reads live bytes before admission.
+    pub fn material_published_source_origin_for_selected(
+        &self,
+        surface_instance_id: Option<editor_shell::ToolSurfaceInstanceId>,
+    ) -> Result<editor_shell::MaterialSourceOrigin> {
+        let observation = self
+            .material_lab_runtime()
+            .active_source_observation()
+            .ok_or_else(|| anyhow::anyhow!("selected source has no admitted observation"))?;
+        let source = resolve_material_source_for_asset(
+            self.asset_catalog_runtime().catalog(),
+            observation.asset_id,
+        )
+        .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
+        anyhow::ensure!(
+            source.source_id == observation.source_id
+                && material_document_id_for_source(observation.asset_id, source.source_id)
+                    == observation.document_id
+                && self.material_source_context_digest(&source.relative_path)?
+                    == observation.source_context_digest,
+            "catalog source/context identity no longer matches the observed Material document"
+        );
+        let (active_asset, active_document) = self
+            .material_lab_runtime()
+            .active_source_document()
+            .ok_or_else(|| anyhow::anyhow!("no active Material source document"))?;
+        anyhow::ensure!(
+            active_asset == observation.asset_id
+                && active_document.document_id == observation.document_id,
+            "active Material document no longer matches source observation"
+        );
+        Ok(editor_shell::MaterialSourceOrigin {
+            asset_id: observation.asset_id,
+            source_id: observation.source_id,
+            document_id: observation.document_id,
+            content_digest: observation.content_digest,
+            source_context_digest: observation.source_context_digest,
+            surface_instance_id,
+        })
+    }
+
+    fn admit_material_source_origin(
+        &mut self,
+        origin: editor_shell::MaterialSourceOrigin,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        let observed_context_matches = self
+            .material_lab_runtime()
+            .active_source_observation()
+            .is_none_or(|observation| {
+                observation.source_context_digest == origin.source_context_digest
+            });
+        let current = self.material_source_origin_for_selected(origin.surface_instance_id);
+        if observed_context_matches && current.as_ref().is_ok_and(|current| *current == origin) {
+            return Ok(());
+        }
+        self.record_material_workflow_diagnostics([material_diagnostic(
+            AssetDiagnosticCode::RatificationRejected,
+            "Material invocation source identity/revision no longer matches the selected source",
+        )]);
+        Err(editor_core::EditorMutationError::runtime_rejected(
+            "Material source invocation is stale or missing",
+        ))
+    }
+
     pub fn apply_material_surface_action(
         &mut self,
         action: MaterialSurfaceAction,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        match action {
+            MaterialSurfaceAction::SourceBound { origin, action } => {
+                if !action.requires_source_origin() {
+                    return Err(editor_core::EditorMutationError::runtime_rejected(
+                        "a source-bound Material action must be a source-scoped operation",
+                    ));
+                }
+                self.admit_material_source_origin(origin)?;
+                let history_origin = match action.as_ref() {
+                    MaterialSurfaceAction::UndoMaterialEdit => {
+                        self.material_lab_runtime().next_undo_source_identity()
+                    }
+                    MaterialSurfaceAction::RedoMaterialEdit => {
+                        self.material_lab_runtime().next_redo_source_identity()
+                    }
+                    _ => None,
+                };
+                if history_origin
+                    .is_some_and(|identity| identity != (origin.asset_id, origin.document_id))
+                {
+                    self.record_material_workflow_diagnostics([material_diagnostic(
+                        AssetDiagnosticCode::RatificationRejected,
+                        "Material history operation belongs to a different source document",
+                    )]);
+                    return Err(editor_core::EditorMutationError::runtime_rejected(
+                        "Material history source differs from the invocation source",
+                    ));
+                }
+                self.apply_qualified_material_surface_action(*action, Some(origin.content_digest))
+            }
+            action if action.requires_source_origin() => {
+                self.record_material_workflow_diagnostics([material_diagnostic(
+                    AssetDiagnosticCode::RatificationRejected,
+                    "Material source action requires its originating source",
+                )]);
+                Err(editor_core::EditorMutationError::runtime_rejected(
+                    "Material source action requires its originating source",
+                ))
+            }
+            action => self.apply_qualified_material_surface_action(action, None),
+        }
+    }
+
+    fn apply_qualified_material_surface_action(
+        &mut self,
+        action: MaterialSurfaceAction,
+        expected_digest: Option<[u8; 32]>,
     ) -> Result<(), editor_core::EditorMutationError> {
         match action {
             MaterialSurfaceAction::SelectMaterialAsset { asset_id } => {
@@ -61,13 +276,14 @@ impl RunenwerkEditorApp {
                         "SDF primitive material slot assignment failed",
                     )
                 }),
-            action => self.apply_source_backed_material_edit(action),
+            action => self.apply_source_backed_material_edit(action, expected_digest),
         }
     }
 
     fn apply_source_backed_material_edit(
         &mut self,
         mut action: MaterialSurfaceAction,
+        expected_digest: Option<[u8; 32]>,
     ) -> Result<(), editor_core::EditorMutationError> {
         if let MaterialSurfaceAction::SelectGraphNode { node_id } = action {
             self.material_lab_runtime_mut().select_graph_node(node_id);
@@ -110,14 +326,14 @@ impl RunenwerkEditorApp {
             return Ok(());
         }
         if let MaterialSurfaceAction::NavigateDiagnostic { diagnostic_index } = action {
-            return self.navigate_material_graph_diagnostic(diagnostic_index);
+            return self.navigate_material_graph_diagnostic(diagnostic_index, expected_digest);
         }
 
         if let MaterialSurfaceAction::UndoMaterialEdit = action {
-            return self.undo_material_edit();
+            return self.undo_material_edit(expected_digest);
         }
         if let MaterialSurfaceAction::RedoMaterialEdit = action {
-            return self.redo_material_edit();
+            return self.redo_material_edit(expected_digest);
         }
         let close_node_picker_after_change =
             if matches!(action, MaterialSurfaceAction::ConfirmNodePickerSelection) {
@@ -144,6 +360,21 @@ impl RunenwerkEditorApp {
             "edit",
             "failed to load material graph source for edit",
         )?;
+        if self
+            .material_lab_runtime()
+            .active_source_document()
+            .is_some_and(|(active_asset, active_document)| {
+                active_asset == asset_id && active_document.document_id != before.document_id
+            })
+        {
+            self.record_material_workflow_diagnostics([material_diagnostic(
+                AssetDiagnosticCode::RatificationRejected,
+                "selected material graph source changed since the active edit session",
+            )]);
+            return Err(editor_core::EditorMutationError::runtime_rejected(
+                "material graph source changed; reload before editing",
+            ));
+        }
         let mut document = before.clone();
         let selected_nodes = self
             .material_lab_runtime()
@@ -178,14 +409,21 @@ impl RunenwerkEditorApp {
         )
         .map_err(editor_core::EditorMutationError::runtime_rejected)?;
         if changed {
-            self.material_lab_runtime_mut()
-                .push_undo_snapshot(asset_id, before);
-            self.write_material_graph_document_for_asset(asset_id, &document)
+            let committed_digest = self
+                .write_material_graph_document_for_asset_if_revision(
+                    asset_id,
+                    &document,
+                    expected_digest,
+                )
                 .map_err(|_| {
                     editor_core::EditorMutationError::runtime_rejected(
                         "failed to persist material graph source edit",
                     )
                 })?;
+            // Only a committed new edit establishes a new undo entry and
+            // invalidates redo. Rejected I/O leaves both stacks intact.
+            self.material_lab_runtime_mut()
+                .push_undo_snapshot(asset_id, before, committed_digest);
             if close_node_picker_after_change {
                 self.material_lab_runtime_mut().close_node_picker();
             }
@@ -197,6 +435,7 @@ impl RunenwerkEditorApp {
     fn navigate_material_graph_diagnostic(
         &mut self,
         diagnostic_index: usize,
+        expected_digest: Option<[u8; 32]>,
     ) -> Result<(), editor_core::EditorMutationError> {
         let diagnostic = self
             .material_lab_runtime()
@@ -242,58 +481,119 @@ impl RunenwerkEditorApp {
         };
 
         center_material_graph_viewport_on_node(&mut document, target_node_id);
-        self.write_material_graph_document_for_asset(asset_id, &document)
-            .map_err(|_| {
-                editor_core::EditorMutationError::runtime_rejected(
-                    "failed to persist material graph diagnostic navigation",
-                )
-            })?;
-        self.material_lab_runtime_mut()
-            .select_graph_node(target_node_id);
-        self.material_lab_runtime_mut()
-            .set_active_source_document(asset_id, document);
-        Ok(())
+        self.write_material_graph_document_for_asset_if_revision(
+            asset_id,
+            &document,
+            expected_digest,
+        )
+        .map_err(|_| {
+            editor_core::EditorMutationError::runtime_rejected(
+                "failed to persist material graph diagnostic navigation",
+            )
+        })?;
+        // Diagnostic navigation writes source viewport state too. Re-observe
+        // exactly the bytes just published before issuing a new UI origin.
+        // Otherwise the canvas loses its admitted source after navigation.
+        match self.load_material_graph_document_for_asset_with_digest(asset_id) {
+            Ok((observed, source_id, digest, context_digest)) if observed == document => {
+                self.material_lab_runtime_mut()
+                    .set_active_source_document_with_observation(
+                        asset_id,
+                        source_id,
+                        document,
+                        digest,
+                        context_digest,
+                    );
+                self.material_lab_runtime_mut()
+                    .select_graph_node(target_node_id);
+                self.material_lab_runtime_mut()
+                    .set_active_diagnostic_index(Some(diagnostic_index));
+                Ok(())
+            }
+            _ => {
+                self.material_lab_runtime_mut()
+                    .discard_failed_selected_source_reload(asset_id);
+                self.record_material_workflow_diagnostics([material_diagnostic(
+                    AssetDiagnosticCode::RatificationRejected,
+                    "material source changed before diagnostic navigation could be observed",
+                )]);
+                Err(editor_core::EditorMutationError::runtime_rejected(
+                    "material graph source could not be observed after diagnostic navigation",
+                ))
+            }
+        }
     }
 
-    fn undo_material_edit(&mut self) -> Result<(), editor_core::EditorMutationError> {
-        let Some((asset_id, previous)) = self.material_lab_runtime_mut().pop_undo_snapshot() else {
+    fn undo_material_edit(
+        &mut self,
+        expected_digest: Option<[u8; 32]>,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        let Some(entry) = self.material_lab_runtime().next_undo_snapshot() else {
             return Ok(());
         };
+        if expected_digest != Some(entry.expected_current_digest) {
+            return Err(editor_core::EditorMutationError::runtime_rejected(
+                "material undo history is stale relative to the current source revision",
+            ));
+        }
         let current = self.load_material_graph_document_for_action(
-            asset_id,
+            entry.asset_id,
             "undo",
             "failed to load material graph source before undo",
         )?;
-        self.write_material_graph_document_for_asset(asset_id, &previous)
+        let committed_digest = self
+            .write_material_graph_document_for_asset_if_revision(
+                entry.asset_id,
+                &entry.document,
+                expected_digest,
+            )
             .map_err(|_| {
                 editor_core::EditorMutationError::runtime_rejected(
                     "failed to persist material graph undo",
                 )
             })?;
-        self.material_lab_runtime_mut()
-            .push_redo_snapshot(asset_id, current);
-        self.refresh_material_source_projection(asset_id, previous);
+        let _ = self.material_lab_runtime_mut().pop_undo_snapshot();
+        self.material_lab_runtime_mut().push_redo_snapshot(
+            entry.asset_id,
+            current,
+            committed_digest,
+        );
+        self.refresh_material_source_projection(entry.asset_id, entry.document);
         Ok(())
     }
 
-    fn redo_material_edit(&mut self) -> Result<(), editor_core::EditorMutationError> {
-        let Some((asset_id, next)) = self.material_lab_runtime_mut().pop_redo_snapshot() else {
+    fn redo_material_edit(
+        &mut self,
+        expected_digest: Option<[u8; 32]>,
+    ) -> Result<(), editor_core::EditorMutationError> {
+        let Some(entry) = self.material_lab_runtime().next_redo_snapshot() else {
             return Ok(());
         };
+        if expected_digest != Some(entry.expected_current_digest) {
+            return Err(editor_core::EditorMutationError::runtime_rejected(
+                "material redo history is stale relative to the current source revision",
+            ));
+        }
         let current = self.load_material_graph_document_for_action(
-            asset_id,
+            entry.asset_id,
             "redo",
             "failed to load material graph source before redo",
         )?;
-        self.write_material_graph_document_for_asset(asset_id, &next)
+        let committed_digest = self
+            .write_material_graph_document_for_asset_if_revision(
+                entry.asset_id,
+                &entry.document,
+                expected_digest,
+            )
             .map_err(|_| {
                 editor_core::EditorMutationError::runtime_rejected(
                     "failed to persist material graph redo",
                 )
             })?;
+        let _ = self.material_lab_runtime_mut().pop_redo_snapshot();
         self.material_lab_runtime_mut()
-            .push_undo_snapshot(asset_id, current);
-        self.refresh_material_source_projection(asset_id, next);
+            .push_undo_snapshot_from_redo(entry.asset_id, current, committed_digest);
+        self.refresh_material_source_projection(entry.asset_id, entry.document);
         Ok(())
     }
 
@@ -317,9 +617,17 @@ impl RunenwerkEditorApp {
 
         self.material_lab_runtime_mut()
             .select_material_asset(Some(asset_id));
-        if let Ok(document) = self.load_material_graph_document_for_asset(asset_id) {
+        if let Ok((document, source_id, digest, context_digest)) =
+            self.load_material_graph_document_for_asset_with_digest(asset_id)
+        {
             self.material_lab_runtime_mut()
-                .set_active_source_document(asset_id, document);
+                .set_active_source_document_with_observation(
+                    asset_id,
+                    source_id,
+                    document,
+                    digest,
+                    context_digest,
+                );
         }
         let catalog_snapshot = self.asset_catalog_runtime().catalog().clone();
         let outcome = {
@@ -360,9 +668,26 @@ impl RunenwerkEditorApp {
                 )
             })
             .collect::<Vec<_>>();
+        let observed = self
+            .load_material_graph_document_for_asset_with_digest(asset_id)
+            .ok()
+            .filter(|(reloaded, _, _, _)| *reloaded == document);
         self.material_lab_runtime_mut().clear_diagnostics();
-        self.material_lab_runtime_mut()
-            .set_active_source_document(asset_id, document);
+        if let Some((_, source_id, digest, context_digest)) = observed {
+            self.material_lab_runtime_mut()
+                .set_active_source_document_with_observation(
+                    asset_id,
+                    source_id,
+                    document,
+                    digest,
+                    context_digest,
+                );
+        } else {
+            // Source may have changed immediately after publication; do not
+            // manufacture a current revision token for an unobserved file.
+            self.material_lab_runtime_mut()
+                .set_active_source_document(asset_id, document);
+        }
         self.record_material_workflow_diagnostics(diagnostics);
         if lowering.report.has_blocking_issues() {
             self.material_lab_runtime_mut()
@@ -377,13 +702,37 @@ impl RunenwerkEditorApp {
         &self,
         asset_id: AssetId,
     ) -> Result<MaterialGraphDocument> {
+        self.load_material_graph_document_for_asset_with_digest(asset_id)
+            .map(|(document, _, _, _)| document)
+    }
+
+    fn load_material_graph_document_for_asset_with_digest(
+        &self,
+        asset_id: AssetId,
+    ) -> Result<(
+        MaterialGraphDocument,
+        asset::AssetSourceId,
+        [u8; 32],
+        [u8; 32],
+    )> {
         let session = self.asset_project_session().ok_or_else(|| {
             anyhow::anyhow!("cannot load material graph document: no asset project session")
         })?;
         let source =
             resolve_material_source_for_asset(self.asset_catalog_runtime().catalog(), asset_id)
                 .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
-        read_material_graph_document(&session.project_root().join(&source.relative_path))
+        let (document, digest) = crate::material_lab::read_material_graph_document_with_digest(
+            &session.project_root().join(&source.relative_path),
+        )?;
+        let expected_document_id = material_document_id_for_source(asset_id, source.source_id);
+        anyhow::ensure!(
+            document.document_id == expected_document_id,
+            "material graph source document id {} does not match asset/source identity {}",
+            document.document_id.raw(),
+            expected_document_id.raw()
+        );
+        let context_digest = self.material_source_context_digest(&source.relative_path)?;
+        Ok((document, source.source_id, digest, context_digest))
     }
 
     pub fn write_material_graph_document_for_asset(
@@ -397,9 +746,57 @@ impl RunenwerkEditorApp {
         let source =
             resolve_material_source_for_asset(self.asset_catalog_runtime().catalog(), asset_id)
                 .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
-        write_material_graph_document(
-            &session.project_root().join(&source.relative_path),
+        let expected_document_id = material_document_id_for_source(asset_id, source.source_id);
+        anyhow::ensure!(
+            document.document_id == expected_document_id,
+            "material graph source document id {} does not match asset/source identity {}",
+            document.document_id.raw(),
+            expected_document_id.raw()
+        );
+        let path = session.project_root().join(&source.relative_path);
+        if path.exists() {
+            let current = read_material_graph_document(&path)?;
+            anyhow::ensure!(
+                current.document_id == expected_document_id,
+                "existing material graph source document id {} does not match asset/source identity {}",
+                current.document_id.raw(),
+                expected_document_id.raw()
+            );
+        }
+        write_material_graph_document(&path, document)
+    }
+
+    fn write_material_graph_document_for_asset_if_revision(
+        &self,
+        asset_id: AssetId,
+        document: &MaterialGraphDocument,
+        expected_digest: Option<[u8; 32]>,
+    ) -> Result<[u8; 32]> {
+        let session = self.asset_project_session().ok_or_else(|| {
+            anyhow::anyhow!("cannot write material graph document: no asset project session")
+        })?;
+        let source =
+            resolve_material_source_for_asset(self.asset_catalog_runtime().catalog(), asset_id)
+                .map_err(|diagnostic| anyhow::anyhow!(diagnostic.message))?;
+        let expected_document_id = material_document_id_for_source(asset_id, source.source_id);
+        anyhow::ensure!(
+            document.document_id == expected_document_id,
+            "material graph source document id does not match asset/source identity"
+        );
+        let path = session.project_root().join(&source.relative_path);
+        let (current, _) = crate::material_lab::read_material_graph_document_with_digest(&path)?;
+        anyhow::ensure!(
+            current.document_id == expected_document_id,
+            "existing material graph source document id does not match asset/source identity"
+        );
+        #[cfg(test)]
+        if self.fail_next_material_source_write.replace(false) {
+            anyhow::bail!("injected Material source writer failure before replacement");
+        }
+        crate::material_lab::write_material_graph_document_if_revision(
+            &path,
             document,
+            expected_digest,
         )
     }
 

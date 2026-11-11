@@ -11,6 +11,10 @@ use crate::asset_pipeline::{EditorImportExecutionLedger, EditorImportProfileRegi
 #[derive(Debug, Clone)]
 pub struct EditorAssetProjectSession {
     project_root: PathBuf,
+    /// Logical project identity is distinct from the physical catalog path.
+    /// Programmatically formed sessions without a project file have no ID.
+    project_id: Option<String>,
+    accepted_catalog: Option<asset::AssetCatalog>,
     descriptor: AssetProjectCatalogDescriptor,
     import_profile_registry: EditorImportProfileRegistry,
     import_ledger: EditorImportExecutionLedger,
@@ -38,6 +42,8 @@ impl EditorAssetProjectSession {
     ) -> Self {
         Self {
             project_root: project_root.into(),
+            project_id: None,
+            accepted_catalog: None,
             descriptor,
             import_profile_registry,
             import_ledger: EditorImportExecutionLedger::default(),
@@ -56,11 +62,37 @@ impl EditorAssetProjectSession {
             return Err(import_profile_registry.diagnostics().to_vec());
         }
         let descriptor = project_asset_catalog_descriptor(project, &import_profile_registry)?;
-        Ok(Self::new_with_import_profile_registry(
+        let mut session = Self::new_with_import_profile_registry(
             project_root,
             descriptor,
             import_profile_registry,
-        ))
+        );
+        session.project_id = Some(project.project_id.clone());
+        Ok(session)
+    }
+
+    pub fn project_id(&self) -> Option<&str> {
+        self.project_id.as_deref()
+    }
+
+    /// Accepted source snapshot; unrelated import dirty markers are not a
+    /// reliable measure of unpersisted catalog edits.
+    pub fn accepted_catalog(&self) -> Option<&asset::AssetCatalog> {
+        self.accepted_catalog.as_ref()
+    }
+
+    pub fn record_accepted_catalog(&mut self, catalog: &asset::AssetCatalog) {
+        self.accepted_catalog = Some(catalog.clone());
+    }
+
+    /// A last-known-good in-memory catalog may survive a controlled reload
+    /// only within the same logical project *and* physical catalog owner.
+    /// Equal catalog paths alone do not make two project files one session.
+    /// Distinct projects may still read the same accepted catalog from disk.
+    pub fn shares_catalog_fallback_context(&self, other: &Self) -> bool {
+        self.project_root == other.project_root
+            && self.project_id == other.project_id
+            && self.descriptor == other.descriptor
     }
 
     pub fn project_root(&self) -> &Path {
@@ -121,6 +153,9 @@ impl EditorAssetProjectSession {
                 self.import_ledger.len()
             ),
         ];
+        if let Some(project_id) = &self.project_id {
+            lines.push(format!("project id: {project_id}"));
+        }
         if let Some(status) = &self.catalog_load_status {
             lines.push(format!("last load: {status}"));
         }
@@ -203,7 +238,35 @@ mod tests {
 
         assert_eq!(session.descriptor().catalog_file_path, "assets/catalog.ron");
         assert_eq!(session.descriptor().source_roots.len(), 2);
+        assert_eq!(session.project_id(), Some("project.test"));
         assert!(session.status_lines()[0].contains("project root"));
+        assert!(
+            session
+                .status_lines()
+                .iter()
+                .any(|line| line == "project id: project.test")
+        );
+    }
+
+    #[test]
+    fn last_known_good_catalog_fallback_requires_same_project_id() {
+        let project_a = ProjectFileV3::new("project.A", "Project A");
+        let project_b = ProjectFileV3::new("project.B", "Project B");
+        let session_a = EditorAssetProjectSession::from_project_file("C:/shared", &project_a)
+            .expect("project A session");
+        let session_b = EditorAssetProjectSession::from_project_file("C:/shared", &project_b)
+            .expect("project B session");
+
+        assert_eq!(session_a.project_root(), session_b.project_root());
+        assert_eq!(session_a.descriptor(), session_b.descriptor());
+        assert!(!session_a.shares_catalog_fallback_context(&session_b));
+        assert!(session_a.shares_catalog_fallback_context(&session_a));
+
+        let programmatic =
+            EditorAssetProjectSession::new("C:/shared", session_a.descriptor().clone());
+        assert_eq!(programmatic.project_id(), None);
+        assert!(!programmatic.shares_catalog_fallback_context(&session_a));
+        assert!(programmatic.shares_catalog_fallback_context(&programmatic));
     }
 
     #[test]
