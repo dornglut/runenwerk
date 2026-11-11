@@ -1,6 +1,6 @@
 ---
 title: "Window Input Demo"
-description: "Documentation for Window Input Demo."
+description: "Move with WASD in a window."
 status: active
 owner: engine
 layer: engine-runtime
@@ -11,28 +11,15 @@ publication: primary
 
 # Window Input Demo
 
-Small windowed example for the `engine::App` path.
+Opens a window. Use **WASD** to move, and press **Esc** to close it. The window title shows the position.
 
-It demonstrates:
-
-- real `winit` window creation through `engine::App::run()`
-- plugins on top of `ecs`
-- selected default plugins providing `Time`, physical `InputState`, and product `ActionState`
-- action-mapped movement with `W`, `A`, `S`, `D` through `ActionState`
-- close-on-`Escape` by approving close on the primary `NativeWindowRecord` in `WindowStateRegistryResource`
-- dynamic native title intent through the same primary native record
-
-Run it with:
+## Run
 
 ```bash
 cargo run -p engine --example window_input_demo
 ```
 
-## Maintained Rust source
-
-This code is read directly from
-`engine/examples/window_input_demo/main.rs` when Astro builds the site.
-There is no separately maintained copy of the example in the documentation.
+## Source
 
 ```rust runenwerk-source=engine/examples/window_input_demo/main.rs
 ```
