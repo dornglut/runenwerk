@@ -22,12 +22,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validation-scope:
+    name: Classify validation scope
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      docs_only: ${{ steps.docs.outputs.docs_only || steps.full.outputs.docs_only }}
+    steps:
+      - name: Require full validation for non-PR events
+        if: github.event_name != 'pull_request'
+        id: full
+        run: echo "docs_only=false" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact pull-request revision and history
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Test change classifier
+        if: github.event_name == 'pull_request'
+        run: python3 -m unittest discover -s tools/checks -p 'test_ci_change_scope.py'
+
+      - name: Classify exact pull-request diff
+        if: github.event_name == 'pull_request'
+        id: docs
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 tools/checks/ci_change_scope.py
+
   validate:
     name: Runenwerk validation
+    needs: validation-scope
+    if: ${{ needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
     uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@9d389c9aa39d37a5b99646d528de91c8ab5799ee
 
   runenrender-r6-vulkan-native:
     name: RunenRender Vulkan native/arena/consumer proofs
+    needs: validation-scope
+    if: ${{ needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -531,6 +567,8 @@ jobs:
 
   runenrender-r6-vulkan-boids-continuity:
     name: RunenRender Vulkan Boids continuity/pacing proofs
+    needs: validation-scope
+    if: ${{ needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -716,6 +754,8 @@ jobs:
 
   runenrender-r6-vulkan-boids-readback:
     name: RunenRender Vulkan Boids readback/PreUpdate proofs
+    needs: validation-scope
+    if: ${{ needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -884,6 +924,8 @@ jobs:
 
   runenrender-r6-vulkan-render-lab:
     name: RunenRender Vulkan Render Lab proofs
+    needs: validation-scope
+    if: ${{ needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -1386,11 +1428,12 @@ jobs:
   runenrender-r6-vulkan-execution:
     name: RunenRender Vulkan execution proofs
     needs:
+      - validation-scope
       - runenrender-r6-vulkan-native
       - runenrender-r6-vulkan-boids-continuity
       - runenrender-r6-vulkan-boids-readback
       - runenrender-r6-vulkan-render-lab
-    if: ${{ always() }}
+    if: ${{ always() && needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -1408,3 +1451,43 @@ jobs:
           test "$BOIDS_CONTINUITY_RESULT" = success
           test "$BOIDS_READBACK_RESULT" = success
           test "$RENDER_LAB_RESULT" = success
+
+  validation-scope-gate:
+    name: Validation scope gate
+    needs:
+      - validation-scope
+      - validate
+      - runenrender-r6-vulkan-execution
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require evidence for the selected validation scope
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          SCOPE_RESULT: ${{ needs.validation-scope.result }}
+          DOCS_ONLY: ${{ needs.validation-scope.outputs.docs_only }}
+          BASELINE_RESULT: ${{ needs.validate.result }}
+          VULKAN_RESULT: ${{ needs.runenrender-r6-vulkan-execution.result }}
+        run: |
+          set -euo pipefail
+          test "$SCOPE_RESULT" = success
+          case "$DOCS_ONLY" in
+            true)
+              test "$EVENT_NAME" = pull_request
+              test "$BASELINE_RESULT" = skipped
+              test "$VULKAN_RESULT" = skipped
+              echo "PASS: docs-only PR head. Rust and GPU suites were NOT run here."
+              echo "The separate required Documentation site validation must pass."
+              echo "Full canonical and Vulkan proofs are mandatory on merge_group."
+              ;;
+            false)
+              test "$BASELINE_RESULT" = success
+              test "$VULKAN_RESULT" = success
+              echo "PASS: exact-revision canonical Rust and Vulkan suites both succeeded."
+              ;;
+            *)
+              echo "Invalid validation scope: $DOCS_ONLY" >&2
+              exit 1
+              ;;
+          esac

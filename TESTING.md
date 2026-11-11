@@ -41,6 +41,39 @@ Rust CI resolves and validates the reviewed feature head for pull requests, the 
 
 Feature-head, merge-group integration, and accepted-main validation are separate evidence stages. When the repository merge queue is enabled, required merge-group checks validate the queue's exact latest-base integration revision before GitHub may merge it. Do not assume SHA equality or inequality between that merge-group revision and the eventual accepted-main commit; accepted-main push evidence independently proves the default-branch state that GitHub accepted.
 
+## Change-aware pull-request validation
+
+A feature-head `pull_request` touching only `docs-site/**`, `README.md`, or
+`ARCHITECTURE.md` is eligible for the documentation-only path. CI classifies the
+exact pull-request base/head Git history with a merge-base diff and renames disabled,
+so a move **from** a Rust/source path into documentation cannot hide a code change.
+Empty, mixed, invalid, and unclassifiable diffs are not documentation-only.
+Classifier unit tests and explicit exact-revision checks must succeed before a
+documentation-only decision is accepted.
+
+For an eligible documentation-only PR head, the Rust canonical baseline and native
+Vulkan execution suites are **skipped**, not reported as successful test executions.
+The independent `Documentation site validation` job still builds the complete
+Astro/Starlight site, proves its publication projection, and remains required.
+The always-running `Validation scope gate` explicitly proves the selected path,
+the classifier outcome, and the required jobs' actual results. It does not relabel
+skipped Rust/GPU work as a successful test run.
+
+Every source, dependency, workflow, validation-tooling, mixed or uncertain PR keeps
+the full canonical and native Vulkan evidence on its feature head. Every
+`merge_group`, accepted-`main` `push`, and `workflow_dispatch` also runs the
+full canonical and Vulkan suites; no documentation-only exemption carries across
+the merge-queue boundary. Thus the canonical `cargo validate` and supplemental
+native evidence remain mandatory before protected merge, including for docs-only
+changes.
+
+Protected-branch required checks for this policy are `Validation scope gate` and
+`Documentation site validation`. The individual canonical/Vulkan check contexts
+must not remain independently required for documentation-only feature heads; the
+scope gate requires their actual success whenever full validation is selected.
+The protected ruleset and workflow must be migrated together; do not activate a
+partial policy transition.
+
 ## Documentation build
 
 Pull requests targeting `main` and merge-group integration revisions always run `Documentation site validation`, which builds the Astro/Starlight production site and validates its publication projection. Main pushes remain path-scoped to changes under `docs-site/**` or `.github/workflows/docs-validation.yml`; root-only documentation changes outside that path scope do not trigger the production build on push. The workflow independently selects and proves the pull-request feature head, merge-group `github.sha`, or push/dispatch `github.sha`; its workflow-definition ref may be a synthetic merge ref, distinct from the checked-out contents.
