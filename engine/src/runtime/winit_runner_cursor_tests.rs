@@ -15,6 +15,16 @@ struct NativeCursorFixture {
 
 struct NativeCursorProbe;
 
+struct NativeCursorProbeState {
+    activations: usize,
+    todo_scale_budgets: bool,
+}
+
+// Mirrors the conservative authored-node declaration of a fully expanded
+// 10,000-row Todo UI (6 base nodes + 4 nodes per task). This is intentionally
+// a Winit-owner test fixture, not an import of downstream Todo source.
+const LARGE_UI_RECONCILIATION_BOUND: usize = 6 + 4 * 10_000;
+
 impl runenui_core::UiApp for NativeCursorProbe {
     // One existing mounted actionable button; no initial effects or subscriptions.
     fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
@@ -22,20 +32,37 @@ impl runenui_core::UiApp for NativeCursorProbe {
     }
 
     fn action_producer_budget(
-        _state: &Self::State,
+        state: &Self::State,
         _action: &Self::Action,
     ) -> runenui_core::ProducerBudget {
+        if state.todo_scale_budgets {
+            return runenui_core::ProducerBudget::new(28, 1).with_reconciliation(
+                LARGE_UI_RECONCILIATION_BOUND,
+                LARGE_UI_RECONCILIATION_BOUND,
+                LARGE_UI_RECONCILIATION_BOUND,
+            );
+        }
         runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
     }
 
-    fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+    fn interaction_producer_budget(state: &Self::State) -> runenui_core::ProducerBudget {
+        if state.todo_scale_budgets {
+            return runenui_core::ProducerBudget::new(28, 13)
+                .with_reconciliation(
+                    LARGE_UI_RECONCILIATION_BOUND,
+                    LARGE_UI_RECONCILIATION_BOUND,
+                    LARGE_UI_RECONCILIATION_BOUND,
+                )
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 2))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2));
+        }
         runenui_core::ProducerBudget::new(13, 9)
             .with_reconciliation(1, 1, 1)
             .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 1))
             .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
     }
 
-    type State = usize;
+    type State = NativeCursorProbeState;
     type Action = ();
     type HostProtocol = runenui_core::NoHostProtocol;
 
@@ -47,11 +74,18 @@ impl runenui_core::UiApp for NativeCursorProbe {
         state: &mut Self::State,
         _: Self::Action,
     ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
-        *state += 1;
+        state.activations += 1;
     }
 }
 
 fn native_cursor_fixture() -> NativeCursorFixture {
+    native_cursor_fixture_with_options(false, false)
+}
+
+fn native_cursor_fixture_with_options(
+    todo_scale_budgets: bool,
+    native_clock: bool,
+) -> NativeCursorFixture {
     use crate::plugins::render::RenderFrameProducerId;
     use crate::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
     use crate::plugins::ui::{
@@ -70,10 +104,20 @@ fn native_cursor_fixture() -> NativeCursorFixture {
         .window_context(window, backend_device)
         .expect("original native window source");
     let mut slots = UiRuntimeSlotsResource::default();
+    if native_clock {
+        slots
+            .configure_host_clock(Some(
+                crate::runtime::native_host_wake::NativeHostClock::new(),
+            ))
+            .expect("native monotonic clock configured before initial UI mount");
+    }
     let slot = slots
         .mount_app::<NativeCursorProbe>(
             UiTypedScreenId::new("native.cursor.stale-display"),
-            0,
+            NativeCursorProbeState {
+                activations: 0,
+                todo_scale_budgets,
+            },
             &UiRuntimeFontConfiguration::default(),
         )
         .slot_id()
@@ -334,8 +378,35 @@ fn activation_count(fixture: &NativeCursorFixture) -> usize {
         .world
         .resource::<UiRuntimeSlotsResource>()
         .expect("same M13 owner")
-        .observe_app::<NativeCursorProbe, _>(fixture.slot, |app| *app.state())
+        .observe_app::<NativeCursorProbe, _>(fixture.slot, |app| app.state().activations)
         .expect("observe actual activation probe state")
+}
+
+/// Investigates #1471 through the *real Engine Winit button routing* and its
+/// exact canonical M13 receipt, with the same large conservative declarations
+/// used by downstream Todo. The displayed Present correlation is test-simulated;
+/// no physical OS event or GPU Present success is claimed here.
+#[test]
+fn winit_native_button_uses_exact_m13_with_large_declared_ui_budget_and_native_clock() {
+    use winit::event::{ElementState, MouseButton};
+
+    for native_clock in [false, true] {
+        let mut fixture = native_cursor_fixture_with_options(true, native_clock);
+        let position = fixture.button_position;
+        route_cursor(&mut fixture, position);
+        assert_eq!(activation_count(&fixture), 0);
+
+        admit_and_route_button(&mut fixture, ElementState::Pressed, MouseButton::Left);
+        assert_eq!(activation_count(&fixture), 0);
+        assert_eq!(pointer_ownership(&mut fixture).pointers().len(), 1);
+
+        admit_and_route_button(&mut fixture, ElementState::Released, MouseButton::Left);
+        assert_eq!(activation_count(&fixture), 1);
+        assert!(
+            pointer_ownership(&mut fixture).pointers().is_empty(),
+            "native button Up must settle its original pointer without a leaked claim"
+        );
+    }
 }
 
 #[test]
