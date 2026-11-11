@@ -53,8 +53,9 @@ documentation-only decision is accepted.
 
 For an eligible documentation-only PR head, the Rust canonical baseline and native
 Vulkan execution suites are **skipped**, not reported as successful test executions.
-The independent `Documentation site validation` job still builds the complete
-Astro/Starlight site, proves its publication projection, and remains required.
+The independent `Documentation site validation` job still checks documentation
+source metadata and links, builds the complete Astro/Starlight site, proves its
+publication projection, and remains required.
 The always-running `Validation scope gate` explicitly proves the selected path,
 the classifier outcome, and the required jobs' actual results. It does not relabel
 skipped Rust/GPU work as a successful test run.
