@@ -19,7 +19,7 @@ cat "$mirrors"
 
 # The Azure-first mirror repeatedly failed DNS on the 2026-11-11 hosted runners.
 # Only change it when the known official Ubuntu archive fallback is present.
-if ! grep -Eq '^https?://archive\.ubuntu\.com/ubuntu/?[[:space:]]*$' "$mirrors"; then
+if ! grep -Eq '^https?://archive\.ubuntu\.com/ubuntu/?([[:space:]]+priority:[0-9]+)?[[:space:]]*$' "$mirrors"; then
   echo '::error::Official archive.ubuntu.com fallback is absent; refusing to rewrite unknown APT sources' >&2
   exit 1
 fi
