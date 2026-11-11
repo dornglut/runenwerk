@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-11-11
 publication: primary
 ---
 
@@ -26,4 +26,13 @@ Run it with:
 
 ```bash
 cargo run -p engine --example runtime_minimal
+```
+
+## Maintained Rust source
+
+This code is read directly from
+`engine/examples/runtime_minimal/main.rs` when Astro builds the site.
+There is no separately maintained copy of the example in the documentation.
+
+```rust runenwerk-source=engine/examples/runtime_minimal/main.rs
 ```
