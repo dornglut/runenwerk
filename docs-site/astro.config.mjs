@@ -2,13 +2,14 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 import { remarkRustExampleSource } from './plugins/remark-rust-example-source.mjs';
+import { remarkDocumentationLinks } from './plugins/remark-doc-route-links.mjs';
 
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://dornglut.github.io/runenwerk',
 	base: '/runenwerk',
 	markdown: {
-		remarkPlugins: [remarkRustExampleSource],
+		remarkPlugins: [remarkRustExampleSource, remarkDocumentationLinks],
 	},
 	integrations: [
 		starlight({
