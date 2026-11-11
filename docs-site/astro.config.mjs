@@ -11,16 +11,15 @@ export default defineConfig({
 			title: 'Runenwerk Docs',
 			sidebar: [
 				{
-					label: 'Start here',
+					label: 'Start Here',
 					items: [
-						{ label: 'Runenwerk Docs', link: '/' },
-						{ label: 'Domain', link: '/domain/00-overview/' },
-						{ label: 'Engine', link: '/engine/' },
+						{ label: 'Overview', link: '/' },
+						{ label: 'Build an Application', slug: 'engine/reference/usage-guide' },
+						{ label: 'Explore Examples', slug: 'engine/examples/overview' },
 						{
-							label: 'Runenwerk Editor',
-							link: '/apps/runenwerk-editor/current-architecture/',
+							label: 'Understand Runenwerk',
+							slug: 'architecture/runenwerk-platform-architecture',
 						},
-						{ label: 'Networking', link: '/net/readme/' },
 					],
 				},
 				{
