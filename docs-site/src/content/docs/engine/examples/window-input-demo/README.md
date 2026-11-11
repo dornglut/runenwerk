@@ -9,8 +9,6 @@ last_reviewed: 2026-11-11
 publication: primary
 ---
 
-# Window Input Demo
-
 Opens a window. Use **WASD** to move, and press **Esc** to close it. The window title shows the position.
 
 ## Run

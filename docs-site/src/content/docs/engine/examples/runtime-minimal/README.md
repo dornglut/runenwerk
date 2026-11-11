@@ -9,8 +9,6 @@ last_reviewed: 2026-11-11
 publication: primary
 ---
 
-# Runtime Minimal
-
 Runs a headless application for three frames and prints the updated position.
 
 ## Run
