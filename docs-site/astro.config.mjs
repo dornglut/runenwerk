@@ -14,11 +14,11 @@ export default defineConfig({
 					label: 'Start Here',
 					items: [
 						{ label: 'Overview', link: '/' },
-						{ label: 'Build an Application', link: '/engine/reference/usage-guide/' },
-						{ label: 'Explore Examples', link: '/engine/examples/overview/' },
+						{ label: 'Build an Application', slug: 'engine/reference/usage-guide' },
+						{ label: 'Explore Examples', slug: 'engine/examples/overview' },
 						{
 							label: 'Understand Runenwerk',
-							link: '/architecture/runenwerk-platform-architecture/',
+							slug: 'architecture/runenwerk-platform-architecture',
 						},
 					],
 				},
