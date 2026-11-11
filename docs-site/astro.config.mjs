@@ -1,11 +1,15 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import { remarkRustExampleSource } from './plugins/remark-rust-example-source.mjs';
 
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://dornglut.github.io/runenwerk',
 	base: '/runenwerk',
+	markdown: {
+		remarkPlugins: [remarkRustExampleSource],
+	},
 	integrations: [
 		starlight({
 			title: 'Runenwerk Docs',
