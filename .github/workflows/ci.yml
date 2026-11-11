@@ -57,13 +57,13 @@ jobs:
   validate:
     name: Runenwerk validation
     needs: validation-scope
-    if: ${{ needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
+    if: ${{ always() && (needs.validation-scope.result != 'success' || needs.validation-scope.outputs.docs_only != 'true') }}
     uses: dornglut/github-workflows/.github/workflows/reusable-rust-cargo-validate.yml@9d389c9aa39d37a5b99646d528de91c8ab5799ee
 
   runenrender-r6-vulkan-native:
     name: RunenRender Vulkan native/arena/consumer proofs
     needs: validation-scope
-    if: ${{ needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
+    if: ${{ always() && (needs.validation-scope.result != 'success' || needs.validation-scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -568,7 +568,7 @@ jobs:
   runenrender-r6-vulkan-boids-continuity:
     name: RunenRender Vulkan Boids continuity/pacing proofs
     needs: validation-scope
-    if: ${{ needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
+    if: ${{ always() && (needs.validation-scope.result != 'success' || needs.validation-scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -755,7 +755,7 @@ jobs:
   runenrender-r6-vulkan-boids-readback:
     name: RunenRender Vulkan Boids readback/PreUpdate proofs
     needs: validation-scope
-    if: ${{ needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
+    if: ${{ always() && (needs.validation-scope.result != 'success' || needs.validation-scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -925,7 +925,7 @@ jobs:
   runenrender-r6-vulkan-render-lab:
     name: RunenRender Vulkan Render Lab proofs
     needs: validation-scope
-    if: ${{ needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
+    if: ${{ always() && (needs.validation-scope.result != 'success' || needs.validation-scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
@@ -1433,7 +1433,7 @@ jobs:
       - runenrender-r6-vulkan-boids-continuity
       - runenrender-r6-vulkan-boids-readback
       - runenrender-r6-vulkan-render-lab
-    if: ${{ always() && needs.validation-scope.result == 'success' && needs.validation-scope.outputs.docs_only != 'true' }}
+    if: ${{ always() && (needs.validation-scope.result != 'success' || needs.validation-scope.outputs.docs_only != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

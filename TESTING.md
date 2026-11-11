@@ -50,6 +50,8 @@ so a move **from** a Rust/source path into documentation cannot hide a code chan
 Empty, mixed, invalid, and unclassifiable diffs are not documentation-only.
 Classifier unit tests and explicit exact-revision checks must succeed before a
 documentation-only decision is accepted.
+If classification itself fails, the full Rust/Vulkan suites still run, but the
+required scope gate fails: passing tests cannot launder a failed classification.
 
 For an eligible documentation-only PR head, the Rust canonical baseline and native
 Vulkan execution suites are **skipped**, not reported as successful test executions.
