@@ -335,7 +335,7 @@ This architecture does not authorize:
 ## Diagram
 
 Diagram source:
-[ui-framework-architecture.puml](./diagrams/ui-framework-architecture.puml).
+[ui-framework-architecture.puml](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/architecture/diagrams/ui-framework-architecture.puml).
 
 ## Related docs
 

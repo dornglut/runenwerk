@@ -58,7 +58,7 @@ shared engine runtime, UI frame contracts, render submission registry, and pure
   tile profiles, app-derived tile caching, product-surface bridging, GPU ink
   proof through public render-flow APIs, and CPU current or last-good fallback
   when GPU validation fails.
-- [Draw authority and product flow](./diagrams/draw-authority-and-product-flow.puml):
+- [Draw authority and product flow](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/apps/runenwerk-draw/diagrams/draw-authority-and-product-flow.puml):
   PlantUML source for the current drawing truth, app runtime state, product
   publication, query snapshot, and render execution boundaries.
 

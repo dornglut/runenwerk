@@ -2,6 +2,7 @@
 import argparse
 import json
 from html.parser import HTMLParser
+from rendered_links import append_link_errors
 from pathlib import Path
 import re
 import sys
@@ -287,6 +288,8 @@ def validate_publication_build(build_root: Path, errors: list[str]) -> None:
         errors.append(
             f"generated sidebar links to non-routed pages: {sorted(invalid_sidebar_routes)[:5]}"
         )
+
+    append_link_errors(build_root, errors)
 
     print(
         "publication build passed: "

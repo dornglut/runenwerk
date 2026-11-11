@@ -1,26 +1,30 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import { remarkRustExampleSource } from './plugins/remark-rust-example-source.mjs';
+import { remarkDocumentationLinks } from './plugins/remark-doc-route-links.mjs';
 
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://dornglut.github.io/runenwerk',
 	base: '/runenwerk',
+	markdown: {
+		remarkPlugins: [remarkRustExampleSource, remarkDocumentationLinks],
+	},
 	integrations: [
 		starlight({
 			title: 'Runenwerk Docs',
 			sidebar: [
 				{
-					label: 'Start here',
+					label: 'Start Here',
 					items: [
-						{ label: 'Runenwerk Docs', link: '/' },
-						{ label: 'Domain', link: '/domain/00-overview/' },
-						{ label: 'Engine', link: '/engine/' },
+						{ label: 'Overview', link: '/' },
+						{ label: 'Build an Application', slug: 'engine/reference/usage-guide' },
+						{ label: 'Explore Examples', slug: 'engine/examples/overview' },
 						{
-							label: 'Runenwerk Editor',
-							link: '/apps/runenwerk-editor/current-architecture/',
+							label: 'Understand Runenwerk',
+							slug: 'architecture/runenwerk-platform-architecture',
 						},
-						{ label: 'Networking', link: '/net/readme/' },
 					],
 				},
 				{

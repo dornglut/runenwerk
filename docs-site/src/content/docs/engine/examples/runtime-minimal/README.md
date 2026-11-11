@@ -1,29 +1,23 @@
 ---
 title: "Runtime Minimal"
-description: "Documentation for Runtime Minimal."
+description: "Run a headless application for three frames."
 status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-11-11
 publication: primary
 ---
 
-# Runtime Minimal
+Runs a headless application for three frames and prints the updated position.
 
-Headless proof example for the engine runtime.
-
-It demonstrates:
-
-- `engine::App`
-- `engine::App::headless()` / `run_for_frames(...)`
-- `engine::Plugin`
-- `Startup` and `Update` schedules
-- `Query`, `ResMut`, and `Commands`
-- `ecs`-backed world state with typed resources and queries
-
-Run it with:
+## Run
 
 ```bash
 cargo run -p engine --example runtime_minimal
+```
+
+## Source
+
+```rust runenwerk-source=engine/examples/runtime_minimal/main.rs
 ```
