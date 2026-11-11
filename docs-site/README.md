@@ -58,3 +58,20 @@ Explanations remain maintainer-authored. Source-backed code blocks guarantee
 the displayed text matches the source file; they do not replace compilation,
 runtime testing, or API-contract review. Rust example compilation continues
 under the repository-owned Rust validation.
+
+## Documentation links
+
+Within the docs source tree, use ordinary relative links to other Markdown
+documents (for example, `../plugins/README.md`). The site build resolves
+routed `.md` and `.mdx` source references to published Starlight URLs,
+including the `/runenwerk` base and `README.md` route mapping.
+
+Do not link public pages directly to `repository-current` or `history`
+documents. Link to the repository source if historical evidence is needed.
+
+The generated-HTML publication validator checks actual in-page links,
+target pages and files, and fragment IDs. Run it after building:
+
+```sh
+python3 tools/docs/validate_publication_build.py docs-site/dist
+```

@@ -46,7 +46,7 @@ generations to GPU-backed product surfaces, rejects stale GPU generations, and
 keeps CPU current or last-good tiles authoritative when GPU validation fails.
 
 Canonical product-flow diagram:
-[draw-authority-and-product-flow.puml](./diagrams/draw-authority-and-product-flow.puml).
+[draw-authority-and-product-flow.puml](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/apps/runenwerk-draw/diagrams/draw-authority-and-product-flow.puml).
 
 ## Foundation Policy
 
