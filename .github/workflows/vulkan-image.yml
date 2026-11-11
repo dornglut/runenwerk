@@ -1,0 +1,119 @@
+name: Vulkan CI image
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'tools/ci/vulkan/**'
+      - '.github/workflows/vulkan-image.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vulkan-image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Build and validate Vulkan environment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - name: Resolve expected revision
+        id: revision
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_SHA: ${{ github.sha }}
+          PULL_REQUEST_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          case "$EVENT_NAME" in
+            pull_request) expected_revision="$PULL_REQUEST_HEAD_SHA" ;;
+            workflow_dispatch) expected_revision="$EVENT_SHA" ;;
+            *) echo "Unsupported event: $EVENT_NAME" >&2; exit 1 ;;
+          esac
+          test -n "$expected_revision"
+          echo "revision=$expected_revision" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact source revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.revision.outputs.revision }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove source revision
+        env:
+          EXPECTED_REVISION: ${{ steps.revision.outputs.revision }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_REVISION"
+          echo "Image definition revision: $EXPECTED_REVISION"
+
+      - name: Build candidate environment
+        env:
+          SOURCE_REVISION: ${{ steps.revision.outputs.revision }}
+        run: bash tools/ci/vulkan/build-image.sh "runenwerk-vulkan-ci:source-$SOURCE_REVISION"
+
+      - name: Prove Lavapipe, Xvfb and native Runenwerk consumer
+        env:
+          SOURCE_REVISION: ${{ steps.revision.outputs.revision }}
+        run: bash tools/ci/vulkan/verify-image.sh "runenwerk-vulkan-ci:source-$SOURCE_REVISION"
+
+  publish:
+    name: Publish verified Vulkan environment
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout accepted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove accepted main revision
+        env:
+          EXPECTED_REVISION: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$EXPECTED_REVISION"
+
+      - name: Build release candidate
+        run: bash tools/ci/vulkan/build-image.sh "runenwerk-vulkan-ci:source-$GITHUB_SHA"
+
+      - name: Independently verify exact image to be published
+        run: bash tools/ci/vulkan/verify-image.sh "runenwerk-vulkan-ci:source-$GITHUB_SHA"
+
+      - name: Authenticate to GHCR
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Publish and identify immutable digest
+        run: |
+          set -euo pipefail
+          image_repo="ghcr.io/$GITHUB_REPOSITORY-vulkan-ci"
+          image_tag="$image_repo:source-$GITHUB_SHA"
+          docker tag "runenwerk-vulkan-ci:source-$GITHUB_SHA" "$image_tag"
+          docker push "$image_tag"
+          digest_ref="$(docker image inspect --format '{{index .RepoDigests 0}}' "$image_tag")"
+          if ! [[ "$digest_ref" =~ ^ghcr\.io/dornglut/runenwerk-vulkan-ci@sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::A content-addressed GHCR image digest was not returned: $digest_ref" >&2
+            exit 1
+          fi
+          echo "Published immutable reference: $digest_ref"
+          echo "Published image digest: $digest_ref" >> "$GITHUB_STEP_SUMMARY"
