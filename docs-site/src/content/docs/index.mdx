@@ -1,54 +1,41 @@
 ---
 title: Runenwerk Docs
-description: Entry point for Runenwerk documentation.
+description: Choose how to get started with Runenwerk.
 status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-09-10
+last_reviewed: 2026-11-11
 publication: primary
 ---
 
 # Runenwerk
 
-Runenwerk is the Dornglut integration platform and reference engine: it combines the
-standalone Runen-family frameworks into a usable product, editor, runtime, and
-developer surface. This site is the public guide to the current repository.
+Runenwerk is an experimental Rust platform for building native applications, games,
+development tools, and simulations. It integrates the standalone Runen-family frameworks.
 
-## Start here
+## What would you like to do?
 
-- [Domain overview](domain/00-overview.md) — current product and domain boundaries.
-- [Engine documentation](engine/index.md) — runtime, plugins, examples, and engine usage.
-- [Runenwerk Editor architecture](apps/runenwerk-editor/current-architecture.md) — the editor application and its current ownership.
-- [Networking](net/README.md) — current networking, simulation, replay, and convergence surfaces.
-- [Adapter documentation](adapters/native-tablet-input/README.md) — host and external-system integration.
+### Build an application
 
-## Current areas
+Use the current Engine APIs to run a windowed or headless Rust application, then add
+UI, rendering, or simulation as needed.
 
-- [Domain crates and contracts](domain/00-overview.md)
-- [Engine and plugins](engine/index.md)
-- [Foundation contracts](foundation/README.md)
-- [Applications](apps/runenwerk-editor/README.md)
-- [Networking and simulation](net/README.md)
+[Get started with the Engine](engine/reference/usage-guide.md)
 
-## Deeper reference
+### Explore examples
 
-Durable architecture, ADRs, design documents, guidelines, and retained evidence
-are published through the separate Reference navigation group. Start with the
-[Runenwerk platform architecture](architecture/runenwerk-platform-architecture.md)
-or the [ADR index](adr/README.md) when you need the reasoning behind a current
-boundary.
+Run existing examples, from minimal runtime setup and window input to Boids and SDF rendering.
 
-Repository-current authoring and conformance material, along with retained
-historical evidence, stays in the repository rather than becoming production site
-content.
+[Browse examples](engine/examples/overview.md)
 
-## Optional local validation
+### Understand Runenwerk
 
-When a local checkout is available, docs checks can be run from the repository root:
+Learn how applications, the Engine, domains, and standalone frameworks fit together.
 
-```sh
-python3 tools/docs/validate_docs.py
-```
+[Explore the platform architecture](architecture/runenwerk-platform-architecture.md)
 
-Local commands are validation helpers, not documentation authority.
+---
+
+Runenwerk is under active development. Its public APIs are not yet stable.
+[View the GitHub repository](https://github.com/dornglut/runenwerk).
