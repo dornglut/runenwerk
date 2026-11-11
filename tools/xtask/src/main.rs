@@ -412,11 +412,12 @@ fn audit_repository(root: &Path) -> Result<(), String> {
         "the local cold-start entrypoint must route organization-wide governance to Engineering",
     )?;
 
-    forbid_text(
+    require_text_count(
         root,
         ".github/workflows/docs-validation.yml",
-        "validate_docs.py",
-        "the documentation build must not duplicate baseline documentation validation",
+        "run: python3 tools/docs/validate_docs.py",
+        1,
+        "the required documentation-only feature-head path must independently validate source metadata and links",
     )?;
 
     validate_sdf_retirement(root)?;
