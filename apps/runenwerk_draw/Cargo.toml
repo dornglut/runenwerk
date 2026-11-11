@@ -9,6 +9,7 @@ license.workspace = true
 anyhow = "1.0.100"
 drawing.workspace = true
 runen_ecs.workspace = true
+state_machine.workspace = true
 engine = { path = "../../engine" }
 runen-input.workspace = true
 graph.workspace = true

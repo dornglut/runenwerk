@@ -43,6 +43,7 @@ Dependency direction, peer-framework ownership, and clean-cutover rules live in 
 | `schema` | `foundation/schema` | foundation | Portable schema identity, version, shape, field, constraint, metadata, and descriptor vocabulary. |
 | `commands` | `foundation/commands` | foundation | Portable command contract vocabulary. |
 | `resource_ref` | `foundation/resource_ref` | foundation | Portable external resource references. |
+| `state_machine` | `foundation/state_machine` | foundation | Typed state transitions and optional lifecycle terminality without execution or resource ownership. |
 
 ### Core domains
 

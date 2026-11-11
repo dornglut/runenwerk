@@ -48,6 +48,7 @@ foundation/ratification   shared ratification report vocabulary
 foundation/schema         portable schema identity, value, shape, constraint, and descriptor vocabulary
 foundation/commands       portable command contract vocabulary
 foundation/resource_ref   portable external resource references
+foundation/state_machine typed transition mechanisms and lifecycle terminality
 ```
 
 The canonical workspace membership and purpose descriptions live in the [crate inventory](docs-site/src/content/docs/workspace/crate-inventory.md). Keep this root summary aligned with that inventory and the workspace manifest. Foundation must not own domain-specific invariants, application or editor policy, runtime orchestration, backend integration, or cross-framework composition.
