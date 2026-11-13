@@ -8,12 +8,15 @@ use engine::plugins::world::chunks::lifecycle::WorldChunkRuntimeMapResource;
 use engine::prelude::{App, Plugin, Res, ResMut, Resource, Startup};
 use runen_spatial::{ChunkCoord3, ChunkId, GridPartitionConfig, WorldId};
 use world_sdf::{
-    FieldProductConsumerClass, FieldProductDescriptor, FieldProductId, FieldProductKind,
-    FieldProductLineage, FieldProductScope, RegionSdfSummary, SDF_METRIC_BRICK_EDGE_SAMPLES,
-    SDF_METRIC_BRICK_SAMPLE_COUNT, SDF_PAGE_EDGE_BRICKS, SdfBrickMetadata, SdfBrickRecord,
-    SdfBrickSamples, SdfChunkPayload, SdfPageCoord3, SdfPageRecord, WorldSdfMetricEncoding,
-    WorldSdfMetricPayloadRef, WorldSdfOpenTopRectInteriorSource, WorldSdfPayloadRef,
+    ChunkGeneration, ChunkRevision, FieldProductConsumerClass, FieldProductDescriptor,
+    FieldProductId, FieldProductKind, FieldProductLineage, FieldProductScope,
+    SDF_METRIC_BRICK_EDGE_SAMPLES, SDF_PAGE_EDGE_BRICKS, SdfChunkPayload, WorldSdfMetricEncoding,
+    WorldSdfMetricPayloadRef, WorldSdfOpenTopExactFormation, WorldSdfOpenTopRectInteriorSource,
+    WorldSdfPayloadRef, form_world_sdf_open_top_exact_source,
 };
+
+#[cfg(test)]
+use world_sdf::SdfPageCoord3;
 
 pub const ARENA_WORLD_ID: WorldId = WorldId::new(0);
 pub const ARENA_CHUNK_EDGE_METERS: f64 = 4.0;
@@ -42,8 +45,8 @@ impl Default for ArenaHazardConfig {
     }
 }
 
+#[cfg(test)]
 const ARENA_PAGE_COORD: SdfPageCoord3 = SdfPageCoord3 { x: 0, y: 0, z: 0 };
-const ARENA_CELL_COUNT_PER_AXIS: u8 = 8;
 /// The game selects the authored value; the same normalized value drives all
 /// its existing analytic and sampled producer outputs.
 pub fn arena_geometry_source() -> WorldSdfOpenTopRectInteriorSource {
@@ -69,18 +72,20 @@ fn install_arena_world(
 ) {
     *partition = PartitionConfigResource(arena_partition_config());
 
-    let payload = build_arena_chunk_payload();
-    let descriptor = arena_field_product_descriptor(&payload);
-    let metric_payload_ref = arena_metric_payload_ref(&payload);
-    let region_summary = arena_region_summary(&payload);
+    let formation = arena_exact_formation(
+        arena_geometry_source(),
+        ARENA_FIELD_PRODUCT_ID,
+        1,
+        ChunkRevision::default(),
+        ChunkGeneration::default(),
+    );
     let enqueued = enqueue_ratified_world_sdf_payload_package(
         &mut completed,
         &mut chunks,
         &sdf_store,
         &mut products,
         &mut metric_capabilities,
-        WorldSdfRuntimePayloadPackage::new(descriptor, vec![payload], region_summary)
-            .with_metric_capability(metric_payload_ref),
+        WorldSdfRuntimePayloadPackage::from_exact_formation(formation),
     )
     .expect("maintained arena field product should satisfy runtime SDF intake");
     debug_assert_eq!(enqueued, 1);
@@ -142,180 +147,48 @@ pub fn arena_signed_distance_from_source(
     source: WorldSdfOpenTopRectInteriorSource,
     position: [f64; 3],
 ) -> f64 {
-    let [min_x, max_x] = source.x_bounds_meters();
-    let [min_z, max_z] = source.z_bounds_meters();
-    let floor = source.floor_y_meters();
-    let x_violation = interval_violation(position[0], min_x, max_x);
-    let y_violation = (floor - position[1]).max(0.0);
-    let z_violation = interval_violation(position[2], min_z, max_z);
-    let outside_distance =
-        (x_violation * x_violation + y_violation * y_violation + z_violation * z_violation).sqrt();
+    source.signed_distance_meters(position)
+}
 
-    if outside_distance > 0.0 {
-        return -outside_distance;
-    }
-
-    (position[0] - min_x)
-        .min(max_x - position[0])
-        .min(position[1] - floor)
-        .min(position[2] - min_z)
-        .min(max_z - position[2])
+/// Domain formation binds normalized full-precision producer source and
+/// derived metric bytes in one immutable artifact before World admission.
+pub fn arena_exact_formation(
+    source: WorldSdfOpenTopRectInteriorSource,
+    product_id: FieldProductId,
+    source_revision: u64,
+    chunk_revision: ChunkRevision,
+    chunk_generation: ChunkGeneration,
+) -> WorldSdfOpenTopExactFormation {
+    form_world_sdf_open_top_exact_source(
+        source,
+        arena_partition_config(),
+        arena_chunk_id(),
+        chunk_revision,
+        chunk_generation,
+        1,
+        product_id,
+        FieldProductLineage::new(source_revision, "runenwerk_arena.runtime_sdf"),
+    )
+    .expect("Arena exact source must have representable formed metric samples")
 }
 
 pub fn build_arena_chunk_payload() -> SdfChunkPayload {
     build_arena_chunk_payload_from_source(arena_geometry_source())
 }
 
-/// Current Arena producer, not a source-bound World admission certificate.
-/// The legacy payload checksum is still producer-declared, not content-derived.
+/// Maintained Arena payload production uses the same domain-owned formation
+/// as its exact-source admission, not an independent source attachment.
 pub fn build_arena_chunk_payload_from_source(
     source: WorldSdfOpenTopRectInteriorSource,
 ) -> SdfChunkPayload {
-    let mut page = SdfPageRecord {
-        page_generation: 0,
-        bricks: Default::default(),
-    };
-
-    for brick_z in 0..SDF_PAGE_EDGE_BRICKS as u8 {
-        for brick_y in 0..SDF_PAGE_EDGE_BRICKS as u8 {
-            for brick_x in 0..SDF_PAGE_EDGE_BRICKS as u8 {
-                let brick_coord = [brick_x, brick_y, brick_z];
-                let distances = arena_brick_metric_samples(source, brick_coord);
-                let min_distance = *distances
-                    .iter()
-                    .min()
-                    .expect("metric arena brick has canonical samples");
-                let max_distance = *distances
-                    .iter()
-                    .max()
-                    .expect("metric arena brick has canonical samples");
-                let occupancy_mask = arena_brick_occupancy_mask(source, brick_coord);
-                page.bricks.insert(
-                    brick_coord,
-                    SdfBrickRecord {
-                        metadata: SdfBrickMetadata {
-                            min_distance,
-                            max_distance,
-                            occupancy_mask,
-                            material_channel_mask: u16::from(occupancy_mask != 0),
-                            surface_band_present: min_distance <= 0 && max_distance >= 0,
-                            ..SdfBrickMetadata::default()
-                        },
-                        samples: SdfBrickSamples { distances },
-                    },
-                );
-            }
-        }
-    }
-
-    let mut page_table = std::collections::BTreeMap::new();
-    page_table.insert(ARENA_PAGE_COORD, page);
-
-    SdfChunkPayload {
-        chunk_id: arena_chunk_id(),
-        chunk_revision: Default::default(),
-        chunk_generation: Default::default(),
-        page_table,
-        hierarchy_revision: 0,
-        checksum: 1,
-    }
-}
-
-fn arena_region_summary(payload: &SdfChunkPayload) -> RegionSdfSummary {
-    let mut min_distance = i16::MAX;
-    let mut max_distance = i16::MIN;
-    let mut occupied = false;
-    let mut surface = false;
-
-    for brick in payload
-        .page_table
-        .values()
-        .flat_map(|page| page.bricks.values())
-    {
-        min_distance = min_distance.min(brick.metadata.min_distance);
-        max_distance = max_distance.max(brick.metadata.max_distance);
-        occupied |= brick.metadata.occupancy_mask != 0;
-        surface |= brick.metadata.surface_band_present;
-    }
-
-    RegionSdfSummary {
-        min_distance,
-        max_distance,
-        occupied_chunk_count: u32::from(occupied),
-        surface_chunk_count: u32::from(surface),
-    }
-}
-
-fn arena_brick_metric_samples(
-    source: WorldSdfOpenTopRectInteriorSource,
-    brick: [u8; 3],
-) -> Vec<i16> {
-    let mut distances = Vec::with_capacity(SDF_METRIC_BRICK_SAMPLE_COUNT);
-    for sample_z in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
-        for sample_y in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
-            for sample_x in 0..SDF_METRIC_BRICK_EDGE_SAMPLES {
-                let position = arena_metric_sample_position(brick, [sample_x, sample_y, sample_z]);
-                distances.push(encode_arena_distance(arena_signed_distance_from_source(
-                    source, position,
-                )));
-            }
-        }
-    }
-    distances
-}
-
-fn arena_metric_sample_position(brick: [u8; 3], sample: [usize; 3]) -> [f64; 3] {
-    let brick_edge_meters = ARENA_CHUNK_EDGE_METERS / SDF_PAGE_EDGE_BRICKS as f64;
-    let sample_step_meters = brick_edge_meters / (SDF_METRIC_BRICK_EDGE_SAMPLES - 1) as f64;
-    [
-        f64::from(brick[0]) * brick_edge_meters + sample[0] as f64 * sample_step_meters,
-        f64::from(brick[1]) * brick_edge_meters + sample[1] as f64 * sample_step_meters,
-        f64::from(brick[2]) * brick_edge_meters + sample[2] as f64 * sample_step_meters,
-    ]
-}
-
-fn encode_arena_distance(distance_meters: f64) -> i16 {
-    let encoded = (distance_meters * f64::from(ARENA_METRIC_DISTANCE_UNITS_PER_METER)).round();
-    assert!(
-        encoded >= f64::from(i16::MIN) && encoded <= f64::from(i16::MAX),
-        "maintained arena metric sample must fit i16"
-    );
-    encoded as i16
-}
-
-fn arena_brick_occupancy_mask(source: WorldSdfOpenTopRectInteriorSource, brick: [u8; 3]) -> u8 {
-    let mut mask = 0_u8;
-    for octant_z in 0..2_u8 {
-        for octant_y in 0..2_u8 {
-            for octant_x in 0..2_u8 {
-                let position = arena_occupancy_cell_center(brick, [octant_x, octant_y, octant_z]);
-                if arena_signed_distance_from_source(source, position) < 0.0 {
-                    let octant_index = octant_x | (octant_y << 1) | (octant_z << 2);
-                    mask |= 1 << octant_index;
-                }
-            }
-        }
-    }
-    mask
-}
-
-fn arena_occupancy_cell_center(brick: [u8; 3], octant: [u8; 3]) -> [f64; 3] {
-    let cell_edge_meters = ARENA_CHUNK_EDGE_METERS / f64::from(ARENA_CELL_COUNT_PER_AXIS);
-    [
-        f64::from(brick[0] * 2 + octant[0]) * cell_edge_meters + cell_edge_meters * 0.5,
-        f64::from(brick[1] * 2 + octant[1]) * cell_edge_meters + cell_edge_meters * 0.5,
-        f64::from(brick[2] * 2 + octant[2]) * cell_edge_meters + cell_edge_meters * 0.5,
-    ]
-}
-
-fn interval_violation(value: f64, minimum: f64, maximum: f64) -> f64 {
-    if value < minimum {
-        minimum - value
-    } else if value > maximum {
-        value - maximum
-    } else {
-        0.0
-    }
+    arena_exact_formation(
+        source,
+        ARENA_FIELD_PRODUCT_ID,
+        1,
+        ChunkRevision::default(),
+        ChunkGeneration::default(),
+    )
+    .into_payload()
 }
 
 #[cfg(test)]
@@ -334,28 +207,13 @@ mod tests {
 
     #[test]
     fn arena_occupancy_encodes_floor_and_boundary_walls() {
-        assert_ne!(
-            arena_brick_occupancy_mask(arena_geometry_source(), [0, 2, 2]),
-            0
-        );
-        assert_ne!(
-            arena_brick_occupancy_mask(arena_geometry_source(), [3, 2, 2]),
-            0
-        );
-        assert_ne!(
-            arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 0]),
-            0
-        );
-        assert_ne!(
-            arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 3]),
-            0
-        );
-        assert_ne!(
-            arena_brick_occupancy_mask(arena_geometry_source(), [2, 0, 2]),
-            0
-        );
+        let payload = build_arena_chunk_payload();
+        let page = payload.page_table.get(&ARENA_PAGE_COORD).unwrap();
+        for cell in [[0, 2, 2], [3, 2, 2], [2, 2, 0], [2, 2, 3], [2, 0, 2]] {
+            assert_ne!(page.bricks.get(&cell).unwrap().metadata.occupancy_mask, 0);
+        }
         assert_eq!(
-            arena_brick_occupancy_mask(arena_geometry_source(), [2, 2, 2]),
+            page.bricks.get(&[2, 2, 2]).unwrap().metadata.occupancy_mask,
             0
         );
     }

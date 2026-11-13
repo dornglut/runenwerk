@@ -1,5 +1,6 @@
 mod caves;
 mod collision;
+mod exact_source;
 mod hierarchy;
 mod metric;
 mod preview;
@@ -16,6 +17,7 @@ pub use collision::{
     CollisionHit, CollisionQueryService, CollisionReadiness, CollisionSample,
     CollisionSweepOutcome, SphereSweep,
 };
+pub use exact_source::*;
 pub use hierarchy::{ChunkHierarchyNode, ChunkHierarchySummary};
 pub use metric::*;
 pub use preview::*;
