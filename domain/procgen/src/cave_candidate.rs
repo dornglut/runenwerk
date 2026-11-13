@@ -376,13 +376,14 @@ pub fn ratify_cave_topology(
     // Both existing criteria describe the whole topology, not individual
     // chambers or passages. Do not invent per-subject meanings for them.
     let branching = i32::try_from(
-        adjacency.values().filter(|neighbors| neighbors.len() >= 3).count(),
+        adjacency
+            .values()
+            .filter(|neighbors| neighbors.len() >= 3)
+            .count(),
     )
     .expect("chamber count bounded by CAVE_MAX_CHAMBERS");
-    let route_alternatives = i32::try_from(
-        connections.len() - chamber_ids.len().saturating_sub(1),
-    )
-    .expect("passage count bounded by CAVE_MAX_PASSAGES");
+    let route_alternatives = i32::try_from(connections.len() - chamber_ids.len().saturating_sub(1))
+        .expect("passage count bounded by CAVE_MAX_PASSAGES");
     for evidence in &proposal.quality {
         if evidence.subject != CaveSubject::Topology {
             assessment.issues.push(CaveTopologyIssue {
