@@ -4,9 +4,9 @@ description: Opt-in bounded Runenwerk profiling for actual native applications.
 status: active
 owner: engine
 layer: engine-runtime
-canonical: false
+canonical: true
 last_reviewed: 2026-11-14
-publication: reference
+publication: primary
 ---
 
 # Native application profiler (experimental, #1494)
