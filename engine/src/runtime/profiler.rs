@@ -4,7 +4,7 @@
 use crate::plugins::render::inspect::{
     RenderFrameHistoryState, RenderFrameObservationPolicyResource,
 };
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, ensure};
 use runen_ecs::World;
 use runenui_runtime::{InputArbitrationRecord, InputPumpBatch, PumpOutcome};
 use serde::Serialize;
@@ -252,13 +252,14 @@ impl NativeProfilerSink {
         slot: u64,
         started: Instant,
         batch: &InputPumpBatch,
-        settled: bool,
+        settlement_status: &'static str,
     ) {
         let outcome = match batch.report().outcome() {
             PumpOutcome::Quiescent => "quiescent",
             PumpOutcome::BudgetExhausted => "budget_exhausted",
             PumpOutcome::Closed => "closed",
             PumpOutcome::Terminal(_) => "terminal",
+            _ => "unknown",
         };
         let terminal_receipts = batch
             .ordered_records()
@@ -272,7 +273,7 @@ impl NativeProfilerSink {
             None,
             Some(slot),
             Some((
-                if settled { "ok" } else { "not_quiescent_or_error" },
+                settlement_status,
                 outcome,
                 batch.report().processed_envelopes(),
                 terminal_receipts,

@@ -2523,7 +2523,12 @@ impl UiRuntimeSlotsResource {
             .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
         let settlement = slot.observe_batch_report(&batch);
         if let (Some(profiler), Some(started)) = (profiler, started) {
-            profiler.record_m13_pump(slot_id.value(), started, &batch, settlement.is_ok());
+            let status = match &settlement {
+                Ok(()) => "settled",
+                Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => "not_quiescent",
+                Err(_) => "failed",
+            };
+            profiler.record_m13_pump(slot_id.value(), started, &batch, status);
         }
         Ok((batch, settlement))
     }
