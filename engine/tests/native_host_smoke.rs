@@ -918,6 +918,48 @@ fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> an
     );
     native_profiler_smoke_artifact::retain(&report, &report_bytes)?;
     std::fs::remove_file(&profile_path)?;
+
+    // Run the real native application with the public one-flag workflow and
+    // no explicit profiler output path. Validate both artifacts at shutdown.
+    let target_dir = std::env::temp_dir().join(format!(
+        "runenwerk-native-cli-profile-{}-{nonce}",
+        std::process::id()
+    ));
+    std::fs::create_dir(&target_dir)?;
+    let status = Command::new(executable)
+        .arg("--profile")
+        .env_remove(NO_RENDER_ENV)
+        .env_remove(RENDER_HOST_ENV)
+        .env_remove("RUNENWERK_PROFILE_OUTPUT")
+        .env(RENDER_UI_HOST_ENV, "managed")
+        .env("CARGO_TARGET_DIR", &target_dir)
+        .status()?;
+    anyhow::ensure!(status.success(), "native --profile launch failed: {status}");
+    let profiles = target_dir.join("runenwerk").join("profiles");
+    let dirs = std::fs::read_dir(&profiles)?.collect::<std::io::Result<Vec<_>>>()?;
+    anyhow::ensure!(dirs.len() == 1, "native --profile must create one session");
+    let session = dirs[0].path();
+    anyhow::ensure!(session.is_dir(), "native --profile session is not a directory");
+    let capture_bytes = std::fs::read(session.join("capture.json"))?;
+    let capture: serde_json::Value = serde_json::from_slice(&capture_bytes)?;
+    anyhow::ensure!(
+        capture["schema_version"] == 3
+            && capture["status"] == "completed"
+            && capture["cpu_events"].as_array().is_some_and(|v| !v.is_empty()),
+        "native --profile did not retain an actual typed native capture"
+    );
+    let html = std::fs::read_to_string(session.join("report.html"))?;
+    anyhow::ensure!(
+        html.starts_with("<!doctype html>")
+            && html.contains("CPU stage durations")
+            && html.contains("Render-owned frame phase observations")
+            && html.contains("Histogram")
+            && !html.contains("Counter output")
+            && !html.contains("native.managed.typed"),
+        "native --profile HTML is incomplete or contains authored UI data"
+    );
+    std::fs::remove_dir_all(target_dir)?;
+    println!("native_typed_ui_profiler_cli_html=pass");
     println!("native_typed_ui_profiler_capture=pass");
     Ok(())
 }

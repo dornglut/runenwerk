@@ -451,14 +451,21 @@ impl NativeProfilerSink {
                 "{ENV_OUTPUT} must name an output file"
             );
             if from_cli {
-                let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
-                std::fs::create_dir_all(parent).context("cannot create profiler output directory")?;
+                let parent = path
+                    .parent()
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .unwrap_or_else(|| Path::new("."));
+                std::fs::create_dir_all(parent)
+                    .context("cannot create profiler output directory")?;
             }
             path
         } else {
             allocate_auto_output()?
         };
-        ensure!(!path.exists(), "profiler output already exists (refusing overwrite)");
+        ensure!(
+            !path.exists(),
+            "profiler output already exists (refusing overwrite)"
+        );
         let mut sink = Self::new(path);
         sink.html_report = from_cli;
         Ok(Some(sink))
@@ -852,12 +859,19 @@ impl NativeProfilerSink {
         };
         write_profile_atomically(self.output.as_ref(), &report)?;
         if self.html_report {
-            let html_path = if self.output.file_name().is_some_and(|name| name == "capture.json") {
+            let html_path = if self
+                .output
+                .file_name()
+                .is_some_and(|name| name == "capture.json")
+            {
                 self.output.with_file_name("report.html")
             } else {
                 self.output.with_extension("html")
             };
-            ensure!(html_path != *self.output, "HTML report would overwrite capture");
+            ensure!(
+                html_path != *self.output,
+                "HTML report would overwrite capture"
+            );
             let html = profiler_html::render_report(&report);
             write_html_atomically(&html_path, &html)?;
             println!("Runenwerk profile: {}", html_path.display());
@@ -886,7 +900,9 @@ fn write_profile_atomically(path: &Path, report: &Capture) -> Result<()> {
 
 fn write_html_atomically(path: &Path, html: &str) -> Result<()> {
     write_file_atomically(path, |output| {
-        output.write_all(html.as_bytes()).context("cannot write HTML profiler report")
+        output
+            .write_all(html.as_bytes())
+            .context("cannot write HTML profiler report")
     })
 }
 
@@ -915,8 +931,13 @@ fn write_file_atomically(
     {
         let mut output = BufWriter::new(file);
         write(&mut output)?;
-        output.flush().context("cannot flush native profiler capture")?;
-        output.get_ref().sync_all().context("cannot sync native profiler capture")?;
+        output
+            .flush()
+            .context("cannot flush native profiler capture")?;
+        output
+            .get_ref()
+            .sync_all()
+            .context("cannot sync native profiler capture")?;
     }
     std::fs::hard_link(&temporary.0, path)
         .context("cannot publish profiler report without overwrite (hard links required)")?;
@@ -926,14 +947,17 @@ fn write_file_atomically(
 /// Reserved exact runtime flag, without scanning or consuming any application's
 /// other arguments. Native applications remain responsible for their own grammar.
 fn profile_flag_present(args: impl IntoIterator<Item = OsString>) -> bool {
-    args.into_iter().any(|arg| arg == OsString::from("--profile"))
+    args.into_iter()
+        .any(|arg| arg == OsString::from("--profile"))
 }
 
 fn allocate_auto_output() -> Result<PathBuf> {
     let root = match std::env::var_os("CARGO_TARGET_DIR") {
         Some(dir) => PathBuf::from(dir),
         None => std::env::current_dir()?.join("target"),
-    }.join("runenwerk").join("profiles");
+    }
+    .join("runenwerk")
+    .join("profiles");
     allocate_auto_output_in(&root)
 }
 
@@ -942,7 +966,10 @@ fn allocate_auto_output_in(root: &Path) -> Result<PathBuf> {
     // Directory creation is atomic; no two writers may claim one session.
     let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     for attempt in 0..64u32 {
-        let dir = root.join(format!("{stamp:032x}-{:08x}-{attempt:02x}", std::process::id()));
+        let dir = root.join(format!(
+            "{stamp:032x}-{:08x}-{attempt:02x}",
+            std::process::id()
+        ));
         match std::fs::create_dir(&dir) {
             Ok(()) => return Ok(dir.join("capture.json")),
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
@@ -1005,7 +1032,10 @@ mod tests {
         assert!(!profile_flag_present([OsString::from("--release")]));
         assert!(!profile_flag_present([OsString::from("--profile-output")]));
         assert!(!profile_flag_present([OsString::from("--profile=true")]));
-        assert!(profile_flag_present([OsString::from("--other"), OsString::from("--profile")]));
+        assert!(profile_flag_present([
+            OsString::from("--other"),
+            OsString::from("--profile")
+        ]));
     }
 
     #[test]

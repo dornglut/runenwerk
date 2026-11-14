@@ -25,7 +25,8 @@ ul{padding-left:22px}li{margin-bottom:5px}footer{margin-top:40px;color:#aebed0}
 </style>"#;
 
 fn escape(value: &str) -> String {
-    value.replace('&', "&amp;")
+    value
+        .replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
@@ -90,16 +91,30 @@ native input promotion is not physical scanout.</p>"
         ("Build", report.profile.to_owned()),
         ("PID", report.process_id.to_string()),
         ("Render capture", report.render.status.to_owned()),
-        ("Render clock-to-Host join", report.render.host_frame_join_status.to_owned()),
-        ("Input promotion", report.native_ui_presentations.status.to_owned()),
+        (
+            "Render clock-to-Host join",
+            report.render.host_frame_join_status.to_owned(),
+        ),
+        (
+            "Input promotion",
+            report.native_ui_presentations.status.to_owned(),
+        ),
     ] {
-        let _ = write!(out, "<tr><th>{}</th><td><code>{}</code></td></tr>", escape(name), escape(&value));
+        let _ = write!(
+            out,
+            "<tr><th>{}</th><td><code>{}</code></td></tr>",
+            escape(name),
+            escape(&value)
+        );
     }
     if let Some(pacing) = &report.host_pacing {
         let _ = write!(
-            out, "<tr><th>Host pacing (close snapshot)</th><td>{} — {} FPS target</td></tr>",
+            out,
+            "<tr><th>Host pacing (close snapshot)</th><td>{} — {} FPS target</td></tr>",
             escape(pacing.mode),
-            pacing.target_fps.map_or_else(|| "none".to_string(), |fps| fps.to_string()),
+            pacing
+                .target_fps
+                .map_or_else(|| "none".to_string(), |fps| fps.to_string()),
         );
     }
     let _ = write!(
@@ -108,22 +123,32 @@ native input promotion is not physical scanout.</p>"
         report.native_windows.windows.len()
     );
 
-    out.push_str("<h2>CPU stage durations</h2>\
+    out.push_str(
+        "<h2>CPU stage durations</h2>\
 <p>Each row is a source-recorded timed scope, grouped by owner, stage, window and UI slot. \
 Percentiles are CPU elapsed time within that scope, not independent frame budgets.</p>\
 <div class=\"scroll\"><table><thead><tr><th>Source stage</th><th>Window / slot</th>\
-<th>Samples</th><th>Median (ms)</th><th>P95 (ms)</th><th>Distribution</th></tr></thead><tbody>");
+<th>Samples</th><th>Median (ms)</th><th>P95 (ms)</th><th>Distribution</th></tr></thead><tbody>",
+    );
     let mut stages: Vec<_> = report.stage_statistics.iter().collect();
-    stages.sort_by(|a, b| b.median_ns.cmp(&a.median_ns)
-        .then_with(|| a.domain.cmp(b.domain)).then_with(|| a.stage.cmp(b.stage)));
+    stages.sort_by(|a, b| {
+        b.median_ns
+            .cmp(&a.median_ns)
+            .then_with(|| a.domain.cmp(b.domain))
+            .then_with(|| a.stage.cmp(b.stage))
+    });
     if stages.is_empty() {
         out.push_str("<tr><td colspan=\"6\">No CPU stage observations retained.</td></tr>");
     }
     for stage in stages {
         let context = format!(
             "{} / {}",
-            stage.window.map_or_else(|| "—".to_owned(), |v| v.to_string()),
-            stage.ui_slot.map_or_else(|| "—".to_owned(), |v| v.to_string())
+            stage
+                .window
+                .map_or_else(|| "—".to_owned(), |v| v.to_string()),
+            stage
+                .ui_slot
+                .map_or_else(|| "—".to_owned(), |v| v.to_string())
         );
         let _ = write!(
             out,
