@@ -453,18 +453,32 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         Ok(event_loop) => event_loop,
         Err(error) => {
             let cleanup = shutdown_native_ui(&mut state.world);
-            return combine_execution_and_cleanup(Err(error.into()), cleanup);
+            let execution = combine_execution_and_cleanup(Err(error.into()), cleanup);
+            return finish_native_profile_session(
+                native_profile.as_ref(),
+                &state.world,
+                execution,
+            );
         }
     };
     // The Native owner retains its own command wake; neither this proxy nor
     // the receipt queue is a second runtime, window registry or UI wake.
     if let Ok(owner) = state.world.resource::<NativeWindowRequestOwner>() {
         let proxy = event_loop.create_proxy();
-        owner.attach_wake(move || {
+        let attachment = owner.attach_wake(move || {
             proxy
                 .send_event(NativeHostEvent::NativeWindowRequests)
                 .is_ok()
-        })?;
+        });
+        if let Err(error) = attachment {
+            let cleanup = shutdown_native_ui(&mut state.world);
+            let execution = combine_execution_and_cleanup(Err(error.into()), cleanup);
+            return finish_native_profile_session(
+                native_profile.as_ref(),
+                &state.world,
+                execution,
+            );
+        }
     }
     if let Ok(owner) = state.world.resource::<AppShutdownOwner>() {
         let proxy = event_loop.create_proxy();
@@ -472,7 +486,12 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
             owner.attach_wake(move || proxy.send_event(NativeHostEvent::AppShutdown).is_ok())
         {
             let cleanup = shutdown_native_ui(&mut state.world);
-            return combine_execution_and_cleanup(Err(error.into()), cleanup);
+            let execution = combine_execution_and_cleanup(Err(error.into()), cleanup);
+            return finish_native_profile_session(
+                native_profile.as_ref(),
+                &state.world,
+                execution,
+            );
         }
     }
     let transport = NativeWakeTransport::new(event_loop.create_proxy());
@@ -495,11 +514,18 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
     };
     let cleanup = runner.shutdown_native();
     let execution = combine_execution_and_cleanup(execution, cleanup);
-    let profile_output = native_profile
-        .as_ref()
-        .map(|profile| profile.finish(&runner.state.world, execution.is_ok()))
+    finish_native_profile_session(native_profile.as_ref(), &runner.state.world, execution)
+}
+
+fn finish_native_profile_session(
+    profile: Option<&crate::runtime::profiler::NativeProfilerSink>,
+    world: &runen_ecs::World,
+    execution: Result<()>,
+) -> Result<()> {
+    let output = profile
+        .map(|capture| capture.finish(world, execution.is_ok()))
         .transpose();
-    combine_execution_and_cleanup(execution, profile_output.map(|_| ()))
+    combine_execution_and_cleanup(execution, output.map(|_| ()))
 }
 
 fn combine_execution_and_cleanup(execution: Result<()>, cleanup: Result<()>) -> Result<()> {
