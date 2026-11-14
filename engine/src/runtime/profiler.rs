@@ -131,9 +131,9 @@ impl NativeProfilerSink {
         let Some(path) = std::env::var_os(ENV_OUTPUT) else {
             return Ok(None);
         };
-        let path = path.into_string().map_err(|_| {
-            anyhow::anyhow!("{ENV_OUTPUT} must be a Unicode file path")
-        })?;
+        let path = path
+            .into_string()
+            .map_err(|_| anyhow::anyhow!("{ENV_OUTPUT} must be a Unicode file path"))?;
         let path = PathBuf::from(path);
         ensure!(
             path.file_name().is_some() && !path.as_os_str().is_empty(),
@@ -239,11 +239,7 @@ impl NativeProfilerSink {
         }
     }
 
-    pub(crate) fn record_schedule(
-        &self,
-        stage: &'static str,
-        started: Instant,
-    ) {
+    pub(crate) fn record_schedule(&self, stage: &'static str, started: Instant) {
         self.record("ecs_schedule", stage, started, None, None, None);
     }
 
@@ -285,9 +281,10 @@ impl NativeProfilerSink {
 
     pub(crate) fn finish(&self, world: &World, completed: bool) -> Result<()> {
         let (events, dropped) = {
-            let state = self.inner.lock().map_err(|_| {
-                anyhow::anyhow!("profiling observer poisoned")
-            })?;
+            let state = self
+                .inner
+                .lock()
+                .map_err(|_| anyhow::anyhow!("profiling observer poisoned"))?;
             (state.events.clone(), state.dropped)
         };
         let render = match world.resource::<RenderFrameHistoryState>() {
@@ -317,7 +314,9 @@ impl NativeProfilerSink {
                                 .composed_timing_evidence
                                 .as_ref()
                                 .and_then(|gpu| gpu.gpu_composed_frame_ms),
-                            present_operation_submitted: value.presentation.present_operation_submitted,
+                            present_operation_submitted: value
+                                .presentation
+                                .present_operation_submitted,
                             display_timestamp_status: "unavailable",
                         })
                         .collect(),
@@ -341,12 +340,20 @@ impl NativeProfilerSink {
         let report = Capture {
             schema_version: 1,
             kind: "runenwerk_native_application_profile",
-            status: if completed { "completed" } else { "failed_or_interrupted" },
+            status: if completed {
+                "completed"
+            } else {
+                "failed_or_interrupted"
+            },
             clock: "cpu_monotonic_process_local_nanoseconds",
             gpu_clock_relation: "not_synchronized_to_cpu",
             process_id: std::process::id(),
             os: std::env::consts::OS,
-            profile: if cfg!(debug_assertions) { "debug" } else { "optimized" },
+            profile: if cfg!(debug_assertions) {
+                "debug"
+            } else {
+                "optimized"
+            },
             source_revision: option_env!("RUNENWERK_SOURCE_REVISION").unwrap_or("unknown"),
             event_capacity: EVENT_LIMIT,
             dropped_cpu_events: dropped,
@@ -368,7 +375,9 @@ impl NativeProfilerSink {
         let mut output = BufWriter::new(file);
         serde_json::to_writer_pretty(&mut output, &report)
             .context("cannot serialize native profiler capture")?;
-        output.flush().context("cannot flush native profiler capture")?;
+        output
+            .flush()
+            .context("cannot flush native profiler capture")?;
         println!(
             "Runenwerk profiler: events={} dropped={} render_frames={} status={}",
             report.cpu_events.len(),
@@ -397,7 +406,12 @@ mod tests {
         let state = sink.inner.lock().unwrap();
         assert_eq!(state.events.len(), EVENT_LIMIT);
         assert_eq!(state.dropped, 3);
-        assert!(state.events.iter().all(|event| event.duration_ns < u64::MAX));
+        assert!(
+            state
+                .events
+                .iter()
+                .all(|event| event.duration_ns < u64::MAX)
+        );
     }
 
     #[test]

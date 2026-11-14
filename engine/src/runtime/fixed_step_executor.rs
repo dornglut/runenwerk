@@ -1,8 +1,8 @@
 use crate::plugins::time::domain::Time;
-use crate::runtime::frame_lifecycle::profile_schedule;
 use crate::runtime::fixed_time::{
     CatchupBudget, FixedStepFrameDeltaOverride, FixedTimeConfig, FixedTimeState,
 };
+use crate::runtime::frame_lifecycle::profile_schedule;
 use crate::runtime::schedules::{FixedStepBegin, FixedUpdate};
 use anyhow::Result;
 use runen_ecs::{Runtime, World};

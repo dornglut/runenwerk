@@ -1,6 +1,12 @@
 ---
 title: Native application profiler (experimental)
 description: Opt-in bounded Runenwerk profiling for actual native applications.
+status: active
+owner: engine
+layer: engine-runtime
+canonical: false
+last_reviewed: 2026-11-14
+publication: reference
 ---
 
 # Native application profiler (experimental, #1494)
