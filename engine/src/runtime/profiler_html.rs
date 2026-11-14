@@ -128,21 +128,35 @@ Percentiles are CPU elapsed time within that scope, not independent frame budget
         let _ = write!(
             out,
             "<tr><td><code>{}.{}</code></td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td class=\"hist\"><details><summary>Histogram</summary>",
-            escape(stage.domain), escape(stage.stage), escape(&context),
-            stage.sample_count, ms(stage.median_ns), ms(stage.p95_ns),
+            escape(stage.domain),
+            escape(stage.stage),
+            escape(&context),
+            stage.sample_count,
+            ms(stage.median_ns),
+            ms(stage.p95_ns),
         );
         let histogram = &stage.duration_histogram_ns;
         let max = histogram.counts.iter().copied().max().unwrap_or(0);
         for (index, count) in histogram.counts.iter().enumerate() {
             let label = match (index, histogram.upper_bounds_exclusive_ns.get(index)) {
                 (0, Some(upper)) => format!("< {} ms", ms(*upper)),
-                (index, Some(upper)) => format!("{} – {} ms", ms(histogram.upper_bounds_exclusive_ns[index - 1]), ms(*upper)),
-                (_, None) => format!("≥ {} ms", ms(*histogram.upper_bounds_exclusive_ns.last().unwrap())),
+                (index, Some(upper)) => format!(
+                    "{} – {} ms",
+                    ms(histogram.upper_bounds_exclusive_ns[index - 1]),
+                    ms(*upper)
+                ),
+                (_, None) => format!(
+                    "≥ {} ms",
+                    ms(*histogram.upper_bounds_exclusive_ns.last().unwrap())
+                ),
             };
             let width = if max == 0 { 0 } else { 100 * count / max };
-            let _ = write!(out,
+            let _ = write!(
+                out,
                 "<div class=\"bucket\"><small>{}</small><div class=\"bar-track\"><div class=\"bar\" style=\"width:{}%\"></div></div><small>{}</small></div>",
-                escape(&label), width, count
+                escape(&label),
+                width,
+                count
             );
         }
         out.push_str("</details></td></tr>");
@@ -169,31 +183,50 @@ These phases must not be joined to a particular Host frame without source-owned 
             _ => frame.encode_submit_cpu_ms,
         });
         if let Some((median, p95, n)) = percentile_ms(values) {
-            let _ = write!(out,
+            let _ = write!(
+                out,
                 "<tr><td>{}</td><td>{}</td><td>{:.3}</td><td>{:.3}</td></tr>",
-                escape(name), n, median, p95
+                escape(name),
+                n,
+                median,
+                p95
             );
         } else {
-            let _ = write!(out, "<tr><td>{}</td><td>0</td><td>unavailable</td><td>unavailable</td></tr>", escape(name));
+            let _ = write!(
+                out,
+                "<tr><td>{}</td><td>0</td><td>unavailable</td><td>unavailable</td></tr>",
+                escape(name)
+            );
         }
     }
     out.push_str("</tbody></table></div>");
 
-    let gpu_available = report.render.observations.iter()
-        .filter(|item| item.composed_gpu_duration_ms.is_some()).count();
+    let gpu_available = report
+        .render
+        .observations
+        .iter()
+        .filter(|item| item.composed_gpu_duration_ms.is_some())
+        .count();
     let _ = write!(
         out,
         "<h2>Missing and lost evidence</h2><p class=\"note\">GPU-composed timing available for \
 {} of {} Render observations. Missing timings are not zero. No inferred GPU/display FPS or input-to-photon latency.</p>",
-        gpu_available, report.render.observations.len()
+        gpu_available,
+        report.render.observations.len()
     );
     out.push_str("<ul>");
     for (label, n) in [
         ("CPU events evicted", report.dropped_cpu_events),
-        ("Native UI transition events evicted", report.native_ui_presentations.dropped_events),
+        (
+            "Native UI transition events evicted",
+            report.native_ui_presentations.dropped_events,
+        ),
         ("Render events evicted", report.render.evicted),
         ("Render events sampled out", report.render.sampled_out),
-        ("Render observations omitted at export", report.render.omitted_by_export_limit as u64),
+        (
+            "Render observations omitted at export",
+            report.render.omitted_by_export_limit as u64,
+        ),
         ("Render evidence uncorrelated", report.render.uncorrelated),
     ] {
         let _ = write!(out, "<li>{}: {}</li>", escape(label), n);
@@ -201,18 +234,23 @@ These phases must not be joined to a particular Host frame without source-owned 
     for name in report.unavailable {
         let _ = write!(out, "<li>Unavailable: <code>{}</code></li>", escape(name));
     }
-    out.push_str("</ul><footer>First-party Runenwerk profiler · Static offline report · \
+    out.push_str(
+        "</ul><footer>First-party Runenwerk profiler · Static offline report · \
 This is observed diagnostic evidence, not a performance regression verdict. \
 See capture.json for bounded raw events, identity and receipt details.</footer>\
-</main></body></html>");
+</main></body></html>",
+    );
     out
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::runtime::profiler::{DurationHistogram, NativeUiPresentationCapture, NativeWindowCapture, RenderCapture, StageStatistics};
-    
+    use crate::runtime::profiler::{
+        DurationHistogram, NativeUiPresentationCapture, NativeWindowCapture, RenderCapture,
+        StageStatistics,
+    };
+
     fn fixture() -> Capture {
         Capture {
             schema_version: 3,
@@ -244,7 +282,7 @@ mod tests {
                 p95_ns: 7_000_000,
                 duration_histogram_ns: DurationHistogram {
                     upper_bounds_exclusive_ns: super::super::DURATION_HISTOGRAM_UPPER_NS,
-                    counts: [0,0,0,0,0,0,0,1,0,0,0],
+                    counts: [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
                 },
             }],
             native_ui_presentations: NativeUiPresentationCapture {
