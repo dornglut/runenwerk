@@ -506,7 +506,10 @@ mod tests {
             value["render"]["host_frame_join_status"],
             "unavailable_no_owner_correlation"
         );
-        assert!(!sink.finish(&world, true).is_ok(), "output must not be replaced");
+        assert!(
+            sink.finish(&world, true).is_err(),
+            "output must not be replaced"
+        );
         std::fs::remove_file(path).unwrap();
     }
 
