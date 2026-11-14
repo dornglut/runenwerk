@@ -45,6 +45,11 @@ observations (with export omissions reported) when available. The Render frame i
 is **not** assumed equal to the Host frame ordinal. GPU-composed durations are
 GPU-clock facts, not synchronized with CPU events, scanout or display FPS.
 
+After the CPU buffer fills, older events are evicted so late interactions remain visible.
+`dropped_cpu_events` counts those evictions; stage statistics describe the retained
+window only, not the full application lifetime. A pump that fails without returning a
+batch is recorded as a failure event without claiming input-settlement evidence.
+
 The report includes dropped event counts, Render observation drop counters and
 explicit unavailability for process CPU/RAM, inner RunenUI shaping/layout
 durations, per-system timings and physical input-to-photon/scanout. It excludes

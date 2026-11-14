@@ -9,7 +9,7 @@ use anyhow::{Context, Result, ensure};
 use runen_ecs::World;
 use runenui_runtime::{InputArbitrationRecord, InputPumpBatch, PumpOutcome, UiInputFinality};
 use serde::Serialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
@@ -36,7 +36,7 @@ impl runen_ecs::Resource for NativeProfilerSink {}
 
 #[derive(Default)]
 struct Recorder {
-    events: Vec<CpuObservation>,
+    events: VecDeque<CpuObservation>,
     dropped: u64,
 }
 
@@ -152,6 +152,13 @@ struct Capture {
     stage_statistics: Vec<StageStatistics>,
     render: RenderCapture,
     unavailable: &'static [&'static str],
+}
+
+/// Why a canonical M13 input pump did not return a batch. No input payloads are captured.
+#[derive(Clone, Copy)]
+pub(crate) enum M13PumpFailureStage {
+    SlotLookup,
+    RuntimePump,
 }
 
 pub(crate) struct ProfileSpan {
@@ -270,8 +277,10 @@ impl NativeProfilerSink {
         };
         if let Ok(mut recorder) = self.inner.lock() {
             if recorder.events.len() < EVENT_LIMIT {
-                recorder.events.push(event);
+                recorder.events.push_back(event);
             } else {
+                recorder.events.pop_front();
+                recorder.events.push_back(event);
                 recorder.dropped = recorder.dropped.saturating_add(1);
             }
         }
@@ -279,6 +288,20 @@ impl NativeProfilerSink {
 
     pub(crate) fn record_schedule(&self, stage: &'static str, started: Instant) {
         self.record("ecs_schedule", stage, started, None, None, None);
+    }
+
+    /// A missing batch cannot justify zero processed inputs or a settled outcome.
+    pub(crate) fn record_m13_pump_failure(
+        &self,
+        slot: u64,
+        started: Instant,
+        failure: M13PumpFailureStage,
+    ) {
+        let stage = match failure {
+            M13PumpFailureStage::SlotLookup => "canonical_input_slot_lookup_failed",
+            M13PumpFailureStage::RuntimePump => "canonical_input_runtime_pump_failed",
+        };
+        self.record("runenui_m13", stage, started, None, Some(slot), None);
     }
 
     pub(crate) fn record_m13_pump(
@@ -341,7 +364,7 @@ impl NativeProfilerSink {
                 .inner
                 .lock()
                 .map_err(|_| anyhow::anyhow!("profiling observer poisoned"))?;
-            (state.events.clone(), state.dropped)
+            (state.events.iter().cloned().collect::<Vec<_>>(), state.dropped)
         };
         let render = match world.resource::<RenderFrameHistoryState>() {
             Ok(history) => {
@@ -517,12 +540,14 @@ mod tests {
     #[test]
     fn capture_is_bounded_and_reports_losses() {
         let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
-        for _ in 0..(EVENT_LIMIT + 3) {
-            let _scope = sink.span("host", "test_event", None, None);
+        for index in 0..(EVENT_LIMIT + 3) {
+            let _scope = sink.span("host", "test_event", Some(index as u64), None);
         }
         let state = sink.inner.lock().unwrap();
         assert_eq!(state.events.len(), EVENT_LIMIT);
         assert_eq!(state.dropped, 3);
+        assert_eq!(state.events.front().unwrap().window, Some(3));
+        assert_eq!(state.events.back().unwrap().window, Some((EVENT_LIMIT + 2) as u64));
         assert!(
             state
                 .events
@@ -613,7 +638,7 @@ mod tests {
         for _ in 0..5 {
             let _scope = sink.span("host", "window_resize", None, None);
         }
-        let mut values = sink.inner.lock().unwrap().events.clone();
+        let mut values = sink.inner.lock().unwrap().events.iter().cloned().collect::<Vec<_>>();
         for (value, duration) in values.iter_mut().zip([100, 200, 300, 400, 500]) {
             value.duration_ns = duration;
         }
@@ -636,7 +661,7 @@ mod tests {
         {
             let _scope = sink.span("runenui_m13", "input", None, Some(7));
         }
-        let events = sink.inner.lock().unwrap().events.clone();
+        let events = sink.inner.lock().unwrap().events.iter().cloned().collect::<Vec<_>>();
         let stats = summarize_events(&events);
         assert_eq!(stats.len(), 3);
         assert_eq!(
@@ -646,6 +671,18 @@ mod tests {
                 .count(),
             2
         );
+    }
+
+    #[test]
+    fn failed_m13_pump_does_not_claim_unobserved_settlement_or_receipts() {
+        let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
+        sink.record_m13_pump_failure(9, Instant::now(), M13PumpFailureStage::SlotLookup);
+        sink.record_m13_pump_failure(9, Instant::now(), M13PumpFailureStage::RuntimePump);
+        let state = sink.inner.lock().unwrap();
+        assert_eq!(state.events.len(), 2);
+        assert_eq!(state.events[0].stage, "canonical_input_slot_lookup_failed");
+        assert_eq!(state.events[1].stage, "canonical_input_runtime_pump_failed");
+        assert!(state.events.iter().all(|event| event.ui_slot == Some(9) && event.m13.is_none()));
     }
 
     #[test]

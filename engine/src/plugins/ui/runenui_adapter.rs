@@ -2514,13 +2514,34 @@ impl UiRuntimeSlotsResource {
     > {
         let profiler = self.profile_sink.clone();
         let started = profiler.as_ref().map(|_| std::time::Instant::now());
-        let slot = self.slot_mut(slot_id)?;
+        let slot = match self.slot_mut(slot_id) {
+            Ok(slot) => slot,
+            Err(error) => {
+                if let (Some(profiler), Some(started)) = (profiler.as_ref(), started) {
+                    profiler.record_m13_pump_failure(
+                        slot_id.value(),
+                        started,
+                        crate::runtime::profiler::M13PumpFailureStage::SlotLookup,
+                    );
+                }
+                return Err(error);
+            }
+        };
         slot.begin_readiness_checkpoint();
         slot.requires_settlement = true;
-        let batch = slot
-            .runtime
-            .pump(runtime_pump_budget())
-            .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+        let batch = match slot.runtime.pump(runtime_pump_budget()) {
+            Ok(batch) => batch,
+            Err(error) => {
+                if let (Some(profiler), Some(started)) = (profiler.as_ref(), started) {
+                    profiler.record_m13_pump_failure(
+                        slot_id.value(),
+                        started,
+                        crate::runtime::profiler::M13PumpFailureStage::RuntimePump,
+                    );
+                }
+                return Err(UiRuntimeSlotOperationFailure::InputObservation(error));
+            }
+        };
         let settlement = slot.observe_batch_report(&batch);
         if let (Some(profiler), Some(started)) = (profiler, started) {
             let status = match &settlement {
