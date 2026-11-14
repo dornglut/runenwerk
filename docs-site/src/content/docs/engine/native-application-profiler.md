@@ -32,10 +32,13 @@ Tracy or graphical editor is required. The profiler reports status and counts at
 shutdown; a normal run without this environment variable does not activate it.
 
 Schema v1 contains bounded CPU event records (monotonic nanoseconds from one
-process epoch), native callback categories and window identities, Engine
+process epoch), per-stage median/P95 grouped by actual window/slot identity,
+native callback categories and window identities, Engine
 schedule-call timing (not standalone RunenECS per-system timings), RunenUI M13
-pump status and numeric receipt counts, RunenUI host settlement/publication,
-and existing Render-owned frame history when available. The Render frame index
+pump status, numeric receipt counts and up to 16 exact terminal receipt
+sequence/finality samples per pump (with omissions reported), RunenUI host
+settlement/publication, and up to 512 existing Render-owned frame
+observations (with export omissions reported) when available. The Render frame index
 is **not** assumed equal to the Host frame ordinal. GPU-composed durations are
 GPU-clock facts, not synchronized with CPU events, scanout or display FPS.
 

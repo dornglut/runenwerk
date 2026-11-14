@@ -73,6 +73,8 @@ struct M13Receipt {
 struct StageStatistics {
     domain: &'static str,
     stage: &'static str,
+    window: Option<u64>,
+    ui_slot: Option<u64>,
     sample_count: usize,
     median_ns: u64,
     p95_ns: u64,
@@ -99,6 +101,7 @@ struct RenderObservation {
 struct RenderCapture {
     status: &'static str,
     observations: Vec<RenderObservation>,
+    omitted_by_export_limit: usize,
     evicted: u64,
     sampled_out: u64,
     dropped_correlated: u64,
@@ -325,6 +328,7 @@ impl NativeProfilerSink {
                     },
                     observations: history
                         .observations()
+                        .take(RENDER_HISTORY_LIMIT)
                         .map(|value| RenderObservation {
                             render_frame: value.key.frame_index,
                             render_surface: value.key.render_surface_id,
@@ -347,6 +351,7 @@ impl NativeProfilerSink {
                             display_timestamp_status: "unavailable",
                         })
                         .collect(),
+                    omitted_by_export_limit: history.len().saturating_sub(RENDER_HISTORY_LIMIT),
                     evicted: stats.evicted_observations,
                     sampled_out: stats.sampled_out_observations,
                     dropped_correlated: stats.dropped_correlated_evidence,
@@ -357,6 +362,7 @@ impl NativeProfilerSink {
             Err(_) => RenderCapture {
                 status: "render_plugin_not_installed",
                 observations: Vec::new(),
+                omitted_by_export_limit: 0,
                 evicted: 0,
                 sampled_out: 0,
                 dropped_correlated: 0,
@@ -391,6 +397,8 @@ impl NativeProfilerSink {
                 "per_system_ecs_cpu",
                 "runenui_internal_layout_shaping_paint_cpu",
                 "process_cpu_and_memory",
+                "native_wakeup_deadline_lateness",
+                "gpu_device_driver_and_display_provenance",
                 "physical_display_scanout",
                 "input_to_photon_latency",
             ],
@@ -423,21 +431,26 @@ fn saturating_u64(value: u128) -> u64 {
 
 /// Close-only reducer: these durations are CPU stage spans, not additive frame wall time.
 fn summarize_events(events: &[CpuObservation]) -> Vec<StageStatistics> {
-    let mut groups = BTreeMap::<(&'static str, &'static str), Vec<u64>>::new();
+    let mut groups = BTreeMap::<
+        (&'static str, &'static str, Option<u64>, Option<u64>),
+        Vec<u64>,
+    >::new();
     for event in events {
         groups
-            .entry((event.domain, event.stage))
+            .entry((event.domain, event.stage, event.window, event.ui_slot))
             .or_default()
             .push(event.duration_ns);
     }
     groups
         .into_iter()
-        .map(|((domain, stage), mut durations)| {
+        .map(|((domain, stage, window, ui_slot), mut durations)| {
             durations.sort_unstable();
             let len = durations.len();
             StageStatistics {
                 domain,
                 stage,
+                window,
+                ui_slot,
                 sample_count: len,
                 median_ns: durations[(len - 1) / 2],
                 p95_ns: durations[(len * 95).div_ceil(100) - 1],
@@ -541,6 +554,27 @@ mod tests {
         assert_eq!(stats[0].sample_count, 5);
         assert_eq!(stats[0].median_ns, 300);
         assert_eq!(stats[0].p95_ns, 500);
+    }
+
+    #[test]
+    fn stage_stats_do_not_mix_window_or_ui_slot_identities() {
+        let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
+        {
+            let _scope = sink.span("host", "window_resize", Some(1), None);
+        }
+        {
+            let _scope = sink.span("host", "window_resize", Some(2), None);
+        }
+        {
+            let _scope = sink.span("runenui_m13", "input", None, Some(7));
+        }
+        let events = sink.inner.lock().unwrap().events.clone();
+        let stats = summarize_events(&events);
+        assert_eq!(stats.len(), 3);
+        assert_eq!(
+            stats.iter().filter(|item| item.stage == "window_resize").count(),
+            2
+        );
     }
 
     #[test]
