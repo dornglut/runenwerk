@@ -1,4 +1,5 @@
 use crate::plugins::time::domain::Time;
+use crate::runtime::frame_lifecycle::profile_schedule;
 use crate::runtime::fixed_time::{
     CatchupBudget, FixedStepFrameDeltaOverride, FixedTimeConfig, FixedTimeState,
 };
@@ -86,8 +87,8 @@ pub(crate) fn run_fixed_update_frame(world: &mut World, scheduler: &mut Runtime)
             break;
         }
 
-        scheduler.run_schedule::<FixedStepBegin>(world)?;
-        scheduler.run_schedule::<FixedUpdate>(world)?;
+        profile_schedule::<FixedStepBegin>(world, scheduler, "fixed_step_begin")?;
+        profile_schedule::<FixedUpdate>(world, scheduler, "fixed_update")?;
         steps = steps.saturating_add(1);
 
         let fixed_state = world

@@ -15,6 +15,7 @@ pub mod native_window_hooks;
 pub mod native_window_requests;
 pub mod param;
 pub mod platform;
+pub(crate) mod profiler;
 pub mod presentation;
 pub mod product_cache;
 pub mod product_publication;
