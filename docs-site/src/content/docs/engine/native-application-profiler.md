@@ -16,28 +16,43 @@ settlement and publication when the application installs UiPlugin. The profiler 
 the Render Lab benchmark. The feature is experimental until the parent issue's
 platform, privacy and overhead gates pass.
 
-The application is still an ordinary Cargo binary. The binary must be built
-against a Runenwerk revision **containing this profiler**. The currently published
-Runen Lab Todo PR #8 pins an older Engine revision and does **not** gain this
-feature automatically. For a qualified compatible native application, run from
-**that application's Cargo project directory** on Windows PowerShell:
+The application remains an ordinary Cargo binary and must be built against a
+Runenwerk revision **containing this profiler**. The currently published Runen
+Lab Todo PR #8 pins an older Engine and does **not** gain the flag automatically.
+For a compatible native application, run from its Cargo project directory:
 
 ~~~powershell
-New-Item -ItemType Directory -Force .\artifacts | Out-Null
-$env:RUNENWERK_PROFILE_OUTPUT = Join-Path (Get-Location).Path 'artifacts\native-profile.json'
-cargo run --release --locked
-Remove-Item Env:RUNENWERK_PROFILE_OUTPUT
+cargo run --release -- --profile
 ~~~
 
-Create the output directory beforehand. Each file path must be new: the profiler
-refuses to replace an existing file. Export first writes and syncs a same-directory
-temporary file, then publishes the final name with a non-overwriting hard link.
-The destination filesystem must support hard links; unsupported filesystems fail
-rather than exposing an incomplete final JSON. Ordinary failures remove the temporary
-file; an abrupt process crash can leave a temporary artifact.
-No application-specific instrumentation,
-Tracy or graphical editor is required. The profiler reports status and counts at
-shutdown; a normal run without this environment variable does not activate it.
+From a Cargo workspace, choose the package before the `--` separator:
+
+~~~powershell
+cargo run -p todo --release -- --profile
+~~~
+
+`--profile` after `--` is a reserved **native Runenwerk runtime argument**,
+not Cargo's compilation-profile `--profile NAME`. The exact flag enables
+first-party capture, automatically allocates a unique non-overwriting session
+directory beneath `target/runenwerk/profiles` relative to the process's working
+directory (or `CARGO_TARGET_DIR` when set), and writes both `capture.json` and
+`report.html` on normal close. It prints both paths. No application source changes,
+manual directories, server, separate reader, Tracy, or browser launch are needed.
+
+The existing `RUNENWERK_PROFILE_OUTPUT` environment variable remains available
+for controlled/CI captures: alone it writes JSON at the caller-selected path;
+combined with `--profile` it also writes a sibling HTML file and creates the
+parent directory when needed. Exact `--profile` recognition leaves other native
+application arguments untouched; applications must not use this reserved token
+for unrelated product behavior.
+
+Exports first write/sync a same-directory temporary file and publish by a
+non-overwriting hard link. The filesystem must support hard links; unsupported
+ones fail explicitly. A failure writing HTML after successfully publishing JSON
+leaves the valid JSON available and reports an error; it does not claim an HTML
+report was created. Unclean process termination can prevent capture/export.
+Ordinary launches without the flag or environment variable do not activate
+instrumentation.
 
 The CI native typed-UI smoke retains a seven-day artifact named
 `runenwerk-native-profiler-smoke`, containing the exact original `capture.json`,
@@ -48,8 +63,9 @@ files and their histogram counts before upload. This fixture is controlled
 and privacy-reviewed; arbitrary real application captures are **not** uploaded
 automatically. The short smoke is **not** a performance benchmark: its
 distributions are real samples, but not statistically qualified for latency
-or regression decisions. Interactive HTML inspection belongs to the later
-graphical profiler reader, not this backend delivery.
+or regression decisions. The command-line `--profile` path also emits a static offline HTML report
+from the **same schema-v3 typed capture**. This is inspection output, not an
+independent measurement or physical performance benchmark.
 
 Each capture has a non-secret session identity and monotonically increasing
 CPU completion-order event ordinals; retained ordinals expose event-loss gaps

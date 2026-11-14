@@ -14,12 +14,16 @@ use runenui_runtime::{
 };
 use serde::Serialize;
 use std::collections::{BTreeMap, VecDeque};
+use std::ffi::OsString;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+#[path = "profiler_html.rs"]
+mod profiler_html;
 
 const ENV_OUTPUT: &str = "RUNENWERK_PROFILE_OUTPUT";
 const EVENT_LIMIT: usize = 16_384;
@@ -40,6 +44,7 @@ pub(crate) struct NativeProfilerSink {
     origin: Instant,
     output: Arc<PathBuf>,
     session_id: Arc<str>,
+    html_report: bool,
 }
 
 impl runen_ecs::Resource for NativeProfilerSink {}
@@ -427,23 +432,36 @@ impl Drop for ProfileSpan {
 }
 
 impl NativeProfilerSink {
-    pub(crate) fn from_environment() -> Result<Option<Self>> {
-        let Some(path) = std::env::var_os(ENV_OUTPUT) else {
+    /// The exact `--profile` argument is an engine-native opt-in.
+    /// Other application arguments remain untouched. The legacy environment
+    /// override continues to produce JSON alone unless the flag is present.
+    pub(crate) fn from_launch() -> Result<Option<Self>> {
+        let from_cli = profile_flag_present(std::env::args_os().skip(1));
+        let explicit_output = std::env::var_os(ENV_OUTPUT);
+        if !from_cli && explicit_output.is_none() {
             return Ok(None);
+        }
+        let path = if let Some(output) = explicit_output {
+            let text = output
+                .into_string()
+                .map_err(|_| anyhow::anyhow!("{ENV_OUTPUT} must be a Unicode file path"))?;
+            let path = PathBuf::from(text);
+            ensure!(
+                path.file_name().is_some() && !path.as_os_str().is_empty(),
+                "{ENV_OUTPUT} must name an output file"
+            );
+            if from_cli {
+                let parent = path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or_else(|| Path::new("."));
+                std::fs::create_dir_all(parent).context("cannot create profiler output directory")?;
+            }
+            path
+        } else {
+            allocate_auto_output()?
         };
-        let path = path
-            .into_string()
-            .map_err(|_| anyhow::anyhow!("{ENV_OUTPUT} must be a Unicode file path"))?;
-        let path = PathBuf::from(path);
-        ensure!(
-            path.file_name().is_some() && !path.as_os_str().is_empty(),
-            "{ENV_OUTPUT} must name an output file"
-        );
-        ensure!(
-            !path.exists(),
-            "{ENV_OUTPUT} output already exists (refusing overwrite)"
-        );
-        Ok(Some(Self::new(path)))
+        ensure!(!path.exists(), "profiler output already exists (refusing overwrite)");
+        let mut sink = Self::new(path);
+        sink.html_report = from_cli;
+        Ok(Some(sink))
     }
 
     fn new(output: PathBuf) -> Self {
@@ -463,6 +481,7 @@ impl NativeProfilerSink {
             origin: Instant::now(),
             output: Arc::new(output),
             session_id: Arc::from(session_id),
+            html_report: false,
         }
     }
 
@@ -832,12 +851,24 @@ impl NativeProfilerSink {
             ],
         };
         write_profile_atomically(self.output.as_ref(), &report)?;
+        if self.html_report {
+            let html_path = if self.output.file_name().is_some_and(|name| name == "capture.json") {
+                self.output.with_file_name("report.html")
+            } else {
+                self.output.with_extension("html")
+            };
+            ensure!(html_path != *self.output, "HTML report would overwrite capture");
+            let html = profiler_html::render_report(&report);
+            write_html_atomically(&html_path, &html)?;
+            println!("Runenwerk profile: {}", html_path.display());
+        }
         println!(
-            "Runenwerk profiler: events={} dropped={} render_frames={} status={}",
+            "Runenwerk profiler: events={} dropped={} render_frames={} status={} json={}",
             report.cpu_events.len(),
             report.dropped_cpu_events,
             report.render.observations.len(),
-            report.status
+            report.status,
+            self.output.display()
         );
         Ok(())
     }
@@ -847,9 +878,25 @@ impl NativeProfilerSink {
 /// A hard-link publication cannot replace an existing target. A filesystem that
 /// cannot provide that guarantee must reject capture rather than expose partial JSON.
 fn write_profile_atomically(path: &Path, report: &Capture) -> Result<()> {
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
+    write_file_atomically(path, |output| {
+        serde_json::to_writer_pretty(output, report)
+            .context("cannot serialize native profiler capture")
+    })
+}
+
+fn write_html_atomically(path: &Path, html: &str) -> Result<()> {
+    write_file_atomically(path, |output| {
+        output.write_all(html.as_bytes()).context("cannot write HTML profiler report")
+    })
+}
+
+/// The caller supplies typed serializable data; neither output format is
+/// published until its bytes are flushed and synced. Existing files survive.
+fn write_file_atomically(
+    path: &Path,
+    write: impl FnOnce(&mut BufWriter<std::fs::File>) -> Result<()>,
+) -> Result<()> {
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let directory = path.parent().unwrap_or_else(|| Path::new("."));
     let temporary = TemporaryProfilePath(directory.join(format!(
         ".runenwerk-profile-{}-{nonce}.tmp",
@@ -867,19 +914,42 @@ fn write_profile_atomically(path: &Path, report: &Capture) -> Result<()> {
         .context("cannot create temporary profiler output")?;
     {
         let mut output = BufWriter::new(file);
-        serde_json::to_writer_pretty(&mut output, report)
-            .context("cannot serialize native profiler capture")?;
-        output
-            .flush()
-            .context("cannot flush native profiler capture")?;
-        output
-            .get_ref()
-            .sync_all()
-            .context("cannot sync native profiler capture")?;
+        write(&mut output)?;
+        output.flush().context("cannot flush native profiler capture")?;
+        output.get_ref().sync_all().context("cannot sync native profiler capture")?;
     }
     std::fs::hard_link(&temporary.0, path)
         .context("cannot publish profiler report without overwrite (hard links required)")?;
     Ok(())
+}
+
+/// Reserved exact runtime flag, without scanning or consuming any application's
+/// other arguments. Native applications remain responsible for their own grammar.
+fn profile_flag_present(args: impl IntoIterator<Item = OsString>) -> bool {
+    args.into_iter().any(|arg| arg == OsString::from("--profile"))
+}
+
+fn allocate_auto_output() -> Result<PathBuf> {
+    let root = match std::env::var_os("CARGO_TARGET_DIR") {
+        Some(dir) => PathBuf::from(dir),
+        None => std::env::current_dir()?.join("target"),
+    }.join("runenwerk").join("profiles");
+    allocate_auto_output_in(&root)
+}
+
+fn allocate_auto_output_in(root: &Path) -> Result<PathBuf> {
+    std::fs::create_dir_all(root).context("cannot create profiler profiles directory")?;
+    // Directory creation is atomic; no two writers may claim one session.
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    for attempt in 0..64u32 {
+        let dir = root.join(format!("{stamp:032x}-{:08x}-{attempt:02x}", std::process::id()));
+        match std::fs::create_dir(&dir) {
+            Ok(()) => return Ok(dir.join("capture.json")),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error).context("cannot allocate profiler session directory"),
+        }
+    }
+    anyhow::bail!("cannot allocate unique profiler session directory")
 }
 
 fn saturating_u64(value: u128) -> u64 {
@@ -929,6 +999,44 @@ fn duration_histogram(durations: &[u64]) -> DurationHistogram {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exact_profile_flag_does_not_match_unrelated_application_arguments() {
+        assert!(!profile_flag_present([OsString::from("--release")]));
+        assert!(!profile_flag_present([OsString::from("--profile-output")]));
+        assert!(!profile_flag_present([OsString::from("--profile=true")]));
+        assert!(profile_flag_present([OsString::from("--other"), OsString::from("--profile")]));
+    }
+
+    #[test]
+    fn auto_output_allocates_unique_nonoverwriting_paths() {
+        let root = std::env::temp_dir().join(format!(
+            "runenwerk-profile-allocate-{}-{}",
+            std::process::id(),
+            PROCESS_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed),
+        ));
+        let first = allocate_auto_output_in(&root).unwrap();
+        let second = allocate_auto_output_in(&root).unwrap();
+        assert_ne!(first, second);
+        assert_eq!(first.file_name().unwrap(), "capture.json");
+        assert!(first.parent().unwrap().is_dir());
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn html_export_never_overwrites_existing_file() {
+        let root = std::env::temp_dir().join(format!(
+            "runenwerk-profile-publish-{}-{}",
+            std::process::id(),
+            PROCESS_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed),
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        let file = root.join("report.html");
+        write_html_atomically(&file, "<h1>first</h1>").unwrap();
+        assert!(write_html_atomically(&file, "<h1>second</h1>").is_err());
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "<h1>first</h1>");
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn canonical_pointer_trace_is_original_and_excludes_ui_content() {

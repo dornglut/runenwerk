@@ -434,7 +434,7 @@ fn displayed_native_mouse_point(
 }
 
 pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
-    let native_profile = crate::runtime::profiler::NativeProfilerSink::from_environment()?;
+    let native_profile = crate::runtime::profiler::NativeProfilerSink::from_launch()?;
     if let Some(profile) = native_profile.as_ref() {
         state.world.insert_resource(profile.clone());
         profile.enable_render_history(&mut state.world);
