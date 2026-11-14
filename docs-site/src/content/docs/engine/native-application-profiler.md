@@ -30,7 +30,12 @@ Remove-Item Env:RUNENWERK_PROFILE_OUTPUT
 ~~~
 
 Create the output directory beforehand. Each file path must be new: the profiler
-refuses to replace an existing file. No application-specific instrumentation,
+refuses to replace an existing file. Export first writes and syncs a same-directory
+temporary file, then publishes the final name with a non-overwriting hard link.
+The destination filesystem must support hard links; unsupported filesystems fail
+rather than exposing an incomplete final JSON. Ordinary failures remove the temporary
+file; an abrupt process crash can leave a temporary artifact.
+No application-specific instrumentation,
 Tracy or graphical editor is required. The profiler reports status and counts at
 shutdown; a normal run without this environment variable does not activate it.
 

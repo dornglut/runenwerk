@@ -12,7 +12,7 @@ use serde::Serialize;
 use std::collections::{BTreeMap, VecDeque};
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -157,6 +157,16 @@ struct Capture {
 pub(crate) enum M13PumpFailureStage {
     SlotLookup,
     RuntimePump,
+}
+
+/// Removes incomplete temporary files on ordinary export errors. The final
+/// output path is never touched before a complete same-directory publication.
+struct TemporaryProfilePath(PathBuf);
+
+impl Drop for TemporaryProfilePath {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
 }
 
 pub(crate) struct ProfileSpan {
@@ -489,17 +499,7 @@ impl NativeProfilerSink {
                 "input_to_photon_latency",
             ],
         };
-        let file = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(self.output.as_ref())
-            .with_context(|| "cannot create new profiler output (no overwrite)")?;
-        let mut output = BufWriter::new(file);
-        serde_json::to_writer_pretty(&mut output, &report)
-            .context("cannot serialize native profiler capture")?;
-        output
-            .flush()
-            .context("cannot flush native profiler capture")?;
+        write_profile_atomically(self.output.as_ref(), &report)?;
         println!(
             "Runenwerk profiler: events={} dropped={} render_frames={} status={}",
             report.cpu_events.len(),
@@ -509,6 +509,45 @@ impl NativeProfilerSink {
         );
         Ok(())
     }
+}
+
+/// Build and sync the JSON completely before atomically publishing the final name.
+/// A hard-link publication cannot replace an existing target. A filesystem that
+/// cannot provide that guarantee must reject capture rather than expose partial JSON.
+fn write_profile_atomically(path: &Path, report: &Capture) -> Result<()> {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let directory = path.parent().unwrap_or_else(|| Path::new("."));
+    let temporary = TemporaryProfilePath(directory.join(format!(
+        ".runenwerk-profile-{}-{nonce}.tmp",
+        std::process::id()
+    )));
+    let mut options = OpenOptions::new();
+    options.create_new(true).write(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let file = options
+        .open(&temporary.0)
+        .context("cannot create temporary profiler output")?;
+    {
+        let mut output = BufWriter::new(file);
+        serde_json::to_writer_pretty(&mut output, report)
+            .context("cannot serialize native profiler capture")?;
+        output
+            .flush()
+            .context("cannot flush native profiler capture")?;
+        output
+            .get_ref()
+            .sync_all()
+            .context("cannot sync native profiler capture")?;
+    }
+    std::fs::hard_link(&temporary.0, path)
+        .context("cannot publish profiler report without overwrite (hard links required)")?;
+    Ok(())
 }
 
 fn saturating_u64(value: u128) -> u64 {
@@ -629,6 +668,36 @@ mod tests {
             "output must not be replaced"
         );
         std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn output_publication_never_overwrites_and_cleans_failed_temporary_files() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory = std::env::temp_dir().join(format!(
+            "runenwerk-native-profiler-publication-{}-{nonce}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let path = directory.join("capture.json");
+        let sink = NativeProfilerSink::new(path.clone());
+        let world = World::new();
+
+        std::fs::write(&path, b"original").unwrap();
+        assert!(sink.finish(&world, true).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"original");
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
+
+        std::fs::remove_file(&path).unwrap();
+        sink.finish(&world, true).unwrap();
+        let capture: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(capture["status"], "completed");
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 1);
+        std::fs::remove_file(path).unwrap();
+        std::fs::remove_dir(directory).unwrap();
     }
 
     #[test]
