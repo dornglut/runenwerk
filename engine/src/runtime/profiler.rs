@@ -21,8 +21,8 @@ const EVENT_LIMIT: usize = 16_384;
 const RENDER_HISTORY_LIMIT: usize = 512;
 /// Fixed logarithmic-ish time buckets. Counts cover [0, bound) and one unbounded tail.
 const DURATION_HISTOGRAM_UPPER_NS: [u64; 10] = [
-    50_000, 100_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000, 8_000_000,
-    16_000_000, 33_333_334,
+    50_000, 100_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000, 8_000_000, 16_000_000,
+    33_333_334,
 ];
 type StageGroupKey = (&'static str, &'static str, Option<u64>, Option<u64>);
 
@@ -768,7 +768,10 @@ mod tests {
     fn histogram_bins_use_actual_durations_and_preserve_boundary_semantics() {
         let values = [0, 49_999, 50_000, 99_999, 100_000, 33_333_334];
         let histogram = duration_histogram(&values);
-        assert_eq!(histogram.upper_bounds_exclusive_ns, DURATION_HISTOGRAM_UPPER_NS);
+        assert_eq!(
+            histogram.upper_bounds_exclusive_ns,
+            DURATION_HISTOGRAM_UPPER_NS
+        );
         assert_eq!(histogram.counts, [2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1]);
         assert_eq!(histogram.counts.iter().sum::<usize>(), values.len());
     }
