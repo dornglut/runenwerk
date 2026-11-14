@@ -190,7 +190,9 @@ fn project_one_pointer_trace(trace: &Trace, work: WorkSequence) -> PointerTraceE
     evidence.status = if committed {
         "observed_committed_pointer_transaction"
     } else {
-        "partial_pointer_trace"
+        // The original hit can be recorded without any routed transaction,
+        // e.g. a non-activating Move; this is not fabricated trace loss.
+        "physical_observed_without_routed_commit"
     };
     evidence.physical_target_present = Some(observation.target().is_some());
     evidence.physical_path_depth = observation
@@ -866,6 +868,10 @@ mod tests {
             rect.y() + rect.height() / 2.0,
         )
         .unwrap();
+        assert!(
+            publication.hit_test_scene().target_at(point).is_some(),
+            "published control center must have a real physical hit"
+        );
         let pointer = PointerId::new(41).unwrap();
         let device = InputDeviceId::new(42).unwrap();
         for phase in [PointerPhase::Move, PointerPhase::Down, PointerPhase::Up] {
@@ -892,10 +898,23 @@ mod tests {
                 .find(|item| item.sequence == submitted.sequence().get())
                 .expect("exact original pointer receipt is projected");
             assert_eq!(observed.phase, Some(pointer_phase_name(phase)));
-            assert_eq!(observed.status, "observed_committed_pointer_transaction");
+            assert!(
+                matches!(
+                    observed.status,
+                    "observed_committed_pointer_transaction"
+                        | "physical_observed_without_routed_commit"
+                ),
+                "phase={phase:?} source trace: {}",
+                serde_json::to_string(observed).unwrap()
+            );
             assert_eq!(observed.physical_target_present, Some(true));
             assert_eq!(observed.displayed_snapshot, Some("current"));
             if phase == PointerPhase::Up {
+                assert_eq!(
+                    observed.status,
+                    "observed_committed_pointer_transaction",
+                    "original primary Up must complete the routed activation"
+                );
                 assert_eq!(
                     observed.matches_previous_down_physical_target,
                     Some(true),

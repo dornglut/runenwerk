@@ -866,7 +866,7 @@ fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> an
     let report_bytes = std::fs::read(&profile_path)?;
     let report: serde_json::Value = serde_json::from_slice(&report_bytes)?;
     anyhow::ensure!(
-        report["schema_version"].as_u64() == Some(1)
+        report["schema_version"].as_u64() == Some(2)
             && report["status"].as_str() == Some("completed")
             && report["session_id"]
                 .as_str()
