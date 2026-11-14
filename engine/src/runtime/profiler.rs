@@ -245,7 +245,10 @@ impl NativeProfilerSink {
             Err(error) => format!("b{:032x}", error.duration().as_nanos()),
         };
         let counter = PROCESS_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let session_id = format!("native-{:08x}-{time_part}-{counter:016x}", std::process::id());
+        let session_id = format!(
+            "native-{:08x}-{time_part}-{counter:016x}",
+            std::process::id()
+        );
         Self {
             inner: Arc::new(Mutex::new(Recorder::default())),
             origin: Instant::now(),
