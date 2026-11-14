@@ -175,13 +175,19 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         let counts = host_frame["duration_histogram_ns"]["counts"]
             .as_array()
             .context("Host-frame histogram counts unavailable")?;
-        let maximum = counts.iter().filter_map(|value| value.as_u64()).max().unwrap_or(0);
+        let maximum = counts
+            .iter()
+            .filter_map(|value| value.as_u64())
+            .max()
+            .unwrap_or(0);
         writeln!(
             &mut readable,
             "\n## Host ordinary-frame histogram (smoke only)\n\n```text"
         )?;
         for (label, value) in labels.iter().zip(counts) {
-            let count = value.as_u64().context("Host-frame bin count is not numeric")?;
+            let count = value
+                .as_u64()
+                .context("Host-frame bin count is not numeric")?;
             let bar_width = if maximum <= 40 {
                 count as usize
             } else {
