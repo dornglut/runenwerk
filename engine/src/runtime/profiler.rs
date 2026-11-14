@@ -6,8 +6,9 @@ use crate::plugins::render::inspect::{
 };
 use anyhow::{Context, Result, ensure};
 use runen_ecs::World;
-use runenui_runtime::{InputArbitrationRecord, InputPumpBatch, PumpOutcome};
+use runenui_runtime::{InputArbitrationRecord, InputPumpBatch, PumpOutcome, UiInputFinality};
 use serde::Serialize;
+use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
@@ -46,12 +47,35 @@ struct CpuObservation {
     host_frame: Option<u64>,
     window: Option<u64>,
     ui_slot: Option<u64>,
-    m13_status: Option<&'static str>,
-    m13_outcome: Option<&'static str>,
-    m13_processed_envelopes: Option<usize>,
-    m13_terminal_receipts: Option<usize>,
-    m13_processed_through: Option<u64>,
-    m13_paused: Option<bool>,
+    m13: Option<M13Observation>,
+}
+
+#[derive(Clone, Serialize)]
+struct M13Observation {
+    settlement_status: &'static str,
+    pump_outcome: &'static str,
+    processed_envelopes: usize,
+    terminal_receipts_total: usize,
+    sampled_receipts: Vec<M13Receipt>,
+    omitted_receipts: usize,
+    processed_through: Option<u64>,
+    paused: bool,
+}
+
+#[derive(Clone, Serialize)]
+struct M13Receipt {
+    sequence: u64,
+    finality: &'static str,
+    ownership_revision: u64,
+}
+
+#[derive(Serialize)]
+struct StageStatistics {
+    domain: &'static str,
+    stage: &'static str,
+    sample_count: usize,
+    median_ns: u64,
+    p95_ns: u64,
 }
 
 #[derive(Serialize)]
@@ -96,6 +120,7 @@ struct Capture {
     event_capacity: usize,
     dropped_cpu_events: u64,
     cpu_events: Vec<CpuObservation>,
+    stage_statistics: Vec<StageStatistics>,
     render: RenderCapture,
     unavailable: &'static [&'static str],
 }
@@ -197,21 +222,10 @@ impl NativeProfilerSink {
         started: Instant,
         window: Option<u64>,
         ui_slot: Option<u64>,
-        m13: Option<(&'static str, &'static str, usize, usize, Option<u64>, bool)>,
+        m13: Option<M13Observation>,
     ) {
         let duration_ns = saturating_u64(started.elapsed().as_nanos());
         let start_ns = saturating_u64(started.duration_since(self.origin).as_nanos());
-        let (status, outcome, processed, terminal, through, paused) = match m13 {
-            Some((status, outcome, processed, terminal, through, paused)) => (
-                Some(status),
-                Some(outcome),
-                Some(processed),
-                Some(terminal),
-                through,
-                Some(paused),
-            ),
-            None => (None, None, None, None, None, None),
-        };
         let event = CpuObservation {
             domain,
             stage,
@@ -223,12 +237,7 @@ impl NativeProfilerSink {
             },
             window,
             ui_slot,
-            m13_status: status,
-            m13_outcome: outcome,
-            m13_processed_envelopes: processed,
-            m13_terminal_receipts: terminal,
-            m13_processed_through: through,
-            m13_paused: paused,
+            m13,
         };
         if let Ok(mut recorder) = self.inner.lock() {
             if recorder.events.len() < EVENT_LIMIT {
@@ -257,25 +266,43 @@ impl NativeProfilerSink {
             PumpOutcome::Terminal(_) => "terminal",
             _ => "unknown",
         };
-        let terminal_receipts = batch
-            .ordered_records()
-            .iter()
-            .filter(|record| matches!(record, InputArbitrationRecord::InputSettled(_)))
-            .count();
+        let mut receipt_samples = Vec::new();
+        let mut receipt_count = 0_usize;
+        for record in batch.ordered_records() {
+            if let InputArbitrationRecord::InputSettled(receipt) = record {
+                receipt_count = receipt_count.saturating_add(1);
+                if receipt_samples.len() < 16 {
+                    let finality = match receipt.finality() {
+                        UiInputFinality::Committed(_) => "committed",
+                        UiInputFinality::ProcessingRejected(_) => "processing_rejected",
+                        UiInputFinality::Aborted(_) => "aborted",
+                        _ => "unknown",
+                    };
+                    receipt_samples.push(M13Receipt {
+                        sequence: receipt.sequence().get(),
+                        finality,
+                        ownership_revision: receipt.ownership_revision().get(),
+                    });
+                }
+            }
+        }
+        let m13 = M13Observation {
+            settlement_status,
+            pump_outcome: outcome,
+            processed_envelopes: batch.report().processed_envelopes(),
+            terminal_receipts_total: receipt_count,
+            omitted_receipts: receipt_count.saturating_sub(receipt_samples.len()),
+            sampled_receipts: receipt_samples,
+            processed_through: batch.processed_through().map(|sequence| sequence.get()),
+            paused: batch.pause_reason().is_some(),
+        };
         self.record(
             "runenui_m13",
             "canonical_input_pump",
             started,
             None,
             Some(slot),
-            Some((
-                settlement_status,
-                outcome,
-                batch.report().processed_envelopes(),
-                terminal_receipts,
-                batch.processed_through().map(|sequence| sequence.get()),
-                batch.pause_reason().is_some(),
-            )),
+            Some(m13),
         );
     }
 
@@ -357,6 +384,7 @@ impl NativeProfilerSink {
             source_revision: option_env!("RUNENWERK_SOURCE_REVISION").unwrap_or("unknown"),
             event_capacity: EVENT_LIMIT,
             dropped_cpu_events: dropped,
+            stage_statistics: summarize_events(&events),
             cpu_events: events,
             render,
             unavailable: &[
@@ -391,6 +419,31 @@ impl NativeProfilerSink {
 
 fn saturating_u64(value: u128) -> u64 {
     u64::try_from(value).unwrap_or(u64::MAX)
+}
+
+/// Close-only reducer: these durations are CPU stage spans, not additive frame wall time.
+fn summarize_events(events: &[CpuObservation]) -> Vec<StageStatistics> {
+    let mut groups = BTreeMap::<(&'static str, &'static str), Vec<u64>>::new();
+    for event in events {
+        groups
+            .entry((event.domain, event.stage))
+            .or_default()
+            .push(event.duration_ns);
+    }
+    groups
+        .into_iter()
+        .map(|((domain, stage), mut durations)| {
+            durations.sort_unstable();
+            let len = durations.len();
+            StageStatistics {
+                domain,
+                stage,
+                sample_count: len,
+                median_ns: durations[(len - 1) / 2],
+                p95_ns: durations[(len * 95).div_ceil(100) - 1],
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -430,6 +483,23 @@ mod tests {
         assert!(json.contains("window_keyboard"));
         assert!(!json.contains("text"));
         assert!(!json.contains("title"));
+    }
+
+    #[test]
+    fn stage_summary_preserves_sample_count_and_percentiles() {
+        let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
+        for _ in 0..5 {
+            let _scope = sink.span("host", "window_resize", None, None);
+        }
+        let mut values = sink.inner.lock().unwrap().events.clone();
+        for (value, duration) in values.iter_mut().zip([100, 200, 300, 400, 500]) {
+            value.duration_ns = duration;
+        }
+        let stats = summarize_events(&values);
+        assert_eq!(stats.len(), 1);
+        assert_eq!(stats[0].sample_count, 5);
+        assert_eq!(stats[0].median_ns, 300);
+        assert_eq!(stats[0].p95_ns, 500);
     }
 
     #[test]
