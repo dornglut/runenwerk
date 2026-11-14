@@ -939,13 +939,18 @@ fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> an
     let dirs = std::fs::read_dir(&profiles)?.collect::<std::io::Result<Vec<_>>>()?;
     anyhow::ensure!(dirs.len() == 1, "native --profile must create one session");
     let session = dirs[0].path();
-    anyhow::ensure!(session.is_dir(), "native --profile session is not a directory");
+    anyhow::ensure!(
+        session.is_dir(),
+        "native --profile session is not a directory"
+    );
     let capture_bytes = std::fs::read(session.join("capture.json"))?;
     let capture: serde_json::Value = serde_json::from_slice(&capture_bytes)?;
     anyhow::ensure!(
         capture["schema_version"] == 3
             && capture["status"] == "completed"
-            && capture["cpu_events"].as_array().is_some_and(|v| !v.is_empty()),
+            && capture["cpu_events"]
+                .as_array()
+                .is_some_and(|v| !v.is_empty()),
         "native --profile did not retain an actual typed native capture"
     );
     let html = std::fs::read_to_string(session.join("report.html"))?;
