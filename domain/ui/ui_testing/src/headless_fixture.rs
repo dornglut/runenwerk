@@ -142,6 +142,24 @@ impl UiApp for MinimalLabelApp {
     type Action = ();
     type HostProtocol = NoHostProtocol;
 
+    fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        // A single text node enters the first mounted root reconciliation.
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+    }
+
+    fn action_producer_budget(
+        _state: &Self::State,
+        _action: &Self::Action,
+    ) -> runenui_core::ProducerBudget {
+        // This proof app's update is inert and produces no effects.
+        runenui_core::ProducerBudget::new(1, 0)
+    }
+
+    fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        // A label has no authored interactive callbacks.
+        runenui_core::ProducerBudget::new(1, 0)
+    }
+
     fn root(state: &Self::State) -> impl View<Self::Action> {
         text(state.text.clone()).id(state.authored_id.clone())
     }
@@ -171,6 +189,7 @@ pub(crate) enum RunenUiHeadlessProofError {
     UnexpectedAccessibilityShape,
     UnsupportedAccessibilityRole,
     InvalidAuthoredId,
+    RuntimeMount,
     FontRegistration,
     FontFamily,
     FontMapping,
@@ -247,7 +266,8 @@ fn observe_minimal_label(
 ) -> Result<StableRunenUiFacts, RunenUiHeadlessProofError> {
     let authored_id = projection.authored_id.clone();
     let text = projection.text.clone();
-    let mut harness = TestHarness::<MinimalLabelApp>::mount(projection);
+    let mut harness = TestHarness::<MinimalLabelApp>::mount(projection)
+        .map_err(|_| RunenUiHeadlessProofError::RuntimeMount)?;
 
     let registered = harness
         .register_text_font_bytes(CONTROLLED_FONT_BYTES.to_vec())

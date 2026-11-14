@@ -2,8 +2,8 @@ use super::composition::{
     RenderFlowRegistryResource, RenderFragmentRegistryResource, sync_render_flow_registry_system,
 };
 use super::features::{
-    EditorPickingResultResource, PreparedDeformationFeatureResource, PreparedDetailFeatureResource,
-    PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
+    EditorPickingResultResource, ManagedRenderProducerIds, PreparedDeformationFeatureResource,
+    PreparedDetailFeatureResource, PreparedDrawFeatureResource, PreparedMaterialFeatureResource,
     PreparedParticleVfxFeatureResource, PreparedUiFrameResource, PreparedWorldFeatureResource,
     RenderFeatureRegistryResource, RunenUiPaintSubmissionRegistryResource,
     SurfaceFrameSubmissionRegistryResource, UiFontAtlasResource,
@@ -86,6 +86,7 @@ impl Plugin for RenderPlugin {
         app.init_resource::<ViewportSurfaceBindingRegistryResource>();
         app.init_resource::<UiFontAtlasResource>();
         app.init_resource::<SurfaceFrameSubmissionRegistryResource>();
+        app.init_resource::<ManagedRenderProducerIds>();
         app.init_resource::<RunenUiPaintSubmissionRegistryResource>();
         app.init_resource::<EditorPickingResultResource>();
         app.init_resource::<PreparedDrawFeatureResource>();
@@ -155,7 +156,10 @@ impl Plugin for RenderPlugin {
         app.add_systems(
             RenderPrepare,
             prepare_ui_feature_resource_system
+                .on_invoker_thread()
+                .in_set(RenderRuntimeSet::UiFeaturePrepare)
                 .after_if_present(UiRuntimeSet::RenderPublication)
+                .after_if_present(UiRuntimeSet::ManagedProducerValidation)
                 .before(RenderRuntimeSet::FramePrepare),
         );
         app.add_systems(

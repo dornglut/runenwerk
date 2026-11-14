@@ -4,6 +4,7 @@
 //! fixed-step state/resources, canonical fixed-step execution, canonical frame
 //! lifecycle execution, publication policy, and window runtime helpers.
 
+pub mod app_shutdown;
 pub(crate) mod fixed_step_executor;
 pub mod fixed_time;
 pub(crate) mod frame_lifecycle;
@@ -11,6 +12,7 @@ pub mod frame_pacing;
 pub mod jobs;
 pub(crate) mod native_host_wake;
 pub mod native_window_hooks;
+pub mod native_window_requests;
 pub mod param;
 pub mod platform;
 pub mod presentation;
@@ -25,11 +27,13 @@ pub(crate) mod winit_input;
 pub mod winit_runner;
 pub(crate) mod winit_window_realizer;
 
+pub use app_shutdown::*;
 pub use fixed_time::*;
 pub use frame_pacing::*;
 pub use jobs::*;
 pub use native_host_wake::{NativeHostEvent, NativeWakeClosed, NativeWakeTransport};
 pub use native_window_hooks::*;
+pub use native_window_requests::*;
 pub use param::*;
 pub use presentation::*;
 pub use product_cache::*;

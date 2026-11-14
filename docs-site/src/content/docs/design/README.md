@@ -98,6 +98,7 @@ Examples:
 
 ```text
 templates/crate-design-template.md
+templates/design-document-template.md
 ```
 
 ## Design Document Requirements

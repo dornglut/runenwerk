@@ -57,6 +57,19 @@ snapshot report; it performs no new GPU readbacks or wait-for-GPU drain.
 
 ## Qualification and overhead
 
+On a successful opt-in report write, stderr includes an additional
+`Render Lab NP1 close-only wall_ms` line with `retained`, `build`,
+`directory`, `serialize`, `file_io` and `total` fields. The timings
+use monotonic elapsed **wall-clock milliseconds**: `build` measures report
+reduction; `directory` includes directory preparation; `serialize` covers
+JSON encoding; `file_io` covers create-new, write and flush (not durable
+fsync); `total` measures the build-through-write interval, excluding
+terminal-summary output, app shutdown and GPU/Present completion. These are
+neither per-frame timings nor process CPU consumption, and stage totals are
+not a replacement for an independent wall/process measurement.
+No added line is printed without `--performance-report`. Existing schema-v1
+and legacy schema-v2 artifacts are unchanged.
+
 The report is generated only when requested, once at close, and can contain up
 to 4096 retained frame rows plus existing per-pass evidence. Historical GPU
 readbacks may still be pending when the report is written; closure never waits

@@ -138,11 +138,11 @@ ADR 0025 owns the coordination relationships among these owners. It does not mov
 
 Implemented-era PlantUML references move with this design:
 
-- [Tool Suite registration flow](diagrams/editor-tool-suite-registration-flow.puml)
-- [Tool Suite ownership](diagrams/editor-tool-suite-ownership.puml)
-- [Provider-owned graph routing](diagrams/provider-owned-graph-routing.puml)
-- [Stable tool-surface key persistence](diagrams/stable-tool-surface-key-persistence.puml)
-- [Workbench host compositions](diagrams/workbench-host-compositions.puml)
+- [Tool Suite registration flow](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/design/implemented/diagrams/editor-tool-suite-registration-flow.puml)
+- [Tool Suite ownership](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/design/implemented/diagrams/editor-tool-suite-ownership.puml)
+- [Provider-owned graph routing](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/design/implemented/diagrams/provider-owned-graph-routing.puml)
+- [Stable tool-surface key persistence](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/design/implemented/diagrams/stable-tool-surface-key-persistence.puml)
+- [Workbench host compositions](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/design/implemented/diagrams/workbench-host-compositions.puml)
 
 They document the implemented editor-local Tool Suite/Workbench boundary. Where older workspace structural terminology conflicts with ADR 0013, ADR 0013 is authoritative. Where older global editor semantic terminology conflicts with ADR 0025, ADR 0025 is authoritative.
 

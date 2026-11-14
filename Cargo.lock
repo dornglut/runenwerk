@@ -1076,6 +1076,7 @@ dependencies = [
  "winit",
  "world_ops",
  "world_sdf",
+ "x11rb",
 ]
 
 [[package]]
@@ -3235,7 +3236,7 @@ dependencies = [
 [[package]]
 name = "runen-gpu"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-gpu?rev=b11c5c665ee4e9d13adc20cb6b0b03a8467800ea#b11c5c665ee4e9d13adc20cb6b0b03a8467800ea"
+source = "git+https://github.com/dornglut/runen-gpu?rev=03be685a1c0ea3f51afbc769cccdc4ef9d765005#03be685a1c0ea3f51afbc769cccdc4ef9d765005"
 dependencies = [
  "bytemuck",
  "naga",
@@ -3273,7 +3274,7 @@ dependencies = [
 [[package]]
 name = "runen-render"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-render?rev=08f85232d7c47e7cada3decb6e31cfa99c147bfa#08f85232d7c47e7cada3decb6e31cfa99c147bfa"
+source = "git+https://github.com/dornglut/runen-render?rev=23cfdcf792a4e4a55bdbc383f08b79c4e99fcadc#23cfdcf792a4e4a55bdbc383f08b79c4e99fcadc"
 dependencies = [
  "bymsdfgen-core",
  "lyon_tessellation",
@@ -3302,12 +3303,12 @@ dependencies = [
 [[package]]
 name = "runenui_core"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-ui?rev=712d9240052cde9dd2ece2516d28f599d3f2465d#712d9240052cde9dd2ece2516d28f599d3f2465d"
+source = "git+https://github.com/dornglut/runen-ui?rev=861be3bedadd56e1db30f7e13bfdaafe2f2c95fd#861be3bedadd56e1db30f7e13bfdaafe2f2c95fd"
 
 [[package]]
 name = "runenui_runtime"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-ui?rev=712d9240052cde9dd2ece2516d28f599d3f2465d#712d9240052cde9dd2ece2516d28f599d3f2465d"
+source = "git+https://github.com/dornglut/runen-ui?rev=861be3bedadd56e1db30f7e13bfdaafe2f2c95fd#861be3bedadd56e1db30f7e13bfdaafe2f2c95fd"
 dependencies = [
  "runenui_core",
  "runenui_text",
@@ -3318,7 +3319,7 @@ dependencies = [
 [[package]]
 name = "runenui_testing"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-ui?rev=712d9240052cde9dd2ece2516d28f599d3f2465d#712d9240052cde9dd2ece2516d28f599d3f2465d"
+source = "git+https://github.com/dornglut/runen-ui?rev=861be3bedadd56e1db30f7e13bfdaafe2f2c95fd#861be3bedadd56e1db30f7e13bfdaafe2f2c95fd"
 dependencies = [
  "runenui_core",
  "runenui_runtime",
@@ -3327,7 +3328,7 @@ dependencies = [
 [[package]]
 name = "runenui_text"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-ui?rev=712d9240052cde9dd2ece2516d28f599d3f2465d#712d9240052cde9dd2ece2516d28f599d3f2465d"
+source = "git+https://github.com/dornglut/runen-ui?rev=861be3bedadd56e1db30f7e13bfdaafe2f2c95fd#861be3bedadd56e1db30f7e13bfdaafe2f2c95fd"
 dependencies = [
  "fontique",
  "parley",
@@ -3339,7 +3340,7 @@ dependencies = [
 [[package]]
 name = "runenui_winit"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-ui?rev=712d9240052cde9dd2ece2516d28f599d3f2465d#712d9240052cde9dd2ece2516d28f599d3f2465d"
+source = "git+https://github.com/dornglut/runen-ui?rev=861be3bedadd56e1db30f7e13bfdaafe2f2c95fd#861be3bedadd56e1db30f7e13bfdaafe2f2c95fd"
 dependencies = [
  "accesskit",
  "accesskit_winit",

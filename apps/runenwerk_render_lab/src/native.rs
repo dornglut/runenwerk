@@ -697,6 +697,7 @@ fn complete_render_lab_measurement_if_requested(
             write_measurement_artifact(output_path, history, measurement)?;
         }
         if let Some(path) = measurement.performance_report_path.as_deref() {
+            let report_started = std::time::Instant::now();
             let report = performance_report::build_report(
                 history,
                 measurement.radiance_target_size_px,
@@ -704,7 +705,19 @@ fn complete_render_lab_measurement_if_requested(
                 observation_policy,
                 gfx.map(|gfx| gfx.adapter_facts()),
             );
-            performance_report::write_report(path, &report)?;
+            let build_elapsed = report_started.elapsed();
+            let write_elapsed = performance_report::write_report(path, &report)?;
+            let total_elapsed = report_started.elapsed();
+            let milliseconds = |duration: std::time::Duration| duration.as_secs_f64() * 1000.0;
+            eprintln!(
+                "Render Lab NP1 close-only wall_ms retained={} build={:.3} directory={:.3} serialize={:.3} file_io={:.3} total={:.3}",
+                history.len(),
+                milliseconds(build_elapsed),
+                milliseconds(write_elapsed.directory),
+                milliseconds(write_elapsed.serialization),
+                milliseconds(write_elapsed.file_io),
+                milliseconds(total_elapsed),
+            );
             eprintln!("{}", performance_report::terminal_summary(&report));
         }
         if let Some(capture) = quality_capture {

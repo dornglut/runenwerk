@@ -123,7 +123,7 @@ Workbench integration is deferred. It must not block standalone
 `runenwerk_draw` drawing app work.
 
 Canonical PlantUML source:
-[draw-authority-and-product-flow.puml](../../apps/runenwerk-draw/diagrams/draw-authority-and-product-flow.puml).
+[draw-authority-and-product-flow.puml](https://github.com/dornglut/runenwerk/blob/main/docs-site/src/content/docs/apps/runenwerk-draw/diagrams/draw-authority-and-product-flow.puml).
 
 ## Tool-Session Boundary
 

@@ -1,6 +1,6 @@
 use crate::app::domain::host::AppHostSelection;
 use crate::app::domain::lifecycle::AppLifecycle;
-use crate::app::domain::state::WindowedAppState;
+use crate::app::domain::state::{NativeInitialWindow, WindowedAppState};
 use crate::prelude::IntoPlugins;
 use crate::runtime::system::IntoSystemConfigs;
 use crate::*;
@@ -17,6 +17,7 @@ pub struct App {
     pub(crate) lifecycle: AppLifecycle,
     pub(crate) host_selection: AppHostSelection,
     pub(crate) title: String,
+    pub(crate) initial_native_window: NativeInitialWindow,
     composition_errors: Vec<AppCompositionError>,
 }
 
@@ -43,6 +44,7 @@ impl App {
             lifecycle: AppLifecycle::default(),
             host_selection,
             title: title.clone(),
+            initial_native_window: NativeInitialWindow::Primary,
             composition_errors: Vec::new(),
         }
     }
@@ -54,12 +56,32 @@ impl App {
         if !self.allow_topology_mutation("add_plugin", None) {
             return self;
         }
+        if crate::plugins::render::reject_selected_native_ui_only_plugin(
+            &mut self.world,
+            plugin.name(),
+        ) {
+            self.composition_errors
+                .push(AppCompositionError::DuplicateSelectedCapability {
+                    plugin: plugin.name(),
+                });
+            return self;
+        }
         plugin.build(self);
         self
     }
 
     pub fn add_boxed_plugin(&mut self, plugin: Box<dyn Plugin>) -> &mut Self {
         if !self.allow_topology_mutation("add_boxed_plugin", None) {
+            return self;
+        }
+        if crate::plugins::render::reject_selected_native_ui_only_plugin(
+            &mut self.world,
+            plugin.name(),
+        ) {
+            self.composition_errors
+                .push(AppCompositionError::DuplicateSelectedCapability {
+                    plugin: plugin.name(),
+                });
             return self;
         }
         plugin.build(self);
@@ -121,6 +143,10 @@ impl App {
         self
     }
 
+    pub(crate) fn is_native_window_host(&self) -> bool {
+        matches!(self.host_selection, AppHostSelection::NativeWindow)
+    }
+
     pub fn world(&self) -> &World {
         &self.world
     }
@@ -143,6 +169,7 @@ impl App {
             scheduler: self.scheduler,
             startup_ran: self.lifecycle,
             title: self.title,
+            initial_native_window: self.initial_native_window,
         }
     }
 
@@ -153,6 +180,8 @@ impl App {
                 AppCompositionAdmissionError::Registration(errors),
             ));
         }
+
+        crate::plugins::render::validate_selected_native_ui_only(self)?;
 
         self.scheduler
             .validate()
@@ -196,6 +225,9 @@ impl App {
 
 #[derive(Debug)]
 enum AppCompositionError {
+    DuplicateSelectedCapability {
+        plugin: &'static str,
+    },
     MissingCapability {
         operation: &'static str,
         capability: &'static str,
@@ -214,6 +246,10 @@ enum AppCompositionError {
 impl fmt::Display for AppCompositionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::DuplicateSelectedCapability { plugin } => write!(
+                formatter,
+                "native UI-only composition rejects duplicate plugin installation: {plugin}"
+            ),
             Self::MissingCapability {
                 operation,
                 capability,
@@ -249,7 +285,9 @@ impl Error for AppCompositionError {
     fn source(&self) -> Option<&(dyn Error + 'static)> {
         match self {
             Self::SystemRegistration { source, .. } => Some(source),
-            Self::MissingCapability { .. } | Self::LateTopologyMutation { .. } => None,
+            Self::MissingCapability { .. }
+            | Self::DuplicateSelectedCapability { .. }
+            | Self::LateTopologyMutation { .. } => None,
         }
     }
 }

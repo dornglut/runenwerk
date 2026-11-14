@@ -18,3 +18,6 @@ sidebar:
 Reusable templates for documentation authors and AI-assisted contributors.
 
 - [Domain Module Template](domain-module-template.md)
+
+When copying a template, replace the sample title and owner metadata and do not
+carry the template page's draft/hidden settings into a published module page.

@@ -15,6 +15,15 @@ use std::io::Write;
 
 const SCHEMA_VERSION: u32 = 1;
 
+// Elapsed wall-clock durations from the opt-in report's close path. These are
+// neither process CPU time nor an alternative Render frame timing authority.
+#[derive(Debug, Clone, Copy)]
+pub(super) struct ReportWriteElapsed {
+    pub(super) directory: std::time::Duration,
+    pub(super) serialization: std::time::Duration,
+    pub(super) file_io: std::time::Duration,
+}
+
 #[derive(Debug, Serialize)]
 pub(super) struct PerformanceReport {
     schema_version: u32,
@@ -447,7 +456,11 @@ pub(super) fn build_report(
     }
 }
 
-pub(super) fn write_report(path: &std::path::Path, report: &PerformanceReport) -> Result<()> {
+pub(super) fn write_report(
+    path: &std::path::Path,
+    report: &PerformanceReport,
+) -> Result<ReportWriteElapsed> {
+    let directory_started = std::time::Instant::now();
     if let Some(parent) = path.parent()
         && !parent.as_os_str().is_empty()
     {
@@ -458,10 +471,14 @@ pub(super) fn write_report(path: &std::path::Path, report: &PerformanceReport) -
             )
         })?;
     }
+    let directory = directory_started.elapsed();
+    let serialization_started = std::time::Instant::now();
     let bytes = serde_json::to_vec_pretty(report)
         .context("serialize native Render Lab performance report")?;
+    let serialization = serialization_started.elapsed();
     // No overwrite: a differently spelled path, symlink, or hardlink must never
     // replace the existing schema-v2 artifact or an older performance report.
+    let file_started = std::time::Instant::now();
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -478,7 +495,11 @@ pub(super) fn write_report(path: &std::path::Path, report: &PerformanceReport) -
         return Err(error)
             .with_context(|| format!("write Render Lab performance report {}", path.display()));
     }
-    Ok(())
+    Ok(ReportWriteElapsed {
+        directory,
+        serialization,
+        file_io: file_started.elapsed(),
+    })
 }
 
 pub(super) fn terminal_summary(report: &PerformanceReport) -> String {

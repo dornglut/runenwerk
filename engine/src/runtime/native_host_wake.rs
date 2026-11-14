@@ -13,6 +13,8 @@ use winit::event_loop::EventLoopProxy;
 #[derive(Debug, Clone, Copy)]
 pub enum NativeHostEvent {
     RunenUiWake,
+    NativeWindowRequests,
+    AppShutdown,
 }
 
 struct NativeClockEpoch {
@@ -128,12 +130,15 @@ impl NativeWakeTransport {
         }
     }
 
-    pub(crate) fn acknowledge(&self) {
+    /// Consume actual pending intent, including immediately before a full-slot
+    /// native settlement. A later queued callback cannot request that work twice;
+    /// a racing producer after this transition retains a new pending intent.
+    pub(crate) fn acknowledge(&self) -> bool {
         // A late callback must not reopen a terminal gate.
-        let _ = self
-            .0
+        self.0
             .state
-            .compare_exchange(PENDING, IDLE, Ordering::AcqRel, Ordering::Acquire);
+            .compare_exchange(PENDING, IDLE, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
     }
 
     pub(crate) fn close(&self) {
@@ -166,6 +171,62 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    fn native_wake_acknowledgement_preserves_racing_and_closed_intent() -> anyhow::Result<()> {
+        if std::env::var_os("RUNENWERK_NATIVE_WAKE_ACK_TEST").is_none() {
+            return Ok(());
+        }
+        let mut builder = winit::event_loop::EventLoop::<NativeHostEvent>::with_user_event();
+        #[cfg(target_os = "windows")]
+        {
+            use winit::platform::windows::EventLoopBuilderExtWindows;
+            builder.with_any_thread(true);
+        }
+        #[cfg(target_os = "linux")]
+        {
+            use winit::platform::x11::EventLoopBuilderExtX11;
+            builder.with_any_thread(true).with_x11();
+        }
+        let event_loop = builder.build()?;
+        let transport = NativeWakeTransport::new(event_loop.create_proxy());
+        transport.notify()?;
+        transport.notify()?;
+        assert!(transport.acknowledge());
+        assert!(
+            !transport.acknowledge(),
+            "stale queued callback is not fresh demand"
+        );
+        for _ in 0..128 {
+            transport.notify()?;
+            let worker_transport = transport.clone();
+            let barrier = Arc::new(std::sync::Barrier::new(2));
+            let worker_barrier = barrier.clone();
+            let worker = std::thread::spawn(move || {
+                worker_barrier.wait();
+                worker_transport.notify().unwrap();
+            });
+            barrier.wait();
+            let covered_before_settlement = transport.acknowledge();
+            worker.join().unwrap();
+            let later_intent = transport.acknowledge();
+            assert!(covered_before_settlement || later_intent);
+            transport.notify()?;
+            assert!(
+                transport.acknowledge(),
+                "producer after acknowledgement retains its opportunity"
+            );
+            assert!(!transport.acknowledge());
+        }
+        transport.close();
+        assert!(!transport.acknowledge());
+        assert!(transport.notify().is_err());
+        println!(
+            "native_wake_ack=pass races=128 stale_callback_inert=true late_producer_preserved=true closed=true"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn clock_clones_share_epoch_and_exhaustion_is_terminal_without_rebasing() {
         let clock = NativeHostClock::new();
         let clone = clock.clone();
@@ -179,15 +240,22 @@ mod tests {
         assert!(clone.deadline(MonotonicInstant::ZERO).is_err());
     }
 
-    /// Run in its own process with RUNENWERK_NATIVE_IDLE_WAKE_SMOKE=1.
-    /// No application timer or host polling can supply the tested completion turn.
+    /// Run in a quiet native process with RUNENWERK_NATIVE_IDLE_WAKE_SMOKE=1.
+    /// RUNENWERK_NATIVE_HOST_LAUNCH_IDLE_WAKE_SMOKE=1 proves launch-selected
+    /// OnDemand through the same real timer-free native wake and retirement.
     #[test]
     #[cfg(any(target_os = "windows", target_os = "linux"))]
     fn native_idle_wake_reaches_real_thread_affine_runtime() -> anyhow::Result<()> {
-        if std::env::var_os("RUNENWERK_NATIVE_IDLE_WAKE_SMOKE").is_none() {
+        let programmatic = std::env::var_os("RUNENWERK_NATIVE_IDLE_WAKE_SMOKE").is_some();
+        let launch = std::env::var_os("RUNENWERK_NATIVE_HOST_LAUNCH_IDLE_WAKE_SMOKE").is_some();
+        if !programmatic && !launch {
             return Ok(());
         }
-        use crate::app::{App, AppNativeHostExt};
+        anyhow::ensure!(
+            !(programmatic && launch),
+            "native idle/wake proof modes are mutually exclusive"
+        );
+        use crate::app::{App, AppNativeHostExt, NativeHostLaunchOverrides};
         use crate::plugins::ui::{
             AppUiExt, UiRuntimeFontConfiguration, UiRuntimeSlotsResource, UiTypedScreenId,
         };
@@ -218,6 +286,25 @@ mod tests {
         }
         struct AsyncApp;
         impl UiApp for AsyncApp {
+            fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                // Fixed authored topology and its initial owner reconciliation.
+                runenui_core::ProducerBudget::new(5, 2)
+                    .with_reconciliation(1, 1, 1)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(1, 0, 0, 0, 0))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(1, 0, 0, 0, 0, 0))
+            }
+
+            fn action_producer_budget(
+                _state: &Self::State,
+                _action: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 1, 1)
+            }
+
+            fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(1, 0)
+            }
+
             type State = State;
             type Action = ();
             type HostProtocol = NoHostProtocol;
@@ -375,7 +462,20 @@ mod tests {
         });
         let mut app = App::new();
         app.add_plugin(crate::plugins::InputFinalizePlugin);
-        app.with_frame_pacing(FramePacingPolicyResource::on_demand());
+        if launch {
+            // An explicit launch request overrides the previously composed
+            // continuous policy before any native window/slot can start.
+            app.with_frame_pacing(FramePacingPolicyResource::continuous_uncapped());
+            let request: NativeHostLaunchOverrides = "on-demand".parse()?;
+            request.apply_to(&mut app)?;
+            anyhow::ensure!(
+                app.world().resource::<FramePacingPolicyResource>()?.mode
+                    == crate::runtime::FramePacingMode::OnDemand,
+                "launch-selected OnDemand failed to override the programmatic Host policy"
+            );
+        } else {
+            app.with_frame_pacing(FramePacingPolicyResource::on_demand());
+        }
         anyhow::ensure!(
             app.ui()
                 .mount_app::<AsyncApp>(
@@ -431,7 +531,11 @@ mod tests {
             done.get() && retired.load(Ordering::Acquire),
             "idle native completion/retirement missing"
         );
-        println!("native_idle_wake_smoke=pass transport_idle=true deadline_none=true");
+        if launch {
+            println!("native_launch_idle_wake_smoke=pass transport_idle=true deadline_none=true");
+        } else {
+            println!("native_idle_wake_smoke=pass transport_idle=true deadline_none=true");
+        }
         Ok(())
     }
 }

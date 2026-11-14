@@ -22,6 +22,7 @@ pub(crate) use frame_submit::frame_render_submit_system;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, SystemSet)]
 pub enum RenderRuntimeSet {
     GpuResidency,
+    UiFeaturePrepare,
     FramePrepare,
     FrameSubmit,
 }

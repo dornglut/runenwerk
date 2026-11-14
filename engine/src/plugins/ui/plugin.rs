@@ -3,9 +3,10 @@ use crate::plugin::Plugin;
 use crate::runtime::{RenderPrepare, RenderSubmit, SystemConfigExt, SystemMobilityExt};
 
 use super::{
-    UiPluginStateResource, UiRuntimeDiagnosticsResource, UiRuntimePresentationAssociationsResource,
-    UiRuntimeReportResource, UiRuntimeSet, UiRuntimeSlotsResource,
-    apply_runenui_terminal_presentations_system, publish_runenui_bound_surfaces_system,
+    UiNativeInputRecipientsResource, UiPluginStateResource, UiRuntimeDiagnosticsResource,
+    UiRuntimePresentationAssociationsResource, UiRuntimeReportResource, UiRuntimeSet,
+    UiRuntimeSlotsResource, apply_runenui_terminal_presentations_system,
+    publish_runenui_bound_surfaces_system, validate_managed_runenui_producers_system,
 };
 
 /// Installs the Engine-owned RunenUI integration resources.
@@ -17,12 +18,20 @@ impl Plugin for UiPlugin {
         app.init_resource::<UiRuntimeDiagnosticsResource>();
         app.init_resource::<UiRuntimeReportResource>();
         app.init_resource::<UiRuntimeSlotsResource>();
+        app.init_resource::<UiNativeInputRecipientsResource>();
         app.init_resource::<UiRuntimePresentationAssociationsResource>();
         app.add_systems(
             RenderPrepare,
             publish_runenui_bound_surfaces_system
                 .on_invoker_thread()
                 .in_set(UiRuntimeSet::RenderPublication),
+        );
+        app.add_systems(
+            RenderPrepare,
+            validate_managed_runenui_producers_system
+                .on_invoker_thread()
+                .in_set(UiRuntimeSet::ManagedProducerValidation)
+                .after(UiRuntimeSet::RenderPublication),
         );
         app.add_systems(
             RenderSubmit,

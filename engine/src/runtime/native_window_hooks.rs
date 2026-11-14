@@ -20,6 +20,7 @@ pub enum NativeWindowHookStage {
     WindowEvent,
     DeviceEvent,
     Frame,
+    GpuProgress,
     Detach,
 }
 
@@ -47,6 +48,18 @@ pub trait NativeWindowHook: 'static {
 
     fn frame(&mut self, _window: &Window, _world: &mut World) -> Result<()> {
         Ok(())
+    }
+
+    /// Observes terminal facts already delivered by Render/UI on the native
+    /// invoker. Return true only once for an actual application-owned wait
+    /// satisfied by exact successful completion in its still-live window,
+    /// slot/publication and GPU generation. Retire cancelled or stale waits.
+    ///
+    /// Passive completion returns false. Do not poll the GPU, perform the next
+    /// application action, or run a frame here. The Host admits a requested
+    /// ordinary continuation through its existing canonical frame gate.
+    fn gpu_progress(&mut self, _world: &mut World) -> Result<bool> {
+        Ok(false)
     }
 
     fn detach(&mut self, _world: &mut World) -> Result<()> {
@@ -149,6 +162,24 @@ impl NativeWindowHookRegistryResource {
             }
         }
     }
+
+    pub(crate) fn dispatch_gpu_progress(&mut self, world: &mut World) -> Result<bool> {
+        let mut continuation = false;
+        for hook in &mut self.hooks {
+            match hook.gpu_progress(world) {
+                Ok(requested) => continuation |= requested,
+                Err(error) => {
+                    self.diagnostics.push(NativeWindowHookDiagnostic {
+                        hook_name: hook.name(),
+                        stage: NativeWindowHookStage::GpuProgress,
+                        message: format!("{error:#}"),
+                    });
+                    return Err(error);
+                }
+            }
+        }
+        Ok(continuation)
+    }
 }
 
 pub(crate) fn with_native_window_hooks(
@@ -160,4 +191,47 @@ pub(crate) fn with_native_window_hooks(
     };
     f(&mut registry, world);
     world.insert_resource(registry);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Consumer(Option<bool>);
+    impl NativeWindowHook for Consumer {
+        fn name(&self) -> &'static str {
+            "waiting application"
+        }
+        fn gpu_progress(&mut self, _: &mut World) -> Result<bool> {
+            match self.0.take() {
+                Some(false) => anyhow::bail!("cancelled wait"),
+                ready => Ok(ready == Some(true)),
+            }
+        }
+    }
+
+    #[test]
+    fn terminal_delivery_has_no_passive_or_repeated_application_demand() {
+        let mut world = World::new();
+        let mut hooks = NativeWindowHookRegistryResource::default();
+        assert!(!hooks.dispatch_gpu_progress(&mut world).unwrap());
+        hooks.register_hook(Consumer(None));
+        assert!(!hooks.dispatch_gpu_progress(&mut world).unwrap());
+        hooks.register_hook(Consumer(Some(true)));
+        assert!(hooks.dispatch_gpu_progress(&mut world).unwrap());
+        assert!(!hooks.dispatch_gpu_progress(&mut world).unwrap());
+    }
+
+    #[test]
+    fn failed_consumer_does_not_return_an_earlier_successful_request() {
+        let mut world = World::new();
+        let mut hooks = NativeWindowHookRegistryResource::default();
+        hooks.register_hook(Consumer(Some(true)));
+        hooks.register_hook(Consumer(Some(false)));
+        assert!(hooks.dispatch_gpu_progress(&mut world).is_err());
+        assert_eq!(
+            hooks.diagnostics()[0].stage,
+            NativeWindowHookStage::GpuProgress
+        );
+    }
 }

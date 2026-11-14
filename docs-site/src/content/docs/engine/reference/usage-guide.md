@@ -5,7 +5,7 @@ status: active
 owner: engine
 layer: engine-runtime
 canonical: true
-last_reviewed: 2026-09-25
+last_reviewed: 2026-10-21
 publication: primary
 ---
 
@@ -135,6 +135,83 @@ configuring it on `App::headless()` is rejected during composition admission. Na
 lifecycle/effect intent is keyed by `NativeWindowId` in
 `WindowStateRegistryResource`; headless App state does not manufacture a native-window
 surrogate.
+
+## Native application launch configuration
+
+Native Host pacing is separate from Render surface presentation policy and fixed
+simulation cadence. An application can set it directly through
+`AppNativeHostExt::with_frame_pacing`, or accept an optional launch argument.
+The effective Host policy remains in the existing App resource, not in a
+persistent CLI configuration object.
+
+The application owns **one argument grammar**, including product-specific flags,
+`--help`, unknown-argument rejection, and any positional values. When that
+grammar encounters a Host option, it can reuse the single typed value parser:
+
+```rust
+use anyhow::{Result, bail, ensure};
+use engine::app::NativeHostLaunchOverrides;
+use engine::prelude::App;
+
+fn main() -> Result<()> {
+    let mut args = std::env::args_os().skip(1);
+    let mut host = NativeHostLaunchOverrides::default();
+    while let Some(arg) = args.next() {
+        if let Some(request) = NativeHostLaunchOverrides::parse_option(&arg, &mut args)? {
+            ensure!(host.frame_pacing().is_none(), "duplicate --host-pacing argument");
+            host = request;
+        } else {
+            bail!("unknown application argument '{}'", arg.to_string_lossy());
+        }
+    }
+
+    let mut app = App::new();
+    app.set_title("Configured Window");
+    // Compose product defaults before lowering explicit launch intent.
+    host.apply_to(&mut app)?;
+    app.run()
+}
+```
+
+This minimal example admits only the Host option. Maintained Boids and Arena
+define their own complete product grammars in their executable entry points.
+They recognize `--help` and `-h` before starting the App; Boids additionally
+owns `--species` and `--evidence`.
+
+Both maintained executables accept:
+
+```text
+--host-pacing capped          # continuous capped 60 FPS
+--host-pacing capped:120      # validated FPS 1..=240
+--host-pacing uncapped        # continuous without synthetic Host FPS deadline
+--host-pacing on-demand       # redraw only on explicit event/invalidation
+```
+
+The equals form (`--host-pacing=capped:120`) is also supported.
+Examples:
+
+```text
+cargo run -p engine --example boids_render_flow -- --species --host-pacing uncapped
+cargo run -p runenwerk_arena -- --host-pacing capped:120
+cargo run -p runenwerk_arena -- --help
+```
+
+Host parsing occurs **only when the product grammar reaches that option**.
+A value-taking product argument consumes its own value before Host matching;
+there is no independent pre-scan that can steal a product value. The maintained
+executables have no positional options: their `--` terminator and any
+unexpected following positional tokens are rejected. Duplicate, missing,
+malformed, out-of-range, non-UTF8 Host values and unknown product options fail
+before application startup. Boids rejects a Host override combined with
+`--evidence`; `--help` exits successfully without starting a window.
+
+An explicit Host override on a headless or already-sealed App is rejected
+without applying partial Host state. Omitting the Host flag leaves all
+programmatic settings and the default capped-60 policy unchanged. Uncapped
+Host redraw does not disable Render FIFO/VSync, guarantee monitor scanout,
+change fixed-step cadence, or alter GPU execution. On-demand applications
+require explicit native input, window invalidation, or wake to advance;
+a continuously animated Boids smoke is not an on-demand idle/wake test.
 
 ## Schedules You Will Use Most
 

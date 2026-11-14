@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-27
+last_reviewed: 2026-10-29
 publication: repository-current
 draft: true
 pagefind: false
@@ -13,84 +13,73 @@ sidebar:
   hidden: true
 ---
 
-# Crate Design Template
+# [Crate name] — Design
+
+> **Using this template:** Copy its relevant structure, not its template-page
+> settings. Replace the title, owner, layer, status, publication and review date
+> for the new document. The `draft: true`, `pagefind: false`, and hidden-sidebar
+> values hide **this template page**; do not carry them into a published
+> document unless the owning documentation policy requires them. Remove this
+> instruction after copying. Follow the [design lifecycle](../README.md)
+> and accepted ownership rules.
 
 ## Purpose
 
-State why the crate exists.
+What existing responsibility or requirement justifies this crate? Link the
+owning issue and source-backed need.
 
-## Scope
+## Scope and non-scope
 
-List what this crate owns.
+- **Owns:** [what the crate is responsible for]
+- **Does not own:** [neighboring behaviors, policies, or framework authority]
 
-## Non-Scope
+## Architectural position and dependencies
 
-List what this crate explicitly does not own.
+- **Layer:** [foundation / domain / engine-runtime / app / adapter-tool / other accepted owner]
+- **Permitted dependencies:** [actual consumers and dependencies, grounded in current architecture]
+- **Forbidden dependencies:** [edges that would violate the accepted design]
 
-## Architectural Position
+Use the current Runenwerk architecture and workspace inventory; do not turn an
+integration crate into authority for a separately owned framework.
 
-Layer:
+## State and ownership
 
-```text
-foundation | domain | engine/runtime | app | adapter/tool | test-support
-```
+Who creates, changes, validates, and observes each important concept? What
+invariants must hold, and who enforces them?
 
-Allowed dependencies:
+## Public interface and compatibility
 
-```text
-...
-```
+Which APIs or formats are public contracts, which are internal, and what
+compatibility guarantees actually apply?
 
-Forbidden dependencies:
+## Failures and diagnostics
 
-```text
-...
-```
+How do invalid inputs, ordering/lifetime failures, and boundary violations
+appear to a caller? List diagnostic code families only if this crate owns them.
 
-## Ownership Rules
+## Operations and extension points (when relevant)
 
-Define who creates, mutates, validates, and consumes the concepts owned by this crate.
+Describe owned mutating commands, read-only inspection, ratification of external
+state, or supported extension seams **only when they exist or are required**.
+Do not invent subsystems merely to fill headings.
 
-## Public API Policy
+## Persistence and migration (when relevant)
 
-State which modules/types are stable public contracts and which are internal implementation details.
+Identify formats, versioning, migration, rollback and compatibility obligations.
+If there is no persisted state or migration, say so briefly.
 
-## Invariants
+## Validation and tests
 
-List invariants that must always hold.
+State the observable positive and negative cases that prove the invariants,
+critical failures, consumer integration, and applicable platforms. Point to
+repository-owned tests and required canonical validation, not invented results.
 
-## Failure Modes
+## Alternatives and trade-offs
 
-Describe how invalid input, invalid state, and boundary violations are reported.
+What simpler option (including keeping the current boundary) was considered?
+Why does this ownership and abstraction remain justified?
 
-## Diagnostics
+## Open questions
 
-List diagnostic code families owned by this crate.
-
-## Ratification
-
-Describe what generated, imported, projected, migrated, or externally modified state this crate must ratify.
-
-## Commands
-
-Describe mutating command boundaries owned by this crate.
-
-## Inspection
-
-Describe read-only DTOs or snapshots exposed for tools, tests, debug UIs, or AI-assisted workflows.
-
-## Persistence and Versioning
-
-Describe serialization, versioning, and migration policy.
-
-## Extension Points
-
-Describe intended extension mechanisms.
-
-## Testing Strategy
-
-List required unit, invariant, ratification, command, projection, golden, or smoke tests.
-
-## Negative Doctrine
-
-State what this crate is not.
+Record unresolved design decisions and their owner; a template does not itself
+authorize changes to public contracts or architecture.

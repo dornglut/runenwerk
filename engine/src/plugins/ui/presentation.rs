@@ -7,11 +7,12 @@
 use std::collections::BTreeMap;
 
 use runenui_core::{StyleEnvironment, SurfaceId, SurfaceInputContext};
-use runenui_runtime::{PaintRevision, SurfacePublication};
+use runenui_runtime::{PaintPublication, PaintRevision, SurfacePublication};
 
 use crate::plugins::render::host::RenderSurfaceId;
 use crate::plugins::render::{
-    RenderFrameProducerId, RunenUiPublicationId, SurfaceFrameRoute, SurfaceFrameSubmissionOrder,
+    RenderFrameProducerId, RunenUiPaintSubmission, RunenUiPublicationId, SurfaceFrameRoute,
+    SurfaceFrameSubmissionOrder,
 };
 use crate::runtime::NativeWindowId;
 
@@ -211,6 +212,10 @@ pub struct UiRuntimePresentationAssociationsResource {
     displayed: BTreeMap<UiRuntimeSlotId, UiRuntimeDisplayedPresentation>,
     current_mappings: BTreeMap<UiRuntimeSlotId, UiRuntimeNativeMapping>,
     last_publication: BTreeMap<UiRuntimeSlotId, (UiRuntimeNativeMapping, u64)>,
+    /// Last renderer paint admitted from the canonical RunenUI source. Retaining
+    /// one snapshot per bound slot also covers frames after terminal Present has
+    /// retired its pending/in-flight input-generation records.
+    last_renderer_paint: BTreeMap<UiRuntimeSlotId, (RunenUiPublicationId, PaintPublication)>,
     /// Render-submission withdrawals owed after unbind/rebind. Never lose ownership cleanup.
     withdrawn: Vec<(RenderFrameProducerId, RenderSurfaceId)>,
     last_issued_publication_id: u64,
@@ -254,6 +259,7 @@ impl UiRuntimePresentationAssociationsResource {
             self.displayed.remove(&slot);
             self.current_mappings.remove(&slot);
             self.last_publication.remove(&slot);
+            self.last_renderer_paint.remove(&slot);
         }
         self.bindings.insert(slot, binding);
         Ok(())
@@ -269,6 +275,7 @@ impl UiRuntimePresentationAssociationsResource {
         self.displayed.remove(&slot);
         self.current_mappings.remove(&slot);
         self.last_publication.remove(&slot);
+        self.last_renderer_paint.remove(&slot);
     }
 
     /// Returns and clears Render withdrawal obligations; called before publishing live bindings.
@@ -286,6 +293,30 @@ impl UiRuntimePresentationAssociationsResource {
         self.bindings.values()
     }
 
+    /// Verifies the *entire* canonical renderer publication and compositor
+    /// position captured by `stage`, not the public mutable registry alone.
+    /// This does not infer GPU acceptance or terminal Present.
+    pub(crate) fn authorizes_managed_paint(
+        &self,
+        owner: u64,
+        submission: &RunenUiPaintSubmission,
+    ) -> bool {
+        let Some((&slot, binding)) = self.bindings.iter().find(|(slot, _)| slot.value() == owner)
+        else {
+            return false;
+        };
+        binding.producer_id == submission.producer_id
+            && Some(binding.render_surface_id) == submission.render_surface_id
+            && binding.route == submission.route
+            && binding.order == submission.order
+            && self
+                .last_renderer_paint
+                .get(&slot)
+                .is_some_and(|(id, paint)| {
+                    *id == submission.publication_id && paint == &submission.publication
+                })
+    }
+
     /// A changed physical mapping invalidates pending work and guards displayed
     /// input against the previous native transform, without inventing input facts.
     /// True when a new physical mapping invalidated the previous paint intake.
@@ -301,6 +332,7 @@ impl UiRuntimePresentationAssociationsResource {
             self.retire_in_flight_for_slot(slot);
             self.displayed.remove(&slot);
             self.last_publication.remove(&slot);
+            self.last_renderer_paint.remove(&slot);
         }
         changed
     }
@@ -312,6 +344,34 @@ impl UiRuntimePresentationAssociationsResource {
         self.displayed.remove(&slot);
         self.current_mappings.remove(&slot);
         self.last_publication.remove(&slot);
+    }
+
+    /// Deny every older staged, accepted or displayed input generation when a
+    /// selected native RunenUI slot has unfinished M13 work. A previously
+    /// published immutable *visual* contribution may continue to render only
+    /// while its existing binding and exact physical mapping remain unchanged.
+    ///
+    /// This deliberately retains no hit, focus, capture or successful-Present
+    /// permission. In particular, a late terminal receipt for an earlier GPU
+    /// submission cannot re-promote its stale input. The next settled RunenUI
+    /// frame must publish an independent aligned generation before input can
+    /// become eligible again.
+    ///
+    /// Returns only compatibility with the currently recorded visual target;
+    /// the caller must independently verify the old renderer-owned paint still
+    /// exists, and withdraw it if the target is incompatible or the paint absent.
+    pub(crate) fn defer_unsettled_publication(
+        &mut self,
+        binding: &UiRuntimePresentationBinding,
+        mapping: UiRuntimeNativeMapping,
+    ) -> bool {
+        let compatible = self.bindings.get(&binding.slot_id) == Some(binding)
+            && self.current_mappings.get(&binding.slot_id) == Some(&mapping);
+        self.pending.remove(&binding.slot_id);
+        self.retire_in_flight_for_slot(binding.slot_id);
+        self.displayed.remove(&binding.slot_id);
+        self.last_publication.remove(&binding.slot_id);
+        compatible
     }
 
     /// Returns whether a new host ingress generation or native mapping needs publication.
@@ -352,6 +412,8 @@ impl UiRuntimePresentationAssociationsResource {
             .checked_add(1)
             .and_then(RunenUiPublicationId::try_from_raw)
             .ok_or(UiRuntimePresentationAssociationError::PublicationIdentityExhausted)?;
+        self.last_renderer_paint
+            .insert(slot, (next, publication.paint_publication().clone()));
         self.pending.insert(
             slot,
             UiRuntimePendingPresentation {
@@ -531,8 +593,25 @@ impl UiRuntimePresentationAssociationsResource {
                 .is_some_and(|displayed| displayed.publication_id > publication_id);
         if !later_is_live {
             self.last_publication.remove(&slot);
+            self.last_renderer_paint.remove(&slot);
         }
         true
+    }
+
+    /// Only the existing terminal completed-Present state at this exact
+    /// window and current mapping is eligible for native pointer translation.
+    /// Neither visual order nor a queued publication selects a recipient.
+    #[must_use]
+    pub fn displayed_for_native_recipient(
+        &self,
+        slot: UiRuntimeSlotId,
+        window: NativeWindowId,
+    ) -> Option<&UiRuntimeDisplayedPresentation> {
+        let current = *self.current_mappings.get(&slot)?;
+        if current.native_window_id() != window {
+            return None;
+        }
+        self.displayed_for_mapping(slot, current)
     }
 
     /// Hides input authority immediately when the native mapping changes.

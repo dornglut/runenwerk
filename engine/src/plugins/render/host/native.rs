@@ -6,6 +6,25 @@ use anyhow::{Context, Result, anyhow};
 use std::sync::Arc;
 use winit::window::Window;
 
+pub(crate) fn has_gpu_context(world: &runen_ecs::World) -> bool {
+    world.has_resource::<Gfx>()
+}
+
+pub(crate) fn gpu_progress_interest(
+    world: &runen_ecs::World,
+) -> Option<runen_gpu::GpuContextAffinity> {
+    world
+        .resource::<Gfx>()
+        .ok()
+        .filter(|gfx| gfx.native_gpu_progress_pending())
+        .map(Gfx::gpu_context_affinity)
+}
+
+pub(crate) fn deliver_gpu_progress(world: &mut runen_ecs::World) -> Result<()> {
+    super::super::runtime::frame_submit::deliver_native_gpu_progress(world)?;
+    crate::plugins::ui::publish::apply_runenui_terminal_presentations(world)
+}
+
 pub(crate) fn initialize_primary(
     world: &mut runen_ecs::World,
     window: Arc<Window>,

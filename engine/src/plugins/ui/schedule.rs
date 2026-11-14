@@ -6,4 +6,5 @@ pub enum UiRuntimeSet {
     Foundation,
     Report,
     RenderPublication,
+    ManagedProducerValidation,
 }

@@ -21,6 +21,10 @@ impl WinitWindowRealizer {
         self.primary_window.is_some()
     }
 
+    pub(crate) fn has_any_window(&self) -> bool {
+        !self.windows.is_empty()
+    }
+
     pub(crate) fn primary_window(&self) -> Option<Arc<Window>> {
         self.primary_window.clone()
     }

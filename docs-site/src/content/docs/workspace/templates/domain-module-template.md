@@ -5,7 +5,7 @@ status: active
 owner: workspace
 layer: workspace
 canonical: true
-last_reviewed: 2026-04-28
+last_reviewed: 2026-10-29
 publication: repository-current
 draft: true
 pagefind: false
@@ -13,55 +13,56 @@ sidebar:
   hidden: true
 ---
 
-# Domain Module Template
+# [Module name] — Domain module
 
-Replace bracketed placeholders before copying this structure into an owning domain subtree.
-
-# [Module Name] Module
+> **Using this template:** Replace this title and all copied frontmatter with the
+> owning module's real metadata. Template-only `draft`, `pagefind`, and
+> `sidebar.hidden` flags must not accidentally hide the published module page.
+> Remove this instruction after copying. Follow the actual domain owner's
+> accepted API and dependency boundaries.
 
 ## Purpose
-- What this module represents in the domain layer
-- Why it exists
-- Problems it solves
-- Engine-agnostic considerations
 
-## Key Concepts (Domain Model)
-- Abstract entities, rules, or patterns
-- Focus on “what it is” rather than “how it’s implemented”
-- Examples of core domain objects or concepts
+What domain concepts and user-visible behavior does the module represent?
+Why is a local engine-agnostic domain owner appropriate?
 
-## Implementation / API (Domain-Level)
-- Map concepts to types, interfaces, or functions
-- Include rules, constraints, and domain-level guarantees
-- Keep all implementation engine-agnostic
+## Concepts and rules
 
-## Invariants & Rules
-- Always-valid rules or constraints
-- Relationships that must hold true
-- Domain-level guarantees
+Define the core terms, valid state, and invariants. Distinguish authored
+facts from projections, caches, and derived values where relevant.
 
-## Usage Examples (Domain-Level)
-### Example 1: Short Description
-Describe a pure domain logic example using text or pseudocode.
-Explain the expected outcome and how concepts interact.
+## Public domain API
 
-### Example 2: Optional
-Another example demonstrating concept interaction and domain-level behavior.
+Link the real types, functions, inputs and outputs. Explain guaranteed
+behavior and the limits of the module, without claiming unaccepted stability.
 
-## Design Guidelines
-- Rules for writing/extending the module
-- Naming conventions
-- Dependency rules (no engine, network, or rendering code)
+## Dependencies and non-ownership
 
-## Integration Notes
-- Expected interfaces for engine adapters
-- How this module may interact with other domain modules
-- Optional links to future engine-level docs
+What other domain contracts does it consume? What stays with the Engine,
+adapters, applications, or standalone framework repositories? Keep runtime
+and platform policy in their accepted owners.
 
-## Future Considerations
-- Potential extensions or optimizations
-- Known limitations or considerations for evolution
+## Error behavior and edge cases
 
-## References & Links
-- Related domain modules
-- External references or reading material
+Explain invalid inputs, unsupported states, failure reporting and the
+important negative or boundary cases.
+
+## Usage example
+
+Provide one small **realistic, domain-level** example with expected behavior.
+Omit further examples unless they add distinct value.
+
+## Validation
+
+Link the relevant tests, invariants and real consumers. Identify any required
+conformance or integration proof and currently unverified claims.
+
+## Integration and evolution (when relevant)
+
+Describe the actual adapter boundary, current limitations, and justified
+compatibility/migration requirements. Avoid speculative feature inventories.
+
+## Related authority
+
+Link the owning ADR, design, source documentation or public framework contract,
+rather than restating another repository's semantics.

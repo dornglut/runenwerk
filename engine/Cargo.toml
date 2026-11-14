@@ -80,6 +80,9 @@ ui_binding = { workspace = true }
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = "0.5.1"
 
+[target.'cfg(target_os = "linux")'.dev-dependencies]
+x11rb = "0.13.2"
+
 [[example]]
 name = "game_of_life_sdf"
 path = "examples/game_of_life_sdf/main.rs"
@@ -103,6 +106,10 @@ path = "examples/runtime_minimal/main.rs"
 [[example]]
 name = "window_input_demo"
 path = "examples/window_input_demo/main.rs"
+
+[[example]]
+name = "native_ui_input_qualification"
+path = "examples/native_ui_input_qualification/main.rs"
 
 [[example]]
 name = "render_flow_fullscreen_minimal"
@@ -141,8 +148,18 @@ name = "render_product_visual_evidence"
 path = "examples/render_product_visual_evidence.rs"
 
 [[test]]
+name = "native_primary_close_os"
+path = "tests/native_primary_close_os.rs"
+harness = false
+
+[[test]]
 name = "native_host_smoke"
 path = "tests/native_host_smoke.rs"
+harness = false
+
+[[test]]
+name = "native_window_requests_os"
+path = "tests/native_window_requests_os.rs"
 harness = false
 
 [[bench]]

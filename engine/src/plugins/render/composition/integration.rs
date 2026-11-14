@@ -44,6 +44,10 @@ impl RenderFlowRegistryResource {
         self.flows.len()
     }
 
+    pub(crate) fn is_only_flow(&self, id: RenderFlowId) -> bool {
+        self.flows.len() == 1 && self.flows.contains_key(&id)
+    }
+
     pub fn compiled_flows(&self) -> &[CompiledRenderFlowPlan] {
         &self.compiled_flows
     }

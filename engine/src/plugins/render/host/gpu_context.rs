@@ -91,6 +91,14 @@ fn renderer_context_descriptor() -> Result<GpuContextDescriptor> {
             ][..],
         ),
         (
+            GpuTextureFormat::Rgba16Float,
+            &[
+                GpuFormatRole::Sampled,
+                GpuFormatRole::ColorAttachment,
+                GpuFormatRole::Blendable,
+            ][..],
+        ),
+        (
             GpuTextureFormat::Bgra8Unorm,
             &[
                 GpuFormatRole::Sampled,
@@ -314,10 +322,15 @@ mod tests {
         for format in [
             GpuTextureFormat::Rgba8Unorm,
             GpuTextureFormat::Rgba8UnormSrgb,
+            GpuTextureFormat::Rgba16Float,
             GpuTextureFormat::Bgra8Unorm,
             GpuTextureFormat::Bgra8UnormSrgb,
         ] {
-            for role in [GpuFormatRole::ColorAttachment, GpuFormatRole::Blendable] {
+            for role in [
+                GpuFormatRole::ColorAttachment,
+                GpuFormatRole::Blendable,
+                GpuFormatRole::Sampled,
+            ] {
                 assert!(
                     descriptor
                         .semantically_eq(&descriptor.clone().require_format_role(format, role)),

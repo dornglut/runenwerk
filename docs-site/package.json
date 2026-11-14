@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "astro dev",
     "start": "astro dev",
-    "build": "astro build",
+    "build": "node --test tests/remark-rust-example-source.test.mjs tests/remark-doc-route-links.test.mjs && astro build && node tests/verify-rendered-source.mjs",
     "preview": "astro preview",
     "astro": "astro"
   },

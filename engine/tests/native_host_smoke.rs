@@ -106,6 +106,42 @@ impl UiScreen for NativeCounterScreen {
     }
 }
 
+/// A real public typed UiApp consumer, not the legacy UiScreen adapter.
+/// Used by the managed mode to qualify the full App-to-Render native path.
+struct NativeManagedTypedApp;
+
+impl runenui_core::UiApp for NativeManagedTypedApp {
+    type State = ();
+    type Action = ();
+    type HostProtocol = runenui_core::NoHostProtocol;
+
+    fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(1, 0, 1)
+    }
+
+    fn action_producer_budget(
+        _state: &Self::State,
+        _action: &Self::Action,
+    ) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0).with_reconciliation(0, 1, 1)
+    }
+
+    fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+        runenui_core::ProducerBudget::new(1, 0)
+    }
+
+    fn root(_: &Self::State) -> impl runenui_core::View<Self::Action> {
+        runenui_core::text("Native managed typed RunenUI")
+    }
+
+    fn update(
+        _: &mut Self::State,
+        (): Self::Action,
+    ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+        runenui_core::Effects::none()
+    }
+}
+
 fn native_counter_fonts() -> UiRuntimeFontConfiguration {
     UiRuntimeFontConfiguration::new(vec![COUNTER_FONT.to_vec()]).with_generic_mapping(
         GenericFontFamily::SansSerif,
@@ -177,12 +213,20 @@ fn main() {
             native_no_render_host_smoke().expect("native no-Render Host smoke should succeed")
         }
         (false, true, false, false) => {
-            native_render_host_smoke(false).expect("bare native Render Host smoke should succeed");
+            native_render_host_smoke(false, false, false)
+                .expect("bare native Render Host smoke should succeed");
             run_native_render_ui_child_smoke()
                 .expect("native Render + UI Host child smoke should succeed");
         }
         (false, false, true, false) => {
-            native_render_host_smoke(true).expect("native Render + UI Host smoke should succeed")
+            let mode = std::env::var(RENDER_UI_HOST_ENV)
+                .expect("native Render + UI Host child requires its selected mode");
+            assert!(
+                ["1", "managed", "ui-only"].contains(&mode.as_str()),
+                "unexpected native UI smoke mode: {mode}"
+            );
+            native_render_host_smoke(true, mode != "1", mode == "ui-only")
+                .expect("native Render + UI Host smoke should succeed");
         }
         (false, false, false, true) => {
             native_historical_gpu_smoke().expect("native historical GPU RenderFlow must succeed")
@@ -240,6 +284,28 @@ mod native_readiness {
         type State = State;
         type Action = Action;
         type HostProtocol = NoHostProtocol;
+
+        fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(5, 2)
+                .with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 1, 0, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 1, 0, 0, 0))
+        }
+
+        fn action_producer_budget(
+            _state: &Self::State,
+            _action: &Self::Action,
+        ) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(5, 2)
+                .with_reconciliation(1, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 1, 0, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 1, 0, 0, 0))
+        }
+
+        fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0)
+        }
+
         fn root(_: &State) -> impl View<Action> {
             text("native timed application")
         }
@@ -282,6 +348,28 @@ mod native_readiness {
         type State = State;
         type Action = Action;
         type HostProtocol = NoHostProtocol;
+
+        fn initial_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(5, 2)
+                .with_reconciliation(1, 0, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(1, 0, 0, 0, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(1, 0, 0, 0, 0, 0))
+        }
+
+        fn action_producer_budget(
+            _state: &Self::State,
+            _action: &Self::Action,
+        ) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(5, 2)
+                .with_reconciliation(0, 1, 1)
+                .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 1, 0, 0))
+                .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 1, 0, 0, 0))
+        }
+
+        fn interaction_producer_budget(_state: &Self::State) -> runenui_core::ProducerBudget {
+            runenui_core::ProducerBudget::new(1, 0)
+        }
+
         fn root(_: &State) -> impl View<Action> {
             text("native asynchronous application")
         }
@@ -734,15 +822,19 @@ mod native_readiness {
 
 fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
     let executable = std::env::current_exe()?;
-    let status = Command::new(executable)
-        .env_remove(NO_RENDER_ENV)
-        .env_remove(RENDER_HOST_ENV)
-        .env(RENDER_UI_HOST_ENV, "1")
-        .status()?;
-    anyhow::ensure!(
-        status.success(),
-        "native Render + UI Host child smoke exited with {status}"
-    );
+    // Preserve the explicit and managed paths, and execute the selected
+    // native UI-only recipe under the same physical GPU/Present smoke lane.
+    for mode in ["1", "managed", "ui-only"] {
+        let status = Command::new(&executable)
+            .env_remove(NO_RENDER_ENV)
+            .env_remove(RENDER_HOST_ENV)
+            .env(RENDER_UI_HOST_ENV, mode)
+            .status()?;
+        anyhow::ensure!(
+            status.success(),
+            "native Render + UI Host child smoke mode={mode} exited with {status}"
+        );
+    }
     Ok(())
 }
 
@@ -1333,7 +1425,11 @@ fn native_no_render_host_smoke() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
+fn native_render_host_smoke(with_ui: bool, managed_ui: bool, ui_only: bool) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        !managed_ui || with_ui,
+        "managed presentation requires UiPlugin"
+    );
     let startup_ran = Arc::new(AtomicBool::new(false));
     let update_ran = Arc::new(AtomicBool::new(false));
     let frame_seen = Arc::new(AtomicBool::new(false));
@@ -1344,52 +1440,96 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
 
     let mut app = App::new();
     app.add_plugins(default_plugins());
-    if with_ui {
-        app.add_plugin(UiPlugin);
+    if ui_only {
+        // The public selected recipe installs UiPlugin, RenderPlugin and the
+        // single native-primary UI-only RenderFlow without app-built passes.
+        app.select_native_ui_only()?;
+    } else {
+        if with_ui {
+            app.add_plugin(UiPlugin);
+        }
+        app.add_plugin(RenderPlugin);
     }
-    app.add_plugin(RenderPlugin);
     let counter_slot = if with_ui {
-        let slot = app
-            .ui()
-            .mount_with_fonts(NativeCounterScreen, &native_counter_fonts())
-            .slot_id()
-            .ok_or_else(|| anyhow::anyhow!("native U5 Counter failed to mount"))?;
-        app.world_mut()
-            .resource_mut::<UiRuntimePresentationAssociationsResource>()?
-            .bind(
-                UiRuntimePresentationBinding::new(
-                    slot,
-                    RenderFrameProducerId::try_from_raw(71).expect("test producer is nonzero"),
-                    RenderSurfaceId::primary(),
-                    StyleEnvironment::default(),
+        let slot = if managed_ui {
+            app.ui()
+                .mount_app::<NativeManagedTypedApp>(
+                    UiTypedScreenId::new("native.managed.typed"),
+                    (),
+                    &native_counter_fonts(),
                 )
-                .with_order(SurfaceFrameSubmissionOrder::new(20, 0)),
-            )?;
+                .slot_id()
+                .ok_or_else(|| anyhow::anyhow!("native managed typed UiApp failed to mount"))?
+        } else {
+            app.ui()
+                .mount_with_fonts(NativeCounterScreen, &native_counter_fonts())
+                .slot_id()
+                .ok_or_else(|| anyhow::anyhow!("native U5 Counter failed to mount"))?
+        };
+        if managed_ui {
+            // Product-facing API: no raw Render producer identity or caller-owned
+            // binding resource. The native Host supplies exact surface facts.
+            app.ui().present(slot, RenderSurfaceId::primary())?;
+            let binding = app
+                .world()
+                .resource::<UiRuntimePresentationAssociationsResource>()?
+                .binding(slot)
+                .ok_or_else(|| anyhow::anyhow!("managed native UI placement was not bound"))?;
+            anyhow::ensure!(
+                app.world()
+                    .resource::<engine::plugins::render::ManagedRenderProducerIds>()?
+                    .is_owned_by(binding.producer_id, slot.value()),
+                "managed native UI must hold the exact producer lease"
+            );
+        } else {
+            // Retain the original expert-producer native integration evidence.
+            app.world_mut()
+                .resource_mut::<UiRuntimePresentationAssociationsResource>()?
+                .bind(
+                    UiRuntimePresentationBinding::new(
+                        slot,
+                        RenderFrameProducerId::try_from_raw(71).expect("test producer is nonzero"),
+                        RenderSurfaceId::primary(),
+                        StyleEnvironment::default(),
+                    )
+                    .with_order(SurfaceFrameSubmissionOrder::new(20, 0)),
+                )?;
+        }
         Some(slot)
     } else {
         None
     };
-    let flow = RenderFlow::new("native.render.host.smoke")
-        .with_surface_color()?
-        .fullscreen_pass("native.render.host.smoke.clear")
-        .main_surface_only()
-        .clear_color([0.0, 0.0, 0.0, 1.0])
-        .write_surface_color()?
-        .finish();
-    let flow = if with_ui {
-        flow.builtin_ui_composite_pass("native.render.host.smoke.runenui")?
+    if !ui_only {
+        let flow = RenderFlow::new("native.render.host.smoke")
+            .with_surface_color()?
+            .fullscreen_pass("native.render.host.smoke.clear")
             .main_surface_only()
+            .clear_color([0.0, 0.0, 0.0, 1.0])
+            .write_surface_color()?
+            .finish();
+        let flow = if with_ui {
+            flow.builtin_ui_composite_pass("native.render.host.smoke.runenui")?
+                .main_surface_only()
+                .finish()
+        } else {
+            flow
+        };
+        let flow = flow
+            .present_pass("native.render.host.smoke.present")?
+            .main_surface_only()
+            .surface_color()?
             .finish()
+            .validate()?;
+        app.add_render_flow(flow);
     } else {
-        flow
-    };
-    let flow = flow
-        .present_pass("native.render.host.smoke.present")?
-        .main_surface_only()
-        .surface_color()?
-        .finish()
-        .validate()?;
-    app.add_render_flow(flow);
+        anyhow::ensure!(
+            app.world()
+                .resource::<engine::plugins::render::RenderFlowRegistryResource>()?
+                .flow_count()
+                == 1,
+            "selected UI-only path must own exactly one RenderFlow"
+        );
+    }
     app.insert_resource(LifecycleProbe {
         startup_ran: Arc::clone(&startup_ran),
         update_ran: Arc::clone(&update_ran),
@@ -1452,8 +1592,15 @@ fn native_render_host_smoke(with_ui: bool) -> anyhow::Result<()> {
         );
     }
     println!(
-        "native_render_host_smoke=pass ui_plugin={}",
-        if with_ui { "selected" } else { "absent" }
+        "native_render_host_smoke=pass ui_plugin={} placement={}",
+        if with_ui { "selected" } else { "absent" },
+        if ui_only {
+            "ui-only"
+        } else if managed_ui {
+            "managed"
+        } else {
+            "explicit"
+        }
     );
     Ok(())
 }

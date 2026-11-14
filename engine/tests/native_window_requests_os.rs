@@ -1,0 +1,702 @@
+//! Real Linux/X11 Winit request-ingress and terminal-receipt proof.
+#![cfg_attr(not(target_os = "linux"), allow(dead_code, unused_imports))]
+
+#[cfg(target_os = "linux")]
+mod linux {
+    use anyhow::{Context, Result, ensure};
+    use engine::app::{App, AppNativeHostExt};
+    use engine::plugins::render::Gfx;
+    use engine::plugins::render::host::{
+        RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+    };
+    use engine::plugins::{RenderPlugin, default_plugins};
+    use engine::runtime::{
+        FramePacingPolicyResource, NativeWindowHook, NativeWindowHookRegistryResource,
+        NativeWindowId, NativeWindowLifecycleState, NativeWindowRequest,
+        NativeWindowRequestOutcome, NativeWindowRequestReadiness, WindowStateRegistryResource,
+    };
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+            mpsc,
+        },
+        thread,
+        time::{Duration, Instant},
+    };
+    use winit::window::Window;
+
+    struct Hook {
+        secondary_count: Arc<AtomicUsize>,
+        unexpected_gpu: Arc<AtomicBool>,
+    }
+
+    impl NativeWindowHook for Hook {
+        fn name(&self) -> &'static str {
+            "native_window_request_os"
+        }
+
+        fn attach(&mut self, _window: &Window, world: &mut runen_ecs::World) -> Result<()> {
+            if world.has_resource::<Gfx>() {
+                self.unexpected_gpu.store(true, Ordering::SeqCst);
+            }
+            let secondary_count = world
+                .resource::<WindowStateRegistryResource>()?
+                .records()
+                .filter(|record| {
+                    record.native_window_id != NativeWindowId::primary()
+                        && record.lifecycle_state == NativeWindowLifecycleState::Created
+                })
+                .count();
+            self.secondary_count
+                .fetch_max(secondary_count, Ordering::SeqCst);
+            if secondary_count >= 2 {
+                world
+                    .resource_mut::<WindowStateRegistryResource>()?
+                    .record_mut(NativeWindowId::primary())
+                    .context("primary record missing after secondary attach")?
+                    .request_close();
+            }
+            Ok(())
+        }
+    }
+
+    /// Trigger a real Native close while a worker has an already-accepted
+    /// external window request. Winit cannot drain the command while the
+    /// original invoker executes this frame callback.
+    struct CloseRaceHook {
+        notified: bool,
+        frame_entered: mpsc::Sender<()>,
+        request_accepted: mpsc::Receiver<()>,
+    }
+
+    impl NativeWindowHook for CloseRaceHook {
+        fn name(&self) -> &'static str {
+            "native_request_vs_primary_close"
+        }
+
+        fn frame(&mut self, _window: &Window, world: &mut runen_ecs::World) -> Result<()> {
+            if self.notified {
+                return Ok(());
+            }
+            self.notified = true;
+            let signalled = self.frame_entered.send(()).is_ok();
+            let admitted = self
+                .request_accepted
+                .recv_timeout(Duration::from_secs(10))
+                .is_ok();
+
+            // Always make shutdown bounded, even on a failed handoff;
+            // the worker's own result and missing marker then fail the test.
+            world
+                .resource_mut::<WindowStateRegistryResource>()?
+                .record_mut(NativeWindowId::primary())
+                .context("primary missing before native close/request race")?
+                .request_close();
+            ensure!(
+                signalled && admitted,
+                "external Native request was not accepted during the held frame"
+            );
+            Ok(())
+        }
+    }
+
+    pub(super) fn close_race() -> Result<()> {
+        let (frame_entered, enter_receiver) = mpsc::channel();
+        let (accepted_sender, request_accepted) = mpsc::channel();
+        let mut app = App::new();
+        app.add_plugins(default_plugins());
+        app.init_resource::<NativeWindowHookRegistryResource>();
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()?
+            .register_hook(CloseRaceHook {
+                notified: false,
+                frame_entered,
+                request_accepted,
+            });
+
+        let windows = app.native_window_requests()?;
+        let worker = thread::spawn(move || -> Result<()> {
+            enter_receiver
+                .recv_timeout(Duration::from_secs(10))
+                .context("no actual native frame callback reached the race barrier")?;
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Ready,
+                "Native command channel not ready during active frame"
+            );
+            let ticket = windows.request(NativeWindowRequest::new(
+                "Accepted request interrupted by primary close",
+                (500, 340),
+            ))?;
+            accepted_sender
+                .send(())
+                .context("native frame callback dropped the acceptance barrier")?;
+            let terminal = ticket.recv_timeout(Duration::from_secs(10))?;
+            ensure!(
+                terminal == NativeWindowRequestOutcome::Cancelled,
+                "request accepted before final close was not terminally cancelled: {terminal:?}"
+            );
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Closed,
+                "Native request channel not closed after primary retired"
+            );
+            ensure!(
+                matches!(
+                    windows.request(NativeWindowRequest::new("too late", (480, 320))),
+                    Err(engine::runtime::NativeWindowRequestError::Closed)
+                ),
+                "Native owner accepted a request after shutdown"
+            );
+            ensure!(
+                ticket.try_recv() == Err(std::sync::mpsc::TryRecvError::Disconnected),
+                "cancelled ticket unexpectedly emitted a second terminal result"
+            );
+            Ok(())
+        });
+
+        app.run()?;
+        worker
+            .join()
+            .expect("Native request/close worker thread must not panic")?;
+        println!("native_window_request_close_race=pass accepted=1 cancelled=1 physical_x11=true");
+        Ok(())
+    }
+
+    /// Test-only fault injection: a real X11 primary and Render-owned Gfx
+    /// must have existed. Withhold the Gfx resource for the secondary request,
+    /// forcing Render's normal secondary-attach error + rollback behavior.
+    /// No production fault switch or new Renderer interface is installed.
+    struct RenderRollbackHook {
+        injected: bool,
+        verified: Arc<AtomicBool>,
+        failure_reported: Arc<AtomicBool>,
+        ready_to_request: mpsc::Sender<()>,
+        accepted_request: mpsc::Receiver<()>,
+    }
+
+    impl NativeWindowHook for RenderRollbackHook {
+        fn name(&self) -> &'static str {
+            "native_real_window_render_rollback"
+        }
+
+        fn frame(&mut self, _window: &Window, world: &mut runen_ecs::World) -> Result<()> {
+            if !self.injected {
+                self.injected = true;
+                let gfx = world
+                    .remove_resource::<Gfx>()
+                    .context("selected native Render must own real Gfx before fault injection")?;
+                drop(gfx);
+                self.ready_to_request
+                    .send(())
+                    .context("Native rollback proof worker went away")?;
+                self.accepted_request
+                    .recv_timeout(Duration::from_secs(12))
+                    .context("Native rollback proof did not admit a secondary request")?;
+                return Ok(());
+            }
+
+            if self.failure_reported.load(Ordering::SeqCst) && !self.verified.load(Ordering::SeqCst)
+            {
+                let failures = world
+                    .resource::<WindowStateRegistryResource>()?
+                    .records()
+                    .filter(|record| {
+                        record.native_window_id != NativeWindowId::primary()
+                            && record.lifecycle_state == NativeWindowLifecycleState::CreationFailed
+                    })
+                    .map(|record| (record.native_window_id, record.failure_reason.clone()))
+                    .collect::<Vec<_>>();
+                let mut verified = false;
+                if failures.len() == 1 {
+                    let (id, reason) = &failures[0];
+                    if reason.as_deref().is_some_and(|message| {
+                        message.contains("GPU surface attachment failed")
+                            && message.contains("runtime gfx is unavailable")
+                    }) {
+                        let render = world.resource::<RenderSurfaceRegistryResource>()?;
+                        let no_active_mapping = render.surface_for_native_window(*id).is_none();
+                        let retired = render.records().any(|record| {
+                            record.native_window_id == *id
+                                && record.lifecycle_state == RenderSurfaceLifecycleState::Retired
+                        });
+                        verified = no_active_mapping && retired;
+                    }
+                }
+                self.verified.store(verified, Ordering::SeqCst);
+                // Always request a bounded exit; the external test assertion
+                // below fails if the exact owner invariants were not observed.
+                world
+                    .resource_mut::<WindowStateRegistryResource>()?
+                    .record_mut(NativeWindowId::primary())
+                    .context("Native primary missing after injected secondary rollback")?
+                    .request_close();
+            }
+            Ok(())
+        }
+    }
+
+    pub(super) fn render_failure() -> Result<()> {
+        let verified = Arc::new(AtomicBool::new(false));
+        let failure_reported = Arc::new(AtomicBool::new(false));
+        let (ready_to_request, ready_receiver) = mpsc::channel();
+        let (accepted_sender, accepted_request) = mpsc::channel();
+        let mut app = App::new();
+        app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(30));
+        app.add_plugins(default_plugins());
+        app.add_plugin(RenderPlugin);
+        app.init_resource::<NativeWindowHookRegistryResource>();
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()?
+            .register_hook(RenderRollbackHook {
+                injected: false,
+                verified: Arc::clone(&verified),
+                failure_reported: Arc::clone(&failure_reported),
+                ready_to_request,
+                accepted_request,
+            });
+
+        let windows = app.native_window_requests()?;
+        let worker = thread::spawn(move || -> Result<()> {
+            ready_receiver
+                .recv_timeout(Duration::from_secs(12))
+                .context("real Render native primary never reached initial frame")?;
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Ready,
+                "Native owner was not ready when Render rollback was injected"
+            );
+            let ticket = windows.request(NativeWindowRequest::new(
+                "secondary with injected missing Gfx",
+                (500, 360),
+            ))?;
+            accepted_sender
+                .send(())
+                .context("Native Render rollback hook exited before admission")?;
+            let result = ticket.recv_timeout(Duration::from_secs(12))?;
+            match result {
+                NativeWindowRequestOutcome::CreationFailed { reason } => {
+                    ensure!(
+                        reason.contains("GPU surface attachment failed")
+                            && reason.contains("runtime gfx is unavailable"),
+                        "physical Winit secondary did not fail at the intended Render seam: {reason}"
+                    );
+                }
+                other => {
+                    anyhow::bail!("injected Render failure returned wrong terminal: {other:?}")
+                }
+            }
+            ensure!(
+                ticket.try_recv() == Err(std::sync::mpsc::TryRecvError::Disconnected),
+                "failed Native request delivered multiple terminal outcomes"
+            );
+            failure_reported.store(true, Ordering::SeqCst);
+            let deadline = Instant::now() + Duration::from_secs(12);
+            while windows.readiness()? != NativeWindowRequestReadiness::Closed {
+                ensure!(
+                    Instant::now() < deadline,
+                    "Native owner did not stop after injected Render rollback"
+                );
+                thread::sleep(Duration::from_millis(5));
+            }
+            Ok(())
+        });
+
+        let app_result = app.run();
+        let worker_result = worker
+            .join()
+            .expect("Render rollback worker must not panic");
+        app_result?;
+        worker_result?;
+        ensure!(
+            verified.load(Ordering::SeqCst),
+            "Native failure record or Render retired surface was inconsistent"
+        );
+        println!(
+            "native_window_request_render_rollback=pass physical_x11=true native_failed=true render_retired=true"
+        );
+        Ok(())
+    }
+
+    /// The existing Native fatal-exit path must terminally cancel already
+    /// accepted window work without fabricating a frame or a Created receipt.
+    /// A real primary Render/GPU owner ensures gpu_progress is called from
+    /// the accepted Native frame path on the original Winit thread.
+    struct NativeFatalRequestHook {
+        fired: bool,
+        frame_entered: mpsc::Sender<()>,
+        command_admitted: mpsc::Receiver<()>,
+    }
+
+    impl NativeWindowHook for NativeFatalRequestHook {
+        fn name(&self) -> &'static str {
+            "native_fatal_exit_with_accepted_window_request"
+        }
+
+        fn frame(&mut self, _window: &Window, _world: &mut runen_ecs::World) -> Result<()> {
+            if !self.fired {
+                self.fired = true;
+                self.frame_entered
+                    .send(())
+                    .context("native fatal-exit proof worker unavailable")?;
+                self.command_admitted
+                    .recv_timeout(Duration::from_secs(12))
+                    .context("native fatal-exit request was not accepted")?;
+            }
+            Ok(())
+        }
+
+        fn gpu_progress(&mut self, _world: &mut runen_ecs::World) -> Result<bool> {
+            anyhow::bail!("injected native fatal shutdown after accepted window request");
+        }
+    }
+
+    pub(super) fn fatal_shutdown() -> Result<()> {
+        let (frame_entered, frame_receiver) = mpsc::channel();
+        let (command_admitted, command_receiver) = mpsc::channel();
+        let mut app = App::new();
+        app.add_plugins(default_plugins());
+        app.add_plugin(RenderPlugin);
+        app.init_resource::<NativeWindowHookRegistryResource>();
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()?
+            .register_hook(NativeFatalRequestHook {
+                fired: false,
+                frame_entered,
+                command_admitted: command_receiver,
+            });
+
+        let windows = app.native_window_requests()?;
+        let worker = thread::spawn(move || -> Result<()> {
+            frame_receiver
+                .recv_timeout(Duration::from_secs(12))
+                .context("actual native Render frame did not reach fatal-exit barrier")?;
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Ready,
+                "native owner not ready during fatal-exit admission"
+            );
+            let ticket = windows.request(NativeWindowRequest::new(
+                "accepted before deliberate native fatal exit",
+                (500, 360),
+            ))?;
+            command_admitted
+                .send(())
+                .context("native Winit invoker no longer owns fatal-exit barrier")?;
+
+            ensure!(
+                ticket.recv_timeout(Duration::from_secs(12))?
+                    == NativeWindowRequestOutcome::Cancelled,
+                "accepted Native request was not terminally cancelled on fatal exit"
+            );
+            ensure!(
+                ticket.try_recv() == Err(std::sync::mpsc::TryRecvError::Disconnected),
+                "fatal-exit ticket delivered a second outcome"
+            );
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Closed,
+                "Native command queue remained open after fatal exit"
+            );
+            ensure!(
+                matches!(
+                    windows.request(NativeWindowRequest::new("after exit", (320, 240))),
+                    Err(engine::runtime::NativeWindowRequestError::Closed)
+                ),
+                "Native fatal exit accepted a late command"
+            );
+            Ok(())
+        });
+
+        let execution = app.run();
+        let worker_result = worker
+            .join()
+            .expect("fatal-exit request worker must not panic");
+        worker_result?;
+        let err = execution.expect_err("injected Native fatal exit must terminate App");
+        ensure!(
+            format!("{err:#}")
+                .contains("injected native fatal shutdown after accepted window request"),
+            "unexpected Native exit error: {err:#}"
+        );
+        println!("native_window_request_fatal_exit=pass physical_x11=true accepted=1 cancelled=1");
+        Ok(())
+    }
+
+    /// Force Render's existing refusal when its logical secondary attachment
+    /// is marked Attached but its GPU authority is missing. The Native secondary
+    /// is still created by actual X11/Winit; only the Render owner state fault
+    /// is intentionally synthetic, without modifying production Render code.
+    struct RenderRefusalHook {
+        started: bool,
+        expected_id: NativeWindowId,
+        detached_verified: Arc<AtomicBool>,
+        frame_entered: mpsc::Sender<()>,
+        request_accepted: mpsc::Receiver<()>,
+    }
+
+    impl NativeWindowHook for RenderRefusalHook {
+        fn name(&self) -> &'static str {
+            "native_render_rollback_refusal"
+        }
+
+        fn frame(&mut self, _window: &Window, world: &mut runen_ecs::World) -> Result<()> {
+            if self.started {
+                return Ok(());
+            }
+            self.started = true;
+            let gfx = world
+                .remove_resource::<Gfx>()
+                .context("real Native Render primary must have GPU authority before injection")?;
+            drop(gfx);
+
+            let surfaces = world.resource_mut::<RenderSurfaceRegistryResource>()?;
+            let surface = surfaces.reserve_surface_for_native_window(self.expected_id, (500, 360));
+            surfaces.confirm_surface_attachment(surface, self.expected_id, (500, 360))?;
+
+            self.frame_entered
+                .send(())
+                .context("Native Render-refusal worker dropped its barrier")?;
+            self.request_accepted
+                .recv_timeout(Duration::from_secs(12))
+                .context("external Native request was not accepted for rollback-refusal proof")?;
+            Ok(())
+        }
+
+        fn detach(&mut self, world: &mut runen_ecs::World) -> Result<()> {
+            let record = world
+                .resource::<WindowStateRegistryResource>()?
+                .record(self.expected_id)
+                .cloned()
+                .context("Native terminal failure record is missing at retirement")?;
+            ensure!(
+                record.lifecycle_state == NativeWindowLifecycleState::CreationFailed,
+                "Native record did not preserve failed physical window identity: {record:?}"
+            );
+            ensure!(
+                record
+                    .failure_reason
+                    .as_deref()
+                    .is_some_and(|reason| { reason.contains("secondary rollback refused") }),
+                "Native did not retain the unsettled Render diagnostic: {record:?}"
+            );
+
+            let render = world.resource::<RenderSurfaceRegistryResource>()?;
+            let surface = render
+                .surface_for_native_window(self.expected_id)
+                .context("Render retention refused but surface correlation was discarded")?;
+            ensure!(
+                render.record(surface).is_some_and(|record| {
+                    record.lifecycle_state == RenderSurfaceLifecycleState::Attached
+                }),
+                "refused Render retirement must preserve attached owner state"
+            );
+            self.detached_verified.store(true, Ordering::SeqCst);
+            Ok(())
+        }
+    }
+
+    pub(super) fn render_refusal() -> Result<()> {
+        let expected_id = NativeWindowId::try_from_raw(2)
+            .context("the first secondary Native window ID must be valid")?;
+        let observed = Arc::new(AtomicBool::new(false));
+        let (frame_entered, frame_receiver) = mpsc::channel();
+        let (accepted_sender, request_accepted) = mpsc::channel();
+
+        let mut app = App::new();
+        app.with_frame_pacing(FramePacingPolicyResource::continuous_capped(30));
+        app.add_plugins(default_plugins());
+        app.add_plugin(RenderPlugin);
+        app.init_resource::<NativeWindowHookRegistryResource>();
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()?
+            .register_hook(RenderRefusalHook {
+                started: false,
+                expected_id,
+                detached_verified: Arc::clone(&observed),
+                frame_entered,
+                request_accepted,
+            });
+
+        let windows = app.native_window_requests()?;
+        let worker = thread::spawn(move || -> Result<()> {
+            frame_receiver
+                .recv_timeout(Duration::from_secs(12))
+                .context("real Render primary never reached the refusal injection frame")?;
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Ready,
+                "Native request owner not ready when Render refusal was staged"
+            );
+            let ticket = windows.request(NativeWindowRequest::new(
+                "secondary with retained Render owner",
+                (500, 360),
+            ))?;
+            accepted_sender
+                .send(())
+                .context("Native Render refusal frame barrier exited")?;
+            let result = ticket.recv_timeout(Duration::from_secs(12))?;
+            match result {
+                NativeWindowRequestOutcome::CreationFailedUnsettled {
+                    native_window_id,
+                    reason,
+                } => {
+                    ensure!(
+                        native_window_id == expected_id,
+                        "unsettled ticket did not preserve its Native physical identity"
+                    );
+                    ensure!(
+                        reason.contains("rollback refused"),
+                        "unsettled ticket did not expose Render retirement refusal: {reason}"
+                    );
+                }
+                other => {
+                    anyhow::bail!("refused rollback returned a falsely settled outcome: {other:?}")
+                }
+            }
+            ensure!(
+                ticket.try_recv() == Err(std::sync::mpsc::TryRecvError::Disconnected),
+                "unsettled ticket received a second terminal result"
+            );
+
+            let deadline = Instant::now() + Duration::from_secs(12);
+            while windows.readiness()? != NativeWindowRequestReadiness::Closed {
+                ensure!(
+                    Instant::now() < deadline,
+                    "Native owner did not close command ingress after rollback refusal"
+                );
+                thread::sleep(Duration::from_millis(5));
+            }
+            ensure!(
+                matches!(
+                    windows.request(NativeWindowRequest::new("after refusal", (320, 240))),
+                    Err(engine::runtime::NativeWindowRequestError::Closed)
+                ),
+                "Native owner accepted a request after unrecoverable rollback refusal"
+            );
+            Ok(())
+        });
+
+        let execution = app.run();
+        let worker_result = worker
+            .join()
+            .expect("Native Render refusal worker must not panic");
+        worker_result?;
+        let err = execution.expect_err("Render rollback refusal must produce Native fatal exit");
+        ensure!(
+            format!("{err:#}").contains("rollback refused"),
+            "Native fatal error lost the original Render refusal: {err:#}"
+        );
+        ensure!(
+            observed.load(Ordering::SeqCst),
+            "Native hook did not confirm retained Render and failed Native owner records"
+        );
+        println!(
+            "native_window_request_render_refusal=pass physical_x11=true unsettled=true retained=true"
+        );
+        Ok(())
+    }
+
+    pub(super) fn run() -> Result<()> {
+        let secondary_count = Arc::new(AtomicUsize::new(0));
+        let unexpected_gpu = Arc::new(AtomicBool::new(false));
+        let mut app = App::new();
+        app.add_plugins(default_plugins());
+        app.init_resource::<NativeWindowHookRegistryResource>();
+        app.world_mut()
+            .resource_mut::<NativeWindowHookRegistryResource>()?
+            .register_hook(Hook {
+                secondary_count: Arc::clone(&secondary_count),
+                unexpected_gpu: Arc::clone(&unexpected_gpu),
+            });
+
+        let windows = app.native_window_requests()?;
+        ensure!(
+            windows.readiness()? == NativeWindowRequestReadiness::NotReady,
+            "Native handle became ready before Winit startup"
+        );
+        let worker = thread::spawn(move || -> Result<NativeWindowId> {
+            let deadline = Instant::now() + Duration::from_secs(20);
+            while windows.readiness()? == NativeWindowRequestReadiness::NotReady {
+                ensure!(
+                    Instant::now() < deadline,
+                    "Native Host never published request readiness"
+                );
+                thread::sleep(Duration::from_millis(5));
+            }
+            ensure!(
+                windows.readiness()? == NativeWindowRequestReadiness::Ready,
+                "Native Host closed before request readiness"
+            );
+
+            let ticket = windows.request(NativeWindowRequest::new(
+                "Native external request proof",
+                (480, 320),
+            ))?;
+            let result = ticket.recv_timeout(Duration::from_secs(20))?;
+            let id = match result {
+                NativeWindowRequestOutcome::Created { native_window_id } => native_window_id,
+                other => anyhow::bail!("Native failed accepted creation ticket: {other:?}"),
+            };
+            ensure!(
+                id != NativeWindowId::primary(),
+                "secondary reused primary NativeWindowId"
+            );
+
+            // The Native owner must realize an accepted request even if the
+            // caller drops its individual result receiver. The second
+            // physical attach closes the initial primary through its hook.
+            let dropped = windows.request(NativeWindowRequest::new(
+                "Native dropped-receiver proof",
+                (400, 300),
+            ))?;
+            drop(dropped);
+
+            // The Created receipt may precede primary-close settlement; do
+            // not assume the owner has already closed when Winit sends it.
+            let shutdown_deadline = Instant::now() + Duration::from_secs(20);
+            while windows.readiness()? != NativeWindowRequestReadiness::Closed {
+                ensure!(
+                    Instant::now() < shutdown_deadline,
+                    "Native owner did not close the request ingress on exit"
+                );
+                thread::sleep(Duration::from_millis(5));
+            }
+            Ok(id)
+        });
+
+        app.run()?;
+        let secondary_id = worker
+            .join()
+            .expect("Native window request worker must not panic")?;
+        ensure!(
+            secondary_count.load(Ordering::SeqCst) >= 2,
+            "two physical secondary windows, including the dropped receiver, did not reach Native attach hooks"
+        );
+        ensure!(
+            !unexpected_gpu.load(Ordering::SeqCst),
+            "Native window request materialized GPU without RenderPlugin"
+        );
+        println!(
+            "native_window_requests_os=pass secondary={} physical_x11=true dropped_receiver_realized=true",
+            secondary_id.raw()
+        );
+        Ok(())
+    }
+}
+
+fn main() {
+    #[cfg(target_os = "linux")]
+    if let Some(mode) = std::env::var_os("RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE") {
+        match mode.to_str() {
+            Some("1") => linux::run().expect("real Native window request proof must pass"),
+            Some("close-race") => {
+                linux::close_race().expect("real Native close/request race proof must pass")
+            }
+            Some("render-failure") => {
+                linux::render_failure().expect("real Render rollback test must pass")
+            }
+            Some("fatal-exit") => {
+                linux::fatal_shutdown().expect("real Native fatal-exit request proof must pass")
+            }
+            Some("render-refusal") => linux::render_refusal()
+                .expect("real Native Render rollback-refusal proof must pass"),
+            _ => panic!("unexpected native window-request proof mode"),
+        }
+    }
+}
