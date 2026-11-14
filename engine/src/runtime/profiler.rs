@@ -364,7 +364,10 @@ impl NativeProfilerSink {
                 .inner
                 .lock()
                 .map_err(|_| anyhow::anyhow!("profiling observer poisoned"))?;
-            (state.events.iter().cloned().collect::<Vec<_>>(), state.dropped)
+            (
+                state.events.iter().cloned().collect::<Vec<_>>(),
+                state.dropped,
+            )
         };
         let render = match world.resource::<RenderFrameHistoryState>() {
             Ok(history) => {
@@ -547,7 +550,10 @@ mod tests {
         assert_eq!(state.events.len(), EVENT_LIMIT);
         assert_eq!(state.dropped, 3);
         assert_eq!(state.events.front().unwrap().window, Some(3));
-        assert_eq!(state.events.back().unwrap().window, Some((EVENT_LIMIT + 2) as u64));
+        assert_eq!(
+            state.events.back().unwrap().window,
+            Some((EVENT_LIMIT + 2) as u64)
+        );
         assert!(
             state
                 .events
@@ -638,7 +644,14 @@ mod tests {
         for _ in 0..5 {
             let _scope = sink.span("host", "window_resize", None, None);
         }
-        let mut values = sink.inner.lock().unwrap().events.iter().cloned().collect::<Vec<_>>();
+        let mut values = sink
+            .inner
+            .lock()
+            .unwrap()
+            .events
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
         for (value, duration) in values.iter_mut().zip([100, 200, 300, 400, 500]) {
             value.duration_ns = duration;
         }
@@ -661,7 +674,14 @@ mod tests {
         {
             let _scope = sink.span("runenui_m13", "input", None, Some(7));
         }
-        let events = sink.inner.lock().unwrap().events.iter().cloned().collect::<Vec<_>>();
+        let events = sink
+            .inner
+            .lock()
+            .unwrap()
+            .events
+            .iter()
+            .cloned()
+            .collect::<Vec<_>>();
         let stats = summarize_events(&events);
         assert_eq!(stats.len(), 3);
         assert_eq!(
@@ -682,7 +702,12 @@ mod tests {
         assert_eq!(state.events.len(), 2);
         assert_eq!(state.events[0].stage, "canonical_input_slot_lookup_failed");
         assert_eq!(state.events[1].stage, "canonical_input_runtime_pump_failed");
-        assert!(state.events.iter().all(|event| event.ui_slot == Some(9) && event.m13.is_none()));
+        assert!(
+            state
+                .events
+                .iter()
+                .all(|event| event.ui_slot == Some(9) && event.m13.is_none())
+        );
     }
 
     #[test]
