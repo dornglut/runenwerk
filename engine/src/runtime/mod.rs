@@ -18,6 +18,7 @@ pub mod platform;
 pub mod presentation;
 pub mod product_cache;
 pub mod product_publication;
+pub(crate) mod profiler;
 pub mod publication;
 pub mod query_snapshot;
 pub mod schedules;

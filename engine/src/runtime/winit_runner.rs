@@ -434,6 +434,14 @@ fn displayed_native_mouse_point(
 }
 
 pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
+    let native_profile = crate::runtime::profiler::NativeProfilerSink::from_environment()?;
+    if let Some(profile) = native_profile.as_ref() {
+        state.world.insert_resource(profile.clone());
+        profile.enable_render_history(&mut state.world);
+        if let Ok(slots) = state.world.resource_mut::<UiRuntimeSlotsResource>() {
+            slots.attach_profile_sink(profile.clone());
+        }
+    }
     let initial_native_window = state.initial_native_window;
     install_native_window_provider_resources(&mut state.world, initial_native_window);
 
@@ -445,18 +453,24 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         Ok(event_loop) => event_loop,
         Err(error) => {
             let cleanup = shutdown_native_ui(&mut state.world);
-            return combine_execution_and_cleanup(Err(error.into()), cleanup);
+            let execution = combine_execution_and_cleanup(Err(error.into()), cleanup);
+            return finish_native_profile_session(native_profile.as_ref(), &state.world, execution);
         }
     };
     // The Native owner retains its own command wake; neither this proxy nor
     // the receipt queue is a second runtime, window registry or UI wake.
     if let Ok(owner) = state.world.resource::<NativeWindowRequestOwner>() {
         let proxy = event_loop.create_proxy();
-        owner.attach_wake(move || {
+        let attachment = owner.attach_wake(move || {
             proxy
                 .send_event(NativeHostEvent::NativeWindowRequests)
                 .is_ok()
-        })?;
+        });
+        if let Err(error) = attachment {
+            let cleanup = shutdown_native_ui(&mut state.world);
+            let execution = combine_execution_and_cleanup(Err(error.into()), cleanup);
+            return finish_native_profile_session(native_profile.as_ref(), &state.world, execution);
+        }
     }
     if let Ok(owner) = state.world.resource::<AppShutdownOwner>() {
         let proxy = event_loop.create_proxy();
@@ -464,7 +478,8 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
             owner.attach_wake(move || proxy.send_event(NativeHostEvent::AppShutdown).is_ok())
         {
             let cleanup = shutdown_native_ui(&mut state.world);
-            return combine_execution_and_cleanup(Err(error.into()), cleanup);
+            let execution = combine_execution_and_cleanup(Err(error.into()), cleanup);
+            return finish_native_profile_session(native_profile.as_ref(), &state.world, execution);
         }
     }
     let transport = NativeWakeTransport::new(event_loop.create_proxy());
@@ -486,7 +501,19 @@ pub(crate) fn run(mut state: WindowedAppState) -> Result<()> {
         (None, execution) => execution,
     };
     let cleanup = runner.shutdown_native();
-    combine_execution_and_cleanup(execution, cleanup)
+    let execution = combine_execution_and_cleanup(execution, cleanup);
+    finish_native_profile_session(native_profile.as_ref(), &runner.state.world, execution)
+}
+
+fn finish_native_profile_session(
+    profile: Option<&crate::runtime::profiler::NativeProfilerSink>,
+    world: &runen_ecs::World,
+    execution: Result<()>,
+) -> Result<()> {
+    let output = profile
+        .map(|capture| capture.finish(world, execution.is_ok()))
+        .transpose();
+    combine_execution_and_cleanup(execution, output.map(|_| ()))
 }
 
 fn combine_execution_and_cleanup(execution: Result<()>, cleanup: Result<()>) -> Result<()> {
@@ -3891,6 +3918,15 @@ impl WinitRunner {
             .ordinary_frames
             .checked_add(1)
             .context("native ordinary frame counter overflow")?;
+        let profile = self
+            .state
+            .world
+            .resource::<crate::runtime::profiler::NativeProfilerSink>()
+            .ok()
+            .cloned();
+        let _profile_frame = profile
+            .as_ref()
+            .map(|sink| sink.frame_span(self.ordinary_frames));
         tracing::debug!(target: "engine.runtime.native_wake", ordinary_frames = self.ordinary_frames,
             invoker = ?std::thread::current().id(), "ordinary frame started");
         if let Some(window) = self.window_realizer.primary_window() {
@@ -3907,6 +3943,9 @@ impl WinitRunner {
                 tracing::debug!(target: "engine.runtime.native_wake", covered,
                     "ordinary settlement covers earlier UI wake");
             }
+            let _profile_ui_settle = profile
+                .as_ref()
+                .map(|sink| sink.span("runenui_host", "native_slot_settlement", None, None));
             self.state
                 .world
                 .resource_mut::<UiRuntimeSlotsResource>()?
@@ -4783,6 +4822,12 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
     }
 
     fn user_event(&mut self, event_loop: &ActiveEventLoop, event: NativeHostEvent) {
+        let _profile_callback = self
+            .state
+            .world
+            .resource::<crate::runtime::profiler::NativeProfilerSink>()
+            .ok()
+            .map(|sink| sink.span("host", "user_event", None, None));
         if event_loop.exiting() || self.exit_if_app_stopping(event_loop) {
             return;
         }
@@ -4985,6 +5030,26 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             );
             return;
         };
+        let _profile_callback = self
+            .state
+            .world
+            .resource::<crate::runtime::profiler::NativeProfilerSink>()
+            .ok()
+            .map(|sink| {
+                let category = match &event {
+                    WindowEvent::Resized(_) => "window_resize",
+                    WindowEvent::Focused(_) => "window_focus",
+                    WindowEvent::KeyboardInput { .. } => "window_keyboard",
+                    WindowEvent::MouseInput { .. } => "window_pointer_button",
+                    WindowEvent::CursorMoved { .. } => "window_pointer_move",
+                    WindowEvent::MouseWheel { .. } => "window_wheel",
+                    WindowEvent::Ime(_) => "window_ime",
+                    WindowEvent::CloseRequested => "window_close",
+                    WindowEvent::RedrawRequested => "window_redraw",
+                    _ => "window_other",
+                };
+                sink.span("host", category, Some(native_window_id.raw()), None)
+            });
 
         // Preserve accepted #1399 Win32 resize/redraw frame admission.
         #[cfg(target_os = "windows")]
@@ -5406,6 +5471,12 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
         device_id: winit::event::DeviceId,
         event: DeviceEvent,
     ) {
+        let _profile_callback = self
+            .state
+            .world
+            .resource::<crate::runtime::profiler::NativeProfilerSink>()
+            .ok()
+            .map(|sink| sink.span("host", "device_event", None, None));
         if event_loop.exiting() || self.exit_if_app_stopping(event_loop) {
             return;
         }
@@ -5438,6 +5509,12 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        let _profile_callback = self
+            .state
+            .world
+            .resource::<crate::runtime::profiler::NativeProfilerSink>()
+            .ok()
+            .map(|sink| sink.span("host", "about_to_wait", None, None));
         if event_loop.exiting() || self.exit_if_app_stopping(event_loop) {
             return;
         }

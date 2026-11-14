@@ -1544,6 +1544,7 @@ impl UiRuntimeSlot {
 pub struct UiRuntimeSlotsResource {
     slots: Vec<UiRuntimeSlot>,
     next_slot_id: u64,
+    profile_sink: Option<crate::runtime::profiler::NativeProfilerSink>,
     native_clock: Option<NativeHostClock>,
     native_transport: Option<NativeWakeTransport>,
     native_closed: bool,
@@ -1560,6 +1561,7 @@ impl Default for UiRuntimeSlotsResource {
         Self {
             slots: Vec::new(),
             next_slot_id: 1,
+            profile_sink: None,
             native_clock: None,
             native_transport: None,
             native_closed: false,
@@ -1570,6 +1572,13 @@ impl Default for UiRuntimeSlotsResource {
 }
 
 impl UiRuntimeSlotsResource {
+    pub(crate) fn attach_profile_sink(
+        &mut self,
+        sink: crate::runtime::profiler::NativeProfilerSink,
+    ) {
+        self.profile_sink = Some(sink);
+    }
+
     pub(crate) fn configure_host_clock(
         &mut self,
         clock: Option<NativeHostClock>,
@@ -2503,14 +2512,63 @@ impl UiRuntimeSlotsResource {
         (InputPumpBatch, Result<(), UiRuntimeSlotOperationFailure>),
         UiRuntimeSlotOperationFailure,
     > {
-        let slot = self.slot_mut(slot_id)?;
+        let profiler = self.profile_sink.clone();
+        let started = profiler.as_ref().map(|_| std::time::Instant::now());
+        let slot = match self.slot_mut(slot_id) {
+            Ok(slot) => slot,
+            Err(error) => {
+                if let (Some(profiler), Some(started)) = (profiler.as_ref(), started) {
+                    profiler.record_m13_pump_failure(
+                        slot_id.value(),
+                        started,
+                        crate::runtime::profiler::M13PumpFailureStage::SlotLookup,
+                    );
+                }
+                return Err(error);
+            }
+        };
         slot.begin_readiness_checkpoint();
         slot.requires_settlement = true;
-        let batch = slot
-            .runtime
-            .pump(runtime_pump_budget())
-            .map_err(UiRuntimeSlotOperationFailure::InputObservation)?;
+        let batch = match slot.runtime.pump(runtime_pump_budget()) {
+            Ok(batch) => batch,
+            Err(error) => {
+                if let (Some(profiler), Some(started)) = (profiler.as_ref(), started) {
+                    profiler.record_m13_pump_failure(
+                        slot_id.value(),
+                        started,
+                        crate::runtime::profiler::M13PumpFailureStage::RuntimePump,
+                    );
+                }
+                return Err(UiRuntimeSlotOperationFailure::InputObservation(error));
+            }
+        };
         let settlement = slot.observe_batch_report(&batch);
+        // Cut actual source-owned pump/settlement time BEFORE observer-side
+        // canonical trace inspection, statistics and capture retention.
+        let completed_at = profiler.as_ref().map(|_| std::time::Instant::now());
+        if let (Some(profiler), Some(started), Some(completed_at)) =
+            (profiler, started, completed_at)
+        {
+            let pointer_trace = match &slot.runtime {
+                UiRuntimeSlotKind::Counter(runtime) => {
+                    crate::runtime::profiler::project_native_pointer_trace(runtime.trace(), &batch)
+                }
+                UiRuntimeSlotKind::Typed(runtime) => runtime.profiler_pointer_trace(&batch),
+            };
+            let status = match &settlement {
+                Ok(()) => "settled",
+                Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => "not_quiescent",
+                Err(_) => "failed",
+            };
+            profiler.record_m13_pump(
+                slot_id.value(),
+                started,
+                completed_at,
+                &batch,
+                status,
+                &pointer_trace,
+            );
+        }
         Ok((batch, settlement))
     }
 
