@@ -158,7 +158,10 @@ fn project_one_pointer_trace(trace: &Trace, work: WorkSequence) -> PointerTraceE
     let mut physical: Option<&TraceRecord> = None;
     let mut committed = false;
     let mut activated = false;
-    for record in trace.records().filter(|record| record.work_sequence() == Some(work)) {
+    for record in trace
+        .records()
+        .filter(|record| record.work_sequence() == Some(work))
+    {
         match record.kind() {
             TraceRecordKind::PointerSubmissionAccepted { pointer_id, phase } => {
                 submission = Some((*pointer_id, *phase));
@@ -220,11 +223,13 @@ fn project_one_pointer_trace(trace: &Trace, work: WorkSequence) -> PointerTraceE
             .records()
             .take_while(|record| record.sequence() < observation.sequence())
             .filter(|record| {
-                matches!(record.kind(), TraceRecordKind::PointerPhysicalTargetResolved)
-                    && record.context().pointer().is_some_and(|context| {
-                        *context.pointer_id() == pointer_id
-                            && context.phase() == Some(PointerPhase::Down)
-                    })
+                matches!(
+                    record.kind(),
+                    TraceRecordKind::PointerPhysicalTargetResolved
+                ) && record.context().pointer().is_some_and(|context| {
+                    *context.pointer_id() == pointer_id
+                        && context.phase() == Some(PointerPhase::Down)
+                })
             })
             .last()
             .and_then(|prior| prior.target())
@@ -797,7 +802,6 @@ fn duration_histogram(durations: &[u64]) -> DurationHistogram {
 mod tests {
     use super::*;
 
-
     #[test]
     fn canonical_pointer_trace_is_original_and_excludes_ui_content() {
         use runenui_core::{
@@ -919,7 +923,8 @@ mod tests {
                 runenui_core::ProducerBudget::new(24, 0).with_reconciliation(4, 0, 4)
             }
             fn action_producer_budget(
-                _: &Self::State, _: &Self::Action
+                _: &Self::State,
+                _: &Self::Action,
             ) -> runenui_core::ProducerBudget {
                 runenui_core::ProducerBudget::new(64, 32).with_reconciliation(4, 4, 4)
             }
@@ -930,13 +935,15 @@ mod tests {
                 button("SECRET").on_activate(|| ())
             }
             fn update(
-                _: &mut Self::State, _: Self::Action
+                _: &mut Self::State,
+                _: Self::Action,
             ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
                 Effects::none()
             }
         }
         let mut runtime = AppRuntime::<TraceOff>::mount_with_config(
-            (), RuntimeConfig::default().with_trace_config(TraceConfig::new(0)),
+            (),
+            RuntimeConfig::default().with_trace_config(TraceConfig::new(0)),
         )
         .unwrap();
         let batch = runtime.pump(PumpBudget::new(128, 128, 128, 128)).unwrap();
