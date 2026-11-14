@@ -7,7 +7,11 @@ use crate::plugins::render::inspect::{
 use crate::runtime::{FramePacingPolicyResource, WindowStateRegistryResource};
 use anyhow::{Context, Result, ensure};
 use runen_ecs::World;
-use runenui_runtime::{InputArbitrationRecord, InputPumpBatch, PumpOutcome, UiInputFinality};
+use runenui_core::{PointerId, PointerPhase, WorkSequence};
+use runenui_runtime::{
+    InputArbitrationRecord, InputPumpBatch, PumpOutcome, Trace, TraceRecord, TraceRecordKind,
+    TraceSurfaceSnapshotKind, UiInputFinality,
+};
 use serde::Serialize;
 use std::collections::{BTreeMap, VecDeque};
 use std::fs::OpenOptions;
@@ -78,6 +82,155 @@ struct M13Receipt {
     sequence: u64,
     finality: &'static str,
     ownership_revision: u64,
+    pointer_trace: PointerTraceEvidence,
+}
+
+/// Bounded read-only projection of the source-owned canonical RunenUI Trace.
+/// Only known status strings and scalar facts are exported; no authored ID,
+/// opaque mounted identity, app content or trace Debug string escapes.
+#[derive(Clone, Serialize)]
+pub(crate) struct PointerTraceEvidence {
+    sequence: u64,
+    status: &'static str,
+    phase: Option<&'static str>,
+    displayed_hit_generation: Option<u64>,
+    displayed_snapshot: Option<&'static str>,
+    physical_target_present: Option<bool>,
+    physical_path_depth: Option<usize>,
+    matches_previous_down_physical_target: Option<bool>,
+    pointer_default: Option<&'static str>,
+    activation_trace: &'static str,
+    trace_evicted_before: Option<u64>,
+}
+
+impl PointerTraceEvidence {
+    const fn unavailable(sequence: u64) -> Self {
+        Self {
+            sequence,
+            status: "unavailable_no_canonical_pointer_trace",
+            phase: None,
+            displayed_hit_generation: None,
+            displayed_snapshot: None,
+            physical_target_present: None,
+            physical_path_depth: None,
+            matches_previous_down_physical_target: None,
+            pointer_default: None,
+            activation_trace: "unavailable",
+            trace_evicted_before: None,
+        }
+    }
+}
+
+/// Projects at most the same 16 exact terminal receipt sequences exported by
+/// the M13 sink. This reads RunenUI's own bounded trace; it never replays work,
+/// captures authored labels or creates a parallel mounted/route authority.
+pub(crate) fn project_native_pointer_trace(
+    trace: &Trace,
+    batch: &InputPumpBatch,
+) -> Vec<PointerTraceEvidence> {
+    let mut evidence = Vec::new();
+    for record in batch.ordered_records() {
+        if let InputArbitrationRecord::InputSettled(receipt) = record {
+            if evidence.len() >= 16 {
+                break;
+            }
+            evidence.push(project_one_pointer_trace(trace, receipt.sequence()));
+        }
+    }
+    evidence
+}
+
+const fn pointer_phase_name(phase: PointerPhase) -> &'static str {
+    match phase {
+        PointerPhase::Move => "move",
+        PointerPhase::Down => "down",
+        PointerPhase::Up => "up",
+        PointerPhase::Cancel => "cancel",
+        PointerPhase::Wheel => "wheel",
+        _ => "unknown",
+    }
+}
+
+fn project_one_pointer_trace(trace: &Trace, work: WorkSequence) -> PointerTraceEvidence {
+    let mut evidence = PointerTraceEvidence::unavailable(work.get());
+    evidence.trace_evicted_before = trace.dropped_before_sequence().map(|seq| seq.get());
+    let mut submission: Option<(PointerId, PointerPhase)> = None;
+    let mut physical: Option<&TraceRecord> = None;
+    let mut committed = false;
+    let mut activated = false;
+    for record in trace.records().filter(|record| record.work_sequence() == Some(work)) {
+        match record.kind() {
+            TraceRecordKind::PointerSubmissionAccepted { pointer_id, phase } => {
+                submission = Some((*pointer_id, *phase));
+            }
+            TraceRecordKind::PointerPhysicalTargetResolved => physical = Some(record),
+            TraceRecordKind::PointerInteractionCommitted { .. } => committed = true,
+            TraceRecordKind::PointerActivateCollected { .. } => activated = true,
+            TraceRecordKind::PointerDefaultApplied { .. } => {
+                evidence.pointer_default = Some("applied");
+            }
+            TraceRecordKind::PointerDefaultSuppressed { .. } => {
+                evidence.pointer_default = Some("suppressed");
+            }
+            _ => {}
+        }
+    }
+    evidence.phase = submission.map(|(_, phase)| pointer_phase_name(phase));
+    let Some(observation) = physical else {
+        evidence.status = if submission.is_some() {
+            "unavailable_no_physical_observation"
+        } else {
+            "unavailable_no_canonical_pointer_trace"
+        };
+        return evidence;
+    };
+    evidence.status = if committed {
+        "observed_committed_pointer_transaction"
+    } else {
+        "partial_pointer_trace"
+    };
+    evidence.physical_target_present = Some(observation.target().is_some());
+    evidence.physical_path_depth = observation
+        .context()
+        .physical_path()
+        .map(|path| path.targets().len());
+    if let Some(surface) = observation.context().surface() {
+        evidence.displayed_hit_generation = Some(surface.hit_test_generation());
+        evidence.displayed_snapshot = match surface.snapshot() {
+            Some(TraceSurfaceSnapshotKind::Current) => Some("current"),
+            Some(TraceSurfaceSnapshotKind::RetainedHistorical) => Some("retained_historical"),
+            _ => None,
+        };
+    }
+    // "not_observed" is a statement about retained source records, not a
+    // claim about widget action success or completion of application effects.
+    evidence.activation_trace = if activated {
+        "collected"
+    } else if committed {
+        "not_observed_in_retained_trace"
+    } else {
+        "unavailable"
+    };
+    // Compare canonical physical hit identity without releasing the opaque
+    // MountedNodeId. This is NOT the actual pressed-owner eligibility fact.
+    if let Some((pointer_id, PointerPhase::Up)) = submission
+        && let Some(current_target) = observation.target()
+    {
+        evidence.matches_previous_down_physical_target = trace
+            .records()
+            .take_while(|record| record.sequence() < observation.sequence())
+            .filter(|record| {
+                matches!(record.kind(), TraceRecordKind::PointerPhysicalTargetResolved)
+                    && record.context().pointer().is_some_and(|context| {
+                        *context.pointer_id() == pointer_id
+                            && context.phase() == Some(PointerPhase::Down)
+                    })
+            })
+            .last()
+            .and_then(|prior| prior.target())
+            .map(|prior| prior.mounted_node_id() == current_target.mounted_node_id());
+    }
+    evidence
 }
 
 #[derive(Serialize)]
@@ -363,6 +516,7 @@ impl NativeProfilerSink {
         started: Instant,
         batch: &InputPumpBatch,
         settlement_status: &'static str,
+        pointer_trace: &[PointerTraceEvidence],
     ) {
         let outcome = match batch.report().outcome() {
             PumpOutcome::Quiescent => "quiescent",
@@ -387,6 +541,13 @@ impl NativeProfilerSink {
                         sequence: receipt.sequence().get(),
                         finality,
                         ownership_revision: receipt.ownership_revision().get(),
+                        pointer_trace: pointer_trace
+                            .iter()
+                            .find(|trace| trace.sequence == receipt.sequence().get())
+                            .cloned()
+                            .unwrap_or_else(|| {
+                                PointerTraceEvidence::unavailable(receipt.sequence().get())
+                            }),
                     });
                 }
             }
@@ -476,7 +637,7 @@ impl NativeProfilerSink {
             },
         };
         let report = Capture {
-            schema_version: 1,
+            schema_version: 2,
             session_id: self.session_id.to_string(),
             kind: "runenwerk_native_application_profile",
             status: if completed {
@@ -636,6 +797,159 @@ fn duration_histogram(durations: &[u64]) -> DurationHistogram {
 mod tests {
     use super::*;
 
+
+    #[test]
+    fn canonical_pointer_trace_is_original_and_excludes_ui_content() {
+        use runenui_core::{
+            Effects, InputDeviceId, LogicalPoint, NoHostProtocol, PointerButton, PointerButtons,
+            PointerDeviceKind, PointerEvent, PointerId, PointerPhase, StyleEnvironment, UiApp,
+            View, button,
+        };
+        use runenui_runtime::{AppRuntime, LogicalSize, PumpBudget, SurfaceBuildContext};
+
+        struct TraceProbe;
+        impl UiApp for TraceProbe {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+
+            fn initial_producer_budget(_: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(24, 0).with_reconciliation(4, 0, 4)
+            }
+
+            fn action_producer_budget(
+                _: &Self::State,
+                _: &Self::Action,
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(64, 32).with_reconciliation(4, 4, 4)
+            }
+
+            fn interaction_producer_budget(_: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(64, 32).with_reconciliation(4, 4, 4)
+            }
+
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                button("SENSITIVE SECRET BUTTON CAPTION")
+                    .id("SENSITIVE SECRET AUTHORED ID")
+                    .on_activate(|| ())
+            }
+
+            fn update(
+                _: &mut Self::State,
+                _: Self::Action,
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                Effects::none()
+            }
+        }
+
+        let mut runtime = AppRuntime::<TraceProbe>::mount(()).unwrap();
+        let style = StyleEnvironment::default();
+        let publication = runtime
+            .publish_surface(&SurfaceBuildContext::tight(
+                &style,
+                LogicalSize::try_new(800.0, 600.0).unwrap(),
+            ))
+            .unwrap();
+        let rect = publication
+            .frame()
+            .nodes()
+            .iter()
+            .find(|node| node.authored_id().is_some())
+            .expect("source-authored control is publicly published")
+            .bounds();
+        let point = LogicalPoint::new(
+            rect.x() + rect.width() / 2.0,
+            rect.y() + rect.height() / 2.0,
+        )
+        .unwrap();
+        let pointer = PointerId::new(41).unwrap();
+        let device = InputDeviceId::new(42).unwrap();
+        for phase in [PointerPhase::Move, PointerPhase::Down, PointerPhase::Up] {
+            let mut event = PointerEvent::new(
+                pointer,
+                PointerDeviceKind::Mouse,
+                phase,
+                point,
+                publication.input_context().clone(),
+            )
+            .with_device_id(device);
+            if phase == PointerPhase::Down {
+                event = event
+                    .with_buttons(PointerButtons::new([PointerButton::Primary]))
+                    .with_changed_button(PointerButton::Primary);
+            } else if phase == PointerPhase::Up {
+                event = event.with_changed_button(PointerButton::Primary);
+            }
+            let submitted = runtime.submit_pointer(event).unwrap();
+            let batch = runtime.pump(PumpBudget::new(128, 128, 128, 128)).unwrap();
+            let evidence = project_native_pointer_trace(runtime.trace(), &batch);
+            let observed = evidence
+                .iter()
+                .find(|item| item.sequence == submitted.sequence().get())
+                .expect("exact original pointer receipt is projected");
+            assert_eq!(observed.phase, Some(pointer_phase_name(phase)));
+            assert_eq!(observed.status, "observed_committed_pointer_transaction");
+            assert_eq!(observed.physical_target_present, Some(true));
+            assert_eq!(observed.displayed_snapshot, Some("current"));
+            if phase == PointerPhase::Up {
+                assert_eq!(
+                    observed.matches_previous_down_physical_target,
+                    Some(true),
+                    "source-owned physical hit is stable across original Down and Up"
+                );
+                assert_eq!(observed.activation_trace, "collected");
+            }
+            let serialized = serde_json::to_string(observed).unwrap();
+            assert!(!serialized.contains("SENSITIVE"));
+            assert!(!serialized.contains("AUTHORED"));
+            assert!(!serialized.contains("CAPTION"));
+        }
+    }
+
+    #[test]
+    fn canonical_pointer_trace_reports_unavailable_without_fabricating_an_action() {
+        use runenui_core::{Effects, NoHostProtocol, UiApp, View, button};
+        use runenui_runtime::{AppRuntime, PumpBudget, RuntimeConfig, TraceConfig};
+        struct TraceOff;
+        impl UiApp for TraceOff {
+            type State = ();
+            type Action = ();
+            type HostProtocol = NoHostProtocol;
+            fn initial_producer_budget(_: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(24, 0).with_reconciliation(4, 0, 4)
+            }
+            fn action_producer_budget(
+                _: &Self::State, _: &Self::Action
+            ) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(64, 32).with_reconciliation(4, 4, 4)
+            }
+            fn interaction_producer_budget(_: &Self::State) -> runenui_core::ProducerBudget {
+                runenui_core::ProducerBudget::new(64, 32).with_reconciliation(4, 4, 4)
+            }
+            fn root(_: &Self::State) -> impl View<Self::Action> {
+                button("SECRET").on_activate(|| ())
+            }
+            fn update(
+                _: &mut Self::State, _: Self::Action
+            ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+                Effects::none()
+            }
+        }
+        let mut runtime = AppRuntime::<TraceOff>::mount_with_config(
+            (), RuntimeConfig::default().with_trace_config(TraceConfig::new(0)),
+        )
+        .unwrap();
+        let batch = runtime.pump(PumpBudget::new(128, 128, 128, 128)).unwrap();
+        assert!(runtime.trace().records().next().is_none());
+        assert!(project_native_pointer_trace(runtime.trace(), &batch).is_empty());
+        let unavailable = project_one_pointer_trace(
+            runtime.trace(),
+            WorkSequence::__runtime_new(std::num::NonZeroU64::new(1).unwrap()),
+        );
+        assert_eq!(unavailable.status, "unavailable_no_canonical_pointer_trace");
+        assert_eq!(unavailable.activation_trace, "unavailable");
+        assert!(unavailable.physical_target_present.is_none());
+    }
     #[test]
     fn capture_is_bounded_and_reports_losses() {
         let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
@@ -698,7 +1012,7 @@ mod tests {
         sink.finish(&world, false).unwrap();
         let value: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["schema_version"], 2);
         assert_eq!(value["status"], "failed_or_interrupted");
         assert_eq!(value["session_id"], sink.session_id.as_ref());
         assert_eq!(value["cpu_events"][0]["event_ordinal"], 1);

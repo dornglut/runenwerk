@@ -28,6 +28,10 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
         "invalid profiler smoke source revision"
     );
+    ensure!(
+        report["schema_version"] == 2,
+        "expected native profiler capture schema v2"
+    );
     let cpu_events = report["cpu_events"]
         .as_array()
         .context("native profiler capture is missing CPU events")?;
@@ -90,6 +94,7 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         .context("native profiler capture is missing Render observations")?;
     let summary = json!({
         "schema_version": 1,
+        "capture_schema_version": 2,
         "kind": "runenwerk_native_profiler_smoke_summary",
         "classification": "functional_smoke_not_performance_qualification",
         "sample_count_cpu": cpu_events.len(),
@@ -110,6 +115,7 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
     });
     let manifest = json!({
         "schema_version": 1,
+        "capture_schema_version": 2,
         "kind": "runenwerk_native_profiler_smoke",
         "source_revision": revision,
         "session_id": report["session_id"],

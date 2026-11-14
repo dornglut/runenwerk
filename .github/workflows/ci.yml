@@ -174,7 +174,7 @@ jobs:
           for file in capture.json summary.json manifest.json validation.json report.md; do
             test -s "${evidence}/${file}"
           done
-          jq -e --arg revision "${{ steps.revision.outputs.expected_revision }}" '.schema_version == 1 and .kind == "runenwerk_native_application_profile" and .status == "completed" and .source_revision == $revision and (.session_id | type == "string" and length > 0) and (.cpu_events | length > 0) and (.cpu_events | all(.event_ordinal > 0)) and (.render.observations | length > 0)' "${evidence}/capture.json"
+          jq -e --arg revision "${{ steps.revision.outputs.expected_revision }}" '.schema_version == 2 and .kind == "runenwerk_native_application_profile" and .status == "completed" and .source_revision == $revision and (.session_id | type == "string" and length > 0) and (.cpu_events | length > 0) and (.cpu_events | all(.event_ordinal > 0)) and (.render.observations | length > 0)' "${evidence}/capture.json"
           jq -e '.classification == "functional_smoke_not_performance_qualification" and .sample_count_cpu > 0 and (.stage_statistics | length > 0) and ([.stage_statistics[] | ((.duration_histogram_ns.counts | add) == .sample_count)] | all)' "${evidence}/summary.json"
           jq -e '.kind == "runenwerk_native_profiler_smoke" and .source_revision == "${{ steps.revision.outputs.expected_revision }}"' "${evidence}/manifest.json"
           jq -e '.status == "passed" and .privacy_reviewed_fixture == true and .performance_qualification == false' "${evidence}/validation.json"

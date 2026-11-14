@@ -61,12 +61,26 @@ is stamped at **build time** only when the application is compiled with
 native CI smoke compiles with its verified exact checkout revision and rejects
 a mismatched raw capture.
 
-Schema v1 contains bounded CPU event records (monotonic nanoseconds from one
+Schema v2 contains bounded CPU event records (monotonic nanoseconds from one
 process epoch), per-stage median/P95 grouped by actual window/slot identity,
 native callback categories and window identities, Engine
 schedule-call timing (not standalone RunenECS per-system timings), RunenUI M13
 pump status, numeric receipt counts and up to 16 exact terminal receipt
-sequence/finality samples per pump (with omissions reported), RunenUI host
+sequence/finality samples per pump (with omissions reported), plus a bounded
+read-only projection of the existing canonical RunenUI pointer trace. Each
+sample carries its original M13 work sequence, source-recorded pointer
+phase, displayed hit-test generation and current-vs-retained snapshot,
+physical-path depth and target presence, and positive canonical
+`PointerActivateCollected` trace evidence. An Up may compare its physical hit
+with the last retained Down from the same pointer stream without exporting
+the opaque target. Such a comparison is not a claim about the framework's
+pressed-owner eligibility. Missing or evicted canonical evidence remains
+explicitly unavailable; `not_observed` means only that a source trace record
+was not retained, not that the application action failed. No trace Debug string,
+authored identifier, text, credential or raw mounted identity is exported.
+An M13 `committed` input receipt is never relabeled as a successful UI
+activation or Todo operation. Existing schema-v1 captures are historical and
+are not silently upgraded or reinterpreted as v2. RunenUI host
 settlement/publication, and up to 512 existing Render-owned frame
 observations (with export omissions reported) when available. The Render frame index
 is **not** assumed equal to the Host frame ordinal. GPU-composed durations are

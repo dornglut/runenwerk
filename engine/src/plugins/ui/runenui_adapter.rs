@@ -2544,12 +2544,18 @@ impl UiRuntimeSlotsResource {
         };
         let settlement = slot.observe_batch_report(&batch);
         if let (Some(profiler), Some(started)) = (profiler, started) {
+            let pointer_trace = match &slot.runtime {
+                UiRuntimeSlotKind::Counter(runtime) => {
+                    crate::runtime::profiler::project_native_pointer_trace(runtime.trace(), &batch)
+                }
+                UiRuntimeSlotKind::Typed(runtime) => runtime.profiler_pointer_trace(&batch),
+            };
             let status = match &settlement {
                 Ok(()) => "settled",
                 Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => "not_quiescent",
                 Err(_) => "failed",
             };
-            profiler.record_m13_pump(slot_id.value(), started, &batch, status);
+            profiler.record_m13_pump(slot_id.value(), started, &batch, status, &pointer_trace);
         }
         Ok((batch, settlement))
     }
