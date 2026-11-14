@@ -86,22 +86,57 @@ pub(crate) fn apply_runenui_terminal_presentations(world: &mut runen_ecs::World)
         return Ok(());
     }
     reconcile_terminal_mappings(world)?;
-    let associations = world.resource_mut::<UiRuntimePresentationAssociationsResource>()?;
-    for publication_id in accepted {
-        // Input remains pending/in-flight; GPU submission acceptance alone is
-        // never a displayed-input receipt.
-        let _ = associations.associate_accepted_submission(publication_id);
+    // Only the renderer-owned terminal Present completion can promote a
+    // displayed input generation. Observe the successful promotion AFTER the
+    // exclusive association mutation, without a second correlation ledger.
+    let profiling = world
+        .resource::<crate::runtime::profiler::NativeProfilerSink>()
+        .is_ok();
+    let mut promoted = Vec::new();
+    {
+        let associations = world.resource_mut::<UiRuntimePresentationAssociationsResource>()?;
+        for publication_id in accepted {
+            // Accepted GPU submission alone never authorizes displayed input.
+            let _ = associations.associate_accepted_submission(publication_id);
+        }
+        for publication_id in completed {
+            // Stale completion never promotes another publication generation.
+            if let Some(displayed) = associations.promote_completed_publication(publication_id)
+                && profiling
+            {
+                promoted.push((
+                    displayed.slot_id.value(),
+                    displayed.mapping.native_window_id().raw(),
+                    displayed.render_surface_id.raw(),
+                    displayed.publication_id.raw(),
+                    displayed.input_context.hit_test_generation(),
+                    displayed.input_context.coordinate_revision(),
+                ));
+            }
+        }
+        for (publication_id, reason) in rejected {
+            if associations.reject_terminal_publication(publication_id) {
+                tracing::warn!(
+                    publication_id = publication_id.raw(),
+                    reason,
+                    "RunenUI GPU publication retired without displayed-input promotion"
+                );
+            }
+        }
     }
-    for publication_id in completed {
-        // Stale completion never promotes another publication generation.
-        let _ = associations.promote_completed_publication(publication_id);
-    }
-    for (publication_id, reason) in rejected {
-        if associations.reject_terminal_publication(publication_id) {
-            tracing::warn!(
-                publication_id = publication_id.raw(),
-                reason,
-                "RunenUI GPU publication retired without displayed-input promotion"
+    if !promoted.is_empty()
+        && let Ok(observer) = world.resource::<crate::runtime::profiler::NativeProfilerSink>()
+    {
+        for (slot, window, surface, publication, hit_generation, coordinate_revision) in promoted {
+            observer.observe_native_ui_presentation(
+                "terminal_present_promoted_for_input",
+                slot,
+                window,
+                surface,
+                publication,
+                hit_generation,
+                coordinate_revision,
+                None,
             );
         }
     }
@@ -294,6 +329,8 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
                 return Err(anyhow!("RunenUI bound publication rejected: {error:?}"));
             }
         };
+        let hit_generation = publication.input_context().hit_test_generation();
+        let coordinate_revision = publication.input_context().coordinate_revision();
         let paint = publication.paint_publication().clone();
 
         // The same producer/surface may not silently overwrite a distinct
@@ -334,6 +371,18 @@ pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> 
                     .with_route(binding.route)
                     .with_order(binding.order),
             );
+        if let Ok(observer) = world.resource::<crate::runtime::profiler::NativeProfilerSink>() {
+            observer.observe_native_ui_presentation(
+                "source_staged_for_render",
+                slot.value(),
+                mapping.native_window_id().raw(),
+                binding.render_surface_id.raw(),
+                publication_id.raw(),
+                hit_generation,
+                coordinate_revision,
+                Some(epoch),
+            );
+        }
     }
     Ok(())
 }

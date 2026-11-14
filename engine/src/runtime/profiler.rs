@@ -24,6 +24,8 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 const ENV_OUTPUT: &str = "RUNENWERK_PROFILE_OUTPUT";
 const EVENT_LIMIT: usize = 16_384;
 const RENDER_HISTORY_LIMIT: usize = 512;
+/// Source-staged and renderer-terminal input promotions; not GPU/display timestamps.
+const NATIVE_UI_PRESENTATION_EVENT_LIMIT: usize = 1_024;
 /// Fixed logarithmic-ish time buckets. Counts cover [0, bound) and one unbounded tail.
 const DURATION_HISTOGRAM_UPPER_NS: [u64; 10] = [
     50_000, 100_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000, 8_000_000, 16_000_000,
@@ -47,6 +49,9 @@ struct Recorder {
     events: VecDeque<CpuObservation>,
     dropped: u64,
     next_event_ordinal: u64,
+    native_ui_presentations: VecDeque<NativeUiPresentationObservation>,
+    dropped_native_ui_presentations: u64,
+    next_native_ui_presentation_ordinal: u64,
     // A Host frame belongs only to the native thread that admitted it.
     active_frame: Option<(std::thread::ThreadId, u64)>,
 }
@@ -277,6 +282,32 @@ struct DurationHistogram {
     counts: [usize; 11],
 }
 
+#[derive(Clone, Serialize)]
+struct NativeUiPresentationObservation {
+    /// Within-session source-observation order, independent of CPU ordinal.
+    event_ordinal: u64,
+    /// Same process-local monotonic CPU epoch as cpu_events.start_ns.
+    observed_ns: u64,
+    host_frame: Option<u64>,
+    transition: &'static str,
+    ui_slot: u64,
+    native_window: u64,
+    render_surface: u64,
+    publication_id: u64,
+    hit_test_generation: u64,
+    coordinate_revision: u64,
+    /// Source ingress epoch at stage time; not synthesized at terminal Present.
+    source_ingress_epoch: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct NativeUiPresentationCapture {
+    status: &'static str,
+    event_capacity: usize,
+    dropped_events: u64,
+    events: Vec<NativeUiPresentationObservation>,
+}
+
 #[derive(Serialize)]
 struct RenderObservation {
     render_frame: u64,
@@ -347,6 +378,7 @@ struct Capture {
     dropped_cpu_events: u64,
     cpu_events: Vec<CpuObservation>,
     stage_statistics: Vec<StageStatistics>,
+    native_ui_presentations: NativeUiPresentationCapture,
     render: RenderCapture,
     unavailable: &'static [&'static str],
 }
@@ -532,6 +564,52 @@ impl NativeProfilerSink {
         }
     }
 
+    /// A non-timed, source-owned native input-generation transition. All IDs
+    /// and generations come from the RunenUI/Render association owner; this
+    /// function never constructs, mutates or promotes an input snapshot.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn observe_native_ui_presentation(
+        &self,
+        transition: &'static str,
+        ui_slot: u64,
+        native_window: u64,
+        render_surface: u64,
+        publication_id: u64,
+        hit_test_generation: u64,
+        coordinate_revision: u64,
+        source_ingress_epoch: Option<u64>,
+    ) {
+        let observed_ns = saturating_u64(self.origin.elapsed().as_nanos());
+        if let Ok(mut recorder) = self.inner.lock() {
+            recorder.next_native_ui_presentation_ordinal =
+                recorder.next_native_ui_presentation_ordinal.saturating_add(1);
+            let event_ordinal = recorder.next_native_ui_presentation_ordinal;
+            let host_frame = match recorder.active_frame {
+                Some((thread, frame)) if thread == std::thread::current().id() => Some(frame),
+                _ => None,
+            };
+            let observation = NativeUiPresentationObservation {
+                event_ordinal,
+                observed_ns,
+                host_frame,
+                transition,
+                ui_slot,
+                native_window,
+                render_surface,
+                publication_id,
+                hit_test_generation,
+                coordinate_revision,
+                source_ingress_epoch,
+            };
+            if recorder.native_ui_presentations.len() == NATIVE_UI_PRESENTATION_EVENT_LIMIT {
+                recorder.native_ui_presentations.pop_front();
+                recorder.dropped_native_ui_presentations =
+                    recorder.dropped_native_ui_presentations.saturating_add(1);
+            }
+            recorder.native_ui_presentations.push_back(observation);
+        }
+    }
+
     pub(crate) fn record_schedule(&self, stage: &'static str, started: Instant) {
         self.record("ecs_schedule", stage, started, None, None, None);
     }
@@ -615,7 +693,7 @@ impl NativeProfilerSink {
     }
 
     pub(crate) fn finish(&self, world: &World, completed: bool) -> Result<()> {
-        let (events, dropped) = {
+        let (events, dropped, native_ui_presentations, dropped_native_ui_presentations) = {
             let state = self
                 .inner
                 .lock()
@@ -623,6 +701,8 @@ impl NativeProfilerSink {
             (
                 state.events.iter().cloned().collect::<Vec<_>>(),
                 state.dropped,
+                state.native_ui_presentations.iter().cloned().collect::<Vec<_>>(),
+                state.dropped_native_ui_presentations,
             )
         };
         let render = match world.resource::<RenderFrameHistoryState>() {
@@ -679,7 +759,7 @@ impl NativeProfilerSink {
             },
         };
         let report = Capture {
-            schema_version: 2,
+            schema_version: 3,
             session_id: self.session_id.to_string(),
             kind: "runenwerk_native_application_profile",
             status: if completed {
@@ -729,6 +809,12 @@ impl NativeProfilerSink {
             dropped_cpu_events: dropped,
             stage_statistics: summarize_events(&events),
             cpu_events: events,
+            native_ui_presentations: NativeUiPresentationCapture {
+                status: "source_observed_not_physical_scanout",
+                event_capacity: NATIVE_UI_PRESENTATION_EVENT_LIMIT,
+                dropped_events: dropped_native_ui_presentations,
+                events: native_ui_presentations,
+            },
             render,
             unavailable: &[
                 "per_system_ecs_cpu",
@@ -1025,6 +1111,60 @@ mod tests {
         assert_eq!(unavailable.activation_trace, "unavailable");
         assert!(unavailable.physical_target_present.is_none());
     }
+
+    #[test]
+    fn native_presentation_events_are_bounded_source_owned_and_non_additive() {
+        let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
+        for index in 0..(NATIVE_UI_PRESENTATION_EVENT_LIMIT + 3) {
+            sink.observe_native_ui_presentation(
+                "source_staged_for_render",
+                17,
+                1,
+                9,
+                (index + 1) as u64,
+                (index + 1) as u64,
+                1,
+                Some(index as u64),
+            );
+        }
+        let recorder = sink.inner.lock().unwrap();
+        assert_eq!(recorder.native_ui_presentations.len(), NATIVE_UI_PRESENTATION_EVENT_LIMIT);
+        assert_eq!(recorder.dropped_native_ui_presentations, 3);
+        assert_eq!(recorder.native_ui_presentations.front().unwrap().event_ordinal, 4);
+        assert_eq!(
+            recorder.native_ui_presentations.back().unwrap().event_ordinal,
+            (NATIVE_UI_PRESENTATION_EVENT_LIMIT + 3) as u64
+        );
+        let event = recorder.native_ui_presentations.front().unwrap();
+        assert_eq!(event.hit_test_generation, 4);
+        assert_eq!(event.publication_id, 4);
+        assert_eq!(event.source_ingress_epoch, Some(3));
+        let serialized = serde_json::to_string(event).unwrap();
+        assert!(!serialized.contains("authored_id"));
+        assert!(!serialized.contains("task_title"));
+        assert!(!serialized.contains("input_text"));
+        assert!(recorder.events.is_empty(), "point observations are not CPU spans");
+    }
+
+    #[test]
+    fn same_publication_identity_can_be_observed_at_stage_and_terminal_promotion() {
+        let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
+        sink.observe_native_ui_presentation(
+            "source_staged_for_render", 17, 1, 9, 77, 2, 1, Some(11),
+        );
+        sink.observe_native_ui_presentation(
+            "terminal_present_promoted_for_input", 17, 1, 9, 77, 2, 1, None,
+        );
+        let state = sink.inner.lock().unwrap();
+        let pair = state.native_ui_presentations.iter().collect::<Vec<_>>();
+        assert_eq!(pair.len(), 2);
+        assert_eq!(pair[0].event_ordinal, 1);
+        assert_eq!(pair[1].event_ordinal, 2);
+        assert!(pair[1].observed_ns >= pair[0].observed_ns);
+        assert_eq!(pair[0].publication_id, pair[1].publication_id);
+        assert_eq!(pair[0].hit_test_generation, pair[1].hit_test_generation);
+        assert_eq!(pair[1].source_ingress_epoch, None);
+    }
     #[test]
     fn capture_is_bounded_and_reports_losses() {
         let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
@@ -1087,7 +1227,7 @@ mod tests {
         sink.finish(&world, false).unwrap();
         let value: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        assert_eq!(value["schema_version"], 2);
+        assert_eq!(value["schema_version"], 3);
         assert_eq!(value["status"], "failed_or_interrupted");
         assert_eq!(value["session_id"], sink.session_id.as_ref());
         assert_eq!(value["cpu_events"][0]["event_ordinal"], 1);

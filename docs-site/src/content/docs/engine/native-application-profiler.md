@@ -61,7 +61,7 @@ is stamped at **build time** only when the application is compiled with
 native CI smoke compiles with its verified exact checkout revision and rejects
 a mismatched raw capture.
 
-Schema v2 contains bounded CPU event records (monotonic nanoseconds from one
+Schema v3 contains bounded CPU event records (monotonic nanoseconds from one
 process epoch), per-stage median/P95 grouped by actual window/slot identity,
 native callback categories and window identities, Engine
 schedule-call timing (not standalone RunenECS per-system timings), RunenUI M13
@@ -82,10 +82,32 @@ An M13 `committed` input receipt is never relabeled as a successful UI
 activation or Todo operation. The M13 CPU measurement ends at the actual
 RunenUI pump/settlement boundary; read-only profiler trace projection and
 export bookkeeping occur afterward and are not attributed to M13 work.
-Observer overhead requires its own matched on/off workload qualification. Existing schema-v1 captures are historical and
-are not silently upgraded or reinterpreted as v2. RunenUI host
-settlement/publication, and up to 512 existing Render-owned frame
-observations (with export omissions reported) when available. The Render frame index
+Observer overhead requires its own matched on/off workload qualification.
+Schema v1/v2 captures remain historical and are not silently upgraded to v3.
+
+Schema v3 also records up to 1,024 **source-owned native UI presentation transitions**
+independently from timed CPU spans: `source_staged_for_render` only after a
+successful aligned source/paint staging, and
+`terminal_present_promoted_for_input` only when the existing
+Render terminal Present completion actually promotes that exact immutable
+generation for native input. Each point observation includes the original
+RunenUI publication ID, native slot/window and Render surface identifiers,
+source hit-test generation, coordinate revision and original Host frame when
+known. The stage includes the source ingress epoch; a terminal promotion does
+not invent one. Both transitions use the same monotonic CPU process clock.
+Their independent ordinals, capacity and eviction count prevent missing
+history from being misrepresented as no promotion.
+
+**Important:** Terminal Present promotion is an authorized native input
+generation transition, **not physical display scanout, GPU execution time,
+or pixel visibility**. Do not equate it with a CPU-to-GPU clock join.
+A test that verifies Todo storage after an action has not thereby verified
+that a later UI generation is promoted for native input. Capture time can
+distinguish when a new generation was staged versus promoted, but cannot
+supply a portable native display-ready barrier by itself.
+
+RunenUI Host settlement/publication and up to 512 existing Render-owned
+frame observations (with export omissions reported) remain available. The Render frame index
 is **not** assumed equal to the Host frame ordinal. GPU-composed durations are
 GPU-clock facts, not synchronized with CPU events, scanout or display FPS.
 

@@ -29,8 +29,8 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         "invalid profiler smoke source revision"
     );
     ensure!(
-        report["schema_version"] == 2,
-        "expected native profiler capture schema v2"
+        report["schema_version"] == 3,
+        "expected native profiler capture schema v3"
     );
     let cpu_events = report["cpu_events"]
         .as_array()
@@ -92,9 +92,45 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
     let render_frames = report["render"]["observations"]
         .as_array()
         .context("native profiler capture is missing Render observations")?;
+    let presentations = &report["native_ui_presentations"];
+    let rows = presentations["events"]
+        .as_array()
+        .context("native profiler capture is missing source-owned presentation observations")?;
+    ensure!(
+        presentations["status"] == "source_observed_not_physical_scanout"
+            && presentations["event_capacity"] == 1024,
+        "native promotion data must be source-owned, bounded and explicitly not a scanout clock"
+    );
+    ensure!(
+        rows.iter().any(|event| {
+            event["transition"] == "source_staged_for_render"
+        }),
+        "native typed RunenUI smoke contains no actual source-staged generation"
+    );
+    ensure!(
+        rows.windows(2).all(|pair| {
+            pair[0]["event_ordinal"].as_u64()
+                .zip(pair[1]["event_ordinal"].as_u64())
+                .is_some_and(|(older, newer)| older < newer)
+        }),
+        "source promotion event ordinals are nonmonotonic"
+    );
+    ensure!(
+        rows.iter().all(|event| {
+            matches!(
+                event["transition"].as_str(),
+                Some("source_staged_for_render" | "terminal_present_promoted_for_input")
+            ) && event["publication_id"].as_u64().is_some_and(|id| id > 0)
+                && event["hit_test_generation"].as_u64().is_some()
+                && event["observed_ns"].as_u64().is_some()
+                && event["ui_slot"].as_u64().is_some()
+                && event["render_surface"].as_u64().is_some()
+        }),
+        "source presentation event has missing or unrecognized typed facts"
+    );
     let summary = json!({
         "schema_version": 1,
-        "capture_schema_version": 2,
+        "capture_schema_version": 3,
         "kind": "runenwerk_native_profiler_smoke_summary",
         "classification": "functional_smoke_not_performance_qualification",
         "sample_count_cpu": cpu_events.len(),
@@ -102,6 +138,11 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         "source_revision": report["source_revision"],
         "dropped_cpu_events": report["dropped_cpu_events"],
         "render_observation_count": render_frames.len(),
+        "source_presentation_count": rows.len(),
+        "source_terminal_promotion_count": rows.iter().filter(|r| {
+            r["transition"] == "terminal_present_promoted_for_input"
+        }).count(),
+        "dropped_source_presentation_events": presentations["dropped_events"],
         "render_status": report["render"]["status"],
         "stage_statistics": stages,
         "histogram_semantics": "counts correspond to successive upper-exclusive nanosecond bounds; final bin is unbounded",
@@ -115,7 +156,7 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
     });
     let manifest = json!({
         "schema_version": 1,
-        "capture_schema_version": 2,
+        "capture_schema_version": 3,
         "kind": "runenwerk_native_profiler_smoke",
         "source_revision": revision,
         "session_id": report["session_id"],
@@ -129,6 +170,7 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         "ci_run_attempt": std::env::var("GITHUB_RUN_ATTEMPT").unwrap_or_else(|_| "unavailable".to_owned()),
         "window_snapshot": report["native_windows"],
         "host_pacing_close_snapshot": report["host_pacing"],
+        "source_presentation_count": rows.len(),
         "capture_clock": report["clock"],
         "gpu_clock_relation": report["gpu_clock_relation"]
     });
@@ -146,7 +188,8 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
             "fixture_ui_label_title_and_identity_not_exported",
             "histogram_counts_equal_retained_stage_samples",
             "raw_capture_revision_matches_exact_checked_out_CI_commit",
-            "session_identity_present_and_event_ordinals_monotonic"
+            "session_identity_present_and_event_ordinals_monotonic",
+            "source_staged_input_generation_and_terminal_promotions_are_typed_and_bounded"
         ],
         "unproven": [
             "physical_windows_behavior",

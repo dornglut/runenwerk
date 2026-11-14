@@ -866,7 +866,7 @@ fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> an
     let report_bytes = std::fs::read(&profile_path)?;
     let report: serde_json::Value = serde_json::from_slice(&report_bytes)?;
     anyhow::ensure!(
-        report["schema_version"].as_u64() == Some(2)
+        report["schema_version"].as_u64() == Some(3)
             && report["status"].as_str() == Some("completed")
             && report["session_id"]
                 .as_str()
@@ -879,6 +879,15 @@ fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> an
             "native profile source revision must match the compiled CI revision"
         );
     }
+    let publications = report["native_ui_presentations"]["events"]
+        .as_array()
+        .ok_or_else(|| anyhow::anyhow!("profiled native UI lacks renderer-owned publication observations"))?;
+    anyhow::ensure!(
+        publications
+            .iter()
+            .any(|entry| entry["transition"] == "source_staged_for_render"),
+        "native Render/RunenUI smoke did not stage any source presentation"
+    );
     let events = report["cpu_events"].as_array().ok_or_else(|| {
         anyhow::anyhow!("profiled native typed UI session did not emit CPU observations")
     })?;
