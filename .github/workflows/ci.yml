@@ -152,7 +152,10 @@ jobs:
               cargo +stable test -p engine \
                 --test native_host_smoke \
                 --locked
-          RUNENWERK_NATIVE_RENDER_HOST_SMOKE=1 \
+          mkdir -p native-profiler/smoke
+          RUNENWERK_PROFILE_SMOKE_ARTIFACT_DIR="$PWD/native-profiler/smoke" \
+            RUNENWERK_PROFILE_SMOKE_REVISION="${{ steps.revision.outputs.expected_revision }}" \
+            RUNENWERK_NATIVE_RENDER_HOST_SMOKE=1 \
             xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
               cargo +stable test -p engine \
                 --test native_host_smoke \
@@ -162,6 +165,33 @@ jobs:
               cargo +stable test -p engine \
                 --test native_host_smoke \
                 --locked
+
+      - name: Verify native profiler evidence artifact
+        run: |
+          set -euo pipefail
+          evidence=native-profiler/smoke
+          for file in capture.json summary.json manifest.json validation.json report.md; do
+            test -s "${evidence}/${file}"
+          done
+          jq -e '.schema_version == 1 and .kind == "runenwerk_native_application_profile" and .status == "completed" and (.cpu_events | length > 0) and (.render.observations | length > 0)' "${evidence}/capture.json"
+          jq -e '.classification == "functional_smoke_not_performance_qualification" and .sample_count_cpu > 0 and (.stage_statistics | length > 0) and ([.stage_statistics[] | ((.duration_histogram_ns.counts | add) == .sample_count)] | all)' "${evidence}/summary.json"
+          jq -e '.kind == "runenwerk_native_profiler_smoke" and .source_revision == "${{ steps.revision.outputs.expected_revision }}"' "${evidence}/manifest.json"
+          jq -e '.status == "passed" and .privacy_reviewed_fixture == true and .performance_qualification == false' "${evidence}/validation.json"
+          grep -F 'Functional smoke only' "${evidence}/report.md"
+          (
+            cd "$evidence"
+            sha256sum capture.json summary.json manifest.json validation.json report.md > SHA256SUMS
+            sha256sum --check SHA256SUMS
+          )
+
+      - name: Upload native typed RunenUI profiler evidence
+        if: success()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: runenwerk-native-profiler-smoke
+          path: native-profiler/smoke
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Prove physical X11 Native request-to-realization receipts
         env:

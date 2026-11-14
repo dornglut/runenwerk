@@ -19,6 +19,11 @@ use std::time::Instant;
 const ENV_OUTPUT: &str = "RUNENWERK_PROFILE_OUTPUT";
 const EVENT_LIMIT: usize = 16_384;
 const RENDER_HISTORY_LIMIT: usize = 512;
+/// Fixed logarithmic-ish time buckets. Counts cover [0, bound) and one unbounded tail.
+const DURATION_HISTOGRAM_UPPER_NS: [u64; 10] = [
+    50_000, 100_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000, 8_000_000,
+    16_000_000, 33_333_334,
+];
 type StageGroupKey = (&'static str, &'static str, Option<u64>, Option<u64>);
 
 #[derive(Clone)]
@@ -78,6 +83,15 @@ struct StageStatistics {
     sample_count: usize,
     median_ns: u64,
     p95_ns: u64,
+    duration_histogram_ns: DurationHistogram,
+}
+
+/// Each count corresponds to [previous upper bound, this upper bound);
+/// the final count is >= the last upper bound. One event belongs to one bin.
+#[derive(Serialize)]
+struct DurationHistogram {
+    upper_bounds_exclusive_ns: [u64; 10],
+    counts: [usize; 11],
 }
 
 #[derive(Serialize)]
@@ -576,9 +590,22 @@ fn summarize_events(events: &[CpuObservation]) -> Vec<StageStatistics> {
                 sample_count: len,
                 median_ns: durations[(len - 1) / 2],
                 p95_ns: durations[(len * 95).div_ceil(100) - 1],
+                duration_histogram_ns: duration_histogram(&durations),
             }
         })
         .collect()
+}
+
+fn duration_histogram(durations: &[u64]) -> DurationHistogram {
+    let mut counts = [0; 11];
+    for &duration in durations {
+        let bin = DURATION_HISTOGRAM_UPPER_NS.partition_point(|&upper| duration >= upper);
+        counts[bin] += 1;
+    }
+    DurationHistogram {
+        upper_bounds_exclusive_ns: DURATION_HISTOGRAM_UPPER_NS,
+        counts,
+    }
 }
 
 #[cfg(test)]
@@ -735,6 +762,15 @@ mod tests {
         assert_eq!(stats[0].sample_count, 5);
         assert_eq!(stats[0].median_ns, 300);
         assert_eq!(stats[0].p95_ns, 500);
+    }
+
+    #[test]
+    fn histogram_bins_use_actual_durations_and_preserve_boundary_semantics() {
+        let values = [0, 49_999, 50_000, 99_999, 100_000, 33_333_334];
+        let histogram = duration_histogram(&values);
+        assert_eq!(histogram.upper_bounds_exclusive_ns, DURATION_HISTOGRAM_UPPER_NS);
+        assert_eq!(histogram.counts, [2, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1]);
+        assert_eq!(histogram.counts.iter().sum::<usize>(), values.len());
     }
 
     #[test]

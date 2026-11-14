@@ -820,6 +820,8 @@ mod native_readiness {
     }
 }
 
+mod native_profiler_smoke_artifact;
+
 fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
     let executable = std::env::current_exe()?;
     // Preserve the explicit and managed paths, and execute the selected
@@ -862,8 +864,6 @@ fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> an
     );
     let report_bytes = std::fs::read(&profile_path)?;
     let report: serde_json::Value = serde_json::from_slice(&report_bytes)?;
-    let _ = std::fs::remove_file(&profile_path);
-
     anyhow::ensure!(
         report["schema_version"].as_u64() == Some(1)
             && report["status"].as_str() == Some("completed"),
@@ -890,9 +890,13 @@ fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> an
         "profiled native typed UI must reuse actual Render frame history"
     );
     anyhow::ensure!(
-        !String::from_utf8_lossy(&report_bytes).contains("Counter output"),
-        "profiler must not export authored UI label content"
+        !String::from_utf8_lossy(&report_bytes).contains("Counter output")
+            && !String::from_utf8_lossy(&report_bytes).contains("Native selected-Render secondary")
+            && !String::from_utf8_lossy(&report_bytes).contains("native.managed.typed"),
+        "profiler must not export authored UI content or window titles"
     );
+    native_profiler_smoke_artifact::retain(&report, &report_bytes)?;
+    std::fs::remove_file(&profile_path)?;
     println!("native_typed_ui_profiler_capture=pass");
     Ok(())
 }

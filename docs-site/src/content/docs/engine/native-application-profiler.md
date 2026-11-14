@@ -39,6 +39,18 @@ No application-specific instrumentation,
 Tracy or graphical editor is required. The profiler reports status and counts at
 shutdown; a normal run without this environment variable does not activate it.
 
+The CI native typed-UI smoke retains a seven-day artifact named
+`runenwerk-native-profiler-smoke`, containing the exact original `capture.json`,
+a derived `summary.json` with per-stage duration histograms, `manifest.json`
+with the checked-out source revision and requested backend, `validation.json`
+with the checks performed, a readable `report.md`, and `SHA256SUMS` for integrity. CI validates these
+files and their histogram counts before upload. This fixture is controlled
+and privacy-reviewed; arbitrary real application captures are **not** uploaded
+automatically. The short smoke is **not** a performance benchmark: its
+distributions are real samples, but not statistically qualified for latency
+or regression decisions. Interactive HTML inspection belongs to the later
+graphical profiler reader, not this backend delivery.
+
 Schema v1 contains bounded CPU event records (monotonic nanoseconds from one
 process epoch), per-stage median/P95 grouped by actual window/slot identity,
 native callback categories and window identities, Engine
@@ -54,6 +66,13 @@ After the CPU buffer fills, older events are evicted so late interactions remain
 `dropped_cpu_events` counts those evictions; stage statistics describe the retained
 window only, not the full application lifetime. A pump that fails without returning a
 batch is recorded as a failure event without claiming input-settlement evidence.
+
+Per-stage CPU duration histograms have fixed, upper-exclusive nanosecond bounds
+(50,000; 100,000; 250,000; 500,000; 1,000,000; 2,000,000; 4,000,000;
+8,000,000; 16,000,000; 33,333,334), plus a final unbounded bin.
+Their counts add to the retained stage sample count. Render observations
+remain a separate source-owned clock and are never combined into a CPU
+frame-duration histogram.
 
 The report includes dropped event counts, Render observation drop counters and
 explicit unavailability for process CPU/RAM, inner RunenUI shaping/layout
