@@ -414,13 +414,14 @@ impl NativeProfilerSink {
                 "optimized"
             },
             source_revision: option_env!("RUNENWERK_SOURCE_REVISION").unwrap_or("unknown"),
-            host_pacing: world.resource::<FramePacingPolicyResource>().ok().map(|policy| {
-                HostPacingSnapshot {
+            host_pacing: world
+                .resource::<FramePacingPolicyResource>()
+                .ok()
+                .map(|policy| HostPacingSnapshot {
                     observed_at: "capture_close",
                     mode: policy.mode.as_str(),
                     target_fps: policy.mode.target_fps(),
-                }
-            }),
+                }),
             native_windows: match world.resource::<WindowStateRegistryResource>() {
                 Ok(registry) => NativeWindowCapture {
                     status: "available",
