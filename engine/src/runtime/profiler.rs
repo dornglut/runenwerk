@@ -221,17 +221,34 @@ fn project_one_pointer_trace(trace: &Trace, work: WorkSequence) -> PointerTraceE
     if let Some((pointer_id, PointerPhase::Up)) = submission
         && let Some(current_target) = observation.target()
     {
+        // Pointer and surface are source-local: never relate coincident
+        // pointer numbers from different devices or source surfaces.
+        let current_pointer = observation.context().pointer();
+        let current_surface = observation.context().surface();
         evidence.matches_previous_down_physical_target = trace
             .records()
             .take_while(|record| record.sequence() < observation.sequence())
             .filter(|record| {
-                matches!(
+                if !matches!(
                     record.kind(),
                     TraceRecordKind::PointerPhysicalTargetResolved
-                ) && record.context().pointer().is_some_and(|context| {
-                    *context.pointer_id() == pointer_id
-                        && context.phase() == Some(PointerPhase::Down)
-                })
+                ) {
+                    return false;
+                }
+                let Some((prior_pointer, current_pointer)) =
+                    record.context().pointer().zip(current_pointer)
+                else {
+                    return false;
+                };
+                let Some((prior_surface, current_surface)) =
+                    record.context().surface().zip(current_surface)
+                else {
+                    return false;
+                };
+                *prior_pointer.pointer_id() == pointer_id
+                    && prior_pointer.phase() == Some(PointerPhase::Down)
+                    && prior_pointer.device_id() == current_pointer.device_id()
+                    && prior_surface.surface_id() == current_surface.surface_id()
             })
             .last()
             .and_then(|prior| prior.target())
@@ -911,8 +928,7 @@ mod tests {
             assert_eq!(observed.displayed_snapshot, Some("current"));
             if phase == PointerPhase::Up {
                 assert_eq!(
-                    observed.status,
-                    "observed_committed_pointer_transaction",
+                    observed.status, "observed_committed_pointer_transaction",
                     "original primary Up must complete the routed activation"
                 );
                 assert_eq!(
