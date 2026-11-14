@@ -6,6 +6,7 @@ use crate::plugins::render::inspect::{
 };
 use anyhow::{Context, Result, ensure};
 use runen_ecs::World;
+use crate::runtime::{FramePacingPolicyResource, WindowStateRegistryResource};
 use runenui_runtime::{InputArbitrationRecord, InputPumpBatch, PumpOutcome, UiInputFinality};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -111,6 +112,28 @@ struct RenderCapture {
 }
 
 #[derive(Serialize)]
+struct HostPacingSnapshot {
+    observed_at: &'static str,
+    mode: &'static str,
+    target_fps: Option<u32>,
+}
+
+#[derive(Serialize)]
+struct NativeWindowSnapshot {
+    window_id: u64,
+    size_px: (u32, u32),
+    scale_factor: f64,
+    focused: bool,
+}
+
+#[derive(Serialize)]
+struct NativeWindowCapture {
+    status: &'static str,
+    observed_at: &'static str,
+    windows: Vec<NativeWindowSnapshot>,
+}
+
+#[derive(Serialize)]
 struct Capture {
     schema_version: u32,
     kind: &'static str,
@@ -121,6 +144,8 @@ struct Capture {
     os: &'static str,
     profile: &'static str,
     source_revision: &'static str,
+    host_pacing: Option<HostPacingSnapshot>,
+    native_windows: NativeWindowCapture,
     event_capacity: usize,
     dropped_cpu_events: u64,
     cpu_events: Vec<CpuObservation>,
@@ -389,6 +414,33 @@ impl NativeProfilerSink {
                 "optimized"
             },
             source_revision: option_env!("RUNENWERK_SOURCE_REVISION").unwrap_or("unknown"),
+            host_pacing: world.resource::<FramePacingPolicyResource>().ok().map(|policy| {
+                HostPacingSnapshot {
+                    observed_at: "capture_close",
+                    mode: policy.mode.as_str(),
+                    target_fps: policy.mode.target_fps(),
+                }
+            }),
+            native_windows: match world.resource::<WindowStateRegistryResource>() {
+                Ok(registry) => NativeWindowCapture {
+                    status: "available",
+                    observed_at: "capture_close_not_display_timestamp",
+                    windows: registry
+                        .records()
+                        .map(|record| NativeWindowSnapshot {
+                            window_id: record.native_window_id.raw(),
+                            size_px: record.size_px,
+                            scale_factor: record.scale_factor,
+                            focused: record.focused,
+                        })
+                        .collect(),
+                },
+                Err(_) => NativeWindowCapture {
+                    status: "registry_unavailable",
+                    observed_at: "capture_close_not_display_timestamp",
+                    windows: Vec::new(),
+                },
+            },
             event_capacity: EVENT_LIMIT,
             dropped_cpu_events: dropped,
             stage_statistics: summarize_events(&events),
@@ -496,6 +548,10 @@ mod tests {
         let sink = NativeProfilerSink::new(path.clone());
         let mut world = World::new();
         world.insert_resource(RenderFrameObservationPolicyResource::default());
+        world.insert_resource(FramePacingPolicyResource::continuous_capped(60));
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("SENSITIVE WINDOW TITLE", (800, 600), 1.25, true);
+        world.insert_resource(windows);
         sink.enable_render_history(&mut world);
         assert!(
             world
@@ -513,6 +569,12 @@ mod tests {
         assert_eq!(value["status"], "failed_or_interrupted");
         assert_eq!(value["cpu_events"][0]["stage"], "window_keyboard");
         assert_eq!(value["cpu_events"][0]["window"], 1);
+        assert_eq!(value["host_pacing"]["mode"], "continuous_capped");
+        assert_eq!(value["host_pacing"]["target_fps"], 60);
+        assert_eq!(value["native_windows"]["status"], "available");
+        assert_eq!(value["native_windows"]["windows"][0]["size_px"], serde_json::json!([800, 600]));
+        assert_eq!(value["native_windows"]["windows"][0]["scale_factor"], 1.25);
+        assert!(!serde_json::to_string(&value).unwrap().contains("SENSITIVE WINDOW TITLE"));
         assert_eq!(
             value["render"]["host_frame_join_status"],
             "unavailable_no_owner_correlation"

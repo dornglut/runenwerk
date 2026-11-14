@@ -52,6 +52,11 @@ input text, IME content, task data, UI tree and arbitrarily formatted event
 debug payloads. Reported completion status indicates the native app lifecycle
 outcome, not proof that every GPU timestamp became available.
 
+The artifact also contains a **capture-close-only** snapshot of the real Host
+pacing policy (including its target FPS when capped) and the last native
+window registry dimensions, scale and focus state. These are not historical
+frame-by-frame values and do not prove physical presentation or monitor refresh.
+
 Do not compare raw durations from runs with different application content,
 window extent, compiler profile, GPU/backend, OS or pacing policy. Quantify
 capture overhead against matched opt-out runs and test input, resize, focus,
