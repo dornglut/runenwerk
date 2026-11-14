@@ -125,7 +125,7 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         ]
     });
     let mut readable = format!(
-        "# Native Runenwerk Profiler — CI Smoke\n\n**Functional smoke only — not a performance qualification.**\n\nSource revision: {revision}\n\nCaptured CPU observations: {} (evicted: {}). Render observations: {}.\n\nThe histogram bounds are exclusive and expressed in nanoseconds; the final count is unbounded. This short native Render smoke cannot establish performance percentiles.\n\n| Domain | Stage | Window | UI slot | Samples | Median (ns) | P95 (ns) | Histogram counts, ascending bins |\n|---|---|---:|---:|---:|---:|---:|---|\n",
+        "# Native Runenwerk Profiler — CI Smoke\n\n**Functional smoke only — not a performance qualification.**\n\nSource revision: {revision}\n\nCaptured CPU observations: {} (evicted: {}). Render observations: {}.\n\nThe histogram bounds are exclusive and expressed in nanoseconds; the final count is unbounded. This short native Render smoke cannot establish performance percentiles.\n",
         cpu_events.len(),
         report["dropped_cpu_events"],
         render_frames.len()
@@ -144,7 +144,7 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
     labels.push(format!("[{previous}, unbounded)"));
     writeln!(
         &mut readable,
-        "\nHistogram bins in order: {}\n",
+        "\nHistogram bins in order: {}\n\n| Domain | Stage | Window | UI slot | Samples | Median (ns) | P95 (ns) | Histogram counts, ascending bins |\n|---|---|---:|---:|---:|---:|---:|---|",
         labels.join(", ")
     )?;
     for stage in stages {
@@ -167,6 +167,33 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
             stage["p95_ns"],
             counts
         )?;
+    }
+    if let Some(host_frame) = stages.iter().find(|stage| {
+        stage["domain"].as_str() == Some("host")
+            && stage["stage"].as_str() == Some("ordinary_frame")
+    }) {
+        let counts = host_frame["duration_histogram_ns"]["counts"]
+            .as_array()
+            .context("Host-frame histogram counts unavailable")?;
+        let maximum = counts.iter().filter_map(|value| value.as_u64()).max().unwrap_or(0);
+        writeln!(
+            &mut readable,
+            "\n## Host ordinary-frame histogram (smoke only)\n\n```text"
+        )?;
+        for (label, value) in labels.iter().zip(counts) {
+            let count = value.as_u64().context("Host-frame bin count is not numeric")?;
+            let bar_width = if maximum <= 40 {
+                count as usize
+            } else {
+                count.saturating_mul(40).div_ceil(maximum) as usize
+            };
+            writeln!(
+                &mut readable,
+                "{label:<25} | {:<40} ({count})",
+                "#".repeat(bar_width)
+            )?;
+        }
+        writeln!(&mut readable, "```")?;
     }
     readable.push_str(
         "\n**Interpretation:** the histogram describes the retained CPU spans only, grouped by owner/stage/window/slot. It cannot prove physical display FPS or CPU–GPU synchronization. Refer to the raw capture for each measured value.\n",
