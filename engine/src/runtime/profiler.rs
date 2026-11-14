@@ -473,6 +473,44 @@ mod tests {
     }
 
     #[test]
+    fn capture_exports_schema_and_refuses_to_overwrite_an_existing_file() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let path = std::env::temp_dir().join(format!(
+            "runenwerk-native-profiler-{}-{nonce}.json",
+            std::process::id()
+        ));
+        let sink = NativeProfilerSink::new(path.clone());
+        let mut world = World::new();
+        world.insert_resource(RenderFrameObservationPolicyResource::default());
+        sink.enable_render_history(&mut world);
+        assert!(
+            world
+                .resource::<RenderFrameObservationPolicyResource>()
+                .unwrap()
+                .enabled
+        );
+        {
+            let _span = sink.span("host", "window_keyboard", Some(1), None);
+        }
+        sink.finish(&world, false).unwrap();
+        let value: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        assert_eq!(value["schema_version"], 1);
+        assert_eq!(value["status"], "failed_or_interrupted");
+        assert_eq!(value["cpu_events"][0]["stage"], "window_keyboard");
+        assert_eq!(value["cpu_events"][0]["window"], 1);
+        assert_eq!(
+            value["render"]["host_frame_join_status"],
+            "unavailable_no_owner_correlation"
+        );
+        assert!(!sink.finish(&world, true).is_ok(), "output must not be replaced");
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
     fn profiler_records_no_arbitrary_text_or_original_input_payload() {
         let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
         {
