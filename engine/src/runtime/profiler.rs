@@ -948,7 +948,7 @@ fn write_file_atomically(
 /// other arguments. Native applications remain responsible for their own grammar.
 fn profile_flag_present(args: impl IntoIterator<Item = OsString>) -> bool {
     args.into_iter()
-        .any(|arg| arg == OsString::from("--profile"))
+        .any(|arg| arg == "--profile")
 }
 
 fn allocate_auto_output() -> Result<PathBuf> {

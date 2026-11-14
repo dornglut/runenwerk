@@ -49,7 +49,7 @@ fn percentile_ms(samples: impl Iterator<Item = f32>) -> Option<(f64, f64, usize)
     let n = values.len();
     let p95 = (n * 95).div_ceil(100).saturating_sub(1);
     Some((
-        if n % 2 == 0 {
+        if n.is_multiple_of(2) {
             (values[n / 2 - 1] + values[n / 2]) / 2.0
         } else {
             values[n / 2]
@@ -175,7 +175,7 @@ Percentiles are CPU elapsed time within that scope, not independent frame budget
                     ms(*histogram.upper_bounds_exclusive_ns.last().unwrap())
                 ),
             };
-            let width = if max == 0 { 0 } else { 100 * count / max };
+            let width = count.saturating_mul(100).checked_div(max).unwrap_or(0);
             let _ = write!(
                 out,
                 "<div class=\"bucket\"><small>{}</small><div class=\"bar-track\"><div class=\"bar\" style=\"width:{}%\"></div></div><small>{}</small></div>",
