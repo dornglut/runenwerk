@@ -13,10 +13,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::path::PathBuf;
-use std::sync::{
-    Arc, Mutex,
-    atomic::{AtomicU64, Ordering},
-};
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 const ENV_OUTPUT: &str = "RUNENWERK_PROFILE_OUTPUT";
@@ -28,7 +25,6 @@ type StageGroupKey = (&'static str, &'static str, Option<u64>, Option<u64>);
 pub(crate) struct NativeProfilerSink {
     inner: Arc<Mutex<Recorder>>,
     origin: Instant,
-    frame: Arc<AtomicU64>,
     output: Arc<PathBuf>,
 }
 
@@ -38,6 +34,8 @@ impl runen_ecs::Resource for NativeProfilerSink {}
 struct Recorder {
     events: VecDeque<CpuObservation>,
     dropped: u64,
+    // A Host frame belongs only to the native thread that admitted it.
+    active_frame: Option<(std::thread::ThreadId, u64)>,
 }
 
 #[derive(Clone, Serialize)]
@@ -182,7 +180,7 @@ impl Drop for ProfileSpan {
             None,
         );
         if self.is_frame {
-            self.sink.frame.store(0, Ordering::Relaxed);
+            self.sink.end_frame();
         }
     }
 }
@@ -211,7 +209,6 @@ impl NativeProfilerSink {
         Self {
             inner: Arc::new(Mutex::new(Recorder::default())),
             origin: Instant::now(),
-            frame: Arc::new(AtomicU64::new(0)),
             output: Arc::new(output),
         }
     }
@@ -245,10 +242,18 @@ impl NativeProfilerSink {
     }
 
     pub(crate) fn frame_span(&self, frame: u64) -> ProfileSpan {
-        self.frame.store(frame, Ordering::Relaxed);
+        if let Ok(mut recorder) = self.inner.lock() {
+            recorder.active_frame = Some((std::thread::current().id(), frame));
+        }
         let mut span = self.span("host", "ordinary_frame", None, None);
         span.is_frame = true;
         span
+    }
+
+    fn end_frame(&self) {
+        if let Ok(mut recorder) = self.inner.lock() {
+            recorder.active_frame = None;
+        }
     }
 
     fn record(
@@ -262,20 +267,21 @@ impl NativeProfilerSink {
     ) {
         let duration_ns = saturating_u64(started.elapsed().as_nanos());
         let start_ns = saturating_u64(started.duration_since(self.origin).as_nanos());
-        let event = CpuObservation {
-            domain,
-            stage,
-            start_ns,
-            duration_ns,
-            host_frame: match self.frame.load(Ordering::Relaxed) {
-                0 => None,
-                frame => Some(frame),
-            },
-            window,
-            ui_slot,
-            m13,
-        };
         if let Ok(mut recorder) = self.inner.lock() {
+            let host_frame = match recorder.active_frame {
+                Some((thread, frame)) if thread == std::thread::current().id() => Some(frame),
+                _ => None,
+            };
+            let event = CpuObservation {
+                domain,
+                stage,
+                start_ns,
+                duration_ns,
+                host_frame,
+                window,
+                ui_slot,
+                m13,
+            };
             if recorder.events.len() < EVENT_LIMIT {
                 recorder.events.push_back(event);
             } else {
@@ -708,6 +714,28 @@ mod tests {
                 .iter()
                 .all(|event| event.ui_slot == Some(9) && event.m13.is_none())
         );
+    }
+
+    #[test]
+    fn other_threads_do_not_inherit_an_active_native_frame() {
+        let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
+        let frame = sink.frame_span(17);
+        let worker_sink = sink.clone();
+        std::thread::spawn(move || {
+            let _worker = worker_sink.span("ecs_schedule", "worker", None, None);
+        })
+        .join()
+        .unwrap();
+        {
+            let _main = sink.span("ecs_schedule", "update", None, None);
+        }
+        drop(frame);
+        let state = sink.inner.lock().unwrap();
+        let events = &state.events;
+        assert_eq!(events[0].stage, "worker");
+        assert_eq!(events[0].host_frame, None);
+        assert_eq!(events[1].host_frame, Some(17));
+        assert_eq!(events[2].host_frame, Some(17));
     }
 
     #[test]

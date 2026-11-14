@@ -842,9 +842,7 @@ fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
 
 /// The same native typed UI + Render consumer exercises the real profiler
 /// launch/close path. No Todo repin, fabricated GPU result or synthetic frame.
-fn run_native_render_ui_profiler_child_smoke(
-    executable: &std::path::Path,
-) -> anyhow::Result<()> {
+fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> anyhow::Result<()> {
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_nanos();
@@ -876,8 +874,7 @@ fn run_native_render_ui_profiler_child_smoke(
     })?;
     let has_stage = |domain: &str, stage: &str| {
         events.iter().any(|event| {
-            event["domain"].as_str() == Some(domain)
-                && event["stage"].as_str() == Some(stage)
+            event["domain"].as_str() == Some(domain) && event["stage"].as_str() == Some(stage)
         })
     };
     anyhow::ensure!(
