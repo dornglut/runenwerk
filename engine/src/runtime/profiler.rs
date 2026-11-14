@@ -328,7 +328,7 @@ impl NativeProfilerSink {
                     },
                     observations: history
                         .observations()
-                        .take(RENDER_HISTORY_LIMIT)
+                        .skip(history.len().saturating_sub(RENDER_HISTORY_LIMIT))
                         .map(|value| RenderObservation {
                             render_frame: value.key.frame_index,
                             render_surface: value.key.render_surface_id,
