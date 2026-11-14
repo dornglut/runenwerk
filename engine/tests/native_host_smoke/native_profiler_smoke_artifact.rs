@@ -65,6 +65,26 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         );
     }
 
+    ensure!(
+        report["source_revision"].as_str() == Some(revision.as_str()),
+        "raw native profile source revision differs from its CI provenance"
+    );
+    ensure!(
+        report["session_id"]
+            .as_str()
+            .is_some_and(|identity| !identity.is_empty()),
+        "native profile session identity is missing"
+    );
+    ensure!(
+        cpu_events.windows(2).all(|pair| {
+            pair[0]["event_ordinal"]
+                .as_u64()
+                .zip(pair[1]["event_ordinal"].as_u64())
+                .is_some_and(|(older, newer)| older < newer)
+        }),
+        "native profile event ordinals are missing or non-monotonic"
+    );
+
     let render_frames = report["render"]["observations"]
         .as_array()
         .context("native profiler capture is missing Render observations")?;
@@ -73,6 +93,8 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         "kind": "runenwerk_native_profiler_smoke_summary",
         "classification": "functional_smoke_not_performance_qualification",
         "sample_count_cpu": cpu_events.len(),
+        "session_id": report["session_id"],
+        "source_revision": report["source_revision"],
         "dropped_cpu_events": report["dropped_cpu_events"],
         "render_observation_count": render_frames.len(),
         "render_status": report["render"]["status"],
@@ -90,6 +112,7 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         "schema_version": 1,
         "kind": "runenwerk_native_profiler_smoke",
         "source_revision": revision,
+        "session_id": report["session_id"],
         "captured_os": report["os"],
         "build_profile": report["profile"],
         "fixture": "native_managed_typed_ui_with_render",
@@ -115,7 +138,9 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
             "cpu_host_update_ui_settlement_stages_present",
             "render_history_nonempty",
             "fixture_ui_label_title_and_identity_not_exported",
-            "histogram_counts_equal_retained_stage_samples"
+            "histogram_counts_equal_retained_stage_samples",
+            "raw_capture_revision_matches_exact_checked_out_CI_commit",
+            "session_identity_present_and_event_ordinals_monotonic"
         ],
         "unproven": [
             "physical_windows_behavior",
@@ -125,7 +150,8 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         ]
     });
     let mut readable = format!(
-        "# Native Runenwerk Profiler — CI Smoke\n\n**Functional smoke only — not a performance qualification.**\n\nSource revision: {revision}\n\nCaptured CPU observations: {} (evicted: {}). Render observations: {}.\n\nThe histogram bounds are exclusive and expressed in nanoseconds; the final count is unbounded. This short native Render smoke cannot establish performance percentiles.\n",
+        "# Native Runenwerk Profiler — CI Smoke\n\n**Functional smoke only — not a performance qualification.**\n\nSource revision: {revision}\n\nSession ID: {}\n\nCaptured CPU observations: {} (evicted: {}). Render observations: {}.\n\nThe histogram bounds are exclusive and expressed in nanoseconds; the final count is unbounded. This short native Render smoke cannot establish performance percentiles.\n",
+        report["session_id"].as_str().unwrap_or("unknown"),
         cpu_events.len(),
         report["dropped_cpu_events"],
         render_frames.len()

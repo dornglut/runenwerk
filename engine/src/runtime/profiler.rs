@@ -13,8 +13,9 @@ use std::collections::{BTreeMap, VecDeque};
 use std::fs::OpenOptions;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 const ENV_OUTPUT: &str = "RUNENWERK_PROFILE_OUTPUT";
 const EVENT_LIMIT: usize = 16_384;
@@ -25,12 +26,14 @@ const DURATION_HISTOGRAM_UPPER_NS: [u64; 10] = [
     33_333_334,
 ];
 type StageGroupKey = (&'static str, &'static str, Option<u64>, Option<u64>);
+static PROCESS_SESSION_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone)]
 pub(crate) struct NativeProfilerSink {
     inner: Arc<Mutex<Recorder>>,
     origin: Instant,
     output: Arc<PathBuf>,
+    session_id: Arc<str>,
 }
 
 impl runen_ecs::Resource for NativeProfilerSink {}
@@ -39,12 +42,15 @@ impl runen_ecs::Resource for NativeProfilerSink {}
 struct Recorder {
     events: VecDeque<CpuObservation>,
     dropped: u64,
+    next_event_ordinal: u64,
     // A Host frame belongs only to the native thread that admitted it.
     active_frame: Option<(std::thread::ThreadId, u64)>,
 }
 
 #[derive(Clone, Serialize)]
 struct CpuObservation {
+    /// Completion-order ordinal scoped to the parent capture session.
+    event_ordinal: u64,
     domain: &'static str,
     stage: &'static str,
     start_ns: u64,
@@ -148,6 +154,8 @@ struct NativeWindowCapture {
 #[derive(Serialize)]
 struct Capture {
     schema_version: u32,
+    /// Non-secret diagnostic grouping identity; not an authentication token.
+    session_id: String,
     kind: &'static str,
     status: &'static str,
     clock: &'static str,
@@ -230,10 +238,19 @@ impl NativeProfilerSink {
     }
 
     fn new(output: PathBuf) -> Self {
+        // Distinguish sessions even when a PID is reused. This is a diagnostic
+        // correlation label, not a security identifier or a timing clock.
+        let time_part = match SystemTime::now().duration_since(UNIX_EPOCH) {
+            Ok(delta) => format!("a{:032x}", delta.as_nanos()),
+            Err(error) => format!("b{:032x}", error.duration().as_nanos()),
+        };
+        let counter = PROCESS_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let session_id = format!("native-{:08x}-{time_part}-{counter:016x}", std::process::id());
         Self {
             inner: Arc::new(Mutex::new(Recorder::default())),
             origin: Instant::now(),
             output: Arc::new(output),
+            session_id: Arc::from(session_id),
         }
     }
 
@@ -292,11 +309,14 @@ impl NativeProfilerSink {
         let duration_ns = saturating_u64(started.elapsed().as_nanos());
         let start_ns = saturating_u64(started.duration_since(self.origin).as_nanos());
         if let Ok(mut recorder) = self.inner.lock() {
+            recorder.next_event_ordinal = recorder.next_event_ordinal.saturating_add(1);
+            let event_ordinal = recorder.next_event_ordinal;
             let host_frame = match recorder.active_frame {
                 Some((thread, frame)) if thread == std::thread::current().id() => Some(frame),
                 _ => None,
             };
             let event = CpuObservation {
+                event_ordinal,
                 domain,
                 stage,
                 start_ns,
@@ -454,6 +474,7 @@ impl NativeProfilerSink {
         };
         let report = Capture {
             schema_version: 1,
+            session_id: self.session_id.to_string(),
             kind: "runenwerk_native_application_profile",
             status: if completed {
                 "completed"
@@ -621,6 +642,11 @@ mod tests {
         let state = sink.inner.lock().unwrap();
         assert_eq!(state.events.len(), EVENT_LIMIT);
         assert_eq!(state.dropped, 3);
+        assert_eq!(state.events.front().unwrap().event_ordinal, 4);
+        assert_eq!(
+            state.events.back().unwrap().event_ordinal,
+            (EVENT_LIMIT + 3) as u64
+        );
         assert_eq!(state.events.front().unwrap().window, Some(3));
         assert_eq!(
             state.events.back().unwrap().window,
@@ -671,6 +697,8 @@ mod tests {
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(value["schema_version"], 1);
         assert_eq!(value["status"], "failed_or_interrupted");
+        assert_eq!(value["session_id"], sink.session_id.as_ref());
+        assert_eq!(value["cpu_events"][0]["event_ordinal"], 1);
         assert_eq!(value["cpu_events"][0]["stage"], "window_keyboard");
         assert_eq!(value["cpu_events"][0]["window"], 1);
         assert_eq!(value["host_pacing"]["mode"], "continuous_capped");
@@ -738,6 +766,24 @@ mod tests {
         assert!(json.contains("window_keyboard"));
         assert!(!json.contains("text"));
         assert!(!json.contains("title"));
+    }
+
+    #[test]
+    fn independent_sessions_never_reuse_a_process_local_identity() {
+        let first = NativeProfilerSink::new(PathBuf::from("first-profile.json"));
+        let second = NativeProfilerSink::new(PathBuf::from("second-profile.json"));
+        assert_ne!(first.session_id, second.session_id);
+        let first_clone = first.clone();
+        assert_eq!(first.session_id, first_clone.session_id);
+        {
+            let _event = first.span("host", "first", None, None);
+        }
+        {
+            let _event = first.span("host", "second", None, None);
+        }
+        let state = first.inner.lock().unwrap();
+        assert_eq!(state.events[0].event_ordinal, 1);
+        assert_eq!(state.events[1].event_ordinal, 2);
     }
 
     #[test]

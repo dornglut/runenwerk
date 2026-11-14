@@ -51,6 +51,16 @@ distributions are real samples, but not statistically qualified for latency
 or regression decisions. Interactive HTML inspection belongs to the later
 graphical profiler reader, not this backend delivery.
 
+Each capture has a non-secret session identity and monotonically increasing
+CPU completion-order event ordinals; retained ordinals expose event-loss gaps
+without implying that completion order is start-time order. A session identity
+groups owner observations **within one capture**, but does not claim an
+otherwise unavailable Host/Render per-frame join. The raw `source_revision`
+is stamped at **build time** only when the application is compiled with
+`RUNENWERK_SOURCE_REVISION`; otherwise the value stays `unknown`. The
+native CI smoke compiles with its verified exact checkout revision and rejects
+a mismatched raw capture.
+
 Schema v1 contains bounded CPU event records (monotonic nanoseconds from one
 process epoch), per-stage median/P95 grouped by actual window/slot identity,
 native callback categories and window identities, Engine

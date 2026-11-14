@@ -867,9 +867,18 @@ fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> an
     let report: serde_json::Value = serde_json::from_slice(&report_bytes)?;
     anyhow::ensure!(
         report["schema_version"].as_u64() == Some(1)
-            && report["status"].as_str() == Some("completed"),
+            && report["status"].as_str() == Some("completed")
+            && report["session_id"]
+                .as_str()
+                .is_some_and(|identity| !identity.is_empty()),
         "profiled native typed UI session lacks a completed versioned capture"
     );
+    if let Ok(expected_revision) = std::env::var("RUNENWERK_PROFILE_SMOKE_REVISION") {
+        anyhow::ensure!(
+            report["source_revision"].as_str() == Some(expected_revision.as_str()),
+            "native profile source revision must match the compiled CI revision"
+        );
+    }
     let events = report["cpu_events"].as_array().ok_or_else(|| {
         anyhow::anyhow!("profiled native typed UI session did not emit CPU observations")
     })?;
