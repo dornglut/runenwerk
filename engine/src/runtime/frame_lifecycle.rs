@@ -42,7 +42,7 @@ pub(crate) fn run_startup_if_needed(
         }
         Err(error) => {
             *lifecycle = AppLifecycle::Failed;
-            Err(error.into())
+            Err(error)
         }
     }
 }
