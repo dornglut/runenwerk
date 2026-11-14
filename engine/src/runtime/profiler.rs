@@ -4,9 +4,9 @@
 use crate::plugins::render::inspect::{
     RenderFrameHistoryState, RenderFrameObservationPolicyResource,
 };
+use crate::runtime::{FramePacingPolicyResource, WindowStateRegistryResource};
 use anyhow::{Context, Result, ensure};
 use runen_ecs::World;
-use crate::runtime::{FramePacingPolicyResource, WindowStateRegistryResource};
 use runenui_runtime::{InputArbitrationRecord, InputPumpBatch, PumpOutcome, UiInputFinality};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -572,9 +572,16 @@ mod tests {
         assert_eq!(value["host_pacing"]["mode"], "continuous_capped");
         assert_eq!(value["host_pacing"]["target_fps"], 60);
         assert_eq!(value["native_windows"]["status"], "available");
-        assert_eq!(value["native_windows"]["windows"][0]["size_px"], serde_json::json!([800, 600]));
+        assert_eq!(
+            value["native_windows"]["windows"][0]["size_px"],
+            serde_json::json!([800, 600])
+        );
         assert_eq!(value["native_windows"]["windows"][0]["scale_factor"], 1.25);
-        assert!(!serde_json::to_string(&value).unwrap().contains("SENSITIVE WINDOW TITLE"));
+        assert!(
+            !serde_json::to_string(&value)
+                .unwrap()
+                .contains("SENSITIVE WINDOW TITLE")
+        );
         assert_eq!(
             value["render"]["host_frame_join_status"],
             "unavailable_no_owner_correlation"
