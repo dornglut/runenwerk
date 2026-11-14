@@ -155,6 +155,10 @@ fn reconcile_terminal_mappings(world: &mut runen_ecs::World) -> Result<()> {
 /// Fails closed for invalid attached scale/extent, conflicting producer families,
 /// rejected publication or lost association, without manufacturing a fake frame.
 pub fn publish_runenui_bound_surfaces_system(mut world: WorldMut) -> Result<()> {
+    let _profile = world
+        .resource::<crate::runtime::profiler::NativeProfilerSink>()
+        .ok()
+        .map(|sink| sink.span("runenui_host", "bound_surface_publication", None, None));
     let bindings = match world.resource::<UiRuntimePresentationAssociationsResource>() {
         Ok(associations) => associations.bindings().cloned().collect::<Vec<_>>(),
         Err(_) => return Ok(()),

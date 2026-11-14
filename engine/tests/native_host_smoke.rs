@@ -820,6 +820,9 @@ mod native_readiness {
     }
 }
 
+#[path = "native_host_smoke/native_profiler_smoke_artifact.rs"]
+mod native_profiler_smoke_artifact;
+
 fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
     let executable = std::env::current_exe()?;
     // Preserve the explicit and managed paths, and execute the selected
@@ -828,6 +831,7 @@ fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
         let status = Command::new(&executable)
             .env_remove(NO_RENDER_ENV)
             .env_remove(RENDER_HOST_ENV)
+            .env_remove("RUNENWERK_PROFILE_OUTPUT")
             .env(RENDER_UI_HOST_ENV, mode)
             .status()?;
         anyhow::ensure!(
@@ -835,6 +839,75 @@ fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
             "native Render + UI Host child smoke mode={mode} exited with {status}"
         );
     }
+    run_native_render_ui_profiler_child_smoke(&executable)?;
+    Ok(())
+}
+
+/// The same native typed UI + Render consumer exercises the real profiler
+/// launch/close path. No Todo repin, fabricated GPU result or synthetic frame.
+fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> anyhow::Result<()> {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let profile_path = std::env::temp_dir().join(format!(
+        "runenwerk-native-profile-{}-{nonce}.json",
+        std::process::id()
+    ));
+    let status = Command::new(executable)
+        .env_remove(NO_RENDER_ENV)
+        .env_remove(RENDER_HOST_ENV)
+        .env(RENDER_UI_HOST_ENV, "managed")
+        .env("RUNENWERK_PROFILE_OUTPUT", &profile_path)
+        .status()?;
+    anyhow::ensure!(
+        status.success(),
+        "profiled native typed UI child exited with {status}"
+    );
+    let report_bytes = std::fs::read(&profile_path)?;
+    let report: serde_json::Value = serde_json::from_slice(&report_bytes)?;
+    anyhow::ensure!(
+        report["schema_version"].as_u64() == Some(2)
+            && report["status"].as_str() == Some("completed")
+            && report["session_id"]
+                .as_str()
+                .is_some_and(|identity| !identity.is_empty()),
+        "profiled native typed UI session lacks a completed versioned capture"
+    );
+    if let Ok(expected_revision) = std::env::var("RUNENWERK_PROFILE_SMOKE_REVISION") {
+        anyhow::ensure!(
+            report["source_revision"].as_str() == Some(expected_revision.as_str()),
+            "native profile source revision must match the compiled CI revision"
+        );
+    }
+    let events = report["cpu_events"].as_array().ok_or_else(|| {
+        anyhow::anyhow!("profiled native typed UI session did not emit CPU observations")
+    })?;
+    let has_stage = |domain: &str, stage: &str| {
+        events.iter().any(|event| {
+            event["domain"].as_str() == Some(domain) && event["stage"].as_str() == Some(stage)
+        })
+    };
+    anyhow::ensure!(
+        has_stage("host", "ordinary_frame")
+            && has_stage("ecs_schedule", "update")
+            && has_stage("runenui_host", "native_slot_settlement"),
+        "profiled native typed UI must emit real Host, ECS and RunenUI observations"
+    );
+    anyhow::ensure!(
+        report["render"]["observations"]
+            .as_array()
+            .is_some_and(|frames| !frames.is_empty()),
+        "profiled native typed UI must reuse actual Render frame history"
+    );
+    anyhow::ensure!(
+        !String::from_utf8_lossy(&report_bytes).contains("Counter output")
+            && !String::from_utf8_lossy(&report_bytes).contains("Native selected-Render secondary")
+            && !String::from_utf8_lossy(&report_bytes).contains("native.managed.typed"),
+        "profiler must not export authored UI content or window titles"
+    );
+    native_profiler_smoke_artifact::retain(&report, &report_bytes)?;
+    std::fs::remove_file(&profile_path)?;
+    println!("native_typed_ui_profiler_capture=pass");
     Ok(())
 }
 

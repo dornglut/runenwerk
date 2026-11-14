@@ -5,7 +5,8 @@ use crate::runtime::schedules::{
     FrameEnd, PreUpdate, RenderPrepare, RenderSubmit, Startup, Update,
 };
 use anyhow::{Result, anyhow};
-use runen_ecs::{Runtime, World};
+use runen_ecs::{Runtime, ScheduleLabel, World};
+use std::time::Instant;
 
 /// Runs `Startup` as one non-retryable lifecycle attempt for a runtime instance.
 pub(crate) fn run_startup_if_needed(
@@ -34,14 +35,14 @@ pub(crate) fn run_startup_if_needed(
     }
 
     *lifecycle = AppLifecycle::Starting;
-    match scheduler.run_schedule::<Startup>(world) {
+    match profile_schedule::<Startup>(world, scheduler, "startup") {
         Ok(()) => {
             *lifecycle = AppLifecycle::Running;
             Ok(())
         }
         Err(error) => {
             *lifecycle = AppLifecycle::Failed;
-            Err(error.into())
+            Err(error)
         }
     }
 }
@@ -60,19 +61,38 @@ pub(crate) fn run_startup_if_needed(
 /// visibility. Runenwerk product/query publication is installed explicitly by application
 /// systems at the lifecycle positions that require it.
 pub(crate) fn run_frame(world: &mut World, scheduler: &mut Runtime) -> Result<()> {
-    scheduler.run_schedule::<PreUpdate>(world)?;
+    profile_schedule::<PreUpdate>(world, scheduler, "pre_update")?;
     if fixed_step_is_active(world) {
         run_fixed_update_frame(world, scheduler)?;
     }
-    scheduler.run_schedule::<Update>(world)?;
-    scheduler.run_schedule::<RenderPrepare>(world)?;
-    scheduler.run_schedule::<RenderSubmit>(world)?;
-    scheduler.run_schedule::<FrameEnd>(world)?;
+    profile_schedule::<Update>(world, scheduler, "update")?;
+    profile_schedule::<RenderPrepare>(world, scheduler, "render_prepare")?;
+    profile_schedule::<RenderSubmit>(world, scheduler, "render_submit")?;
+    profile_schedule::<FrameEnd>(world, scheduler, "frame_end")?;
     if let Ok(journal) =
         world.resource_mut::<crate::runtime::platform::PlatformWindowEventQueueResource>()
     {
         journal.retire_frame();
     }
+    Ok(())
+}
+
+/// Observe an Engine schedule call, not RunenECS per-system execution time.
+pub(crate) fn profile_schedule<L: ScheduleLabel>(
+    world: &mut World,
+    scheduler: &mut Runtime,
+    stage: &'static str,
+) -> Result<()> {
+    let profile = world
+        .resource::<crate::runtime::profiler::NativeProfilerSink>()
+        .ok()
+        .cloned();
+    let started = profile.as_ref().map(|_| Instant::now());
+    let outcome = scheduler.run_schedule::<L>(world);
+    if let (Some(profile), Some(started)) = (profile, started) {
+        profile.record_schedule(stage, started);
+    }
+    outcome?;
     Ok(())
 }
 
