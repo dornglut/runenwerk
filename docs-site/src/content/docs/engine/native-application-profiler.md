@@ -16,13 +16,16 @@ settlement and publication when the application installs UiPlugin. The profiler 
 the Render Lab benchmark. The feature is experimental until the parent issue's
 platform, privacy and overhead gates pass.
 
-The application is still an ordinary Cargo binary. To capture its full lifetime,
-set an output path before starting a **new native process**, for example in
-Windows PowerShell:
+The application is still an ordinary Cargo binary. The binary must be built
+against a Runenwerk revision **containing this profiler**. The currently published
+Runen Lab Todo PR #8 pins an older Engine revision and does **not** gain this
+feature automatically. For a qualified compatible native application, run from
+**that application's Cargo project directory** on Windows PowerShell:
 
 ~~~powershell
-$env:RUNENWERK_PROFILE_OUTPUT = "$PWD\artifacts\todo-native-profile.json"
-cargo run --manifest-path projects/todo/Cargo.toml --release --locked
+New-Item -ItemType Directory -Force .\artifacts | Out-Null
+$env:RUNENWERK_PROFILE_OUTPUT = Join-Path (Get-Location).Path 'artifacts\native-profile.json'
+cargo run --release --locked
 Remove-Item Env:RUNENWERK_PROFILE_OUTPUT
 ~~~
 
