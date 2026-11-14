@@ -570,7 +570,10 @@ mod tests {
         let stats = summarize_events(&events);
         assert_eq!(stats.len(), 3);
         assert_eq!(
-            stats.iter().filter(|item| item.stage == "window_resize").count(),
+            stats
+                .iter()
+                .filter(|item| item.stage == "window_resize")
+                .count(),
             2
         );
     }
