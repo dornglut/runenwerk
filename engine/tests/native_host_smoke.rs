@@ -881,7 +881,9 @@ fn run_native_render_ui_profiler_child_smoke(executable: &std::path::Path) -> an
     }
     let publications = report["native_ui_presentations"]["events"]
         .as_array()
-        .ok_or_else(|| anyhow::anyhow!("profiled native UI lacks renderer-owned publication observations"))?;
+        .ok_or_else(|| {
+            anyhow::anyhow!("profiled native UI lacks renderer-owned publication observations")
+        })?;
     anyhow::ensure!(
         publications
             .iter()

@@ -581,8 +581,9 @@ impl NativeProfilerSink {
     ) {
         let observed_ns = saturating_u64(self.origin.elapsed().as_nanos());
         if let Ok(mut recorder) = self.inner.lock() {
-            recorder.next_native_ui_presentation_ordinal =
-                recorder.next_native_ui_presentation_ordinal.saturating_add(1);
+            recorder.next_native_ui_presentation_ordinal = recorder
+                .next_native_ui_presentation_ordinal
+                .saturating_add(1);
             let event_ordinal = recorder.next_native_ui_presentation_ordinal;
             let host_frame = match recorder.active_frame {
                 Some((thread, frame)) if thread == std::thread::current().id() => Some(frame),
@@ -701,7 +702,11 @@ impl NativeProfilerSink {
             (
                 state.events.iter().cloned().collect::<Vec<_>>(),
                 state.dropped,
-                state.native_ui_presentations.iter().cloned().collect::<Vec<_>>(),
+                state
+                    .native_ui_presentations
+                    .iter()
+                    .cloned()
+                    .collect::<Vec<_>>(),
                 state.dropped_native_ui_presentations,
             )
         };
@@ -1128,11 +1133,25 @@ mod tests {
             );
         }
         let recorder = sink.inner.lock().unwrap();
-        assert_eq!(recorder.native_ui_presentations.len(), NATIVE_UI_PRESENTATION_EVENT_LIMIT);
-        assert_eq!(recorder.dropped_native_ui_presentations, 3);
-        assert_eq!(recorder.native_ui_presentations.front().unwrap().event_ordinal, 4);
         assert_eq!(
-            recorder.native_ui_presentations.back().unwrap().event_ordinal,
+            recorder.native_ui_presentations.len(),
+            NATIVE_UI_PRESENTATION_EVENT_LIMIT
+        );
+        assert_eq!(recorder.dropped_native_ui_presentations, 3);
+        assert_eq!(
+            recorder
+                .native_ui_presentations
+                .front()
+                .unwrap()
+                .event_ordinal,
+            4
+        );
+        assert_eq!(
+            recorder
+                .native_ui_presentations
+                .back()
+                .unwrap()
+                .event_ordinal,
             (NATIVE_UI_PRESENTATION_EVENT_LIMIT + 3) as u64
         );
         let event = recorder.native_ui_presentations.front().unwrap();
@@ -1143,17 +1162,34 @@ mod tests {
         assert!(!serialized.contains("authored_id"));
         assert!(!serialized.contains("task_title"));
         assert!(!serialized.contains("input_text"));
-        assert!(recorder.events.is_empty(), "point observations are not CPU spans");
+        assert!(
+            recorder.events.is_empty(),
+            "point observations are not CPU spans"
+        );
     }
 
     #[test]
     fn same_publication_identity_can_be_observed_at_stage_and_terminal_promotion() {
         let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
         sink.observe_native_ui_presentation(
-            "source_staged_for_render", 17, 1, 9, 77, 2, 1, Some(11),
+            "source_staged_for_render",
+            17,
+            1,
+            9,
+            77,
+            2,
+            1,
+            Some(11),
         );
         sink.observe_native_ui_presentation(
-            "terminal_present_promoted_for_input", 17, 1, 9, 77, 2, 1, None,
+            "terminal_present_promoted_for_input",
+            17,
+            1,
+            9,
+            77,
+            2,
+            1,
+            None,
         );
         let state = sink.inner.lock().unwrap();
         let pair = state.native_ui_presentations.iter().collect::<Vec<_>>();

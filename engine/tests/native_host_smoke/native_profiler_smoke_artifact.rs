@@ -102,14 +102,14 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         "native promotion data must be source-owned, bounded and explicitly not a scanout clock"
     );
     ensure!(
-        rows.iter().any(|event| {
-            event["transition"] == "source_staged_for_render"
-        }),
+        rows.iter()
+            .any(|event| { event["transition"] == "source_staged_for_render" }),
         "native typed RunenUI smoke contains no actual source-staged generation"
     );
     ensure!(
         rows.windows(2).all(|pair| {
-            pair[0]["event_ordinal"].as_u64()
+            pair[0]["event_ordinal"]
+                .as_u64()
                 .zip(pair[1]["event_ordinal"].as_u64())
                 .is_some_and(|(older, newer)| older < newer)
         }),
