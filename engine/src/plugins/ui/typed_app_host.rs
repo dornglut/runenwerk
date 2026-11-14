@@ -55,6 +55,15 @@ impl<A: UiApp> UiAppObservation<'_, A> {
 /// The only erased work is truly common Engine host plumbing. Application
 /// actions, state and host responses never cross this interface.
 pub(super) trait TypedRuntimeOps {
+    /// Optional read-only projection from RunenUI's own canonical trace.
+    /// Non-standard test erasures may have no trace: never invent a route.
+    fn profiler_pointer_trace(
+        &self,
+        _batch: &InputPumpBatch,
+    ) -> Vec<crate::runtime::profiler::PointerTraceEvidence> {
+        Vec::new()
+    }
+
     fn pump(&mut self, budget: PumpBudget) -> Result<InputPumpBatch, InputObservationError>;
     fn input_ownership(&mut self) -> Result<InputOwnershipSnapshot, InputObservationError>;
     fn submit_keyboard(
@@ -106,6 +115,13 @@ pub(super) struct TypedRuntime<A: UiApp> {
 }
 
 impl<A: UiApp + 'static> TypedRuntimeOps for TypedRuntime<A> {
+    fn profiler_pointer_trace(
+        &self,
+        batch: &InputPumpBatch,
+    ) -> Vec<crate::runtime::profiler::PointerTraceEvidence> {
+        crate::runtime::profiler::project_native_pointer_trace(self.runtime.trace(), batch)
+    }
+
     fn set_native_wake_transport(&self, transport: crate::runtime::NativeWakeTransport) {
         self.runtime.set_wake_transport(transport);
     }
