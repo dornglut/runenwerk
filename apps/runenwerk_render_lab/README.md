@@ -10,10 +10,21 @@ Render-owned frame-history snapshot at the normal measurement close boundary.
 cargo run --release -p runenwerk_render_lab --bin runenwerk-render-lab -- \
   --rl2-measure artifacts/gpu-v2.json \
   --performance-report artifacts/performance-v1.json \
-  --submitted-frames 240 \
-  --window-size-px 1600x900 \
-  --radiance-size-px 1280x720
+  --submitted-frames 240
 ~~~
+
+The native output extent comes from the **realized** primary client size. For
+portable first-run qualification, omit `--radiance-size-px`: Render Lab
+then couples the radiance extent to that realized output. The optional
+`--window-size-px WIDTHxHEIGHT` requests the initial physical window size
+but does not guarantee that the OS/window manager realizes those exact
+dimensions. When `--radiance-size-px` is explicitly supplied, both extents
+must have **exactly** equal aspect ratios and the radiance target must not
+exceed the realized output. For example, a Windows output realized at
+1904x1020 rejects fixed 1280x720, even if the application requested a
+1600x900 window. For controlled A/B measurements, compare the actual output
+and radiance extents recorded in both artifacts; do not use mismatched
+runs as performance evidence.
 
 The output files must differ. The optional NP1 report MUST use a new, nonexisting path;
 the writer refuses overwrites, including symlink/hardlink aliases of old artifacts.
