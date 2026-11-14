@@ -2543,7 +2543,12 @@ impl UiRuntimeSlotsResource {
             }
         };
         let settlement = slot.observe_batch_report(&batch);
-        if let (Some(profiler), Some(started)) = (profiler, started) {
+        // Cut actual source-owned pump/settlement time BEFORE observer-side
+        // canonical trace inspection, statistics and capture retention.
+        let completed_at = profiler.as_ref().map(|_| std::time::Instant::now());
+        if let (Some(profiler), Some(started), Some(completed_at)) =
+            (profiler, started, completed_at)
+        {
             let pointer_trace = match &slot.runtime {
                 UiRuntimeSlotKind::Counter(runtime) => {
                     crate::runtime::profiler::project_native_pointer_trace(runtime.trace(), &batch)
@@ -2555,7 +2560,14 @@ impl UiRuntimeSlotsResource {
                 Err(UiRuntimeSlotOperationFailure::RuntimeDidNotQuiesce) => "not_quiescent",
                 Err(_) => "failed",
             };
-            profiler.record_m13_pump(slot_id.value(), started, &batch, status, &pointer_trace);
+            profiler.record_m13_pump(
+                slot_id.value(),
+                started,
+                completed_at,
+                &batch,
+                status,
+                &pointer_trace,
+            );
         }
         Ok((batch, settlement))
     }

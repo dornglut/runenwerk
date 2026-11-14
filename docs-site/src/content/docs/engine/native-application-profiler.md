@@ -79,7 +79,10 @@ explicitly unavailable; `not_observed` means only that a source trace record
 was not retained, not that the application action failed. No trace Debug string,
 authored identifier, text, credential or raw mounted identity is exported.
 An M13 `committed` input receipt is never relabeled as a successful UI
-activation or Todo operation. Existing schema-v1 captures are historical and
+activation or Todo operation. The M13 CPU measurement ends at the actual
+RunenUI pump/settlement boundary; read-only profiler trace projection and
+export bookkeeping occur afterward and are not attributed to M13 work.
+Observer overhead requires its own matched on/off workload qualification. Existing schema-v1 captures are historical and
 are not silently upgraded or reinterpreted as v2. RunenUI host
 settlement/publication, and up to 512 existing Render-owned frame
 observations (with export omissions reported) when available. The Render frame index

@@ -486,7 +486,23 @@ impl NativeProfilerSink {
         ui_slot: Option<u64>,
         m13: Option<M13Observation>,
     ) {
-        let duration_ns = saturating_u64(started.elapsed().as_nanos());
+        self.record_until(domain, stage, started, Instant::now(), window, ui_slot, m13);
+    }
+
+    /// The original owner fixes this endpoint before profiler-side trace
+    /// projection. Observer bookkeeping is never charged to M13 input work.
+    #[allow(clippy::too_many_arguments)]
+    fn record_until(
+        &self,
+        domain: &'static str,
+        stage: &'static str,
+        started: Instant,
+        completed_at: Instant,
+        window: Option<u64>,
+        ui_slot: Option<u64>,
+        m13: Option<M13Observation>,
+    ) {
+        let duration_ns = saturating_u64(completed_at.duration_since(started).as_nanos());
         let start_ns = saturating_u64(started.duration_since(self.origin).as_nanos());
         if let Ok(mut recorder) = self.inner.lock() {
             recorder.next_event_ordinal = recorder.next_event_ordinal.saturating_add(1);
@@ -538,6 +554,7 @@ impl NativeProfilerSink {
         &self,
         slot: u64,
         started: Instant,
+        completed_at: Instant,
         batch: &InputPumpBatch,
         settlement_status: &'static str,
         pointer_trace: &[PointerTraceEvidence],
@@ -586,10 +603,11 @@ impl NativeProfilerSink {
             processed_through: batch.processed_through().map(|sequence| sequence.get()),
             paused: batch.pause_reason().is_some(),
         };
-        self.record(
+        self.record_until(
             "runenui_m13",
             "canonical_input_pump",
             started,
+            completed_at,
             None,
             Some(slot),
             Some(m13),
@@ -848,7 +866,12 @@ mod tests {
             }
 
             fn interaction_producer_budget(_: &Self::State) -> runenui_core::ProducerBudget {
-                runenui_core::ProducerBudget::new(64, 32).with_reconciliation(4, 4, 4)
+                // Source-owned button pointer hover can admit framework cursor
+                // services. Reuse the proven bounded native UI budget policy.
+                runenui_core::ProducerBudget::new(64, 32)
+                    .with_reconciliation(4, 4, 4)
+                    .with_work_starts(runenui_core::WorkStartBudget::new(0, 0, 0, 0, 2))
+                    .with_work_residency(runenui_core::WorkResidencyBudget::new(0, 0, 0, 0, 0, 2))
             }
 
             fn root(_: &Self::State) -> impl View<Self::Action> {
@@ -909,6 +932,16 @@ mod tests {
             }
             let submitted = runtime.submit_pointer(event).unwrap();
             let batch = runtime.pump(PumpBudget::new(128, 128, 128, 128)).unwrap();
+            assert_eq!(
+                batch.final_ownership().status(),
+                runenui_runtime::RuntimeStatus::Running,
+                "original phase {phase:?} must not poison; trace={:?}",
+                runtime
+                    .trace()
+                    .records()
+                    .map(|record| record.kind())
+                    .collect::<Vec<_>>()
+            );
             let evidence = project_native_pointer_trace(runtime.trace(), &batch);
             let observed = evidence
                 .iter()
@@ -1210,6 +1243,28 @@ mod tests {
                 .count(),
             2
         );
+    }
+
+    #[test]
+    fn measured_m13_interval_excludes_profiler_post_processing() {
+        let sink = NativeProfilerSink::new(PathBuf::from("unused-profile.json"));
+        let started = Instant::now();
+        let completed_at = started + std::time::Duration::from_micros(123);
+        // A later read-only projection could be arbitrarily expensive. The
+        // recorded M13 work still ends at its original settlement boundary.
+        sink.record_until(
+            "runenui_m13",
+            "canonical_input_pump",
+            started,
+            completed_at,
+            None,
+            Some(17),
+            None,
+        );
+        let state = sink.inner.lock().unwrap();
+        assert_eq!(state.events.len(), 1);
+        assert_eq!(state.events[0].duration_ns, 123_000);
+        assert_eq!(state.events[0].ui_slot, Some(17));
     }
 
     #[test]
