@@ -21,6 +21,7 @@ use std::time::Instant;
 const ENV_OUTPUT: &str = "RUNENWERK_PROFILE_OUTPUT";
 const EVENT_LIMIT: usize = 16_384;
 const RENDER_HISTORY_LIMIT: usize = 512;
+type StageGroupKey = (&'static str, &'static str, Option<u64>, Option<u64>);
 
 #[derive(Clone)]
 pub(crate) struct NativeProfilerSink {
@@ -431,10 +432,7 @@ fn saturating_u64(value: u128) -> u64 {
 
 /// Close-only reducer: these durations are CPU stage spans, not additive frame wall time.
 fn summarize_events(events: &[CpuObservation]) -> Vec<StageStatistics> {
-    let mut groups = BTreeMap::<
-        (&'static str, &'static str, Option<u64>, Option<u64>),
-        Vec<u64>,
-    >::new();
+    let mut groups = BTreeMap::<StageGroupKey, Vec<u64>>::new();
     for event in events {
         groups
             .entry((event.domain, event.stage, event.window, event.ui_slot))
