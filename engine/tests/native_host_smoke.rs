@@ -820,6 +820,7 @@ mod native_readiness {
     }
 }
 
+#[path = "native_host_smoke/native_profiler_smoke_artifact.rs"]
 mod native_profiler_smoke_artifact;
 
 fn run_native_render_ui_child_smoke() -> anyhow::Result<()> {
