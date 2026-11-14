@@ -22,8 +22,8 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
         raw.len() < 8 * 1024 * 1024,
         "native profiler smoke capture exceeded 8 MiB"
     );
-    let revision = std::env::var(REVISION_ENV)
-        .context("missing exact profiler smoke source revision")?;
+    let revision =
+        std::env::var(REVISION_ENV).context("missing exact profiler smoke source revision")?;
     ensure!(
         revision.len() == 40 && revision.bytes().all(|byte| byte.is_ascii_hexdigit()),
         "invalid profiler smoke source revision"
@@ -34,15 +34,20 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
     let stages = report["stage_statistics"]
         .as_array()
         .context("native profiler capture is missing CPU stage statistics")?;
-    ensure!(!stages.is_empty(), "native profiler capture lacks stage statistics");
+    ensure!(
+        !stages.is_empty(),
+        "native profiler capture lacks stage statistics"
+    );
     let bounds = stages[0]["duration_histogram_ns"]["upper_bounds_exclusive_ns"]
         .as_array()
         .context("native profiler histogram bounds missing")?;
-    ensure!(bounds.len() == 10, "native profiler histogram must have ten bounds");
+    ensure!(
+        bounds.len() == 10,
+        "native profiler histogram must have ten bounds"
+    );
     for stage in stages {
         ensure!(
-            stage["duration_histogram_ns"]["upper_bounds_exclusive_ns"].as_array()
-                == Some(bounds),
+            stage["duration_histogram_ns"]["upper_bounds_exclusive_ns"].as_array() == Some(bounds),
             "native profiler histogram bounds are inconsistent"
         );
         let sample_count = stage["sample_count"]
@@ -129,7 +134,10 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
     let mut labels = Vec::new();
     for bound in bounds {
         let upper = bound.as_u64().context("histogram bound is not numeric")?;
-        ensure!(upper > previous, "histogram bounds must be strictly increasing");
+        ensure!(
+            upper > previous,
+            "histogram bounds must be strictly increasing"
+        );
         labels.push(format!("[{previous}, {upper})"));
         previous = upper;
     }
@@ -165,9 +173,18 @@ pub(super) fn retain(report: &Value, raw: &[u8]) -> Result<()> {
     );
 
     write_new(&directory.join("capture.json"), raw)?;
-    write_new(&directory.join("summary.json"), &serde_json::to_vec_pretty(&summary)?)?;
-    write_new(&directory.join("manifest.json"), &serde_json::to_vec_pretty(&manifest)?)?;
-    write_new(&directory.join("validation.json"), &serde_json::to_vec_pretty(&validation)?)?;
+    write_new(
+        &directory.join("summary.json"),
+        &serde_json::to_vec_pretty(&summary)?,
+    )?;
+    write_new(
+        &directory.join("manifest.json"),
+        &serde_json::to_vec_pretty(&manifest)?,
+    )?;
+    write_new(
+        &directory.join("validation.json"),
+        &serde_json::to_vec_pretty(&validation)?,
+    )?;
     write_new(&directory.join("report.md"), readable.as_bytes())?;
     println!("native_typed_ui_profiler_artifact=pass");
     Ok(())
