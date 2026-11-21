@@ -80,7 +80,13 @@ pub enum ShellCommand {
     LoadAssetCatalog {
         projection_epoch: u64,
     },
+    ConfirmAssetCatalogDiscard {
+        projection_epoch: u64,
+    },
     SaveAssetCatalog {
+        projection_epoch: u64,
+    },
+    CancelAssetCatalogDiscard {
         projection_epoch: u64,
     },
     ReimportAsset {
@@ -306,7 +312,9 @@ impl ShellCommand {
                 projection_epoch, ..
             }
             | Self::LoadAssetCatalog { projection_epoch }
+            | Self::ConfirmAssetCatalogDiscard { projection_epoch }
             | Self::SaveAssetCatalog { projection_epoch }
+            | Self::CancelAssetCatalogDiscard { projection_epoch }
             | Self::ReimportAsset {
                 projection_epoch, ..
             }

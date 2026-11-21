@@ -74,6 +74,7 @@ pub fn dispatch_shell_command_with_viewport_commands(
         return Ok(());
     }
 
+    let selected_material_before = app.material_lab_runtime().selected_material_asset_id();
     app.runtime_mut().record_workflow_event(
         editor_core::WorkflowEventKind::ShellCommandDispatched {
             command: shell_command_label(&command),
@@ -220,10 +221,34 @@ pub fn dispatch_shell_command_with_viewport_commands(
         ShellCommand::LoadAssetCatalog {
             projection_epoch: _,
         } => {
-            app.load_asset_project_catalog().map_err(|error| {
+            let disposition = app.load_asset_project_catalog().map_err(|error| {
                 app.append_console_error(format!("[asset] catalog load failed: {error}"));
                 EditorMutationError::runtime_rejected("asset catalog load failed")
             })?;
+            match disposition {
+                crate::editor_app::AssetCatalogLoadDisposition::Loaded => {
+                    app.append_console_line("[asset] catalog load completed");
+                }
+                crate::editor_app::AssetCatalogLoadDisposition::ConfirmationRequired => {
+                    app.append_console_warning(
+                        "[asset] load NOT committed: confirm the discard action or cancel",
+                    );
+                }
+                crate::editor_app::AssetCatalogLoadDisposition::RejectedPreserved => {
+                    app.append_console_warning(
+                        "[asset] catalog load rejected: previous catalog preserved",
+                    );
+                }
+            }
+        }
+        ShellCommand::ConfirmAssetCatalogDiscard {
+            projection_epoch: _,
+        } => {
+            app.confirm_asset_catalog_discard().map_err(|error| {
+                app.append_console_error(format!("[asset] catalog discard failed: {error}"));
+                EditorMutationError::runtime_rejected("asset catalog discard failed")
+            })?;
+            app.append_console_line("[asset] confirmed catalog discard and saved catalog loaded");
         }
         ShellCommand::SaveAssetCatalog {
             projection_epoch: _,
@@ -232,6 +257,12 @@ pub fn dispatch_shell_command_with_viewport_commands(
                 app.append_console_error(format!("[asset] catalog save failed: {error}"));
                 EditorMutationError::runtime_rejected("asset catalog save failed")
             })?;
+        }
+        ShellCommand::CancelAssetCatalogDiscard {
+            projection_epoch: _,
+        } => {
+            app.cancel_asset_catalog_discard_confirmation();
+            app.append_console_line("[asset] catalog discard cancelled");
         }
         ShellCommand::ReimportAsset {
             asset_id,
@@ -1142,6 +1173,11 @@ pub fn dispatch_shell_command_with_viewport_commands(
         ShellCommand::NoOp => {}
     }
 
+    if selected_material_before != app.material_lab_runtime().selected_material_asset_id()
+        && let Some(shell_state) = shell_state
+    {
+        shell_state.clear_cached_projection();
+    }
     Ok(())
 }
 
@@ -1296,7 +1332,9 @@ fn shell_command_label(command: &ShellCommand) -> &'static str {
         ShellCommand::ToggleDebugLogs => "ToggleDebugLogs",
         ShellCommand::SelectAsset { .. } => "SelectAsset",
         ShellCommand::LoadAssetCatalog { .. } => "LoadAssetCatalog",
+        ShellCommand::ConfirmAssetCatalogDiscard { .. } => "ConfirmAssetCatalogDiscard",
         ShellCommand::SaveAssetCatalog { .. } => "SaveAssetCatalog",
+        ShellCommand::CancelAssetCatalogDiscard { .. } => "CancelAssetCatalogDiscard",
         ShellCommand::ReimportAsset { .. } => "ReimportAsset",
         ShellCommand::ReimportSelectedAsset { .. } => "ReimportSelectedAsset",
         ShellCommand::ClearAssetDiagnostics { .. } => "ClearAssetDiagnostics",

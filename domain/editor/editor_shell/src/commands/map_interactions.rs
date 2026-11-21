@@ -357,6 +357,7 @@ fn command_for_provider_owned_graph_canvas_action(
         provider_id,
         tool_surface_instance_id,
         context,
+        origin,
     }) = routing.widget_actions_by_id.get(&widget_id)
     else {
         return None;
@@ -373,7 +374,13 @@ fn command_for_provider_owned_graph_canvas_action(
         provider_id: *provider_id,
         tool_surface_instance_id: *tool_surface_instance_id,
         target: command_target(*context),
-        interaction: SurfaceInteraction::GraphCanvasAction(action.clone()),
+        interaction: match origin {
+            Some(origin) => SurfaceInteraction::SourceBoundGraphCanvasAction {
+                origin: *origin,
+                action: action.clone(),
+            },
+            None => SurfaceInteraction::GraphCanvasAction(action.clone()),
+        },
         projection_epoch: routing.projection_epoch,
     })
 }

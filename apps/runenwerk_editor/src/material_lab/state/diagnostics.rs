@@ -51,7 +51,7 @@ impl MaterialLabRuntime {
         catalog: &AssetCatalog,
     ) -> Vec<MaterialResourceBindingDiagnosticViewModel> {
         let mut rows = Vec::new();
-        if let Some((_, document)) = self.active_source_document() {
+        if let Some(document) = self.selected_source_document_for_catalog(catalog) {
             let node_catalog = material_graph::MaterialNodeCatalog::first_slice();
             for node in &document.graph.nodes {
                 let Some(descriptor) = node_catalog.descriptor(&node.name) else {
@@ -89,7 +89,7 @@ impl MaterialLabRuntime {
         }
 
         if rows.is_empty()
-            && let Some(preview) = &self.active_preview
+            && let Some(preview) = self.selected_preview_for_catalog(catalog)
         {
             rows.extend(preview.resolved_resources.iter().map(|resource| {
                 let status = catalog

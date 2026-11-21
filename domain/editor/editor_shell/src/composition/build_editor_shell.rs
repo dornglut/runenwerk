@@ -145,6 +145,7 @@ pub enum RoutedShellAction {
         provider_id: SurfaceProviderId,
         tool_surface_instance_id: ToolSurfaceInstanceId,
         context: StructuralWidgetRoutingContext,
+        origin: Option<crate::MaterialSourceOrigin>,
     },
 }
 
@@ -1837,6 +1838,7 @@ fn build_frame_widget_routes(
                     provider_id,
                     tool_surface_instance_id: surface.surface_instance_id,
                     context,
+                    origin: route.source_origin().copied(),
                 }
             } else {
                 let Some(action) = route.action().cloned() else {

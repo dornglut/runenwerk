@@ -9,9 +9,10 @@ use editor_shell::EditorCompositionRuntime;
 
 use super::console::{ConsoleMessage, ConsoleMessageKind};
 use crate::asset_pipeline::{
-    AssetCatalogRuntime, EditorAssetProjectSession, EditorFieldProductPublication,
-    EditorFieldProductPublicationJournalEntry, ImportJobStatus, catalog_with_import_artifact,
-    execute_import_for_asset, load_project_catalog, save_project_catalog,
+    AssetCatalogRuntime, CatalogPersistenceOutcome, EditorAssetProjectSession,
+    EditorFieldProductPublication, EditorFieldProductPublicationJournalEntry, ImportJobStatus,
+    catalog_with_import_artifact, execute_import_for_asset, load_project_catalog,
+    save_project_catalog,
 };
 use crate::material_lab::{
     EditorMaterialPreviewPublication, EditorMaterialPreviewPublicationJournalEntry,
@@ -33,6 +34,23 @@ use crate::texture_preview::TexturePreviewRuntime;
 
 use super::sdf_operations::SdfOperationWorkspaceState;
 
+/// Distinguishes a completed catalog load from a pending destructive reload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AssetCatalogLoadDisposition {
+    Loaded,
+    ConfirmationRequired,
+    RejectedPreserved,
+}
+
+/// An explicit second Load click may discard only the exact previously
+/// observed in-memory version into the exact previously observed disk version.
+struct PendingAssetCatalogDiscard {
+    session: EditorAssetProjectSession,
+    source_generation: u64,
+    current: asset::AssetCatalog,
+    persisted: asset::AssetCatalog,
+}
+
 pub struct RunenwerkEditorApp {
     pub(crate) runtime: RunenwerkEditorRuntime,
     pub(crate) scene_persistence: ScenePersistenceContext,
@@ -48,7 +66,13 @@ pub struct RunenwerkEditorApp {
     pub(crate) failed_editor_definition_activations: Vec<PendingEditorDefinitionActivation>,
     pub(crate) asset_catalog_runtime: AssetCatalogRuntime,
     pub(crate) asset_project_session: Option<EditorAssetProjectSession>,
+    pending_asset_catalog_discard: Option<PendingAssetCatalogDiscard>,
+    /// Monotonic owner-local incarnation: even reopening the same root
+    /// invalidates an action captured before the new project context.
+    pub(crate) material_source_context_generation: u64,
     pub(crate) material_lab_runtime: MaterialLabRuntime,
+    #[cfg(test)]
+    pub(crate) fail_next_material_source_write: std::cell::Cell<bool>,
     pub(crate) texture_preview_runtime: TexturePreviewRuntime,
     pub(crate) sdf_operation_workspace: SdfOperationWorkspaceState,
     pub(crate) pending_field_product_publications: Vec<EditorFieldProductPublication>,
@@ -123,7 +147,11 @@ impl RunenwerkEditorApp {
             failed_editor_definition_activations: Vec::new(),
             asset_catalog_runtime: AssetCatalogRuntime::new(),
             asset_project_session: None,
+            pending_asset_catalog_discard: None,
+            material_source_context_generation: 0,
             material_lab_runtime: MaterialLabRuntime::default(),
+            #[cfg(test)]
+            fail_next_material_source_write: std::cell::Cell::new(false),
             texture_preview_runtime: TexturePreviewRuntime::default(),
             sdf_operation_workspace: SdfOperationWorkspaceState::default(),
             pending_field_product_publications: Vec::new(),
@@ -370,8 +398,65 @@ impl RunenwerkEditorApp {
         self.asset_project_session.as_mut()
     }
 
-    pub fn set_asset_project_session(&mut self, session: EditorAssetProjectSession) {
+    /// Refuse a change of catalog fallback context while it would discard an
+    /// in-memory catalog not proven equal to the old project's accepted disk copy.
+    /// Two logical projects may share one physical catalog path without sharing
+    /// in-memory, last-known-good editor state. This does not interpret
+    /// dirty_assets as a save-state marker; direct catalog_mut callers may edit.
+    /// An explicit save or restoration of the previous catalog is required.
+    pub fn set_asset_project_session(
+        &mut self,
+        mut session: EditorAssetProjectSession,
+    ) -> anyhow::Result<()> {
+        let replaces_catalog_fallback_owner = self
+            .asset_project_session
+            .as_ref()
+            .is_some_and(|previous| !previous.shares_catalog_fallback_context(&session));
+        if replaces_catalog_fallback_owner {
+            let previous = self
+                .asset_project_session
+                .as_ref()
+                .expect("catalog-owner replacement requires a previous session");
+            let accepted = load_project_catalog(previous).map_err(|error| {
+                anyhow::anyhow!(
+                    "cannot verify previous project catalog before switching projects: {error}"
+                )
+            })?;
+            let catalog_is_persisted = match accepted.accepted_catalog {
+                Some(persisted) => persisted == *self.asset_catalog_runtime.catalog(),
+                None => self.asset_catalog_runtime.catalog() == &asset::AssetCatalog::new(),
+            };
+            anyhow::ensure!(
+                catalog_is_persisted,
+                "project switch rejected: current asset catalog differs from the previous project's accepted on-disk catalog; save or restore that catalog first"
+            );
+        }
+        if !replaces_catalog_fallback_owner
+            && let Some(accepted) = self
+                .asset_project_session
+                .as_ref()
+                .and_then(EditorAssetProjectSession::accepted_catalog)
+        {
+            session.record_accepted_catalog(accepted);
+        }
+        self.pending_asset_catalog_discard = None;
+        self.material_source_context_generation = self
+            .material_source_context_generation
+            .checked_add(1)
+            .expect("Material project-session incarnation exhausted");
+        // A project-session replacement is not an in-place Material source
+        // refresh: old selected documents, history and queued previews belong
+        // to the old project even when its owner-local IDs are reused.
+        self.material_lab_runtime = MaterialLabRuntime::default();
+        self.pending_material_preview_publications.clear();
+        // The last-known-good catalog is a *project-owned* fallback. It may
+        // survive a failed reload within one project, never a project switch:
+        // old source paths under a new root could otherwise admit a new edit.
+        if replaces_catalog_fallback_owner {
+            self.asset_catalog_runtime = AssetCatalogRuntime::new();
+        }
         self.asset_project_session = Some(session);
+        Ok(())
     }
 
     pub fn material_lab_runtime(&self) -> &MaterialLabRuntime {
@@ -383,7 +468,8 @@ impl RunenwerkEditorApp {
     }
 
     pub fn asset_catalog_status_lines(&self) -> Vec<String> {
-        self.asset_project_session
+        let mut lines = self
+            .asset_project_session
             .as_ref()
             .map(EditorAssetProjectSession::status_lines)
             .unwrap_or_else(|| {
@@ -391,20 +477,112 @@ impl RunenwerkEditorApp {
                     "No asset project session".to_string(),
                     "Load a project file before catalog IO or import execution".to_string(),
                 ]
-            })
+            });
+        if self.pending_asset_catalog_discard.is_some() {
+            lines.push(
+                "Confirmation required: choose Confirm discard or Cancel; Load alone never discards local edits"
+                    .to_string(),
+            );
+        }
+        lines
     }
 
-    pub fn load_asset_project_catalog(&mut self) -> anyhow::Result<()> {
-        let Some(session) = self.asset_project_session.as_mut() else {
+    pub fn asset_catalog_discard_confirmation_pending(&self) -> bool {
+        self.pending_asset_catalog_discard.is_some()
+    }
+
+    pub fn cancel_asset_catalog_discard_confirmation(&mut self) {
+        self.pending_asset_catalog_discard = None;
+    }
+
+    /// Load is non-destructive when local edits exist: only the separate
+    /// Confirm command can authorize replacing them. Two queued Load commands
+    /// cannot silently become a destructive double-click.
+    pub fn load_asset_project_catalog(&mut self) -> anyhow::Result<AssetCatalogLoadDisposition> {
+        if self.pending_asset_catalog_discard.is_some() {
+            return Ok(AssetCatalogLoadDisposition::ConfirmationRequired);
+        }
+        let Some(session) = self.asset_project_session.as_ref() else {
             self.record_missing_asset_project_session("load catalog");
-            return Ok(());
+            anyhow::bail!("cannot load asset catalog: no asset project session is active");
         };
         let outcome = load_project_catalog(session)?;
+        if let Some(persisted) = outcome.accepted_catalog.as_ref() {
+            let current = self.asset_catalog_runtime.catalog();
+            let unchanged = session.accepted_catalog().map_or_else(
+                || current == &asset::AssetCatalog::new(),
+                |accepted| current == accepted,
+            );
+            if !unchanged {
+                self.pending_asset_catalog_discard = Some(PendingAssetCatalogDiscard {
+                    session: session.clone(),
+                    source_generation: self.material_source_context_generation,
+                    current: current.clone(),
+                    persisted: persisted.clone(),
+                });
+                self.append_console_warning(
+                    "[asset] unsaved catalog changes: choose Confirm discard to load saved catalog, or Cancel",
+                );
+                return Ok(AssetCatalogLoadDisposition::ConfirmationRequired);
+            }
+        }
+        self.pending_asset_catalog_discard = None;
+        let rejected = outcome.accepted_catalog.is_none();
+        self.apply_asset_project_catalog_load_outcome(outcome);
+        if rejected {
+            Ok(AssetCatalogLoadDisposition::RejectedPreserved)
+        } else {
+            Ok(AssetCatalogLoadDisposition::Loaded)
+        }
+    }
+
+    /// Explicit destructive command, available only after the UI has shown
+    /// the pending confirmation. A stale project/local/disk revision fails
+    /// closed and never consumes any unconfirmed catalog edits.
+    pub fn confirm_asset_catalog_discard(&mut self) -> anyhow::Result<AssetCatalogLoadDisposition> {
+        let pending = self
+            .pending_asset_catalog_discard
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("no pending asset catalog discard to confirm"))?;
+        let session = self.asset_project_session.as_ref().ok_or_else(|| {
+            anyhow::anyhow!("cannot confirm catalog discard: no active project session")
+        })?;
+        let outcome = load_project_catalog(session)?;
+        let Some(persisted) = outcome.accepted_catalog.as_ref() else {
+            anyhow::bail!("catalog discard rejected: saved catalog is no longer accepted");
+        };
+        anyhow::ensure!(
+            pending.source_generation == self.material_source_context_generation
+                && session.shares_catalog_fallback_context(&pending.session)
+                && self.asset_catalog_runtime.catalog() == &pending.current
+                && persisted == &pending.persisted,
+            "catalog discard rejected: project, local catalog or disk changed since confirmation; request again"
+        );
+        self.apply_asset_project_catalog_load_outcome(outcome);
+        Ok(AssetCatalogLoadDisposition::Loaded)
+    }
+
+    /// Publish a catalog result already read for the active project. Project
+    /// loading stages this fallible I/O before replacing the old session.
+    pub(crate) fn apply_asset_project_catalog_load_outcome(
+        &mut self,
+        outcome: CatalogPersistenceOutcome,
+    ) {
         if let Some(catalog) = outcome.accepted_catalog {
-            self.asset_catalog_runtime.replace_catalog(catalog);
+            if self.asset_catalog_runtime.catalog() != &catalog {
+                self.material_source_context_generation = self
+                    .material_source_context_generation
+                    .checked_add(1)
+                    .expect("Material catalog-replacement incarnation exhausted");
+                self.material_lab_runtime = MaterialLabRuntime::default();
+                self.pending_material_preview_publications.clear();
+                self.asset_catalog_runtime.select_asset(None);
+            }
             if let Some(session) = self.asset_project_session.as_mut() {
+                session.record_accepted_catalog(&catalog);
                 session.set_catalog_load_status("accepted");
             }
+            self.asset_catalog_runtime.replace_catalog(catalog);
         } else {
             for diagnostic in outcome.diagnostics {
                 self.asset_catalog_runtime.record_diagnostic(diagnostic);
@@ -413,26 +591,29 @@ impl RunenwerkEditorApp {
                 session.set_catalog_load_status("rejected; previous catalog preserved");
             }
         }
-        Ok(())
     }
 
     pub fn save_asset_project_catalog(&mut self) -> anyhow::Result<()> {
         let Some(session) = self.asset_project_session.as_ref() else {
             self.record_missing_asset_project_session("save catalog");
-            return Ok(());
+            anyhow::bail!("cannot save asset catalog: no asset project session is active");
         };
         let diagnostics = save_project_catalog(session, self.asset_catalog_runtime.catalog())?;
         if diagnostics.is_empty() {
             if let Some(session) = self.asset_project_session.as_mut() {
+                session.record_accepted_catalog(self.asset_catalog_runtime.catalog());
                 session.set_catalog_save_status("written");
             }
+            self.pending_asset_catalog_discard = None;
         } else {
+            let count = diagnostics.len();
             for diagnostic in diagnostics {
                 self.asset_catalog_runtime.record_diagnostic(diagnostic);
             }
             if let Some(session) = self.asset_project_session.as_mut() {
                 session.set_catalog_save_status("rejected; invalid catalog not written");
             }
+            anyhow::bail!("asset catalog save rejected: {count} blocking validation issue(s)");
         }
         Ok(())
     }

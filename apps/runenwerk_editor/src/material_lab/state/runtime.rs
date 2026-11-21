@@ -2,6 +2,40 @@ use super::picker_projection::{first_palette_descriptor_key, palette_contains_de
 use super::*;
 use engine::plugins::render::CompiledMaterialResourceBinding;
 
+/// A source-less Material Graph is valid for in-memory preview/fixture projections.
+/// Once the catalog declares any source for this asset, however, its identity must
+/// resolve unambiguously. A dangling, foreign, or ambiguous descriptor must never
+/// turn an old cached document or preview into apparently current selected content.
+fn source_for_selected_material_projection(
+    catalog: &AssetCatalog,
+    asset_id: AssetId,
+) -> Option<Option<&asset::AssetSourceDescriptor>> {
+    let Some(record) = catalog.asset(asset_id) else {
+        // In-memory graph fixtures can precede catalog admission, but must not
+        // override a source descriptor that is already known for this asset.
+        return (!catalog
+            .sources
+            .values()
+            .any(|source| source.asset_id == asset_id))
+        .then_some(None);
+    };
+    if record.kind != AssetKind::MaterialGraph {
+        return None;
+    }
+    if let Some(source) = material_source_for_asset(catalog, asset_id) {
+        return Some(Some(source));
+    }
+    if record.primary_source_id.is_none()
+        && !catalog
+            .sources
+            .values()
+            .any(|source| source.asset_id == asset_id)
+    {
+        return Some(None);
+    }
+    None
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorMaterialPreviewProduct {
     pub asset_id: AssetId,
@@ -149,12 +183,35 @@ pub enum PreviewSceneProductRuntimeStatus {
     LastValidPreserved { product_identity: String },
 }
 
+/// Source bytes observed during an explicit owner load/publication.
+///
+/// This is derived projection provenance, not an authoritative disk revision:
+/// mutation admission still compares the live file against the captured digest.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MaterialSourceObservation {
+    pub asset_id: AssetId,
+    pub source_id: AssetSourceId,
+    pub document_id: material_graph::MaterialGraphDocumentId,
+    pub content_digest: [u8; 32],
+    pub source_context_digest: [u8; 32],
+}
+
+/// A source-qualified history state can replay only when the file is still
+/// exactly the byte revision produced by the preceding authored transition.
+#[derive(Debug, Clone)]
+pub(crate) struct MaterialHistorySnapshot {
+    pub asset_id: AssetId,
+    pub document: material_graph::MaterialGraphDocument,
+    pub expected_current_digest: [u8; 32],
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct MaterialLabRuntime {
     pub(super) selected_material_asset_id: Option<AssetId>,
     pub(super) active_preview: Option<EditorMaterialPreviewProduct>,
     pub(super) preview_products_by_asset: BTreeMap<AssetId, EditorMaterialPreviewProduct>,
     pub(super) active_source_document: Option<(AssetId, material_graph::MaterialGraphDocument)>,
+    pub(super) active_source_observation: Option<MaterialSourceObservation>,
     pub(super) selected_graph_nodes: BTreeSet<graph::NodeId>,
     pub(super) selected_graph_edges: BTreeSet<graph::EdgeId>,
     pub(super) node_palette_search_query: String,
@@ -163,8 +220,8 @@ pub struct MaterialLabRuntime {
     pub(super) node_picker_highlighted_descriptor_key: Option<String>,
     pub(super) active_diagnostic_index: Option<usize>,
     pub(super) texture_resource_search_query: String,
-    pub(super) undo_stack: Vec<(AssetId, material_graph::MaterialGraphDocument)>,
-    pub(super) redo_stack: Vec<(AssetId, material_graph::MaterialGraphDocument)>,
+    pub(super) undo_stack: Vec<MaterialHistorySnapshot>,
+    pub(super) redo_stack: Vec<MaterialHistorySnapshot>,
     pub(super) diagnostics: Vec<AssetDiagnosticRecord>,
     pub(super) publication_journal: Vec<EditorMaterialPreviewPublicationJournalEntry>,
     pub(super) last_workflow_status: Option<String>,
@@ -175,11 +232,65 @@ pub struct MaterialLabRuntime {
 
 impl MaterialLabRuntime {
     pub fn select_material_asset(&mut self, asset_id: Option<AssetId>) {
+        if self.selected_material_asset_id != asset_id {
+            self.active_source_observation = None;
+            self.clear_graph_selection();
+            self.node_picker_open = false;
+            self.node_picker_highlighted_descriptor_key = None;
+            self.active_diagnostic_index = None;
+        }
         self.selected_material_asset_id = asset_id;
     }
 
     pub fn selected_material_asset_id(&self) -> Option<AssetId> {
         self.selected_material_asset_id
+    }
+
+    /// A failed explicit reload of a declared source must not leave an old
+    /// graph/selection presented as the newly selected source. Source-less
+    /// in-memory fixtures are handled by the caller and are not invalidated.
+    pub fn discard_failed_selected_source_reload(&mut self, asset_id: AssetId) {
+        if self.selected_material_asset_id != Some(asset_id) {
+            return;
+        }
+        self.active_source_document = None;
+        self.active_source_observation = None;
+        self.clear_graph_selection();
+        self.node_picker_open = false;
+        self.node_picker_highlighted_descriptor_key = None;
+        self.active_diagnostic_index = None;
+    }
+
+    pub(super) fn selected_source_document_for_catalog(
+        &self,
+        catalog: &AssetCatalog,
+    ) -> Option<&material_graph::MaterialGraphDocument> {
+        let (asset_id, document) = self.active_source_document()?;
+        if self.selected_material_asset_id != Some(asset_id) {
+            return None;
+        }
+        let source = source_for_selected_material_projection(catalog, asset_id)?;
+        source
+            .map(|source| {
+                document.document_id == material_document_id_for_source(asset_id, source.source_id)
+            })
+            .unwrap_or(true)
+            .then_some(document)
+    }
+
+    pub(super) fn selected_preview_for_catalog(
+        &self,
+        catalog: &AssetCatalog,
+    ) -> Option<&EditorMaterialPreviewProduct> {
+        let preview = self.active_preview.as_ref()?;
+        if self.selected_material_asset_id != Some(preview.asset_id) {
+            return None;
+        }
+        let source = source_for_selected_material_projection(catalog, preview.asset_id)?;
+        source
+            .map(|source| source.source_id == preview.source_id)
+            .unwrap_or(true)
+            .then_some(preview)
     }
 
     pub fn active_preview(&self) -> Option<&EditorMaterialPreviewProduct> {
@@ -270,33 +381,83 @@ impl MaterialLabRuntime {
         self.texture_resource_search_query = query.into();
     }
 
-    pub fn push_undo_snapshot(
+    pub(crate) fn push_undo_snapshot(
         &mut self,
         asset_id: AssetId,
         document: material_graph::MaterialGraphDocument,
+        committed_digest: [u8; 32],
     ) {
-        self.undo_stack.push((asset_id, document));
+        self.undo_stack.push(MaterialHistorySnapshot {
+            asset_id,
+            document,
+            expected_current_digest: committed_digest,
+        });
         self.redo_stack.clear();
     }
 
-    pub fn pop_undo_snapshot(
-        &mut self,
-    ) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
+    pub(crate) fn next_undo_snapshot(&self) -> Option<MaterialHistorySnapshot> {
+        self.undo_stack.last().cloned()
+    }
+
+    pub(crate) fn pop_undo_snapshot(&mut self) -> Option<MaterialHistorySnapshot> {
         self.undo_stack.pop()
     }
 
-    pub fn push_redo_snapshot(
+    pub(crate) fn push_redo_snapshot(
         &mut self,
         asset_id: AssetId,
         document: material_graph::MaterialGraphDocument,
+        committed_digest: [u8; 32],
     ) {
-        self.redo_stack.push((asset_id, document));
+        self.redo_stack.push(MaterialHistorySnapshot {
+            asset_id,
+            document,
+            expected_current_digest: committed_digest,
+        });
     }
 
-    pub fn pop_redo_snapshot(
-        &mut self,
-    ) -> Option<(AssetId, material_graph::MaterialGraphDocument)> {
+    pub(crate) fn next_redo_snapshot(&self) -> Option<MaterialHistorySnapshot> {
+        self.redo_stack.last().cloned()
+    }
+
+    pub(crate) fn pop_redo_snapshot(&mut self) -> Option<MaterialHistorySnapshot> {
         self.redo_stack.pop()
+    }
+
+    /// Redo is not a fresh edit: the remaining redo chain must survive.
+    pub(crate) fn push_undo_snapshot_from_redo(
+        &mut self,
+        asset_id: AssetId,
+        document: material_graph::MaterialGraphDocument,
+        committed_digest: [u8; 32],
+    ) {
+        self.undo_stack.push(MaterialHistorySnapshot {
+            asset_id,
+            document,
+            expected_current_digest: committed_digest,
+        });
+    }
+
+    /// Source identity of the next history operation, without consuming it.
+    pub fn next_undo_source_identity(
+        &self,
+    ) -> Option<(AssetId, material_graph::MaterialGraphDocumentId)> {
+        self.undo_stack
+            .last()
+            .map(|entry| (entry.asset_id, entry.document.document_id))
+    }
+
+    pub fn next_redo_source_identity(
+        &self,
+    ) -> Option<(AssetId, material_graph::MaterialGraphDocumentId)> {
+        self.redo_stack
+            .last()
+            .map(|entry| (entry.asset_id, entry.document.document_id))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn history_depths(&self) -> (usize, usize) {
+        (self.undo_stack.len(), self.redo_stack.len())
     }
 
     pub fn can_undo(&self) -> bool {
@@ -308,7 +469,7 @@ impl MaterialLabRuntime {
     }
 
     pub fn set_active_preview(&mut self, preview: EditorMaterialPreviewProduct) {
-        self.selected_material_asset_id = Some(preview.asset_id);
+        self.select_material_asset(Some(preview.asset_id));
         self.preview_products_by_asset
             .insert(preview.asset_id, preview.clone());
         self.active_preview = Some(preview);
@@ -319,8 +480,67 @@ impl MaterialLabRuntime {
         asset_id: AssetId,
         document: material_graph::MaterialGraphDocument,
     ) {
-        self.selected_material_asset_id = Some(asset_id);
+        if self
+            .active_source_document
+            .as_ref()
+            .is_some_and(|(current_asset, current)| {
+                *current_asset == asset_id && current.document_id != document.document_id
+            })
+        {
+            self.clear_graph_selection();
+            self.node_picker_open = false;
+            self.node_picker_highlighted_descriptor_key = None;
+            self.active_diagnostic_index = None;
+        }
+        self.select_material_asset(Some(asset_id));
         self.active_source_document = Some((asset_id, document));
+        self.active_source_observation = None;
+    }
+
+    /// Bind a successfully observed source snapshot to its in-memory document.
+    /// Changing bytes or source identity within one asset invalidates old local
+    /// graph IDs and selection even if the document ID itself is unchanged.
+    pub fn set_active_source_document_with_observation(
+        &mut self,
+        asset_id: AssetId,
+        source_id: AssetSourceId,
+        document: material_graph::MaterialGraphDocument,
+        content_digest: [u8; 32],
+        source_context_digest: [u8; 32],
+    ) {
+        let next_observation = MaterialSourceObservation {
+            asset_id,
+            source_id,
+            document_id: document.document_id,
+            content_digest,
+            source_context_digest,
+        };
+        let changed_revision = self
+            .active_source_observation
+            .is_some_and(|prior| prior.asset_id == asset_id && prior != next_observation);
+        let switched_locator = self.active_source_observation.is_some_and(|prior| {
+            prior.asset_id == asset_id
+                && prior.source_context_digest != next_observation.source_context_digest
+        });
+        self.set_active_source_document(asset_id, document);
+        if switched_locator {
+            // A different physical source is a distinct history owner even if
+            // AssetId, document ID and serialized bytes happen to match.
+            self.undo_stack.clear();
+            self.redo_stack.clear();
+        }
+        if changed_revision {
+            self.clear_graph_selection();
+            self.node_picker_open = false;
+            self.node_picker_highlighted_descriptor_key = None;
+            self.active_diagnostic_index = None;
+        }
+        self.active_source_observation = Some(next_observation);
+    }
+
+    pub fn active_source_observation(&self) -> Option<MaterialSourceObservation> {
+        self.active_source_observation
+            .filter(|observation| self.selected_material_asset_id == Some(observation.asset_id))
     }
 
     pub fn active_source_document(

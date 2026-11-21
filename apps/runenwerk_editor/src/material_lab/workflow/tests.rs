@@ -89,6 +89,19 @@ fn material_graph_node_move_persists_source_layout() {
     );
 }
 
+fn apply_bound_material_action(
+    app: &mut RunenwerkEditorApp,
+    action: MaterialSurfaceAction,
+) -> Result<(), editor_core::EditorMutationError> {
+    let origin = app
+        .material_source_origin_for_selected(None)
+        .expect("test must have a valid selected source origin");
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin,
+        action: Box::new(action),
+    })
+}
+
 #[test]
 fn material_source_edit_records_load_failure_diagnostic() {
     let mut app = RunenwerkEditorApp::new();
@@ -105,9 +118,9 @@ fn material_source_edit_records_load_failure_diagnostic() {
         app.material_lab_runtime()
             .diagnostics()
             .iter()
-            .any(|diagnostic| diagnostic.message.contains(
-                "failed to load material graph source for edit: cannot load material graph document: no asset project session"
-            )),
+            .any(|diagnostic| diagnostic
+                .message
+                .contains("Material source action requires its originating source")),
         "source-backed edit load failures should preserve the concrete cause"
     );
 }
@@ -205,21 +218,1049 @@ fn material_graph_texture_ref_edit_mutates_source_graph() {
 }
 
 #[test]
+fn same_asset_source_rebinding_rejects_stale_graph_delete_and_projection() {
+    let root = unique_temp_dir("material_source_rebinding");
+    let asset = asset_id(294);
+    let original_source = asset_source_id(295);
+    let replacement_source = asset_source_id(296);
+    let mut app = material_edit_app(&root, asset, original_source, command_test_document());
+    let old_origin = app
+        .material_source_origin_for_selected(None)
+        .expect("original source origin should form");
+
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        },
+    )
+    .expect("original source graph selection must succeed");
+
+    let replacement_path = "assets/materials/replacement.material.ron";
+    let mut replacement_document = command_test_document();
+    replacement_document.document_id = material_document_id_for_source(asset, replacement_source);
+    write_material_graph_document(&root.join(replacement_path), &replacement_document)
+        .expect("replacement material source should write");
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_source(AssetSourceDescriptor::new(
+            replacement_source,
+            asset,
+            AssetKind::MaterialGraph,
+            replacement_path,
+        ));
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_asset_record(
+            AssetRecord::new(asset, "edit", "Edit", AssetKind::MaterialGraph)
+                .with_primary_source(replacement_source),
+        );
+
+    let original_path = root.join("assets/materials/edit.material.ron");
+    let original_bytes = std::fs::read(&original_path).expect("original source must exist");
+    let replacement_bytes =
+        std::fs::read(root.join(replacement_path)).expect("replacement source must exist");
+
+    let projection = app
+        .material_lab_runtime()
+        .graph_canvas_view_model(app.asset_catalog_runtime().catalog(), Vec::new());
+    assert!(projection.graph.nodes.is_empty());
+    assert_eq!(
+        projection.selected.as_ref().map(|row| row.node_count),
+        Some(0)
+    );
+
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: old_origin,
+            action: Box::new(MaterialSurfaceAction::DeleteSelectedGraphSelection),
+        })
+        .is_err(),
+        "old selection must not be interpreted against the same asset's new source"
+    );
+    assert!(
+        app.material_lab_runtime()
+            .selected_graph_nodes()
+            .contains(&graph::NodeId::new(1))
+    );
+    assert!(!app.material_lab_runtime().can_undo());
+    assert_eq!(
+        std::fs::read(&original_path).expect("original source must remain"),
+        original_bytes
+    );
+    assert_eq!(
+        std::fs::read(root.join(replacement_path)).expect("replacement source must remain"),
+        replacement_bytes
+    );
+
+    let loaded = app
+        .load_material_graph_document_for_asset(asset)
+        .expect("new source identity should resolve");
+    app.material_lab_runtime_mut()
+        .set_active_source_document(asset, loaded);
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn selected_material_switch_cannot_delete_old_graph_selection_in_other_source() {
+    let root = unique_temp_dir("material_source_switch_rejects_retained_selection");
+    let first = asset_id(281);
+    let first_source = asset_source_id(282);
+    let second = asset_id(283);
+    let second_source = asset_source_id(284);
+    let mut app = material_edit_app(&root, first, first_source, command_test_document());
+
+    let second_path = "assets/materials/other.material.ron";
+    let descriptor =
+        AssetSourceDescriptor::new(second_source, second, AssetKind::MaterialGraph, second_path);
+    let mut second_document = command_test_document();
+    second_document.document_id = material_document_id_for_source(second, second_source);
+    write_material_graph_document(&root.join(second_path), &second_document)
+        .expect("second source must be available");
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_asset_record(
+            AssetRecord::new(second, "other", "Other Material", AssetKind::MaterialGraph)
+                .with_primary_source(second_source),
+        );
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_source(descriptor);
+
+    let first_bytes = std::fs::read(root.join("assets/materials/edit.material.ron"))
+        .expect("first source must exist");
+    let second_bytes = std::fs::read(root.join(second_path)).expect("second source must exist");
+
+    let first_origin = app
+        .material_source_origin_for_selected(None)
+        .expect("first source origin should form");
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        },
+    )
+    .expect("first source node selection must succeed");
+    app.apply_material_surface_action(MaterialSurfaceAction::SelectMaterialAsset {
+        asset_id: second,
+    })
+    .expect("switch to second material source must succeed");
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: first_origin,
+            action: Box::new(MaterialSurfaceAction::DeleteSelectedGraphSelection),
+        })
+        .is_err(),
+        "the earlier source must not retarget the new source, even with empty selection"
+    );
+    for action in [
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 11,
+            delta_y: -4,
+        },
+        MaterialSurfaceAction::ConnectPorts {
+            from_port_id: graph::PortId::new(1),
+            to_port_id: graph::PortId::new(2),
+        },
+        MaterialSurfaceAction::SetNodeValue {
+            node_id: graph::NodeId::new(1),
+            key: "roughness".to_string(),
+            value: "0.9".to_string(),
+        },
+        MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        },
+    ] {
+        assert!(
+            app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+                origin: first_origin,
+                action: Box::new(action),
+            })
+            .is_err(),
+            "old A-origin intent must not mutate the currently selected B"
+        );
+    }
+
+    assert_eq!(
+        std::fs::read(root.join(second_path)).expect("second source must remain"),
+        second_bytes
+    );
+    assert_eq!(
+        std::fs::read(root.join("assets/materials/edit.material.ron"))
+            .expect("first source must remain"),
+        first_bytes
+    );
+    assert!(!app.material_lab_runtime().can_undo());
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        },
+    )
+    .expect("explicit second source node selection must succeed");
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::DeleteSelectedGraphSelection,
+    )
+    .expect("explicit selected source deletion must commit");
+    assert!(
+        !app.load_material_graph_document_for_asset(second)
+            .expect("second edited source must decode")
+            .graph
+            .nodes
+            .iter()
+            .any(|node| node.id == graph::NodeId::new(1))
+    );
+    assert!(app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn wrong_material_document_identity_rejects_edit_and_write_without_mutating_source() {
+    let root = unique_temp_dir("material_identity_guard");
+    let selected = asset_id(291);
+    let source_id = asset_source_id(292);
+    let mut app = material_edit_app(&root, selected, source_id, command_test_document());
+    let path = root.join("assets/materials/edit.material.ron");
+
+    let mut wrong_document = command_test_document();
+    wrong_document.document_id = material_graph::MaterialGraphDocumentId::new(77);
+    assert_ne!(
+        wrong_document.document_id,
+        material_document_id_for_source(selected, source_id)
+    );
+    let valid_origin = app
+        .material_source_origin_for_selected(None)
+        .expect("valid source origin before external replacement");
+    write_material_graph_document(&path, &wrong_document)
+        .expect("mismatched test source should be written");
+    let wrong_bytes = std::fs::read(&path).expect("mismatched source must exist");
+
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: valid_origin,
+            action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 17,
+                delta_y: 1,
+            }),
+        })
+        .is_err()
+    );
+    assert!(!app.material_lab_runtime().can_undo());
+    assert_eq!(
+        std::fs::read(&path).expect("source must remain"),
+        wrong_bytes
+    );
+    assert!(
+        app.write_material_graph_document_for_asset(selected, &wrong_document)
+            .is_err(),
+        "a caller must not publish a different source document id"
+    );
+
+    let mut correctly_identified = wrong_document;
+    correctly_identified.document_id = material_document_id_for_source(selected, source_id);
+    assert!(
+        app.write_material_graph_document_for_asset(selected, &correctly_identified)
+            .is_err(),
+        "a valid candidate must not overwrite a mismatched existing source"
+    );
+    assert_eq!(
+        std::fs::read(&path).expect("source must remain"),
+        wrong_bytes
+    );
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn published_material_origin_is_a_cached_owner_observation_not_frame_time_file_io() {
+    let root = unique_temp_dir("material_owner_snapshot_no_frame_io");
+    let asset = asset_id(400);
+    let source = asset_source_id(401);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+
+    // Explicit source selection publishes a snapshot once.
+    app.select_material_asset(asset);
+    let published = app
+        .material_published_source_origin_for_selected(None)
+        .expect("source observation must be published after selection");
+    assert_eq!(
+        published,
+        app.material_source_origin_for_selected(None)
+            .expect("initial live source should match published observation")
+    );
+    let path = root.join("assets/materials/edit.material.ron");
+    let absent = root.join("assets/materials/temporarily-absent.material.ron");
+    std::fs::rename(&path, &absent).expect("isolate source after owner observation");
+
+    // Frame formation can still transport the last observed source revision
+    // without accessing the unavailable path. Admission rechecks the live file.
+    assert_eq!(
+        app.material_published_source_origin_for_selected(None)
+            .expect("published source observation must remain readable"),
+        published
+    );
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: published,
+            action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 4,
+                delta_y: 1,
+            }),
+        })
+        .is_err(),
+        "an observed origin does not authorize editing an unavailable source"
+    );
+    assert!(!app.material_lab_runtime().can_undo());
+
+    std::fs::rename(absent, path).expect("restore isolated source");
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn failed_selected_source_reload_hides_old_document_and_origin_until_restored() {
+    let root = unique_temp_dir("material_owner_failed_selected_reload");
+    let asset = asset_id(411);
+    let source = asset_source_id(412);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    app.select_material_asset(asset);
+    let previous = app
+        .material_published_source_origin_for_selected(None)
+        .expect("initial published source origin");
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        },
+    )
+    .expect("original selection should succeed");
+
+    let path = root.join("assets/materials/edit.material.ron");
+    let absent = root.join("assets/materials/absent.material.ron");
+    std::fs::rename(&path, &absent).expect("isolate original source file");
+
+    app.select_material_asset(asset);
+    assert!(
+        app.material_published_source_origin_for_selected(None)
+            .is_err(),
+        "failed explicit reload must invalidate the previous source origin"
+    );
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+    let hidden = app
+        .material_lab_runtime()
+        .graph_canvas_view_model(app.asset_catalog_runtime().catalog(), Vec::new());
+    assert!(hidden.graph.nodes.is_empty());
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: previous,
+            action: Box::new(MaterialSurfaceAction::DeleteSelectedGraphSelection),
+        })
+        .is_err(),
+        "a failed reload cannot authorize a prior source interaction"
+    );
+
+    std::fs::rename(&absent, &path).expect("restore source");
+    app.select_material_asset(asset);
+    assert!(
+        app.material_published_source_origin_for_selected(None)
+            .is_ok(),
+        "explicit successful reload republishes origin"
+    );
+    let restored = app
+        .material_lab_runtime()
+        .graph_canvas_view_model(app.asset_catalog_runtime().catalog(), Vec::new());
+    assert_eq!(restored.graph.nodes.len(), 2);
+
+    // Removing the catalog binding must not transform previously persisted
+    // content into an apparently current source-less in-memory fixture.
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .sources
+        .remove(&source);
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_asset_record(AssetRecord::new(
+            asset,
+            "unbound",
+            "Unbound",
+            AssetKind::MaterialGraph,
+        ));
+    app.select_material_asset(asset);
+    assert!(
+        app.material_published_source_origin_for_selected(None)
+            .is_err()
+    );
+    let unbound = app
+        .material_lab_runtime()
+        .graph_canvas_view_model(app.asset_catalog_runtime().catalog(), Vec::new());
+    assert!(unbound.graph.nodes.is_empty());
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn material_source_origin_does_not_retarget_an_identical_file_in_another_project_session() {
+    let first_root = unique_temp_dir("material_origin_project_first");
+    let second_root = unique_temp_dir("material_origin_project_second");
+    let asset = asset_id(420);
+    let source = asset_source_id(421);
+    let relative = "assets/materials/edit.material.ron";
+    let mut app = material_edit_app(&first_root, asset, source, command_test_document());
+    app.save_asset_project_catalog()
+        .expect("first project's catalog save must be attempted");
+    assert!(
+        first_root.join("assets/catalog.ron").is_file(),
+        "first project's catalog must be accepted on disk before switching"
+    );
+    app.select_material_asset(asset);
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 6,
+            delta_y: -2,
+        },
+    )
+    .expect("first project has an independently persisted edit");
+    assert!(app.material_lab_runtime().can_undo());
+    let old_origin = app
+        .material_published_source_origin_for_selected(None)
+        .expect("first project origin");
+    let first_source = first_root.join(relative);
+    let first_bytes = std::fs::read(&first_source).expect("first source bytes");
+    let second_source = second_root.join(relative);
+    std::fs::create_dir_all(second_source.parent().expect("source parent"))
+        .expect("second source directory");
+    std::fs::write(&second_source, &first_bytes).expect("identical B source bytes");
+
+    let second_session = crate::asset_pipeline::EditorAssetProjectSession::from_project_file(
+        &second_root,
+        &material_project_with_recipe("render", "render_material"),
+    )
+    .expect("second project session");
+    app.set_asset_project_session(second_session)
+        .expect("clean first project may switch to second project");
+    assert!(!app.material_lab_runtime().can_undo());
+    assert!(
+        app.asset_catalog_runtime().catalog().asset(asset).is_none(),
+        "new project must not inherit the old project's catalog"
+    );
+    let mut second_catalog = AssetCatalog::new();
+    second_catalog.insert_asset_record(
+        AssetRecord::new(asset, "edit-b", "Edit B", AssetKind::MaterialGraph)
+            .with_primary_source(source),
+    );
+    second_catalog.insert_source(
+        AssetSourceDescriptor::new(source, asset, AssetKind::MaterialGraph, relative)
+            .with_hash(SourceHash::new("sha256", "edit-b")),
+    );
+    app.asset_catalog_runtime_mut()
+        .replace_catalog(second_catalog);
+    app.select_material_asset(asset);
+    let new_origin = app
+        .material_published_source_origin_for_selected(None)
+        .expect("second project origin");
+    assert_eq!(new_origin.asset_id, old_origin.asset_id);
+    assert_eq!(new_origin.source_id, old_origin.source_id);
+    assert_eq!(new_origin.document_id, old_origin.document_id);
+    assert_eq!(new_origin.content_digest, old_origin.content_digest);
+    assert_ne!(
+        new_origin.source_context_digest,
+        old_origin.source_context_digest
+    );
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: old_origin,
+            action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 100,
+                delta_y: 10,
+            }),
+        })
+        .is_err(),
+        "previous project intent must not mutate identical owner-local IDs in B"
+    );
+    assert_eq!(
+        std::fs::read(&second_source).expect("B unchanged"),
+        first_bytes
+    );
+    assert_eq!(
+        std::fs::read(&first_source).expect("A unchanged"),
+        first_bytes
+    );
+    assert!(!app.material_lab_runtime().can_undo());
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin: new_origin,
+        action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 4,
+            delta_y: 1,
+        }),
+    })
+    .expect("explicit B-origin action still works");
+    assert_ne!(
+        std::fs::read(&second_source).expect("B edited"),
+        first_bytes
+    );
+    assert_eq!(
+        std::fs::read(&first_source).expect("A remains"),
+        first_bytes
+    );
+
+    let before_reopen = app
+        .material_published_source_origin_for_selected(None)
+        .expect("B origin before reopening project");
+    let reloaded_session = crate::asset_pipeline::EditorAssetProjectSession::from_project_file(
+        &second_root,
+        &material_project_with_recipe("render", "render_material"),
+    )
+    .expect("reopened B session");
+    app.set_asset_project_session(reloaded_session)
+        .expect("same-project session may be reopened");
+    app.select_material_asset(asset);
+    let reopened_origin = app
+        .material_published_source_origin_for_selected(None)
+        .expect("new origin even when project root remains identical");
+    assert_eq!(before_reopen.content_digest, reopened_origin.content_digest);
+    assert_ne!(
+        before_reopen.source_context_digest,
+        reopened_origin.source_context_digest
+    );
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: before_reopen,
+            action: Box::new(MaterialSurfaceAction::SelectGraphNode {
+                node_id: graph::NodeId::new(1),
+            }),
+        })
+        .is_err(),
+        "reopening the same project invalidates old invocation context"
+    );
+
+    let _ = std::fs::remove_dir_all(first_root);
+    let _ = std::fs::remove_dir_all(second_root);
+}
+
+#[test]
+fn material_source_origin_rejects_same_ids_and_bytes_after_catalog_locator_rebind() {
+    let root = unique_temp_dir("material_origin_locator_rebind");
+    let asset = asset_id(425);
+    let source = asset_source_id(426);
+    let original_relative = "assets/materials/edit.material.ron";
+    let new_relative = "assets/materials/relocated.material.ron";
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    app.select_material_asset(asset);
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 3,
+            delta_y: 1,
+        },
+    )
+    .expect("original source edit creates history");
+    let old_origin = app
+        .material_published_source_origin_for_selected(None)
+        .expect("original observed locator");
+    let original_path = root.join(original_relative);
+    let relocated_path = root.join(new_relative);
+    let original_bytes = std::fs::read(&original_path).expect("original bytes");
+    std::fs::write(&relocated_path, &original_bytes).expect("same bytes at new locator");
+
+    app.asset_catalog_runtime_mut().catalog_mut().insert_source(
+        AssetSourceDescriptor::new(source, asset, AssetKind::MaterialGraph, new_relative)
+            .with_hash(SourceHash::new("sha256", "edit")),
+    );
+    assert!(
+        app.material_published_source_origin_for_selected(None)
+            .is_err(),
+        "a new catalog locator must not inherit the prior file observation"
+    );
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: old_origin,
+            action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 44,
+                delta_y: 0,
+            }),
+        })
+        .is_err(),
+        "old source origin must not write the equally encoded relocated source"
+    );
+    assert_eq!(
+        std::fs::read(&relocated_path).expect("relocated unchanged"),
+        original_bytes
+    );
+
+    app.select_material_asset(asset);
+    let current_origin = app
+        .material_published_source_origin_for_selected(None)
+        .expect("explicit reload should qualify the new locator");
+    assert_eq!(current_origin.content_digest, old_origin.content_digest);
+    assert_ne!(
+        current_origin.source_context_digest,
+        old_origin.source_context_digest
+    );
+    assert!(
+        !app.material_lab_runtime().can_undo(),
+        "old source history cannot apply to another locator with reused IDs"
+    );
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin: current_origin,
+        action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 2,
+            delta_y: 3,
+        }),
+    })
+    .expect("new source locator accepts a freshly qualified edit");
+    assert_eq!(
+        std::fs::read(&original_path).expect("old source unchanged"),
+        original_bytes
+    );
+    assert_ne!(
+        std::fs::read(&relocated_path).expect("new source edited"),
+        original_bytes
+    );
+
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn material_source_observation_reload_invalidates_equal_document_id_old_selection() {
+    let root = unique_temp_dir("material_owner_source_revision_reload");
+    let asset = asset_id(405);
+    let source = asset_source_id(406);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    app.select_material_asset(asset);
+    let original = app
+        .material_published_source_origin_for_selected(None)
+        .expect("source observation should exist");
+
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin: original,
+        action: Box::new(MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        }),
+    })
+    .expect("initial graph selection should succeed");
+    assert!(!app.material_lab_runtime().selected_graph_nodes().is_empty());
+
+    let path = root.join("assets/materials/edit.material.ron");
+    let mut bytes = std::fs::read(&path).expect("source bytes before external revision");
+    bytes.extend_from_slice(b"\n  ");
+    std::fs::write(&path, &bytes).expect("simulate external same-document byte update");
+    app.select_material_asset(asset);
+    let updated = app
+        .material_published_source_origin_for_selected(None)
+        .expect("source observation should refresh");
+    assert_eq!(original.document_id, updated.document_id);
+    assert_ne!(original.content_digest, updated.content_digest);
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: original,
+            action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 6,
+                delta_y: 1,
+            }),
+        })
+        .is_err(),
+        "old exact-byte origin must still reject after reload"
+    );
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+    assert!(!app.material_lab_runtime().can_undo());
+
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin: updated,
+        action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 6,
+            delta_y: 1,
+        }),
+    })
+    .expect("new source observation should authorize a live edit");
+    assert!(app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn material_history_from_old_asset_cannot_undo_through_new_asset_binding() {
+    let root = unique_temp_dir("material_history_wrong_source");
+    let first = asset_id(390);
+    let first_source = asset_source_id(391);
+    let second = asset_id(392);
+    let second_source = asset_source_id(393);
+    let mut app = material_edit_app(&root, first, first_source, command_test_document());
+
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 10,
+            delta_y: 2,
+        },
+    )
+    .expect("first asset edit should be recorded");
+    assert!(app.material_lab_runtime().can_undo());
+    let original_a = std::fs::read(root.join("assets/materials/edit.material.ron"))
+        .expect("edited first material bytes");
+
+    let second_path = "assets/materials/second-history.material.ron";
+    let mut second_document = command_test_document();
+    second_document.document_id = material_document_id_for_source(second, second_source);
+    write_material_graph_document(&root.join(second_path), &second_document)
+        .expect("second source should write");
+    let original_b = std::fs::read(root.join(second_path)).expect("second source bytes");
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_asset_record(
+            AssetRecord::new(second, "history-b", "History B", AssetKind::MaterialGraph)
+                .with_primary_source(second_source),
+        );
+    app.asset_catalog_runtime_mut()
+        .catalog_mut()
+        .insert_source(AssetSourceDescriptor::new(
+            second_source,
+            second,
+            AssetKind::MaterialGraph,
+            second_path,
+        ));
+    app.select_material_asset(second);
+    let bound_b = app
+        .material_source_origin_for_selected(None)
+        .expect("second source origin should form");
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: bound_b,
+            action: Box::new(MaterialSurfaceAction::UndoMaterialEdit),
+        })
+        .is_err(),
+        "a B-origin Undo must not pop or write the latest A history entry"
+    );
+    assert_eq!(
+        std::fs::read(root.join("assets/materials/edit.material.ron"))
+            .expect("first source remains"),
+        original_a
+    );
+    assert_eq!(
+        std::fs::read(root.join(second_path)).expect("second source remains"),
+        original_b
+    );
+    assert!(app.material_lab_runtime().can_undo());
+
+    app.select_material_asset(first);
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit)
+        .expect("original source can undo its own history entry");
+    assert!(!app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn material_source_revision_rejects_external_same_document_byte_change() {
+    let root = unique_temp_dir("material_source_revision");
+    let asset = asset_id(380);
+    let source = asset_source_id(381);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    let origin = app
+        .material_source_origin_for_selected(None)
+        .expect("source origin before external change");
+    let path = root.join("assets/materials/edit.material.ron");
+    let old_bytes = std::fs::read(&path).expect("original source bytes");
+    let mut external_bytes = old_bytes.clone();
+    external_bytes.extend_from_slice(b"\n  ");
+    std::fs::write(&path, &external_bytes).expect("external whitespace change");
+    assert_eq!(
+        app.load_material_graph_document_for_asset(asset)
+            .expect("external whitespace should not change the document")
+            .document_id,
+        origin.document_id
+    );
+
+    for action in [
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 20,
+            delta_y: 3,
+        },
+        MaterialSurfaceAction::SelectGraphNode {
+            node_id: graph::NodeId::new(1),
+        },
+    ] {
+        assert!(
+            app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+                origin,
+                action: Box::new(action),
+            })
+            .is_err(),
+            "same document identity is not enough when the observed bytes change"
+        );
+    }
+    assert_eq!(std::fs::read(&path).expect("source bytes"), external_bytes);
+    assert!(!app.material_lab_runtime().can_undo());
+    assert!(app.material_lab_runtime().selected_graph_nodes().is_empty());
+
+    // A new, explicit origin for the now-current source is admissible.
+    let refreshed = app
+        .material_source_origin_for_selected(None)
+        .expect("fresh source origin after external change");
+    assert_ne!(refreshed.content_digest, origin.content_digest);
+    app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+        origin: refreshed,
+        action: Box::new(MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 5,
+            delta_y: 1,
+        }),
+    })
+    .expect("a new exact-source invocation should succeed");
+    assert!(app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn material_history_refuses_external_changes_after_a_fresh_source_reload() {
+    let root = unique_temp_dir("material_history_external_revision");
+    let asset = asset_id(7721);
+    let source = asset_source_id(7722);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    let file = root.join("assets/materials/edit.material.ron");
+
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 2,
+            delta_y: 3,
+        },
+    )
+    .expect("initial authored edit should commit");
+    assert_eq!(app.material_lab_runtime().history_depths(), (1, 0));
+
+    // Same asset/document ID, but external source revision differs. A fresh
+    // source selection can observe the external edit, not adopt old history.
+    let mut externally_changed =
+        read_material_graph_document(&file).expect("current material document");
+    externally_changed.label = "External Author Change".to_string();
+    write_material_graph_document(&file, &externally_changed)
+        .expect("external writer updates the same document");
+    let external_bytes = std::fs::read(&file).expect("external source bytes");
+    app.select_material_asset(asset);
+    let current_origin = app
+        .material_source_origin_for_selected(None)
+        .expect("fresh origin can observe the external version");
+
+    assert!(
+        app.apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+            origin: current_origin,
+            action: Box::new(MaterialSurfaceAction::UndoMaterialEdit),
+        })
+        .is_err(),
+        "old Undo must not overwrite a newer external revision"
+    );
+    assert_eq!(app.material_lab_runtime().history_depths(), (1, 0));
+    assert_eq!(
+        std::fs::read(&file).expect("external content survives"),
+        external_bytes
+    );
+
+    // After an undo and subsequent external write, stale Redo must similarly
+    // be denied rather than replayed into the externally changed document.
+    let root2 = unique_temp_dir("material_redo_external_revision");
+    let mut redo_app = material_edit_app(&root2, asset, source, command_test_document());
+    let redo_file = root2.join("assets/materials/edit.material.ron");
+    apply_bound_material_action(
+        &mut redo_app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 5,
+            delta_y: 1,
+        },
+    )
+    .expect("source edit for redo fixture");
+    apply_bound_material_action(&mut redo_app, MaterialSurfaceAction::UndoMaterialEdit)
+        .expect("undo creates a redo entry");
+    assert_eq!(redo_app.material_lab_runtime().history_depths(), (0, 1));
+
+    let mut external_redo =
+        read_material_graph_document(&redo_file).expect("undone material source");
+    external_redo.label = "External After Undo".to_string();
+    write_material_graph_document(&redo_file, &external_redo).expect("external update after undo");
+    let redo_external_bytes = std::fs::read(&redo_file).expect("external redo bytes");
+    redo_app.select_material_asset(asset);
+    let redo_origin = redo_app
+        .material_source_origin_for_selected(None)
+        .expect("new current source origin after external edit");
+    assert!(
+        redo_app
+            .apply_material_surface_action(MaterialSurfaceAction::SourceBound {
+                origin: redo_origin,
+                action: Box::new(MaterialSurfaceAction::RedoMaterialEdit),
+            })
+            .is_err(),
+        "old Redo must not overwrite externally authored data"
+    );
+    assert_eq!(redo_app.material_lab_runtime().history_depths(), (0, 1));
+    assert_eq!(
+        std::fs::read(&redo_file).expect("external redo survives"),
+        redo_external_bytes
+    );
+    let _ = std::fs::remove_dir_all(root);
+    let _ = std::fs::remove_dir_all(root2);
+}
+
+#[test]
+fn material_three_step_undo_redo_preserves_each_revision_and_remaining_redo() {
+    let root = unique_temp_dir("material_history_three_redos");
+    let asset = asset_id(7701);
+    let source = asset_source_id(7702);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    let file = root.join("assets/materials/edit.material.ron");
+    let mut versions = vec![std::fs::read(&file).expect("initial material bytes")];
+
+    for (index, (dx, dy)) in [(3, 1), (5, -2), (7, 4)].into_iter().enumerate() {
+        apply_bound_material_action(
+            &mut app,
+            MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: dx,
+                delta_y: dy,
+            },
+        )
+        .expect("source-backed edit should commit");
+        versions.push(std::fs::read(&file).expect("committed source bytes"));
+        assert_eq!(app.material_lab_runtime().history_depths(), (index + 1, 0));
+    }
+    assert_eq!(versions.len(), 4);
+    assert!(app.material_lab_runtime().can_undo());
+    assert!(!app.material_lab_runtime().can_redo());
+
+    for expected in (0..3).rev() {
+        apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit)
+            .expect("undo must preserve remaining undo steps");
+        assert_eq!(
+            std::fs::read(&file).expect("undo source bytes"),
+            versions[expected],
+            "undo must restore the exact prior committed source bytes"
+        );
+        assert_eq!(
+            app.material_lab_runtime().history_depths(),
+            (expected, 3 - expected)
+        );
+        assert!(app.material_lab_runtime().can_redo());
+    }
+    assert!(!app.material_lab_runtime().can_undo());
+
+    for (expected, bytes) in versions.iter().enumerate().skip(1) {
+        apply_bound_material_action(&mut app, MaterialSurfaceAction::RedoMaterialEdit)
+            .expect("redo must preserve the remaining redo steps");
+        let observed = std::fs::read(&file).expect("redo source bytes");
+        assert_eq!(
+            observed.as_slice(),
+            bytes.as_slice(),
+            "redo must restore the exact prior committed source bytes"
+        );
+        assert_eq!(
+            app.material_lab_runtime().history_depths(),
+            (expected, 3 - expected)
+        );
+        assert_eq!(
+            app.material_lab_runtime().can_redo(),
+            expected < 3,
+            "remaining redo entries cannot be cleared by a successful redo"
+        );
+    }
+    assert!(app.material_lab_runtime().can_undo());
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
+fn material_failed_post_admission_write_preserves_both_history_stacks_and_disk() {
+    let root = unique_temp_dir("material_history_writer_failure");
+    let asset = asset_id(7711);
+    let source = asset_source_id(7712);
+    let mut app = material_edit_app(&root, asset, source, command_test_document());
+    let file = root.join("assets/materials/edit.material.ron");
+    let original = std::fs::read(&file).expect("initial source bytes");
+
+    app.fail_next_material_source_write.set(true);
+    assert!(
+        apply_bound_material_action(
+            &mut app,
+            MaterialSurfaceAction::MoveGraphNode {
+                node_id: graph::NodeId::new(1),
+                delta_x: 4,
+                delta_y: 2,
+            },
+        )
+        .is_err(),
+        "injected write rejection happens only after source admission"
+    );
+    assert_eq!(std::fs::read(&file).expect("source bytes"), original);
+    assert!(!app.material_lab_runtime().can_undo());
+    assert!(!app.material_lab_runtime().can_redo());
+
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 4,
+            delta_y: 2,
+        },
+    )
+    .expect("valid edit after failed publication");
+    let edited = std::fs::read(&file).expect("edited source bytes");
+    app.fail_next_material_source_write.set(true);
+    assert!(
+        apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit).is_err()
+    );
+    assert_eq!(std::fs::read(&file).expect("failed undo source"), edited);
+    assert!(app.material_lab_runtime().can_undo());
+    assert!(!app.material_lab_runtime().can_redo());
+
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit)
+        .expect("undo retry should succeed");
+    assert_eq!(std::fs::read(&file).expect("undone source"), original);
+    app.fail_next_material_source_write.set(true);
+    assert!(
+        apply_bound_material_action(&mut app, MaterialSurfaceAction::RedoMaterialEdit).is_err()
+    );
+    assert_eq!(std::fs::read(&file).expect("failed redo source"), original);
+    assert!(app.material_lab_runtime().can_redo());
+    assert!(!app.material_lab_runtime().can_undo());
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::RedoMaterialEdit)
+        .expect("redo retry must still work");
+    assert_eq!(std::fs::read(&file).expect("restored redo source"), edited);
+    let _ = std::fs::remove_dir_all(root);
+}
+
+#[test]
 fn material_graph_node_drag_is_one_undo_transaction() {
     let root = unique_temp_dir("material_graph_node_drag_undo");
     let asset_id = asset_id(41);
     let source_id = asset_source_id(42);
     let mut app = material_edit_app(&root, asset_id, source_id, command_test_document());
 
-    app.apply_material_surface_action(MaterialSurfaceAction::MoveGraphNode {
-        node_id: graph::NodeId::new(1),
-        delta_x: 10,
-        delta_y: 4,
-    })
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::MoveGraphNode {
+            node_id: graph::NodeId::new(1),
+            delta_x: 10,
+            delta_y: 4,
+        },
+    )
     .expect("drag commit should apply as one material edit");
 
     assert!(app.material_lab_runtime().can_undo());
-    app.apply_material_surface_action(MaterialSurfaceAction::UndoMaterialEdit)
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit)
         .expect("one undo should roll back the drag commit");
 
     let document = app
@@ -240,15 +1281,18 @@ fn material_graph_property_edit_groups_commit_correctly() {
     let source_id = asset_source_id(52);
     let mut app = material_edit_app(&root, asset_id, source_id, command_test_document());
 
-    app.apply_material_surface_action(MaterialSurfaceAction::SetNodeValue {
-        node_id: graph::NodeId::new(1),
-        key: "roughness".to_string(),
-        value: "0.25".to_string(),
-    })
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::SetNodeValue {
+            node_id: graph::NodeId::new(1),
+            key: "roughness".to_string(),
+            value: "0.25".to_string(),
+        },
+    )
     .expect("property commit should apply as one material edit");
 
     assert!(app.material_lab_runtime().can_undo());
-    app.apply_material_surface_action(MaterialSurfaceAction::UndoMaterialEdit)
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::UndoMaterialEdit)
         .expect("one undo should roll back the property commit");
 
     let document = app
@@ -283,11 +1327,14 @@ fn material_graph_texture_picker_selection_updates_source_ref() {
         TextureDimension::Texture2D,
     );
 
-    app.apply_material_surface_action(MaterialSurfaceAction::PickTextureResource {
-        node_id: graph::NodeId::new(1),
-        key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
-        stable_id: "rock.albedo".to_string(),
-    })
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::PickTextureResource {
+            node_id: graph::NodeId::new(1),
+            key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
+            stable_id: "rock.albedo".to_string(),
+        },
+    )
     .expect("catalog-backed texture picker selection should update source ref");
 
     let document = app
@@ -311,11 +1358,14 @@ fn material_graph_texture_picker_rejects_missing_texture_product() {
     let source_id = asset_source_id(67);
     let mut app = material_edit_app(&root, asset_id, source_id, texture_edit_command_document());
 
-    let result = app.apply_material_surface_action(MaterialSurfaceAction::PickTextureResource {
-        node_id: graph::NodeId::new(1),
-        key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
-        stable_id: "missing.albedo".to_string(),
-    });
+    let result = apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::PickTextureResource {
+            node_id: graph::NodeId::new(1),
+            key: material_graph::MATERIAL_GRAPH_VALUE_TEXTURE_REF.to_string(),
+            stable_id: "missing.albedo".to_string(),
+        },
+    );
 
     assert!(result.is_err());
     assert!(
@@ -559,13 +1609,16 @@ fn material_graph_node_picker_confirm_adds_highlighted_node_to_source() {
     let source_id = asset_source_id(69);
     let mut app = material_edit_app(&root, asset_id, source_id, command_test_document());
 
-    app.apply_material_surface_action(MaterialSurfaceAction::OpenNodePicker)
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::OpenNodePicker)
         .expect("node picker should open");
-    app.apply_material_surface_action(MaterialSurfaceAction::HighlightNodePickerNode {
-        descriptor_key: "pbr.base_color".to_string(),
-    })
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::HighlightNodePickerNode {
+            descriptor_key: "pbr.base_color".to_string(),
+        },
+    )
     .expect("catalog node should highlight");
-    app.apply_material_surface_action(MaterialSurfaceAction::ConfirmNodePickerSelection)
+    apply_bound_material_action(&mut app, MaterialSurfaceAction::ConfirmNodePickerSelection)
         .expect("highlighted catalog node should be added through source-backed workflow");
 
     let document = app
@@ -603,9 +1656,12 @@ fn material_graph_navigate_diagnostic_selects_and_centers_subject() {
         .with_subject("material_graph.port:2"),
     );
 
-    app.apply_material_surface_action(MaterialSurfaceAction::NavigateDiagnostic {
-        diagnostic_index: 0,
-    })
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::NavigateDiagnostic {
+            diagnostic_index: 0,
+        },
+    )
     .expect("diagnostic navigation should load and persist source viewport state");
 
     let document = app
@@ -623,6 +1679,19 @@ fn material_graph_navigate_diagnostic_selects_and_centers_subject() {
     );
     assert_eq!(document.editor_state.viewport.pan_x, 100);
     assert_eq!(document.editor_state.viewport.pan_y, 220);
+    let reobserved = app
+        .material_published_source_origin_for_selected(None)
+        .expect("successful diagnostic navigation must republish source identity");
+    assert_eq!(reobserved.document_id, document.document_id);
+    apply_bound_material_action(
+        &mut app,
+        MaterialSurfaceAction::SetGraphZoom { zoom_milli: 1250 },
+    )
+    .expect("next source-bound edit should work without a manual source reload");
+    let updated = app
+        .load_material_graph_document_for_asset(asset_id)
+        .expect("follow-up source graph should persist");
+    assert_eq!(updated.editor_state.viewport.zoom_milli, 1250);
     let _ = std::fs::remove_dir_all(root);
 }
 
@@ -1117,8 +2186,9 @@ fn material_edit_app(
     root: &std::path::Path,
     asset_id: AssetId,
     source_id: asset::AssetSourceId,
-    document: MaterialGraphDocument,
+    mut document: MaterialGraphDocument,
 ) -> RunenwerkEditorApp {
+    document.document_id = material_document_id_for_source(asset_id, source_id);
     let source = AssetSourceDescriptor::new(
         source_id,
         asset_id,
@@ -1141,7 +2211,8 @@ fn material_edit_app(
     catalog.insert_source(source);
 
     let mut app = RunenwerkEditorApp::new();
-    app.set_asset_project_session(session);
+    app.set_asset_project_session(session)
+        .expect("first project session must install");
     app.asset_catalog_runtime_mut().replace_catalog(catalog);
     app.material_lab_runtime_mut()
         .select_material_asset(Some(asset_id));
