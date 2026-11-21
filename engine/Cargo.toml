@@ -39,6 +39,7 @@ asset.workspace = true
 graph.workspace = true
 material_graph.workspace = true
 resource_ref.workspace = true
+state_machine.workspace = true
 product.workspace = true
 runen-net.workspace = true
 runen-spatial.workspace = true
