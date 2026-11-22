@@ -957,6 +957,8 @@ jobs:
           trace_file="${RUNNER_TEMP}/boids-native-g3-exclusive-phases.log"
           echo "G3 research source revision: $(git rev-parse HEAD)"
           echo "G3 research target: runen_gpu::graph"
+          echo "G3 accepted RunenGPU: 94b8588637eeb4c638f700b1ebb863b46243a743"
+          echo "G3 accepted RunenRender: 282e0aae6cf3343e028c8668cb712f2e829805b4"
           echo "G3 research profile: Cargo debug, no-image-readback, native Boids flocking, 120 submitted Presents"
           if ! xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
                cargo +stable run -p engine --example boids_render_flow --locked >"$trace_file" 2>&1; then
