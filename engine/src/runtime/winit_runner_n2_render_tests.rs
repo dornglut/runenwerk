@@ -5,14 +5,14 @@
 
 use super::*;
 use crate::app::{App, AppNativeHostExt, NativePrimaryClosePolicy};
+use crate::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::inspect::{
     RenderFrameHistoryState, RenderFrameObservationPolicyResource,
 };
 use crate::plugins::render::renderer::RenderGpuFrameTerminalDisposition;
 use crate::plugins::render::{
     AppRenderExt, Gfx, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
-    RenderFlow, RenderFlowId, RenderFrameProducerId, RenderSurfaceId,
-    RenderSurfaceRegistryResource,
+    RenderFlow, RenderFlowId, RenderFrameProducerId,
 };
 use crate::plugins::{RenderPlugin, default_plugins};
 use crate::runtime::system::SystemMobilityExt;
@@ -170,12 +170,13 @@ impl NativeSecondaryRenderProof {
 
                 // A real acquired primary image must make approved retirement
                 // defer, without consuming the lease or touching secondary.
-                let acquired_primary = self
-                    .runner
-                    .state
-                    .world
-                    .resource::<Gfx>()?
-                    .acquire_surface_image(RenderSurfaceId::primary())?;
+                let acquired_primary = {
+                    let gfx = self.runner.state.world.resource::<Gfx>()?;
+                    let (gpu, handle) = gfx
+                        .physical_surface_proof_handles(RenderSurfaceId::primary())
+                        .ok_or_else(|| anyhow!("real primary GPU surface handle missing"))?;
+                    gpu.acquire_surface_image(handle)?
+                };
                 self.runner
                     .state
                     .world
@@ -315,12 +316,13 @@ impl NativeSecondaryRenderProof {
                         }),
                     "actual secondary Present was not recorded on its Render surface"
                 );
-                let next = self
-                    .runner
-                    .state
-                    .world
-                    .resource::<Gfx>()?
-                    .acquire_surface_image(surface)?;
+                let next = {
+                    let gfx = self.runner.state.world.resource::<Gfx>()?;
+                    let (gpu, handle) = gfx
+                        .physical_surface_proof_handles(surface)
+                        .ok_or_else(|| anyhow!("surviving GPU surface handle missing"))?;
+                    gpu.acquire_surface_image(handle)?
+                };
                 next.abandon();
                 self.observed = true;
                 event_loop.exit();
