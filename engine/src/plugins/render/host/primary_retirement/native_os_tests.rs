@@ -138,6 +138,11 @@ fn physical_probe(event_loop: &ActiveEventLoop) -> Result<()> {
             == PrimaryRenderRetirementOutcome::Retired,
         "primary G7 conditional detach must retire only after released lease"
     );
+    ensure!(
+        try_retire_primary_render_surface(app.world_mut())?
+            == PrimaryRenderRetirementOutcome::AlreadyRetired,
+        "repeated primary Render retirement must be idempotent and cannot detach secondary"
+    );
     let gfx = app.world().resource::<Gfx>()?;
     ensure!(
         !gfx.has_surface(primary_surface) && gfx.has_surface(secondary_surface),
