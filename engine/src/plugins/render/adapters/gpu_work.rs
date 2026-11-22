@@ -1139,14 +1139,20 @@ fn compose_timing_graph_orders(
     };
 
     let mut graph_orders = Vec::new();
-    for &root in measured.iter().filter(|&&node| !measured_before.contains(&node)) {
+    for &root in measured
+        .iter()
+        .filter(|&&node| !measured_before.contains(&node))
+    {
         graph_orders.push(GpuGraphExplicitOrder::new(
             bracket.start(),
             authored_id(root),
             "renderer composed timing starts before measured dependency frontier",
         )?);
     }
-    for &sink in measured.iter().filter(|&&node| !measured_after.contains(&node)) {
+    for &sink in measured
+        .iter()
+        .filter(|&&node| !measured_after.contains(&node))
+    {
         graph_orders.push(GpuGraphExplicitOrder::new(
             authored_id(sink),
             bracket.end(),
@@ -1409,6 +1415,7 @@ impl DependencyPaths {
         reached
     }
 
+    #[cfg(test)]
     fn reachable_from(&self, start: GpuPreparedWorkNodeId) -> BTreeSet<GpuPreparedWorkNodeId> {
         let mut ready = vec![start];
         let mut visited = BTreeSet::new();
@@ -1428,7 +1435,22 @@ impl DependencyPaths {
     }
 
     fn path_exists(&self, start: GpuPreparedWorkNodeId, target: GpuPreparedWorkNodeId) -> bool {
-        self.reachable_from(start).contains(&target)
+        let mut ready = vec![start];
+        let mut visited = BTreeSet::new();
+        while let Some(node) = ready.pop() {
+            if !visited.insert(node) {
+                continue;
+            }
+            if let Some(successors) = self.outgoing.get(&node) {
+                for &after in successors {
+                    if after == target {
+                        return true;
+                    }
+                    ready.push(after);
+                }
+            }
+        }
+        false
     }
 }
 
@@ -1496,7 +1518,11 @@ mod tests {
         .expect("valid graph fragment");
         let prepared = GpuPreparedWorkGraph::prepare(label("dependency path fixture"), [fragment])
             .expect("fixture graph must prepare");
-        let ids = prepared.nodes().iter().map(|node| node.id()).collect::<Vec<_>>();
+        let ids = prepared
+            .nodes()
+            .iter()
+            .map(|node| node.id())
+            .collect::<Vec<_>>();
         assert_eq!(ids.len(), 12);
 
         // Reference implementation: visit every edge for every reached node.
@@ -1533,7 +1559,11 @@ mod tests {
                 for &to in ids {
                     let expected = reference_path_exists(reference, from, to);
                     assert_eq!(index.path_exists(from, to), expected, "path {from} -> {to}");
-                    assert_eq!(descendants.contains(&to), expected, "closure {from} -> {to}");
+                    assert_eq!(
+                        descendants.contains(&to),
+                        expected,
+                        "closure {from} -> {to}"
+                    );
                 }
             }
         }
@@ -1573,12 +1603,12 @@ mod tests {
         let predecessors = dag.has_preceding_source(&ids, &sources);
         let successors = dag.has_following_source(&ids, &sources);
         for &node in &ids {
-            let expected_before = sources.iter().any(|&source| {
-                source != node && reference_path_exists(&dag_edges, source, node)
-            });
-            let expected_after = sources.iter().any(|&source| {
-                source != node && reference_path_exists(&dag_edges, node, source)
-            });
+            let expected_before = sources
+                .iter()
+                .any(|&source| source != node && reference_path_exists(&dag_edges, source, node));
+            let expected_after = sources
+                .iter()
+                .any(|&source| source != node && reference_path_exists(&dag_edges, node, source));
             assert_eq!(predecessors.contains(&node), expected_before);
             assert_eq!(successors.contains(&node), expected_after);
         }
