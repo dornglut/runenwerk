@@ -231,6 +231,22 @@ jobs:
           grep -F "native_keep_alive_primary=pass physical_x11=true first_primary_retired=true secondary_survived=true resumed_without_recreation=true app_updates_after_retirement=true" "$log"
           rm -f "$log"
 
+      - name: Prove same-App secondary Vulkan RenderFlow after native primary close
+        env:
+          RUNENWERK_NATIVE_KEEP_ALIVE_RENDER_OS_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          if ! timeout 240s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib native_keep_alive_render_os_proof --locked -- --nocapture >"$log" 2>&1; then
+            cat "$log"
+            rm -f "$log"
+            exit 1
+          fi
+          cat "$log"
+          grep -F "native_keep_alive_render=pass physical_x11=true vulkan=true active_primary_lease_deferred=true primary_detached=true secondary_g5_present_completed=true secondary_reacquired=true" "$log"
+          rm -f "$log"
+
       - name: Prove physical X11 Native request-to-realization receipts
         env:
           RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE: '1'
