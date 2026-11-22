@@ -10,8 +10,9 @@ use crate::plugins::render::inspect::{
 };
 use crate::plugins::render::renderer::RenderGpuFrameTerminalDisposition;
 use crate::plugins::render::{
-    AppRenderExt, Gfx, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource, RenderFlow,
-    RenderFlowId, RenderFrameProducerId, RenderSurfaceId, RenderSurfaceRegistryResource,
+    AppRenderExt, Gfx, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
+    RenderFlow, RenderFlowId, RenderFrameProducerId, RenderSurfaceId,
+    RenderSurfaceRegistryResource,
 };
 use crate::plugins::{RenderPlugin, default_plugins};
 use crate::runtime::system::SystemMobilityExt;
@@ -228,7 +229,9 @@ impl NativeSecondaryRenderProof {
                     .world
                     .resource::<RenderSurfaceRegistryResource>()?;
                 ensure!(
-                    surfaces.surface_for_native_window(NativeWindowId::primary()).is_none()
+                    surfaces
+                        .surface_for_native_window(NativeWindowId::primary())
+                        .is_none()
                         && surfaces.surface_for_native_window(secondary) == Some(surface),
                     "primary G7 retirement damaged the secondary Render identity"
                 );
@@ -403,7 +406,10 @@ fn native_keep_alive_render_os_proof() -> Result<()> {
         published: Arc::clone(&published),
     });
     app.add_systems(Startup, request_render_secondary.on_invoker_thread());
-    app.add_systems(Update, publish_secondary_render_after_close.on_invoker_thread());
+    app.add_systems(
+        Update,
+        publish_secondary_render_after_close.on_invoker_thread(),
+    );
     app.admit_composition()?;
     app.prepare_lifecycle_for_execution()?;
     app.prepare_native_ui_host()?;
@@ -436,7 +442,10 @@ fn native_keep_alive_render_os_proof() -> Result<()> {
         return Err(error);
     }
     ensure!(proof.runner.fatal_error.is_none(), "Native Host failed");
-    ensure!(proof.observed, "same-App post-close secondary G5 Present was not proven");
+    ensure!(
+        proof.observed,
+        "same-App post-close secondary G5 Present was not proven"
+    );
     ensure!(
         proof.published.load(Ordering::SeqCst) == 1,
         "secondary producer did not publish exactly once after primary close"
