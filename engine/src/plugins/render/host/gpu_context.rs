@@ -251,6 +251,16 @@ impl RenderGpuContext {
         true
     }
 
+    /// Test-only direct physical identity, never an application-facing or
+    /// alternative Render/GPU ownership API.
+    #[cfg(test)]
+    pub(crate) fn physical_surface_for_test(
+        &self,
+        surface: RenderSurfaceId,
+    ) -> Option<GpuSurfaceHandle> {
+        self.surfaces.get(&surface).map(|state| state.surface)
+    }
+
     pub fn has_surface(&self, render_surface_id: RenderSurfaceId) -> bool {
         self.surfaces.contains_key(&render_surface_id)
     }

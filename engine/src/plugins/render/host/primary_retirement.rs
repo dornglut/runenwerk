@@ -274,6 +274,9 @@ fn commit_primary_registry_retirement(
     Ok(())
 }
 
+#[cfg(all(test, target_os = "linux"))]
+mod native_os_tests;
+
 #[cfg(test)]
 mod tests {
     use super::*;

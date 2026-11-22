@@ -1114,6 +1114,16 @@ impl Gfx {
     /// Source-owned G5 and retained-session evidence; independently checked
     /// before the G7 conditional detach barrier.
     #[allow(dead_code)]
+    #[cfg(test)]
+    pub(crate) fn physical_surface_proof_handles(
+        &self,
+        surface: crate::plugins::render::host::RenderSurfaceId,
+    ) -> Option<(&runen_gpu::GpuContext, runen_gpu::GpuSurfaceHandle)> {
+        self.ctx
+            .physical_surface_for_test(surface)
+            .map(|handle| (self.ctx.context(), handle))
+    }
+
     pub(crate) fn has_unsettled_retained_surface(
         &self,
         surface: crate::plugins::render::host::RenderSurfaceId,
