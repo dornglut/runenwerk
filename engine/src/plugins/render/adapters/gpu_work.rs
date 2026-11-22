@@ -1094,19 +1094,6 @@ fn compose_timing_graph_orders(
             .iter()
             .map(|dependency| (dependency.before(), dependency.after())),
     );
-    // Timing frontiers compare many pairs in the same immutable graph.
-    // Precompute reachability once per source instead of repeatedly scanning
-    // the entire dependency collection for each candidate pair.
-    let reachable_by_source = prepared_nodes
-        .iter()
-        .map(|(id, _)| (*id, dependency_paths.reachable_from(*id)))
-        .collect::<BTreeMap<_, _>>();
-    let path_exists = |from: GpuPreparedWorkNodeId, to: GpuPreparedWorkNodeId| {
-        reachable_by_source
-            .get(&from)
-            .is_some_and(|reachable| reachable.contains(&to))
-    };
-
     let measured = prepared_nodes
         .iter()
         .filter(|(_, node)| {
@@ -1128,25 +1115,18 @@ fn compose_timing_graph_orders(
         .map(|(prepared, _)| *prepared)
         .collect::<BTreeSet<_>>();
 
-    let is_root = |node: GpuPreparedWorkNodeId, set: &BTreeSet<GpuPreparedWorkNodeId>| {
-        !set.iter().copied().any(|candidate| {
-            candidate != node && path_exists(candidate, node)
-        })
-    };
-    let is_sink = |node: GpuPreparedWorkNodeId, set: &BTreeSet<GpuPreparedWorkNodeId>| {
-        !set.iter().copied().any(|candidate| {
-            candidate != node && path_exists(node, candidate)
-        })
-    };
+    // A prepared graph is already acyclic and topologically ordered by G3.
+    // Propagate source-set membership once in each direction, rather than
+    // checking all candidate pairs or materializing a quadratic closure.
+    let order = boundary_graph.topological_order();
+    let measured_before = dependency_paths.has_preceding_source(order, &measured);
+    let measured_after = dependency_paths.has_following_source(order, &measured);
+    let observation_before = dependency_paths.has_preceding_source(order, &observation);
 
-    if observation.iter().copied().any(|observation_node| {
-        measured.iter().copied().any(|measured_before| {
-            path_exists(measured_before, observation_node)
-                && measured.iter().copied().any(|measured_after| {
-                    path_exists(observation_node, measured_after)
-                })
-        })
-    }) {
+    if observation
+        .iter()
+        .any(|node| measured_before.contains(node) && measured_after.contains(node))
+    {
         return Err(RenderGpuWorkAdapterError::InterleavedTimingObservation);
     }
 
@@ -1159,14 +1139,14 @@ fn compose_timing_graph_orders(
     };
 
     let mut graph_orders = Vec::new();
-    for &root in measured.iter().filter(|&&node| is_root(node, &measured)) {
+    for &root in measured.iter().filter(|&&node| !measured_before.contains(&node)) {
         graph_orders.push(GpuGraphExplicitOrder::new(
             bracket.start(),
             authored_id(root),
             "renderer composed timing starts before measured dependency frontier",
         )?);
     }
-    for &sink in measured.iter().filter(|&&node| is_sink(node, &measured)) {
+    for &sink in measured.iter().filter(|&&node| !measured_after.contains(&node)) {
         graph_orders.push(GpuGraphExplicitOrder::new(
             authored_id(sink),
             bracket.end(),
@@ -1175,7 +1155,7 @@ fn compose_timing_graph_orders(
     }
     for &root in observation
         .iter()
-        .filter(|&&node| is_root(node, &observation))
+        .filter(|&&node| !observation_before.contains(&node))
     {
         graph_orders.push(GpuGraphExplicitOrder::new(
             bracket.end(),
@@ -1368,6 +1348,7 @@ fn normalize_control_orders(
 /// of resource hazard inference and the canonical accepted work order.
 struct DependencyPaths {
     outgoing: BTreeMap<GpuPreparedWorkNodeId, Vec<GpuPreparedWorkNodeId>>,
+    incoming: BTreeMap<GpuPreparedWorkNodeId, Vec<GpuPreparedWorkNodeId>>,
 }
 
 impl DependencyPaths {
@@ -1376,6 +1357,7 @@ impl DependencyPaths {
     ) -> Self {
         let mut paths = Self {
             outgoing: BTreeMap::new(),
+            incoming: BTreeMap::new(),
         };
         for (before, after) in edges {
             paths.insert(before, after);
@@ -1385,6 +1367,46 @@ impl DependencyPaths {
 
     fn insert(&mut self, before: GpuPreparedWorkNodeId, after: GpuPreparedWorkNodeId) {
         self.outgoing.entry(before).or_default().push(after);
+        self.incoming.entry(after).or_default().push(before);
+    }
+
+    // Returns nodes with a strict (one-or-more-edge) path from a source.
+    // The order is the accepted RunenGPU topological order, not a guessed
+    // renderer ordering. Storage is proportional to nodes and edges.
+    fn has_preceding_source(
+        &self,
+        order: &[GpuPreparedWorkNodeId],
+        sources: &BTreeSet<GpuPreparedWorkNodeId>,
+    ) -> BTreeSet<GpuPreparedWorkNodeId> {
+        let mut reached = BTreeSet::new();
+        for &node in order {
+            if self.incoming.get(&node).is_some_and(|predecessors| {
+                predecessors
+                    .iter()
+                    .any(|pred| sources.contains(pred) || reached.contains(pred))
+            }) {
+                reached.insert(node);
+            }
+        }
+        reached
+    }
+
+    fn has_following_source(
+        &self,
+        order: &[GpuPreparedWorkNodeId],
+        sources: &BTreeSet<GpuPreparedWorkNodeId>,
+    ) -> BTreeSet<GpuPreparedWorkNodeId> {
+        let mut reached = BTreeSet::new();
+        for &node in order.iter().rev() {
+            if self.outgoing.get(&node).is_some_and(|successors| {
+                successors
+                    .iter()
+                    .any(|next| sources.contains(next) || reached.contains(next))
+            }) {
+                reached.insert(node);
+            }
+        }
+        reached
     }
 
     fn reachable_from(&self, start: GpuPreparedWorkNodeId) -> BTreeSet<GpuPreparedWorkNodeId> {
@@ -1532,6 +1554,33 @@ mod tests {
             edges.insert((ids[from], ids[to]));
             indexed.insert(ids[from], ids[to]);
             assert_equivalent(&indexed, &edges, &ids);
+        }
+
+        // Frontiers require only a linear topological sweep, even for
+        // disconnected regions and source nodes reached by other sources.
+        let dag_edges = BTreeSet::from([
+            (ids[0], ids[1]),
+            (ids[1], ids[2]),
+            (ids[2], ids[3]),
+            (ids[0], ids[4]),
+            (ids[4], ids[5]),
+            (ids[6], ids[7]),
+            (ids[8], ids[9]),
+            (ids[9], ids[10]),
+        ]);
+        let dag = DependencyPaths::from_edges(dag_edges.iter().copied());
+        let sources = BTreeSet::from([ids[1], ids[5], ids[7], ids[10]]);
+        let predecessors = dag.has_preceding_source(&ids, &sources);
+        let successors = dag.has_following_source(&ids, &sources);
+        for &node in &ids {
+            let expected_before = sources.iter().any(|&source| {
+                source != node && reference_path_exists(&dag_edges, source, node)
+            });
+            let expected_after = sources.iter().any(|&source| {
+                source != node && reference_path_exists(&dag_edges, node, source)
+            });
+            assert_eq!(predecessors.contains(&node), expected_before);
+            assert_eq!(successors.contains(&node), expected_after);
         }
     }
 
