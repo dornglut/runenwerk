@@ -246,11 +246,17 @@ mod tests {
         assert!(lifetime.can_publish());
         lifetime.publish().unwrap();
         assert!(!lifetime.can_publish());
-        assert!(lifetime.publish().is_err(), "double realization must fail closed");
+        assert!(
+            lifetime.publish().is_err(),
+            "double realization must fail closed"
+        );
         lifetime.retire();
         assert_eq!(lifetime, NativeOriginalPrimaryLifetime::Retired);
         assert!(!lifetime.can_publish());
-        assert!(lifetime.publish().is_err(), "retired fixed ID cannot be recreated");
+        assert!(
+            lifetime.publish().is_err(),
+            "retired fixed ID cannot be recreated"
+        );
         lifetime.retire();
         assert_eq!(lifetime, NativeOriginalPrimaryLifetime::Retired);
     }
