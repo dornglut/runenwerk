@@ -209,11 +209,11 @@ impl ApplicationHandler<NativeHostEvent> for NativeKeepAliveProof {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         self.runner.about_to_wait(event_loop);
-        if !event_loop.exiting() {
-            if let Err(error) = self.inspect(event_loop) {
-                self.failure = Some(error);
-                event_loop.exit();
-            }
+        if !event_loop.exiting()
+            && let Err(error) = self.inspect(event_loop)
+        {
+            self.failure = Some(error);
+            event_loop.exit();
         }
     }
 
