@@ -472,7 +472,7 @@ impl NativeSecondaryUiProof {
                     self.slot,
                     epoch,
                     device,
-                    context.source,
+                    context,
                     point,
                 )?;
                 for state in [ElementState::Pressed, ElementState::Released] {
@@ -505,7 +505,8 @@ impl NativeSecondaryUiProof {
                     .state
                     .world
                     .resource::<UiRuntimeSlotsResource>()?
-                    .observe_app::<RetainedSecondaryUi, _>(self.slot, |app| *app.state())?;
+                    .observe_app::<RetainedSecondaryUi, _>(self.slot, |app| *app.state())
+                    .map_err(|error| anyhow!("selected secondary M13 observation failed: {error:?}"))?;
                 if activations == 0 {
                     let secondary = self
                         .secondary
