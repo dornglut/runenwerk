@@ -22,18 +22,17 @@ use crate::plugins::ui::{
     bind_native_input_recipient,
 };
 use crate::plugins::{RenderPlugin, UiPlugin, default_plugins};
-use runenui_core::{NoHostProtocol, ProducerBudget, StyleEnvironment, UiApp, View, button};
-use winit::dpi::PhysicalPosition;
 use crate::runtime::system::SystemMobilityExt;
 use crate::runtime::{Startup, Update, WorldMut};
 use anyhow::{Result, anyhow, ensure};
+use runenui_core::{NoHostProtocol, ProducerBudget, StyleEnvironment, UiApp, View, button};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
 };
 use std::time::{Duration, Instant};
+use winit::dpi::PhysicalPosition;
 use winit::platform::x11::EventLoopBuilderExtX11;
-
 
 struct RetainedSecondaryUi;
 
@@ -61,7 +60,10 @@ impl UiApp for RetainedSecondaryUi {
         button("retained secondary input").on_activate(|| ())
     }
 
-    fn update(state: &mut Self::State, _: ()) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
+    fn update(
+        state: &mut Self::State,
+        _: (),
+    ) -> impl runenui_core::IntoUpdateOutput<Self::Action, Self::HostProtocol> {
         *state += 1;
     }
 }
@@ -193,7 +195,8 @@ impl NativeSecondaryUiProof {
                     .resource_mut::<UiRuntimePresentationAssociationsResource>()?
                     .bind(UiRuntimePresentationBinding::new(
                         self.slot,
-                        RenderFrameProducerId::try_from_raw(1510).expect("N2-B0 UI producer identity"),
+                        RenderFrameProducerId::try_from_raw(1510)
+                            .expect("N2-B0 UI producer identity"),
                         secondary_surface,
                         StyleEnvironment::default(),
                     ))?;
@@ -389,7 +392,9 @@ impl NativeSecondaryUiProof {
                     self.runner.ordinary_frames > self.frames_at_close,
                     "terminal secondary flow did not follow a genuine post-close App Update"
                 );
-                let secondary = self.secondary.ok_or_else(|| anyhow!("missing secondary Native identity"))?;
+                let secondary = self
+                    .secondary
+                    .ok_or_else(|| anyhow!("missing secondary Native identity"))?;
                 let window = self
                     .runner
                     .window_realizer
@@ -410,12 +415,19 @@ impl NativeSecondaryUiProof {
                     .state
                     .world
                     .resource::<UiRuntimePresentationAssociationsResource>()?;
-                if associations.displayed_for_mapping(self.slot, mapping).is_none() {
+                if associations
+                    .displayed_for_mapping(self.slot, mapping)
+                    .is_none()
+                {
                     // A terminal flow completion without a terminal UI display
                     // receipt cannot grant input or pass this proof.
                     return Ok(());
                 }
-                let recipients = self.runner.state.world.resource::<UiNativeInputRecipientsResource>()?;
+                let recipients = self
+                    .runner
+                    .state
+                    .world
+                    .resource::<UiNativeInputRecipientsResource>()?;
                 ensure!(
                     recipients.binding_epoch_for_window(secondary).is_some(),
                     "secondary displayed UI lacks an exact live input binding epoch"
@@ -433,7 +445,10 @@ impl NativeSecondaryUiProof {
                 // actual secondary identity. These are admitted callbacks,
                 // not proof of OS-generated X11 pointer/IME ingress.
                 let device = winit::event::DeviceId::dummy();
-                let context = self.runner.native_input_mut().window_context(secondary, device)?;
+                let context = self
+                    .runner
+                    .native_input_mut()
+                    .window_context(secondary, device)?;
                 let (recipient, epoch) = self.runner.native_input_recipient(secondary)?;
                 ensure!(
                     recipient == NativeInputRecipient::RunenUiSlot(self.slot),
@@ -453,17 +468,31 @@ impl NativeSecondaryUiProof {
                     },
                 )?;
                 self.runner.route_ui_cursor_moved(
-                    secondary, self.slot, epoch, device, context.source, point,
+                    secondary,
+                    self.slot,
+                    epoch,
+                    device,
+                    context.source,
+                    point,
                 )?;
                 for state in [ElementState::Pressed, ElementState::Released] {
-                    let (input, disposition) =
-                        self.runner.admit_native_mouse_button(secondary, device, state, MouseButton::Left)?;
+                    let (input, disposition) = self.runner.admit_native_mouse_button(
+                        secondary,
+                        device,
+                        state,
+                        MouseButton::Left,
+                    )?;
                     ensure!(
                         disposition == NativeMouseButtonDisposition::Original,
                         "secondary Winit callback was not admitted as its original native input"
                     );
                     self.runner.route_ui_mouse_button(
-                        secondary, self.slot, epoch, input, state, MouseButton::Left,
+                        secondary,
+                        self.slot,
+                        epoch,
+                        input,
+                        state,
+                        MouseButton::Left,
                     )?;
                 }
                 self.stage = 3;
@@ -478,7 +507,9 @@ impl NativeSecondaryUiProof {
                     .resource::<UiRuntimeSlotsResource>()?
                     .observe_app::<RetainedSecondaryUi, _>(self.slot, |app| *app.state())?;
                 if activations == 0 {
-                    let secondary = self.secondary.ok_or_else(|| anyhow!("secondary disappeared"))?;
+                    let secondary = self
+                        .secondary
+                        .ok_or_else(|| anyhow!("secondary disappeared"))?;
                     self.runner.request_redraw_for_native_window(secondary);
                     return Ok(());
                 }
@@ -547,11 +578,15 @@ fn native_keep_alive_ui_os_proof() -> Result<()> {
     app.add_plugins(default_plugins());
     app.add_plugin(RenderPlugin);
     app.add_plugin(UiPlugin);
-    let slot = app.ui().mount_app::<RetainedSecondaryUi>(
-        UiTypedScreenId::new("native.n2b.secondary.ui"),
-        0,
-        &UiRuntimeFontConfiguration::default(),
-    ).slot_id().ok_or_else(|| anyhow!("secondary typed RunenUI slot failed to mount"))?;
+    let slot = app
+        .ui()
+        .mount_app::<RetainedSecondaryUi>(
+            UiTypedScreenId::new("native.n2b.secondary.ui"),
+            0,
+            &UiRuntimeFontConfiguration::default(),
+        )
+        .slot_id()
+        .ok_or_else(|| anyhow!("secondary typed RunenUI slot failed to mount"))?;
 
     let flow = RenderFlow::new("native.n2b.postclose.secondary")
         .explicit_invocations_only()
