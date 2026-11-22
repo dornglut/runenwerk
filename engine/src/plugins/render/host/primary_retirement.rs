@@ -379,9 +379,9 @@ mod tests {
         );
         {
             let registry = app
-            .world()
-            .resource::<RenderSurfaceRegistryResource>()
-            .unwrap();
+                .world()
+                .resource::<RenderSurfaceRegistryResource>()
+                .unwrap();
             assert_eq!(
                 registry.surface_for_native_window(native_primary),
                 Some(render_primary)
