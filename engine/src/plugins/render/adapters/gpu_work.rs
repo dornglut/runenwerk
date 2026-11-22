@@ -874,12 +874,11 @@ fn prepare_resolved_render_gpu_work(
     )?;
     let provisional_fragments =
         compose_frame_fragments(producer_fragments, &provisional.fragment, timing_bracket);
-    let provisional_graph =
-        prepare_counted_graph(
-            graph_label.clone(),
-            provisional_fragments,
-            RenderGpuOrderRequest::Strict(Vec::new()),
-        )?;
+    let provisional_graph = prepare_counted_graph(
+        graph_label.clone(),
+        provisional_fragments,
+        RenderGpuOrderRequest::Strict(Vec::new()),
+    )?;
     let provisional_occurrences =
         map_prepared_occurrences(&provisional_graph, &provisional.occurrence_nodes)?;
     let required_explicit_orders = normalize_control_orders(
@@ -1680,8 +1679,16 @@ mod tests {
             },
         )
         .expect("final graph must prepare and admit the required control");
-        assert_eq!(strict_preparations.get(), 0, "no provisional graph is permitted");
-        assert_eq!(required_preparations.get(), 1, "exactly one complete G3 preparation");
+        assert_eq!(
+            strict_preparations.get(),
+            0,
+            "no provisional graph is permitted"
+        );
+        assert_eq!(
+            required_preparations.get(),
+            1,
+            "exactly one complete G3 preparation"
+        );
         assert_eq!(prepared.fragment_count, 2);
         assert_eq!(prepared.graph.nodes().len(), 2);
         assert_eq!(prepared.graph.topological_order().len(), 2);
@@ -1730,14 +1737,64 @@ mod tests {
         .expect("RunenGPU must recognize already satisfied typed causality");
         assert_eq!(prepared.graph.nodes().len(), 2);
         assert_eq!(prepared.graph.dependencies().len(), 1);
-        assert!(prepared.graph.dependencies()[0]
-            .reasons()
-            .iter()
-            .any(|reason| reason.resource().is_some()));
-        assert!(prepared.graph.dependencies()[0]
-            .reasons()
-            .iter()
-            .all(|reason| !matches!(reason, GpuDependencyReason::ExplicitNonData { .. })));
+        assert!(
+            prepared.graph.dependencies()[0]
+                .reasons()
+                .iter()
+                .any(|reason| reason.resource().is_some())
+        );
+        assert!(
+            prepared.graph.dependencies()[0]
+                .reasons()
+                .iter()
+                .all(|reason| !matches!(reason, GpuDependencyReason::ExplicitNonData { .. }))
+        );
+    }
+
+    #[test]
+    fn required_mixed_ui_control_enters_first_painter_and_leaves_last_painter() {
+        let mut allocation = GpuWorkResourceIdAllocator::new();
+        let mut authored_ids = Vec::new();
+        let _fragment = GpuWorkFragment::build("mixed UI control endpoints", |builder| {
+            for index in 0..4 {
+                let buffer = buffer(&mut allocation, &format!("ui slot {index}"), 16);
+                authored_ids.push(builder.operation(
+                    format!("mixed UI boundary node {index}"),
+                    GpuClearOperation::buffer_zero(whole_region(&buffer, 16)).unwrap(),
+                )?);
+            }
+            Ok(())
+        })
+        .unwrap();
+
+        let preceding = RenderGpuWorkOccurrenceId::new(11);
+        let mixed = RenderGpuWorkOccurrenceId::new(12);
+        let following = RenderGpuWorkOccurrenceId::new(13);
+        let occurrence_nodes = BTreeMap::from([
+            (preceding, authored_ids[0].clone()),
+            (mixed, authored_ids[2].clone()),
+            (following, authored_ids[3].clone()),
+        ]);
+        let requirements = required_render_control_orders(
+            &[(preceding, mixed), (mixed, following)],
+            &occurrence_nodes,
+            Some((mixed, &authored_ids[1])),
+        )
+        .unwrap();
+        assert_eq!(requirements.len(), 2);
+        assert_eq!(requirements[0].before(), &authored_ids[0]);
+        assert_eq!(requirements[0].after(), &authored_ids[1]);
+        assert_eq!(requirements[1].before(), &authored_ids[2]);
+        assert_eq!(requirements[1].after(), &authored_ids[3]);
+
+        assert!(matches!(
+            required_render_control_orders(
+                &[(RenderGpuWorkOccurrenceId::new(99), mixed)],
+                &occurrence_nodes,
+                Some((mixed, &authored_ids[1])),
+            ),
+            Err(RenderGpuWorkAdapterError::MissingOrderedOccurrence { .. })
+        ));
     }
 
     fn color_target_view(allocator: &mut GpuWorkResourceIdAllocator) -> GpuTextureViewHandle {

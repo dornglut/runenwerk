@@ -3274,7 +3274,7 @@ dependencies = [
 [[package]]
 name = "runen-render"
 version = "0.1.0"
-source = "git+https://github.com/dornglut/runen-render?rev=23cfdcf792a4e4a55bdbc383f08b79c4e99fcadc#23cfdcf792a4e4a55bdbc383f08b79c4e99fcadc"
+source = "git+https://github.com/dornglut/runen-render?rev=55c4f0a3f77427242e93c725b6f35fd668639a4c#55c4f0a3f77427242e93c725b6f35fd668639a4c"
 dependencies = [
  "bymsdfgen-core",
  "lyon_tessellation",
