@@ -217,6 +217,15 @@ pub(crate) fn try_retire_primary_render_surface(
         .expect("fresh synchronous preflight retains Gfx")
         .detach_surface_if_unleased(primary)
         .map_err(|err| PrimaryRenderRetirementError::PhysicalDetach(err.to_string()))?;
+    finish_primary_conditional_detach(world, detached)
+}
+
+/// Render registry effects of the exact conditional G7 result. A busy lease
+/// cannot change logical identities, even on repeated close attempts.
+fn finish_primary_conditional_detach(
+    world: &mut World,
+    detached: GpuSurfaceConditionalDetachOutcome,
+) -> Result<PrimaryRenderRetirementOutcome, PrimaryRenderRetirementError> {
     match detached {
         GpuSurfaceConditionalDetachOutcome::ActiveLease => {
             Ok(PrimaryRenderRetirementOutcome::Deferred(
@@ -334,7 +343,31 @@ mod tests {
             .unwrap()
             .confirm_surface_attachment(secondary, native_secondary, (480, 320))
             .unwrap();
-        commit_primary_registry_retirement(app.world_mut()).unwrap();
+        assert_eq!(
+            finish_primary_conditional_detach(
+                app.world_mut(),
+                GpuSurfaceConditionalDetachOutcome::ActiveLease,
+            ),
+            Ok(PrimaryRenderRetirementOutcome::Deferred(
+                PrimaryRenderRetirementDeferral::ActiveSurfaceLease,
+            ))
+        );
+        {
+            let registry = app.world().resource::<RenderSurfaceRegistryResource>().unwrap();
+            assert_eq!(registry.surface_for_native_window(native_primary), Some(render_primary));
+            assert_eq!(registry.surface_for_native_window(native_secondary), Some(secondary));
+            assert_eq!(
+                registry.record(render_primary).unwrap().lifecycle_state,
+                RenderSurfaceLifecycleState::Attached
+            );
+        }
+        assert_eq!(
+            finish_primary_conditional_detach(
+                app.world_mut(),
+                GpuSurfaceConditionalDetachOutcome::Detached,
+            ),
+            Ok(PrimaryRenderRetirementOutcome::Retired)
+        );
         let registry = app.world().resource::<RenderSurfaceRegistryResource>().unwrap();
         assert_eq!(registry.surface_for_native_window(native_primary), None);
         assert_eq!(registry.primary_surface_id(), None);
