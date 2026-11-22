@@ -34,6 +34,12 @@ pub enum NativePrimaryClosePolicy {
 #[derive(Debug, Clone, Copy, runen_ecs::Resource)]
 pub(crate) struct NativeQuitOnLastWindowClose;
 
+/// Explicit lifetime selection: Native Host remains admitted when the
+/// original physical primary is safely retired (including zero windows).
+/// It does not approve a close intent, select a UI target, or bypass G5/G7.
+#[derive(Debug, Clone, Copy, runen_ecs::Resource)]
+pub(crate) struct NativeKeepAlive;
+
 fn approve_unhandled_primary_close_intent(mut windows: ResMut<WindowStateRegistryResource>) {
     if let Some(primary) = windows.primary_window_id()
         && let Some(record) = windows.record_mut(primary)
@@ -113,6 +119,30 @@ impl AppNativeHostExt for App {
 }
 
 impl App {
+    /// Keep the selected Native App running after an explicitly approved,
+    /// fully owner-settled original-primary close, including zero windows.
+    ///
+    /// Legacy App::new() without this selection keeps its accepted
+    /// primary-close-means-shutdown behavior. A live UI binding and G5/G7
+    /// ownership still must retire through their independent owners.
+    pub fn keep_alive(&mut self) -> Result<&mut Self> {
+        ensure!(
+            self.allow_topology_mutation("keep_alive", None),
+            "native App lifetime must be selected during App configuration"
+        );
+        if !self.is_native_window_host() {
+            self.record_missing_capability("keep_alive", "native-window Host");
+            return Err(anyhow!("keep_alive requires a Native-window Host"));
+        }
+        ensure!(
+            !self.world.has_resource::<NativeKeepAlive>()
+                && !self.world.has_resource::<NativeQuitOnLastWindowClose>(),
+            "Native App lifetime is already selected or conflicts with quit-on-last"
+        );
+        self.world.insert_resource(NativeKeepAlive);
+        Ok(self)
+    }
+
     /// Request shutdown after the final successfully retired native window.
     ///
     /// This first bounded delivery supports the explicitly selected
@@ -136,8 +166,9 @@ impl App {
             "quit_on_last_window_close currently requires enable_windowing() with zero initial windows"
         );
         ensure!(
-            !self.world.has_resource::<NativeQuitOnLastWindowClose>(),
-            "quit_on_last_window_close was already selected"
+            !self.world.has_resource::<NativeQuitOnLastWindowClose>()
+                && !self.world.has_resource::<NativeKeepAlive>(),
+            "quit-on-last conflicts with an existing Native App lifetime selection"
         );
         self.world.insert_resource(NativeQuitOnLastWindowClose);
         Ok(self)
@@ -729,4 +760,33 @@ mod tests {
         assert!(!late.world().has_resource::<NativePrimaryClosePolicy>());
         assert!(late.admit_composition().is_err());
     }
+    #[test]
+    fn keep_alive_requires_a_native_host_and_is_a_single_explicit_selection() {
+        let mut app = App::new();
+        assert!(!app.world().has_resource::<NativeKeepAlive>());
+        app.keep_alive().unwrap();
+        assert!(app.world().has_resource::<NativeKeepAlive>());
+        assert!(app.keep_alive().is_err());
+        assert!(app.quit_on_last_window_close().is_err());
+
+        let mut headless = App::headless();
+        assert!(headless.keep_alive().is_err());
+        assert!(!headless.world().has_resource::<NativeKeepAlive>());
+
+        let mut late = App::new();
+        late.prepare_lifecycle_for_execution().unwrap();
+        assert!(late.keep_alive().is_err());
+        assert!(!late.world().has_resource::<NativeKeepAlive>());
+    }
+
+    #[test]
+    fn keep_alive_and_explicit_quit_after_last_are_mutually_exclusive() {
+        let mut app = App::new();
+        app.enable_windowing().unwrap();
+        app.quit_on_last_window_close().unwrap();
+        assert!(app.keep_alive().is_err());
+        assert!(!app.world().has_resource::<NativeKeepAlive>());
+        assert!(app.world().has_resource::<NativeQuitOnLastWindowClose>());
+    }
+
 }

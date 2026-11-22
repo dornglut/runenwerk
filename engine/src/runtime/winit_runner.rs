@@ -1,4 +1,6 @@
-use crate::app::{NativeInitialWindow, NativeQuitOnLastWindowClose, WindowedAppState};
+use crate::app::{
+    NativeInitialWindow, NativeKeepAlive, NativeQuitOnLastWindowClose, WindowedAppState,
+};
 use crate::plugins::render::host::native as render_native_host;
 use crate::plugins::ui::{
     NativeInputRecipient, NativeInputRecipientError, NativePointerOrigin,
@@ -4189,6 +4191,70 @@ impl WinitRunner {
 
     /// The original source loss must remain journal-admissible before physical
     /// Render retirement. Neither rejection may mutate input or window identity.
+    /// A voluntarily approved primary close is a staged Native input/source,
+    /// UI and Render transaction. No physical Winit identity may disappear
+    /// before the actual original M13 source and atomic G7 owner settle.
+    /// Deferrals are real retained work, never a fabricated Render frame.
+    fn try_retire_keep_alive_primary(&mut self, native_window_id: NativeWindowId) -> Result<bool> {
+        anyhow::ensure!(
+            native_window_id == NativeWindowId::primary(),
+            "keep-alive primary retirement was asked to retire a secondary"
+        );
+        self.preflight_native_source_retirement(native_window_id)?;
+        let recipient_retirement = self.retire_native_input_recipient(native_window_id);
+        if recipient_retirement.is_ok()
+            && self
+                .state
+                .world
+                .resource::<UiNativeInputRecipientsResource>()
+                .is_ok_and(|recipients| {
+                    recipients.host_cancellation_pending(native_window_id)
+                })
+        {
+            self.request_ordinary_frame("pending original M13 cancellation");
+            return Ok(false);
+        }
+        // Original source-loss must still be delivered even when recipient
+        // retirement reports a framework error; it may not strand gameplay.
+        let source_retirement = self.retire_window_input_source(native_window_id);
+        recipient_retirement?;
+        source_retirement?;
+
+        let ui = crate::plugins::ui::retirement::settle_native_surface_ui_withdrawals_without_frame(
+            &mut self.state.world,
+            native_window_id,
+            crate::plugins::render::host::RenderSurfaceId::primary(),
+        )?;
+        if let crate::plugins::ui::retirement::UiSurfaceRetirementStatus::Blocked(blocker) = ui {
+            tracing::debug!(
+                target: "engine.runtime.primary_retirement",
+                ?blocker,
+                "retaining original physical primary pending UI owner clearance"
+            );
+            return Ok(false);
+        }
+
+        use crate::plugins::render::host::primary_retirement::{
+            PrimaryRenderRetirementOutcome, try_retire_primary_render_surface,
+        };
+        match try_retire_primary_render_surface(&mut self.state.world)? {
+            PrimaryRenderRetirementOutcome::Retired
+            | PrimaryRenderRetirementOutcome::AlreadyRetired
+            | PrimaryRenderRetirementOutcome::NoRender => Ok(true),
+            PrimaryRenderRetirementOutcome::Deferred(reason) => {
+                tracing::debug!(
+                    target: "engine.runtime.primary_retirement",
+                    ?reason,
+                    "retaining original physical primary pending Render G5/G7"
+                );
+                Ok(false)
+            }
+            PrimaryRenderRetirementOutcome::ReadyToRetire => {
+                anyhow::bail!("Render primary preflight readiness is not physical detachment")
+            }
+        }
+    }
+
     fn authorize_secondary_close(&mut self, native_window_id: NativeWindowId) -> Result<()> {
         self.preflight_native_source_retirement(native_window_id)?;
         render_native_host::try_retire_secondary(&mut self.state.world, native_window_id)
@@ -4231,6 +4297,34 @@ impl WinitRunner {
             WinitWindowRealizer::apply_physical_record(&window, &record);
 
             if record.close_requested {
+                if native_window_id == NativeWindowId::primary()
+                    && self.state.world.has_resource::<NativeKeepAlive>()
+                {
+                    if self.try_retire_keep_alive_primary(native_window_id)? {
+                        // The original Native/Render primary has ALREADY
+                        // settled. Only now may Winit remove that fixed ID.
+                        let removed = self
+                            .state
+                            .world
+                            .resource_mut::<WindowStateRegistryResource>()?
+                            .remove_window(native_window_id);
+                        anyhow::ensure!(
+                            removed.is_some(),
+                            "retired primary has no native record to remove"
+                        );
+                        self.forget_destroyed_native_input_recipient(native_window_id)?;
+                        self.window_realizer.remove_window(window_id);
+                        self.native_ime_applied.remove(&native_window_id);
+                        self.owned_redraws.remove(&native_window_id);
+                        if self.window_realizer.has_any_window() {
+                            // This is a normal subsequent application turn
+                            // for the surviving windows, not a fake frame
+                            // needed to settle already retired GPU work.
+                            self.request_ordinary_frame("surviving native secondary after primary");
+                        }
+                    }
+                    continue;
+                }
                 if native_window_id != NativeWindowId::primary() {
                     // Preserve Render's accepted refusal boundary before input
                     // recipient/source retirement. Re-entry after a successful
@@ -4883,8 +4977,20 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             return;
         }
         if !self.window_realizer.may_realize_initial_primary() {
-            // A previous original-primary incarnation cannot be recreated
-            // after physical retirement, even if Winit delivers Resumed again.
+            // Do not recreate original ID 1. A NEW OS resume after actual
+            // retirement still belongs to the surviving native App/secondaries.
+            if self.window_realizer.original_primary_retired()
+                && self.state.world.has_resource::<NativeKeepAlive>()
+            {
+                if let Err(error) = self.apply_event(PlatformEvent::Resumed) {
+                    self.exit_with_error(event_loop, error);
+                    return;
+                }
+                if self.window_realizer.has_any_window() {
+                    self.request_ordinary_frame("resumed surviving secondary windows");
+                }
+                self.pace_or_exit(event_loop);
+            }
             return;
         }
 
@@ -5448,8 +5554,28 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
         if event_loop.exiting() || self.exit_if_app_stopping(event_loop) {
             return;
         }
-        if let Err(error) = self.progress_gpu_if_due(Instant::now()) {
-            self.exit_with_error(event_loop, error.context("native GPU progress failed"));
+        let gpu_observed = match self.progress_gpu_if_due(Instant::now()) {
+            Ok(observed) => observed,
+            Err(error) => {
+                self.exit_with_error(event_loop, error.context("native GPU progress failed"));
+                return;
+            }
+        };
+        // A genuine GPU terminal observation can unblock an already approved
+        // primary close. Retry its staged owner preflight without fabricating
+        // an ECS Update, RenderPrepare, RenderSubmit or Present.
+        if gpu_observed
+            && self.state.world.has_resource::<NativeKeepAlive>()
+            && self
+                .state
+                .world
+                .resource::<WindowStateRegistryResource>()
+                .ok()
+                .and_then(|windows| windows.record(NativeWindowId::primary()))
+                .is_some_and(|primary| primary.close_requested)
+            && let Err(error) = self.apply_window_effects(event_loop)
+        {
+            self.exit_with_error(event_loop, error.context("deferred primary close failed"));
             return;
         }
         self.pace_or_exit(event_loop);
