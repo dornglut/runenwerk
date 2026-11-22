@@ -202,6 +202,15 @@ impl NativePointerIngressError {
     }
 }
 
+/// Original native M13 recipient admission, independent of visual paint.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum UiNativeInputRetirementState {
+    NoUiRecipient,
+    Live,
+    Unsettled,
+    Settled,
+}
+
 #[derive(Default, runen_ecs::Resource)]
 pub struct UiNativeInputRecipientsResource {
     bindings: BTreeMap<NativeWindowId, WindowRecipientBinding>,
@@ -692,6 +701,41 @@ impl UiNativeInputRecipientsResource {
                 ..
             })
         )
+    }
+
+    /// Read only the original native recipient's M13 retirement state.
+    /// World-only retirement does not establish original Host cancellation.
+    pub(crate) fn native_ui_retirement_state(
+        &self,
+        window: NativeWindowId,
+    ) -> UiNativeInputRetirementState {
+        if window == NativeWindowId::primary()
+            && matches!(
+                self.requested_primary,
+                Some(NativeInputRecipient::RunenUiSlot(_))
+            )
+        {
+            return UiNativeInputRetirementState::Live;
+        }
+        match self.bindings.get(&window) {
+            Some(WindowRecipientBinding::Bound(binding))
+                if matches!(binding.recipient, NativeInputRecipient::RunenUiSlot(_)) =>
+            {
+                UiNativeInputRetirementState::Live
+            }
+            Some(WindowRecipientBinding::Retired {
+                previous,
+                input_settled,
+                host_cancellation_pending,
+            }) if matches!(previous.recipient, NativeInputRecipient::RunenUiSlot(_)) => {
+                if *input_settled && !*host_cancellation_pending {
+                    UiNativeInputRetirementState::Settled
+                } else {
+                    UiNativeInputRetirementState::Unsettled
+                }
+            }
+            _ => UiNativeInputRetirementState::NoUiRecipient,
+        }
     }
 
     /// Discharge only an original Host retirement after the slot's common pump

@@ -284,6 +284,56 @@ impl UiRuntimePresentationAssociationsResource {
         std::mem::take(&mut self.withdrawn)
     }
 
+    /// Inspect only the exact target. An empty live bindings map is not a
+    /// certificate of producer withdrawal or terminal GPU presentation.
+    pub(crate) fn has_live_surface_binding(&self, surface: RenderSurfaceId) -> bool {
+        self.bindings
+            .values()
+            .any(|binding| binding.render_surface_id == surface)
+    }
+
+    /// Source-side pending, accepted or displayed input remains independently
+    /// owned. Render must still qualify physical submissions and readbacks.
+    pub(crate) fn has_unsettled_surface_publication(&self, surface: RenderSurfaceId) -> bool {
+        self.pending
+            .values()
+            .any(|pending| pending.binding.render_surface_id == surface)
+            || self
+                .in_flight
+                .values()
+                .any(|pending| pending.binding.render_surface_id == surface)
+            || self
+                .displayed
+                .values()
+                .any(|displayed| displayed.render_surface_id == surface)
+            || self
+                .current_mappings
+                .values()
+                .any(|mapping| mapping.render_surface_id() == surface)
+    }
+
+    pub(crate) fn has_withdrawal_for_surface(&self, surface: RenderSurfaceId) -> bool {
+        self.withdrawn.iter().any(|(_, target)| *target == surface)
+    }
+
+    /// Consume only one target's owed Render removals. The ordinary
+    /// RenderPrepare path still drains all targets during normal frames.
+    pub(crate) fn take_withdrawals_for_surface(
+        &mut self,
+        surface: RenderSurfaceId,
+    ) -> Vec<(RenderFrameProducerId, RenderSurfaceId)> {
+        let mut selected = Vec::new();
+        self.withdrawn.retain(|&(producer, target)| {
+            if target == surface {
+                selected.push((producer, target));
+                false
+            } else {
+                true
+            }
+        });
+        selected
+    }
+
     #[must_use]
     pub fn binding(&self, slot: UiRuntimeSlotId) -> Option<&UiRuntimePresentationBinding> {
         self.bindings.get(&slot)
