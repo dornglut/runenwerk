@@ -24,8 +24,7 @@ fn tracy_enabled() -> bool {
 pub fn setup_tracing() -> Option<WorkerGuard> {
     // Profiling is an explicit diagnostic session; regular engine launch
     // remains event-only and retains the identical default target filter.
-    let profile_g3 = std::env::var("RUNENWERK_G3_PHASE_PROFILE")
-        .is_ok_and(|value| value == "1");
+    let profile_g3 = std::env::var("RUNENWERK_G3_PHASE_PROFILE").is_ok_and(|value| value == "1");
     let mut filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(DEFAULT_TRACING_FILTER));
     if profile_g3 {
@@ -50,7 +49,7 @@ pub fn setup_tracing() -> Option<WorkerGuard> {
     let stdout_layer = fmt::layer()
         .with_target(true)
         .with_ansi(true)
-        .with_span_events(span_events);
+        .with_span_events(span_events.clone());
     let file_layer = fmt::layer()
         .with_target(true)
         .with_ansi(false)
