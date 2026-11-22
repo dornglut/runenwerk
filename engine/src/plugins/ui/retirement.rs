@@ -80,16 +80,19 @@ pub(crate) fn inspect_native_surface_ui_retirement(
 
     // Correlate only existing Render-owned facts; do not manufacture a target
     // or claim attachment when no Render capability is selected.
-    if let Ok(surfaces) = world.resource::<RenderSurfaceRegistryResource>() {
-        if surfaces
-            .record(surface)
-            .is_some_and(|record| record.native_window_id != native)
-            || surfaces
-                .surface_for_native_window(native)
-                .is_some_and(|actual| actual != surface)
-        {
-            return Err(UiSurfaceRetirementError::MismatchedTarget);
-        }
+    let mismatched_target = world
+        .resource::<RenderSurfaceRegistryResource>()
+        .ok()
+        .is_some_and(|surfaces| {
+            surfaces
+                .record(surface)
+                .is_some_and(|record| record.native_window_id != native)
+                || surfaces
+                    .surface_for_native_window(native)
+                    .is_some_and(|actual| actual != surface)
+        });
+    if mismatched_target {
+        return Err(UiSurfaceRetirementError::MismatchedTarget);
     }
     if render_integration_is_active(world) {
         world
