@@ -159,7 +159,9 @@ fn physical_probe(event_loop: &ActiveEventLoop) -> Result<()> {
     );
     let image = gpu.acquire_surface_image(secondary_handle)?;
     let prepared = pollster::block_on(gpu.prepare_submission(secondary_present_graph(&image)))?;
-    let submitted = gpu.submit_prepared(prepared)?;
+    let submitted = gpu
+        .submit_prepared(prepared)
+        .map_err(|rejected| anyhow!("secondary Vulkan G5 submission rejected: {rejected:?}"))?;
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
         gpu.progress();
