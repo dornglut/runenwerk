@@ -74,6 +74,23 @@ impl RetainedRenderSessions {
         });
     }
 
+    /// Do not drop a registered or quarantined primary continuity with
+    /// potentially accepted G5 work simply because a native window is closing.
+    #[allow(dead_code)]
+    pub(super) fn has_unsettled_surface(&self, surface: RenderSurfaceId) -> bool {
+        self.sessions.iter().any(|(key, retained)| {
+            key.surface == surface
+                && (retained.association_failed
+                    || retained.session.is_in_flight()
+                    || retained
+                        .unassociated_submission
+                        .as_ref()
+                        .is_some_and(|submission| {
+                            matches!(submission.status(), GpuSubmissionStatus::Accepted)
+                        }))
+        })
+    }
+
     pub(super) fn retire_surface(&mut self, surface: RenderSurfaceId) {
         self.sessions
             .retain(|continuity, _| continuity.surface != surface);
