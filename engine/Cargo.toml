@@ -81,7 +81,7 @@ ui_binding = { workspace = true }
 criterion = "0.5.1"
 
 [target.'cfg(target_os = "linux")'.dev-dependencies]
-x11rb = "0.13.2"
+x11rb = { version = "0.13.2", features = ["xtest"] }
 
 [[example]]
 name = "game_of_life_sdf"
