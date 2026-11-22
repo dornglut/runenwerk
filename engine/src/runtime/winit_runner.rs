@@ -4998,11 +4998,22 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             if self.window_realizer.original_primary_retired()
                 && self.state.world.has_resource::<NativeKeepAlive>()
             {
-                if let Err(error) = self.apply_event(PlatformEvent::Resumed) {
-                    self.exit_with_error(event_loop, error);
-                    return;
+                // PlatformEvent::Resumed has a native window identity in
+                // the existing journal. The former ID 1 no longer has a
+                // record: project the real global OS resume only onto the
+                // surviving, actually realized native windows instead.
+                let surviving = self.window_realizer.realized_windows();
+                for (_, native_window_id, window) in &surviving {
+                    if let Err(error) = self.apply_event_for_native_window(
+                        *native_window_id,
+                        PlatformEvent::Resumed,
+                    ) {
+                        self.exit_with_error(event_loop, error);
+                        return;
+                    }
+                    self.request_native_redraw(*native_window_id, window);
                 }
-                if self.window_realizer.has_any_window() {
+                if !surviving.is_empty() {
                     self.request_ordinary_frame("resumed surviving secondary windows");
                 }
                 self.pace_or_exit(event_loop);
