@@ -5616,6 +5616,10 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
 #[path = "winit_runner_retirement_tests.rs"]
 mod retirement_tests;
 
+#[cfg(all(test, target_os = "linux"))]
+#[path = "winit_runner_keep_alive_tests.rs"]
+mod keep_alive_tests;
+
 #[cfg(test)]
 #[path = "winit_runner_windowless_tests.rs"]
 mod windowless_tests;
