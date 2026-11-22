@@ -400,7 +400,6 @@ fn real_prepared_paint_is_withdrawn_only_for_primary_without_another_frame() {
         .resource_mut::<UiRuntimePresentationAssociationsResource>()
         .unwrap();
     associations.unbind(a);
-    associations.unbind(b);
     assert_eq!(
         settle_native_surface_ui_withdrawals_without_frame(app.world_mut(), primary, first),
         Ok(UiSurfaceRetirementStatus::Cleared)
@@ -411,11 +410,16 @@ fn real_prepared_paint_is_withdrawn_only_for_primary_without_another_frame() {
         .unwrap();
     assert!(paints.get_for_surface(&a_producer, first).is_none());
     assert!(paints.get_for_surface(&b_producer, second).is_some());
+    let associations = app
+        .world()
+        .resource::<UiRuntimePresentationAssociationsResource>()
+        .unwrap();
     assert!(
-        app.world()
-            .resource::<UiRuntimePresentationAssociationsResource>()
-            .unwrap()
-            .has_withdrawal_for_surface(second),
-        "secondary's existing withdrawal must remain pending"
+        associations.binding(b).is_some(),
+        "surviving secondary UI must retain its actual association"
+    );
+    assert!(
+        !associations.has_withdrawal_for_surface(second),
+        "surviving secondary UI must not be withdrawn"
     );
 }
