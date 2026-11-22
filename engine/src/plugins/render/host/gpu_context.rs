@@ -5,7 +5,8 @@ use pollster::block_on;
 use runen_gpu::{
     GpuAcquiredSurfaceImage, GpuCapabilityFeature, GpuCapabilityProfile, GpuCapabilityRequirement,
     GpuContext, GpuContextDescriptor, GpuFormatRole, GpuPowerPreference, GpuPreferredFallback,
-    GpuSurfaceAcquireErrorCategory, GpuSurfaceConfiguration, GpuSurfaceHandle, GpuTextureFormat,
+    GpuSurfaceAcquireErrorCategory, GpuSurfaceConditionalDetachOutcome, GpuSurfaceConfiguration,
+    GpuSurfaceHandle, GpuTextureFormat,
 };
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -216,6 +217,26 @@ impl RenderGpuContext {
         state.surface = configured;
         state.config = Some(config);
         Ok(())
+    }
+
+    /// Atomic G7 lease-safe detach; an active image lease keeps the physical
+    /// surface and its original owner intact. Unlike teardown, this never
+    /// abandons a Present-capable image.
+    pub(crate) fn detach_surface_if_unleased(
+        &mut self,
+        render_surface_id: RenderSurfaceId,
+    ) -> Result<GpuSurfaceConditionalDetachOutcome> {
+        let state = self.surfaces.get(&render_surface_id).ok_or_else(|| {
+            anyhow::anyhow!(
+                "no physical GPU surface for logical render surface {}",
+                render_surface_id.raw()
+            )
+        })?;
+        let outcome = self.context.detach_surface_if_unleased(state.surface)?;
+        if outcome == GpuSurfaceConditionalDetachOutcome::Detached {
+            self.surfaces.remove(&render_surface_id);
+        }
+        Ok(outcome)
     }
 
     pub fn detach_surface(&mut self, render_surface_id: RenderSurfaceId) -> bool {

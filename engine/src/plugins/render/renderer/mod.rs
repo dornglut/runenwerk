@@ -1111,6 +1111,31 @@ impl Gfx {
             .attach_surface(render_surface_id, window, target_size_px)
     }
 
+    /// Source-owned G5 and retained-session evidence; independently checked
+    /// before the G7 conditional detach barrier.
+    pub(crate) fn has_unsettled_retained_surface(
+        &self,
+        surface: crate::plugins::render::host::RenderSurfaceId,
+    ) -> bool {
+        self.renderer.render_sessions.has_unsettled_surface(surface)
+    }
+
+    /// Internal primary-retirement path. Do not reuse the forced teardown
+    /// detach: it may abandon an outstanding acquired surface image.
+    pub(crate) fn detach_surface_if_unleased(
+        &mut self,
+        render_surface_id: crate::plugins::render::host::RenderSurfaceId,
+    ) -> Result<runen_gpu::GpuSurfaceConditionalDetachOutcome> {
+        let outcome = self.ctx.detach_surface_if_unleased(render_surface_id)?;
+        if outcome == runen_gpu::GpuSurfaceConditionalDetachOutcome::Detached {
+            self.renderer.render_sessions.retire_surface(render_surface_id);
+            if let Some(observations) = self.frame_gate_observations.as_mut() {
+                observations.remove(&render_surface_id.raw());
+            }
+        }
+        Ok(outcome)
+    }
+
     pub fn detach_surface(
         &mut self,
         render_surface_id: crate::plugins::render::host::RenderSurfaceId,

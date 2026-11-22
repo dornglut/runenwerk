@@ -3,6 +3,7 @@
 
 mod gpu_context;
 pub(crate) mod native;
+pub(crate) mod primary_retirement;
 mod surface;
 
 pub use gpu_context::*;
