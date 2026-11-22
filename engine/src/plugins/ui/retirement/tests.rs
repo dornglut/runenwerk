@@ -460,7 +460,9 @@ fn incomplete_selected_render_owner_fails_closed_before_withdrawal() {
     let mut app = app(true);
     let native = NativeWindowId::primary();
     let surface = RenderSurfaceId::primary();
-    let _ = app.world_mut().remove_resource::<ManagedRenderProducerIds>();
+    let _ = app
+        .world_mut()
+        .remove_resource::<ManagedRenderProducerIds>();
     assert_eq!(
         inspect_native_surface_ui_retirement(app.world(), native, surface),
         Err(UiSurfaceRetirementError::IncompleteRenderOwner(
