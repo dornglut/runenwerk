@@ -4214,11 +4214,19 @@ impl WinitRunner {
             self.request_ordinary_frame("pending original M13 cancellation");
             return Ok(false);
         }
-        // Original source-loss must still be delivered even when recipient
-        // retirement reports a framework error; it may not strand gameplay.
-        let source_retirement = self.retire_window_input_source(native_window_id);
-        recipient_retirement?;
-        source_retirement?;
+        // A hard original-recipient failure still requires source-loss
+        // admission before the Host fails closed. By contrast, an ordinary
+        // G5/G7 or M13 *deferral* must preserve the physical input source:
+        // Winit may still deliver callbacks before this window disappears.
+        if let Err(error) = recipient_retirement {
+            let source_retirement = self.retire_window_input_source(native_window_id);
+            if let Err(source_error) = source_retirement {
+                return Err(error.context(format!(
+                    "original input source retirement also failed: {source_error:#}"
+                )));
+            }
+            return Err(error);
+        }
 
         let ui = crate::plugins::ui::retirement::settle_native_surface_ui_withdrawals_without_frame(
             &mut self.state.world,
@@ -4240,7 +4248,15 @@ impl WinitRunner {
         match try_retire_primary_render_surface(&mut self.state.world)? {
             PrimaryRenderRetirementOutcome::Retired
             | PrimaryRenderRetirementOutcome::AlreadyRetired
-            | PrimaryRenderRetirementOutcome::NoRender => Ok(true),
+            | PrimaryRenderRetirementOutcome::NoRender => {
+                // After the physical G7 commit, no deferred primary GPU
+                // owner remains. Immediately retire the original neutral
+                // source BEFORE deleting its physical Winit window. A source
+                // failure is fatal and never represented as a successful
+                // Native window disappearance.
+                self.retire_window_input_source(native_window_id)?;
+                Ok(true)
+            },
             PrimaryRenderRetirementOutcome::Deferred(reason) => {
                 tracing::debug!(
                     target: "engine.runtime.primary_retirement",
