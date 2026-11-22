@@ -22,8 +22,24 @@ fn tracy_enabled() -> bool {
 }
 
 pub fn setup_tracing() -> Option<WorkerGuard> {
-    let filter = EnvFilter::try_from_default_env()
+    // Profiling is an explicit diagnostic session; regular engine launch
+    // remains event-only and retains the identical default target filter.
+    let profile_g3 = std::env::var("RUNENWERK_G3_PHASE_PROFILE")
+        .is_ok_and(|value| value == "1");
+    let mut filter = EnvFilter::try_from_default_env()
         .unwrap_or_else(|_| EnvFilter::new(DEFAULT_TRACING_FILTER));
+    if profile_g3 {
+        filter = filter.add_directive(
+            "runen_gpu::graph=trace"
+                .parse()
+                .expect("static G3 trace target must parse"),
+        );
+    }
+    let span_events = if profile_g3 {
+        fmt::format::FmtSpan::CLOSE
+    } else {
+        fmt::format::FmtSpan::NONE
+    };
     let log_dir = Path::new("logs");
     if let Err(err) = std::fs::create_dir_all(log_dir) {
         eprintln!("failed creating log directory {}: {err}", log_dir.display());
@@ -31,10 +47,14 @@ pub fn setup_tracing() -> Option<WorkerGuard> {
     let file_appender = tracing_appender::rolling::never(log_dir, "engine.log");
     let (file_writer, guard) = tracing_appender::non_blocking(file_appender);
 
-    let stdout_layer = fmt::layer().with_target(true).with_ansi(true);
+    let stdout_layer = fmt::layer()
+        .with_target(true)
+        .with_ansi(true)
+        .with_span_events(span_events);
     let file_layer = fmt::layer()
         .with_target(true)
         .with_ansi(false)
+        .with_span_events(span_events)
         .with_writer(file_writer);
 
     #[cfg(feature = "tracy")]

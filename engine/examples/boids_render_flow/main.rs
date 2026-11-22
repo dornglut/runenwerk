@@ -88,6 +88,13 @@ fn main() -> Result<()> {
         println!("{}", rendering::production_evidence_report()?.format_text());
         return Ok(());
     }
+    // The ordinary example must not install an additional subscriber or
+    // start file logging on startup. A research capture explicitly opts into
+    // the engine-owned tracing stack and current-frame G3 phase CLOSE events.
+    let _g3_profile_guard = (std::env::var("RUNENWERK_G3_PHASE_PROFILE")
+        .is_ok_and(|value| value == "1"))
+    .then(engine::utils::setup_tracing)
+    .flatten();
     let rule = if species {
         rendering::BoidsRuleFamily::SpeciesInteraction
     } else {
