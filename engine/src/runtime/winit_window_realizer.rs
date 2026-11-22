@@ -9,8 +9,41 @@ use std::sync::Arc;
 use winit::event_loop::ActiveEventLoop;
 use winit::window::{CursorIcon, Window, WindowAttributes, WindowId};
 
+/// The original Native/Render primary has a fixed identity. Physical
+/// presence alone cannot tell whether ID 1 was permanently retired.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum NativeOriginalPrimaryLifetime {
+    #[default]
+    NeverRealized,
+    Realized,
+    Retired,
+}
+
+impl NativeOriginalPrimaryLifetime {
+    fn can_publish(self) -> bool {
+        self == Self::NeverRealized
+    }
+
+    fn publish(&mut self) -> Result<()> {
+        if !self.can_publish() {
+            return Err(anyhow!(
+                "original primary Native identity cannot be realized a second time"
+            ));
+        }
+        *self = Self::Realized;
+        Ok(())
+    }
+
+    fn retire(&mut self) {
+        if *self == Self::Realized {
+            *self = Self::Retired;
+        }
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct WinitWindowRealizer {
+    original_primary_lifetime: NativeOriginalPrimaryLifetime,
     primary_window: Option<Arc<Window>>,
     windows: BTreeMap<WindowId, Arc<Window>>,
     native_windows_by_winit: BTreeMap<WindowId, NativeWindowId>,
@@ -19,6 +52,11 @@ pub(crate) struct WinitWindowRealizer {
 impl WinitWindowRealizer {
     pub(crate) fn has_primary_window(&self) -> bool {
         self.primary_window.is_some()
+    }
+
+    /// Admission is one-shot even across Winit Suspended/Resumed transitions.
+    pub(crate) fn may_realize_initial_primary(&self) -> bool {
+        self.original_primary_lifetime.can_publish()
     }
 
     pub(crate) fn has_any_window(&self) -> bool {
@@ -121,13 +159,22 @@ impl WinitWindowRealizer {
         }
     }
 
-    pub(crate) fn publish_window(&mut self, native_window_id: NativeWindowId, window: Arc<Window>) {
+    pub(crate) fn publish_window(
+        &mut self,
+        native_window_id: NativeWindowId,
+        window: Arc<Window>,
+    ) -> Result<()> {
+        // Verify the fixed original-primary identity before mutating any map.
+        if native_window_id == NativeWindowId::primary() {
+            self.original_primary_lifetime.publish()?;
+        }
         let window_id = window.id();
         self.publish_mapping(window_id, native_window_id);
         self.windows.insert(window_id, Arc::clone(&window));
         if native_window_id == NativeWindowId::primary() {
             self.primary_window = Some(window);
         }
+        Ok(())
     }
 
     pub(crate) fn remove_window(&mut self, window_id: WindowId) {
@@ -135,6 +182,7 @@ impl WinitWindowRealizer {
         self.windows.remove(&window_id);
         if native_window_id == Some(NativeWindowId::primary()) {
             self.primary_window = None;
+            self.original_primary_lifetime.retire();
         }
     }
 
@@ -191,6 +239,27 @@ fn winit_cursor_icon(cursor_icon: WindowCursorIcon) -> CursorIcon {
 mod tests {
     use super::*;
     use crate::app::{App, AppNativeHostExt};
+
+    #[test]
+    fn original_primary_identity_never_reopens_after_retirement() {
+        let mut lifetime = NativeOriginalPrimaryLifetime::default();
+        assert!(lifetime.can_publish());
+        lifetime.publish().unwrap();
+        assert!(!lifetime.can_publish());
+        assert!(
+            lifetime.publish().is_err(),
+            "double realization must fail closed"
+        );
+        lifetime.retire();
+        assert_eq!(lifetime, NativeOriginalPrimaryLifetime::Retired);
+        assert!(!lifetime.can_publish());
+        assert!(
+            lifetime.publish().is_err(),
+            "retired fixed ID cannot be recreated"
+        );
+        lifetime.retire();
+        assert_eq!(lifetime, NativeOriginalPrimaryLifetime::Retired);
+    }
 
     #[test]
     fn correlation_routes_known_primary_and_secondary_windows() {

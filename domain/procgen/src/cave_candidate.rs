@@ -109,6 +109,8 @@ pub enum CaveTopologyIssueCode {
     InsufficientCycles,
     DuplicateQualityEvidence,
     UnknownQualitySubject,
+    UnsupportedQualitySubject,
+    IncorrectQualityScore,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -369,6 +371,42 @@ pub fn ratify_cave_topology(
         return assessment;
     }
 
+    // Public proposals supply untrusted quality claims. Measure the admitted
+    // canonical graph independently before making any such claim authoritative.
+    // Both existing criteria describe the whole topology, not individual
+    // chambers or passages. Do not invent per-subject meanings for them.
+    let branching = i32::try_from(
+        adjacency
+            .values()
+            .filter(|neighbors| neighbors.len() >= 3)
+            .count(),
+    )
+    .expect("chamber count bounded by CAVE_MAX_CHAMBERS");
+    let route_alternatives = i32::try_from(connections.len() - chamber_ids.len().saturating_sub(1))
+        .expect("passage count bounded by CAVE_MAX_PASSAGES");
+    for evidence in &proposal.quality {
+        if evidence.subject != CaveSubject::Topology {
+            assessment.issues.push(CaveTopologyIssue {
+                code: CaveTopologyIssueCode::UnsupportedQualitySubject,
+                subject: evidence.subject,
+            });
+            continue;
+        }
+        let expected = match evidence.criterion {
+            CaveQualityCriterion::Branching => branching,
+            CaveQualityCriterion::RouteAlternatives => route_alternatives,
+        };
+        if evidence.score != expected {
+            assessment.issues.push(CaveTopologyIssue {
+                code: CaveTopologyIssueCode::IncorrectQualityScore,
+                subject: evidence.subject,
+            });
+        }
+    }
+    if !assessment.issues.is_empty() {
+        return assessment;
+    }
+
     let mut key_parts = vec![
         "procgen.cave.candidate.v1".to_owned(),
         recipe.determinism_key(),
@@ -437,7 +475,7 @@ mod tests {
             quality: vec![CaveQualityEvidence {
                 subject: CaveSubject::Topology,
                 criterion: CaveQualityCriterion::Branching,
-                score: 3,
+                score: 0,
             }],
         }
     }
@@ -571,6 +609,107 @@ mod tests {
             &issue,
             CaveTopologyIssueCode::UnknownQualitySubject
         ));
+    }
+
+    #[test]
+    fn rejects_forged_topology_quality_without_forming_a_candidate() {
+        let source = valid_source();
+        for (criterion, fake_score) in [
+            (CaveQualityCriterion::Branching, 3),
+            (CaveQualityCriterion::Branching, i32::MAX),
+            (CaveQualityCriterion::RouteAlternatives, 1),
+            (CaveQualityCriterion::RouteAlternatives, -1),
+        ] {
+            let mut proposal = valid_proposal();
+            proposal.quality = vec![CaveQualityEvidence {
+                subject: CaveSubject::Topology,
+                criterion,
+                score: fake_score,
+            }];
+            let assessment = evaluate(&source, proposal);
+            assert_eq!(assessment.status, CaveTopologyStatus::Rejected);
+            assert!(has_issue(
+                &assessment,
+                CaveTopologyIssueCode::IncorrectQualityScore
+            ));
+            assert!(assessment.candidate.is_none());
+        }
+    }
+
+    #[test]
+    fn accepts_verified_cycle_quality_without_rewriting_identity() {
+        let source = valid_source();
+        let mut proposal = valid_proposal();
+        proposal.passages.push(CavePassage {
+            id: CavePassageId::new(9),
+            from: id(1),
+            to: id(3),
+        });
+        proposal.quality.push(CaveQualityEvidence {
+            subject: CaveSubject::Topology,
+            criterion: CaveQualityCriterion::RouteAlternatives,
+            score: 1,
+        });
+        let first = evaluate(&source, proposal.clone());
+        assert!(first.is_qualified());
+        let candidate = first.candidate.unwrap();
+        assert_eq!(candidate.quality(), first.proposal.quality.as_slice());
+
+        proposal.chambers.reverse();
+        proposal.passages.reverse();
+        proposal.quality.reverse();
+        let second = evaluate(&source, proposal);
+        assert!(second.is_qualified());
+        assert_eq!(second.candidate.unwrap(), candidate);
+
+        let mut forged = first.proposal;
+        forged.quality[0].score = 1;
+        let rejected = evaluate(&source, forged);
+        assert!(has_issue(
+            &rejected,
+            CaveTopologyIssueCode::IncorrectQualityScore
+        ));
+        assert!(rejected.candidate.is_none());
+    }
+
+    #[test]
+    fn absent_and_partial_quality_remain_allowed_but_duplicates_do_not() {
+        let source = valid_source();
+        let mut absent = valid_proposal();
+        absent.quality.clear();
+        let assessment = evaluate(&source, absent);
+        assert!(assessment.is_qualified());
+        assert!(assessment.candidate.unwrap().quality().is_empty());
+
+        let partial = valid_proposal();
+        assert!(evaluate(&source, partial.clone()).is_qualified());
+
+        let mut duplicate = partial;
+        duplicate.quality.push(duplicate.quality[0]);
+        let assessment = evaluate(&source, duplicate);
+        assert!(has_issue(
+            &assessment,
+            CaveTopologyIssueCode::DuplicateQualityEvidence
+        ));
+        assert!(assessment.candidate.is_none());
+    }
+
+    #[test]
+    fn rejects_undefined_per_subject_structural_scores() {
+        let source = valid_source();
+        for subject in [
+            CaveSubject::Chamber(id(1)),
+            CaveSubject::Passage(CavePassageId::new(7)),
+        ] {
+            let mut proposal = valid_proposal();
+            proposal.quality[0].subject = subject;
+            let assessment = evaluate(&source, proposal);
+            assert!(has_issue(
+                &assessment,
+                CaveTopologyIssueCode::UnsupportedQualitySubject
+            ));
+            assert!(assessment.candidate.is_none());
+        }
     }
 
     #[test]

@@ -19,6 +19,9 @@ pub mod publish;
 pub(crate) mod render_scene;
 pub mod report;
 pub mod resources;
+// UI owner clearance is tested before Render #1453 adopts this seam.
+#[allow(dead_code)]
+pub(crate) mod retirement;
 mod runenui_adapter;
 pub mod schedule;
 pub mod screen;

@@ -199,6 +199,22 @@ jobs:
                 --test native_host_smoke \
                 --locked
 
+      - name: Prove physical primary G7 retirement and secondary Vulkan G5 Present
+        env:
+          RUNENWERK_NATIVE_PRIMARY_RENDER_RETIRE_OS_SMOKE: '1'
+        run: |
+          set -euo pipefail
+          log="$(mktemp)"
+          if ! timeout 180s xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable test -p engine --lib physical_primary_render_retirement_os_proof --locked -- --nocapture >"$log" 2>&1; then
+            cat "$log"
+            rm -f "$log"
+            exit 1
+          fi
+          cat "$log"
+          grep -F "native_primary_render_retirement_os=pass physical_x11=true vulkan=true primary_lease_refused=true primary_detached=true secondary_g5_present_completed=true" "$log"
+          rm -f "$log"
+
       - name: Prove physical X11 Native request-to-realization receipts
         env:
           RUNENWERK_NATIVE_WINDOW_REQUEST_OS_SMOKE: '1'
@@ -712,8 +728,19 @@ jobs:
           RUNENWERK_G5_REQUIRE_GPU: '1'
         run: |
           set -euo pipefail
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-            cargo +stable run -p engine --example boids_render_flow --locked
+          # This ordinary launch includes RenderPlugin's GPU progress in PreUpdate.
+          # Keep the former PreUpdate proof markers on this exact execution,
+          # rather than launching the same smoke process a second time.
+          flocking_log="$(mktemp)"
+          trap 'rm -f "$flocking_log"' EXIT
+          if ! xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable run -p engine --example boids_render_flow --locked >"$flocking_log" 2>&1; then
+            cat "$flocking_log"
+            exit 1
+          fi
+          cat "$flocking_log"
+          grep -F "native_boids_gpu_smoke=pass" "$flocking_log"
+          grep -F "visual_readback=true" "$flocking_log"
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
             cargo +stable run -p engine --example boids_render_flow --locked -- --species
 
@@ -870,49 +897,18 @@ jobs:
           set -euo pipefail
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
             cargo +stable run -p engine --example boids_render_flow --locked
-          xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-            cargo +stable run -p engine --example boids_render_flow --locked -- --species
-
-      - name: Prove Engine-owned PreUpdate GPU progress with Boids (source and readback)
-        env:
-          RUST_BACKTRACE: '1'
-          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
-          RUNENWERK_G5_REQUIRE_GPU: '1'
-        run: |
-          set -euo pipefail
-          # Exercise the default Engine-owned before-Update Gfx lifecycle.
-          # These are separate real-GPU consumer runs:
-          # original flocking verifies actual GPU image change; species
-          # verifies source lineage without full-frame image readback.
-          for mode in flocking species; do
-            log="$(mktemp)"
-            args=()
-            if [ "$mode" = species ]; then
-              args=(--species)
-              export RUNENWERK_BOIDS_NATIVE_NO_READBACK=1
-            else
-              unset RUNENWERK_BOIDS_NATIVE_NO_READBACK
-            fi
-            if ! xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-                 cargo +stable run -p engine --example boids_render_flow --locked -- "${args[@]}" >"$log" 2>&1; then
-              cat "$log"
-              rm -f "$log"
-              exit 1
-            fi
-            cat "$log"
-            if ! grep -F "native_boids_gpu_smoke=pass" "$log"; then
-              echo "Engine PreUpdate GPU Boids conformance marker missing" >&2
-              rm -f "$log"
-              exit 1
-            fi
-            if [ "$mode" = flocking ]; then
-              grep -F "visual_readback=true" "$log"
-            else
-              grep -F "visual_readback=false" "$log"
-            fi
-            rm -f "$log"
-          done
-
+          # The --species launch covers the PreUpdate/compact-witness mode;
+          # assert its explicit no-full-image-readback receipt here.
+          species_log="$(mktemp)"
+          trap 'rm -f "$species_log"' EXIT
+          if ! xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable run -p engine --example boids_render_flow --locked -- --species >"$species_log" 2>&1; then
+            cat "$species_log"
+            exit 1
+          fi
+          cat "$species_log"
+          grep -F "native_boids_gpu_smoke=pass" "$species_log"
+          grep -F "visual_readback=false" "$species_log"
 
       - name: Report Rust compiler cache stats
         if: always() && steps.sccache_setup.outcome == 'success'

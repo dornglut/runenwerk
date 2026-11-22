@@ -4152,7 +4152,7 @@ impl WinitRunner {
         self.attach_native_window_hooks(&window);
         self.request_native_redraw(request.native_window_id, &window);
         self.window_realizer
-            .publish_window(request.native_window_id, window);
+            .publish_window(request.native_window_id, window)?;
         Ok(())
     }
 
@@ -4882,7 +4882,9 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
             self.pace_or_exit(event_loop);
             return;
         }
-        if self.window_realizer.has_primary_window() {
+        if !self.window_realizer.may_realize_initial_primary() {
+            // A previous original-primary incarnation cannot be recreated
+            // after physical retirement, even if Winit delivers Resumed again.
             return;
         }
 
@@ -4936,8 +4938,13 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
 
         self.request_ordinary_frame("initial native window");
         self.request_native_redraw(NativeWindowId::primary(), &window);
-        self.window_realizer
-            .publish_window(NativeWindowId::primary(), window);
+        if let Err(error) = self
+            .window_realizer
+            .publish_window(NativeWindowId::primary(), window)
+        {
+            self.exit_with_error(event_loop, error);
+            return;
+        }
         let readiness = self
             .state
             .world
