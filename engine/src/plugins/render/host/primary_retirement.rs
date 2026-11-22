@@ -196,16 +196,25 @@ pub(crate) fn try_retire_primary_render_surface(
         GpuSurfaceConditionalDetachOutcome::Detached => {
             // Only this exact primary mapping may retire. The surviving native
             // windows, RenderSurfaceIds, retained sessions and Gfx context stay.
-            let retired = world
-                .resource_mut::<RenderSurfaceRegistryResource>()
-                .expect("fresh synchronous preflight retains Render registry")
-                .retire_surface_for_native_window(NativeWindowId::primary());
-            if retired != Some(primary) {
-                return Err(PrimaryRenderRetirementError::LostPrimaryRecord);
-            }
+            commit_primary_registry_retirement(world)?;
             Ok(PrimaryRenderRetirementOutcome::Retired)
         }
     }
+}
+
+/// Logical commit after G7 has already returned exact Detached. Never
+/// invoked on a refused or actively leased physical surface.
+fn commit_primary_registry_retirement(
+    world: &mut World,
+) -> Result<(), PrimaryRenderRetirementError> {
+    let retired = world
+        .resource_mut::<RenderSurfaceRegistryResource>()
+        .expect("fresh synchronous preflight retains Render registry")
+        .retire_surface_for_native_window(NativeWindowId::primary());
+    if retired != Some(RenderSurfaceId::primary()) {
+        return Err(PrimaryRenderRetirementError::LostPrimaryRecord);
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -269,6 +278,49 @@ mod tests {
             Err(PrimaryRenderRetirementError::MissingGpuSurface)
         );
         assert!(app.world().resource::<RenderSurfaceRegistryResource>().is_ok());
+    }
+
+    #[test]
+    fn post_g7_logical_commit_preserves_secondary_registry_and_identity() {
+        // Pure Render registry transaction. Actual G7 lease safety is
+        // separately verified by RunenGPU and by Native Vulkan qualification.
+        let mut app = App::new();
+        app.init_resource::<RenderSurfaceRegistryResource>();
+        let native_primary = NativeWindowId::primary();
+        let render_primary = RenderSurfaceId::primary();
+        let native_secondary = NativeWindowId::try_from_raw(2).unwrap();
+        app.world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .confirm_surface_attachment(render_primary, native_primary, (640, 480))
+            .unwrap();
+        let secondary = app
+            .world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .reserve_surface_for_native_window(native_secondary, (480, 320));
+        app.world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap()
+            .confirm_surface_attachment(secondary, native_secondary, (480, 320))
+            .unwrap();
+        commit_primary_registry_retirement(app.world_mut()).unwrap();
+        let registry = app.world().resource::<RenderSurfaceRegistryResource>().unwrap();
+        assert_eq!(registry.surface_for_native_window(native_primary), None);
+        assert_eq!(registry.primary_surface_id(), None);
+        assert_eq!(registry.surface_for_native_window(native_secondary), Some(secondary));
+        assert_eq!(
+            registry.record(secondary).unwrap().lifecycle_state,
+            RenderSurfaceLifecycleState::Attached
+        );
+        assert_eq!(
+            registry.record(render_primary).unwrap().lifecycle_state,
+            RenderSurfaceLifecycleState::Retired
+        );
+        assert_eq!(
+            commit_primary_registry_retirement(app.world_mut()),
+            Err(PrimaryRenderRetirementError::LostPrimaryRecord)
+        );
     }
 
     #[test]

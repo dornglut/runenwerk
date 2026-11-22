@@ -1113,6 +1113,7 @@ impl Gfx {
 
     /// Source-owned G5 and retained-session evidence; independently checked
     /// before the G7 conditional detach barrier.
+    #[allow(dead_code)]
     pub(crate) fn has_unsettled_retained_surface(
         &self,
         surface: crate::plugins::render::host::RenderSurfaceId,
@@ -1122,6 +1123,7 @@ impl Gfx {
 
     /// Internal primary-retirement path. Do not reuse the forced teardown
     /// detach: it may abandon an outstanding acquired surface image.
+    #[allow(dead_code)]
     pub(crate) fn detach_surface_if_unleased(
         &mut self,
         render_surface_id: crate::plugins::render::host::RenderSurfaceId,

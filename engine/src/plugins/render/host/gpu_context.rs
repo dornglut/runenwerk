@@ -222,6 +222,7 @@ impl RenderGpuContext {
     /// Atomic G7 lease-safe detach; an active image lease keeps the physical
     /// surface and its original owner intact. Unlike teardown, this never
     /// abandons a Present-capable image.
+    #[allow(dead_code)]
     pub(crate) fn detach_surface_if_unleased(
         &mut self,
         render_surface_id: RenderSurfaceId,
