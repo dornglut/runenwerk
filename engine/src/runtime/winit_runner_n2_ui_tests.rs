@@ -153,8 +153,7 @@ fn bind_and_publish_secondary_ui(mut world: WorldMut) -> Result<()> {
         .bind(
             UiRuntimePresentationBinding::new(
                 slot,
-                RenderFrameProducerId::try_from_raw(1510)
-                    .expect("test producer is nonzero"),
+                RenderFrameProducerId::try_from_raw(1510).expect("test producer is nonzero"),
                 surface,
                 StyleEnvironment::default(),
             )
@@ -163,8 +162,7 @@ fn bind_and_publish_secondary_ui(mut world: WorldMut) -> Result<()> {
     world
         .resource_mut::<PreparedRenderFrameRequestResource>()?
         .replace_surface_contribution_with_automatic_main_replacements(
-            RenderFrameProducerId::try_from_raw(1511)
-                .expect("test RenderFlow producer is nonzero"),
+            RenderFrameProducerId::try_from_raw(1511).expect("test RenderFlow producer is nonzero"),
             surface,
             [],
             [PreparedFlowInvocationRequest::new(
@@ -196,7 +194,9 @@ fn send_real_secondary_pointer_click(window: &winit::window::Window) -> Result<(
         geometry.width >= 240 && geometry.height >= 200,
         "secondary physical window extent is insufficient for the button"
     );
-    let translated = conn.translate_coordinates(xid, screen.root, 0, 0)?.reply()?;
+    let translated = conn
+        .translate_coordinates(xid, screen.root, 0, 0)?
+        .reply()?;
     let x = translated
         .dst_x
         .checked_add(90)
@@ -209,9 +209,12 @@ fn send_real_secondary_pointer_click(window: &winit::window::Window) -> Result<(
         .check()?;
     // Core X11 event codes: MotionNotify = 6, ButtonPress = 4,
     // ButtonRelease = 5; detail 1 is the primary pointer button.
-    conn.xtest_fake_input(6, 0, 0, screen.root, x, y, 0)?.check()?;
-    conn.xtest_fake_input(4, 1, 0, screen.root, x, y, 0)?.check()?;
-    conn.xtest_fake_input(5, 1, 0, screen.root, x, y, 0)?.check()?;
+    conn.xtest_fake_input(6, 0, 0, screen.root, x, y, 0)?
+        .check()?;
+    conn.xtest_fake_input(4, 1, 0, screen.root, x, y, 0)?
+        .check()?;
+    conn.xtest_fake_input(5, 1, 0, screen.root, x, y, 0)?
+        .check()?;
     conn.flush()?;
     Ok(())
 }
@@ -235,7 +238,9 @@ struct NativeSecondaryUiOsProof {
 impl NativeSecondaryUiOsProof {
     fn secondary_mapping(&self) -> Result<UiRuntimeNativeMapping> {
         let native = self.secondary.ok_or_else(|| anyhow!("missing secondary"))?;
-        let surface = self.surface.ok_or_else(|| anyhow!("missing secondary surface"))?;
+        let surface = self
+            .surface
+            .ok_or_else(|| anyhow!("missing secondary surface"))?;
         let record = self
             .runner
             .state
@@ -252,7 +257,10 @@ impl NativeSecondaryUiOsProof {
     }
 
     fn inspect(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
-        ensure!(Instant::now() < self.deadline, "N2-B0 physical UI/XTEST proof timed out");
+        ensure!(
+            Instant::now() < self.deadline,
+            "N2-B0 physical UI/XTEST proof timed out"
+        );
         match self.stage {
             0 => {
                 let realized = self.runner.window_realizer.realized_windows();
@@ -272,7 +280,10 @@ impl NativeSecondaryUiOsProof {
                     .resource::<RenderSurfaceRegistryResource>()?
                     .surface_for_native_window(secondary)
                     .ok_or_else(|| anyhow!("secondary physical Render attachment missing"))?;
-                ensure!(surface != RenderSurfaceId::primary(), "secondary reused primary");
+                ensure!(
+                    surface != RenderSurfaceId::primary(),
+                    "secondary reused primary"
+                );
                 ensure!(
                     self.runner
                         .state
@@ -311,7 +322,9 @@ impl NativeSecondaryUiOsProof {
                     return Ok(());
                 }
                 let secondary = self.secondary.ok_or_else(|| anyhow!("missing secondary"))?;
-                let surface = self.surface.ok_or_else(|| anyhow!("missing Render target"))?;
+                let surface = self
+                    .surface
+                    .ok_or_else(|| anyhow!("missing Render target"))?;
                 ensure!(
                     self.runner
                         .state
@@ -337,11 +350,14 @@ impl NativeSecondaryUiOsProof {
                     return Ok(());
                 }
                 let secondary = self.secondary.ok_or_else(|| anyhow!("missing secondary"))?;
-                let surface = self.surface.ok_or_else(|| anyhow!("missing Render surface"))?;
+                let surface = self
+                    .surface
+                    .ok_or_else(|| anyhow!("missing Render surface"))?;
                 if !self.followup_requested {
                     self.followup_requested = true;
                     self.runner.request_redraw_for_native_window(secondary);
-                    self.runner.request_ordinary_frame("selected secondary UI publication");
+                    self.runner
+                        .request_ordinary_frame("selected secondary UI publication");
                 }
                 let mapping = self.secondary_mapping()?;
                 let displayed = self
@@ -384,7 +400,10 @@ impl NativeSecondaryUiOsProof {
             }
             3 => {
                 let clicks = self.clicks.load(Ordering::SeqCst);
-                ensure!(clicks <= 1, "one actual XTEST click activated UI more than once");
+                ensure!(
+                    clicks <= 1,
+                    "one actual XTEST click activated UI more than once"
+                );
                 if clicks == 0 {
                     return Ok(());
                 }
@@ -403,7 +422,9 @@ impl NativeSecondaryUiOsProof {
                     return Ok(());
                 }
                 let secondary = self.secondary.ok_or_else(|| anyhow!("missing secondary"))?;
-                let surface = self.surface.ok_or_else(|| anyhow!("missing Render surface"))?;
+                let surface = self
+                    .surface
+                    .ok_or_else(|| anyhow!("missing Render surface"))?;
                 ensure!(
                     !self.runner.window_realizer.has_primary_window()
                         && self
@@ -549,7 +570,10 @@ fn native_secondary_ui_input_os_proof() -> Result<()> {
     if let Some(error) = proof.failure {
         return Err(error);
     }
-    ensure!(proof.runner.fatal_error.is_none(), "Native Host reported a fatal error");
+    ensure!(
+        proof.runner.fatal_error.is_none(),
+        "Native Host reported a fatal error"
+    );
     ensure!(
         proof.observed && proof.clicks.load(Ordering::SeqCst) == 1,
         "no real post-close secondary UI display and XTEST activation"
