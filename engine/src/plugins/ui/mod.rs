@@ -19,6 +19,7 @@ pub mod publish;
 pub(crate) mod render_scene;
 pub mod report;
 pub mod resources;
+pub(crate) mod retirement;
 mod runenui_adapter;
 pub mod schedule;
 pub mod screen;
