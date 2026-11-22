@@ -606,6 +606,18 @@ pub struct RenderGpuFlowStepStreams {
 }
 
 impl RenderGpuFlowStepStreams {
+    /// Global semantic GPU work has no trustworthy native-surface ownership
+    /// key. Conservatively defer physical primary retirement until its
+    /// accepted source batches are verified by their producer.
+    #[allow(dead_code)]
+    pub(crate) fn has_unsettled_accepted_work(&self) -> bool {
+        self.streams
+            .values()
+            .any(|stream| stream.accepted_submission().is_some())
+            || !self.accepted_capture_readbacks.is_empty()
+            || !self.accepted_buffer_readbacks.is_empty()
+    }
+
     pub fn register(
         &mut self,
         flow: RenderFlowId,
