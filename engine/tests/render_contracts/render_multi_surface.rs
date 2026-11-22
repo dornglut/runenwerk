@@ -1,5 +1,6 @@
 use engine::plugins::render::host::{
-    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource,
+    RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfacePresentationError,
+    RenderSurfacePresentationRequest, RenderSurfaceRegistryResource,
 };
 use engine::plugins::render::inspect::inspect_prepared_render_frame;
 use engine::plugins::render::{
@@ -111,5 +112,41 @@ fn render_multi_surface_prepared_frame_set_is_surface_keyed_and_deterministic() 
             .map(|prepared| prepared.surface.render_surface_id)
             .collect::<Vec<_>>(),
         vec![RenderSurfaceId::primary(), secondary_surface]
+    );
+}
+
+#[test]
+fn two_native_surfaces_keep_independent_presentation_requests() {
+    use runen_gpu::GpuSurfacePresentMode;
+    let mut registry = RenderSurfaceRegistryResource::default();
+    let first = registry.reserve_surface_for_native_window(NativeWindowId::primary(), (900, 600));
+    let other_window = native_window(4);
+    let second = registry.reserve_surface_for_native_window(other_window, (400, 300));
+    let mailbox = RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::Mailbox, 1).unwrap();
+    let relaxed =
+        RenderSurfacePresentationRequest::new(GpuSurfacePresentMode::FifoRelaxed, 3).unwrap();
+    assert_eq!(registry.set_presentation_request(first, mailbox), Ok(1));
+    assert_eq!(registry.set_presentation_request(second, relaxed), Ok(1));
+    registry
+        .confirm_surface_attachment(first, NativeWindowId::primary(), (900, 600))
+        .unwrap();
+    registry
+        .confirm_surface_attachment(second, other_window, (400, 300))
+        .unwrap();
+    assert_eq!(
+        registry.record(first).unwrap().presentation_request,
+        mailbox
+    );
+    assert_eq!(
+        registry.record(second).unwrap().presentation_request,
+        relaxed
+    );
+    assert_eq!(registry.record(second).unwrap().presentation_attempt, None);
+    assert_eq!(registry.record(first).unwrap().presentation_revision, 1);
+    assert_eq!(registry.record(second).unwrap().presentation_revision, 1);
+    registry.retire_surface_for_native_window(other_window);
+    assert_eq!(
+        registry.set_presentation_request(second, mailbox),
+        Err(RenderSurfacePresentationError::RetiredSurface)
     );
 }
