@@ -1130,7 +1130,9 @@ impl Gfx {
     ) -> Result<runen_gpu::GpuSurfaceConditionalDetachOutcome> {
         let outcome = self.ctx.detach_surface_if_unleased(render_surface_id)?;
         if outcome == runen_gpu::GpuSurfaceConditionalDetachOutcome::Detached {
-            self.renderer.render_sessions.retire_surface(render_surface_id);
+            self.renderer
+                .render_sessions
+                .retire_surface(render_surface_id);
             if let Some(observations) = self.frame_gate_observations.as_mut() {
                 observations.remove(&render_surface_id.raw());
             }

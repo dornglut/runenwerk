@@ -102,12 +102,10 @@ pub(crate) fn inspect_primary_render_retirement(
 
     if registry.surface_for_native_window(native).is_none()
         && registry.primary_surface_id().is_none()
-        && registry
-            .record(primary)
-            .is_some_and(|record| {
-                record.native_window_id == native
-                    && record.lifecycle_state == RenderSurfaceLifecycleState::Retired
-            })
+        && registry.record(primary).is_some_and(|record| {
+            record.native_window_id == native
+                && record.lifecycle_state == RenderSurfaceLifecycleState::Retired
+        })
         && !gfx.has_surface(primary)
     {
         return Ok(PrimaryRenderRetirementOutcome::AlreadyRetired);
@@ -319,7 +317,10 @@ mod tests {
             try_retire_primary_render_surface(app.world_mut()),
             Err(PrimaryRenderRetirementError::MissingGpuSurface)
         );
-        let registry = app.world().resource::<RenderSurfaceRegistryResource>().unwrap();
+        let registry = app
+            .world()
+            .resource::<RenderSurfaceRegistryResource>()
+            .unwrap();
         assert_eq!(registry.primary_surface_id(), Some(primary));
         assert_eq!(registry.surface_for_native_window(native), Some(primary));
         assert_eq!(
@@ -336,7 +337,11 @@ mod tests {
             inspect_primary_render_retirement(app.world()),
             Err(PrimaryRenderRetirementError::MissingGpuSurface)
         );
-        assert!(app.world().resource::<RenderSurfaceRegistryResource>().is_ok());
+        assert!(
+            app.world()
+                .resource::<RenderSurfaceRegistryResource>()
+                .is_ok()
+        );
     }
 
     #[test]
@@ -373,9 +378,18 @@ mod tests {
             ))
         );
         {
-            let registry = app.world().resource::<RenderSurfaceRegistryResource>().unwrap();
-            assert_eq!(registry.surface_for_native_window(native_primary), Some(render_primary));
-            assert_eq!(registry.surface_for_native_window(native_secondary), Some(secondary));
+            let registry = app
+            .world()
+            .resource::<RenderSurfaceRegistryResource>()
+            .unwrap();
+            assert_eq!(
+                registry.surface_for_native_window(native_primary),
+                Some(render_primary)
+            );
+            assert_eq!(
+                registry.surface_for_native_window(native_secondary),
+                Some(secondary)
+            );
             assert_eq!(
                 registry.record(render_primary).unwrap().lifecycle_state,
                 RenderSurfaceLifecycleState::Attached
@@ -388,10 +402,16 @@ mod tests {
             ),
             Ok(PrimaryRenderRetirementOutcome::Retired)
         );
-        let registry = app.world().resource::<RenderSurfaceRegistryResource>().unwrap();
+        let registry = app
+            .world()
+            .resource::<RenderSurfaceRegistryResource>()
+            .unwrap();
         assert_eq!(registry.surface_for_native_window(native_primary), None);
         assert_eq!(registry.primary_surface_id(), None);
-        assert_eq!(registry.surface_for_native_window(native_secondary), Some(secondary));
+        assert_eq!(
+            registry.surface_for_native_window(native_secondary),
+            Some(secondary)
+        );
         assert_eq!(
             registry.record(secondary).unwrap().lifecycle_state,
             RenderSurfaceLifecycleState::Attached
