@@ -1,6 +1,8 @@
 //! App-owned drawing tool session intent boundary.
 
 use drawing::CanvasCoordinate;
+use state_machine::{Next, StateMachine};
+use std::convert::Infallible;
 use ui_input::{
     Key, KeyState, KeyboardEvent, Modifiers, PointerDeviceId, PointerSourceKind, PointerToolKind,
 };
@@ -8,42 +10,89 @@ use ui_math::UiPoint;
 
 use crate::app::{DrawingToolInputEvent, DrawingToolRouteKind};
 
-#[derive(Debug, Clone, PartialEq)]
+type DrawingTransitionRule = fn(
+    &DrawingToolSessionState,
+    &DrawingToolSessionEvent,
+) -> Result<Next<DrawingToolSessionState>, Infallible>;
+
+type DrawingMachine = StateMachine<
+    DrawingToolSessionState,
+    DrawingToolSessionEvent,
+    Infallible,
+    DrawingTransitionRule,
+>;
+
+#[derive(Debug, Clone)]
 pub struct DrawingToolSession {
+    state: DrawingMachine,
+}
+
+// Session equality compares owned domain state; it does not compare
+// function pointers (which do not have a reliable policy identity).
+impl PartialEq for DrawingToolSession {
+    fn eq(&self, other: &Self) -> bool {
+        self.state.state() == other.state.state()
+    }
+}
+
+/// One coherent owner for gesture identity and active phase.
+#[derive(Debug, Clone, PartialEq)]
+struct DrawingToolSessionState {
     next_session_id: u64,
     phase: DrawingToolSessionPhase,
 }
 
 impl Default for DrawingToolSession {
     fn default() -> Self {
+        let transitions: DrawingTransitionRule = |state, event| match (&state.phase, event) {
+            (DrawingToolSessionPhase::Idle, DrawingToolSessionEvent::End) => Ok(Next::Stay),
+            (_, DrawingToolSessionEvent::End) => Ok(Next::Enter(DrawingToolSessionState {
+                next_session_id: state.next_session_id,
+                phase: DrawingToolSessionPhase::Idle,
+            })),
+            (_, DrawingToolSessionEvent::Begin { kind, anchor }) => {
+                Ok(Next::Enter(DrawingToolSessionState {
+                    next_session_id: state.next_session_id.saturating_add(1),
+                    phase: DrawingToolSessionPhase::Active {
+                        id: DrawingToolSessionId(state.next_session_id),
+                        kind: *kind,
+                        anchor: anchor.clone(),
+                    },
+                }))
+            }
+        };
+
         Self {
-            next_session_id: 1,
-            phase: DrawingToolSessionPhase::Idle,
+            state: StateMachine::new(DrawingToolSessionState {
+                next_session_id: 1,
+                phase: DrawingToolSessionPhase::Idle,
+            })
+            .transitions(transitions),
         }
     }
 }
 
 impl DrawingToolSession {
     pub fn active_kind(&self) -> Option<DrawingToolSessionKind> {
-        match self.phase {
+        match self.phase() {
             DrawingToolSessionPhase::Idle => None,
-            DrawingToolSessionPhase::Active { kind, .. } => Some(kind),
+            DrawingToolSessionPhase::Active { kind, .. } => Some(*kind),
         }
     }
 
     pub fn phase(&self) -> &DrawingToolSessionPhase {
-        &self.phase
+        &self.state.state().phase
     }
 
     pub fn active_session_id(&self) -> Option<DrawingToolSessionId> {
-        match self.phase {
+        match self.phase() {
             DrawingToolSessionPhase::Idle => None,
-            DrawingToolSessionPhase::Active { id, .. } => Some(id),
+            DrawingToolSessionPhase::Active { id, .. } => Some(*id),
         }
     }
 
     pub fn active_anchor(&self) -> Option<&DrawingToolSessionAnchor> {
-        match &self.phase {
+        match self.phase() {
             DrawingToolSessionPhase::Idle => None,
             DrawingToolSessionPhase::Active { anchor, .. } => Some(anchor),
         }
@@ -56,13 +105,15 @@ impl DrawingToolSession {
                 DrawingToolSessionOutcome::handled(DrawingToolIntent::BeginPreviewStroke { input })
             }
             DrawingToolRouteKind::UpdatePreviewStroke => {
-                if matches!(self.phase, DrawingToolSessionPhase::Idle) {
+                if matches!(self.phase(), DrawingToolSessionPhase::Idle) {
                     self.begin_active_session(DrawingToolSessionKind::InkStroke, &input);
                 }
                 DrawingToolSessionOutcome::handled(DrawingToolIntent::UpdatePreviewStroke { input })
             }
             DrawingToolRouteKind::EndPreviewStroke => {
-                self.phase = DrawingToolSessionPhase::Idle;
+                self.state
+                    .transition(DrawingToolSessionEvent::End)
+                    .expect("ending an ink session is infallible");
                 DrawingToolSessionOutcome::handled(DrawingToolIntent::FinishPreviewStroke { input })
             }
             DrawingToolRouteKind::Hover => {
@@ -109,13 +160,12 @@ impl DrawingToolSession {
         kind: DrawingToolSessionKind,
         input: &DrawingToolInputEvent,
     ) {
-        let id = DrawingToolSessionId(self.next_session_id);
-        self.next_session_id = self.next_session_id.saturating_add(1);
-        self.phase = DrawingToolSessionPhase::Active {
-            id,
-            kind,
-            anchor: DrawingToolSessionAnchor::from_input(input),
-        };
+        self.state
+            .transition(DrawingToolSessionEvent::Begin {
+                kind,
+                anchor: DrawingToolSessionAnchor::from_input(input),
+            })
+            .expect("starting an ink session is infallible");
     }
 }
 
@@ -132,6 +182,15 @@ pub enum DrawingToolSessionPhase {
         kind: DrawingToolSessionKind,
         anchor: DrawingToolSessionAnchor,
     },
+}
+
+/// Domain-only session events are not exposed as public drawing commands.
+enum DrawingToolSessionEvent {
+    Begin {
+        kind: DrawingToolSessionKind,
+        anchor: DrawingToolSessionAnchor,
+    },
+    End,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -279,6 +338,41 @@ mod tests {
     use ui_math::UiPoint;
 
     use super::*;
+
+    #[test]
+    fn idle_end_is_idempotent_without_advancing_session_identity() {
+        let mut session = DrawingToolSession::default();
+        assert_eq!(
+            session
+                .state
+                .transition(DrawingToolSessionEvent::End)
+                .unwrap(),
+            state_machine::TransitionOutcome::Stayed
+        );
+        assert_eq!(session.phase(), &DrawingToolSessionPhase::Idle);
+        assert_eq!(session.state.state().next_session_id, 1);
+    }
+
+    #[test]
+    fn phase_and_session_identity_are_one_commit() {
+        let mut session = DrawingToolSession::default();
+        let input = input_for_route(
+            DrawingToolRouteKind::BeginPreviewStroke,
+            PointerEventKind::Down,
+        );
+        session.begin_active_session(DrawingToolSessionKind::InkStroke, &input);
+        assert_eq!(session.active_session_id(), Some(DrawingToolSessionId(1)));
+        assert_eq!(session.state.state().next_session_id, 2);
+        session
+            .state
+            .transition(DrawingToolSessionEvent::End)
+            .unwrap();
+        assert_eq!(session.active_session_id(), None);
+        assert_eq!(session.state.state().next_session_id, 2);
+        session.begin_active_session(DrawingToolSessionKind::InkStroke, &input);
+        assert_eq!(session.active_session_id(), Some(DrawingToolSessionId(2)));
+        assert_eq!(session.state.state().next_session_id, 3);
+    }
 
     #[test]
     fn tool_session_records_active_session_id_phase_and_anchor() {

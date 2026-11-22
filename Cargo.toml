@@ -67,6 +67,7 @@ members = [
     "foundation/schema",
     "foundation/commands",
     "foundation/resource_ref",
+    "foundation/state_machine",
 
     "engine",
     "engine_render_macros",
@@ -160,3 +161,4 @@ drawing = { path = "domain/drawing" }
 schema = { path = "foundation/schema" }
 commands = { path = "foundation/commands" }
 resource_ref = { path = "foundation/resource_ref" }
+state_machine = { path = "foundation/state_machine" }
