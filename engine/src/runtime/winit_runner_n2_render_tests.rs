@@ -313,16 +313,12 @@ impl NativeSecondaryRenderProof {
                         "duplicate secondary G5 terminal receipt"
                     );
                 }
-                if self.terminal_ids.is_empty()
-                    || self
-                        .runner
-                        .state
-                        .world
-                        .resource::<Gfx>()?
-                        .pending_gpu_frame_submissions()
-                        .iter()
-                        .any(|receipt| receipt.surface() == surface.raw())
-                {
+                // Another independently admitted frame may legitimately still
+                // be in flight on this secondary. Qualification requires an
+                // exact Completed receipt for our flow and a fresh, real G7
+                // image acquisition; global submission quiescence would turn
+                // an otherwise valid continuing App into a false timeout.
+                if self.terminal_ids.is_empty() {
                     return Ok(());
                 }
                 ensure!(
