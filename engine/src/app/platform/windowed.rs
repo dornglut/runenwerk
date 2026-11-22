@@ -769,6 +769,14 @@ mod tests {
         assert!(app.keep_alive().is_err());
         assert!(app.quit_on_last_window_close().is_err());
 
+        let mut windowless = App::new();
+        windowless.enable_windowing().unwrap();
+        windowless.keep_alive().unwrap();
+        assert!(
+            windowless.world().has_resource::<NativeKeepAlive>(),
+            "explicit keep-alive must not manufacture a mandatory primary"
+        );
+
         let mut headless = App::headless();
         assert!(headless.keep_alive().is_err());
         assert!(!headless.world().has_resource::<NativeKeepAlive>());
