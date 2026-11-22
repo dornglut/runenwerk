@@ -59,6 +59,10 @@ impl WinitWindowRealizer {
         self.original_primary_lifetime.can_publish()
     }
 
+    pub(crate) fn original_primary_retired(&self) -> bool {
+        self.original_primary_lifetime == NativeOriginalPrimaryLifetime::Retired
+    }
+
     pub(crate) fn has_any_window(&self) -> bool {
         !self.windows.is_empty()
     }
