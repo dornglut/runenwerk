@@ -6,8 +6,8 @@
 
 use super::super::renderer::Gfx;
 use super::super::{
-    RenderDynamicTextureTargetRequestRegistryResource, RenderGpuFlowStepStreams,
-    render_integration_is_active,
+    PreparedRenderFrameResource, RenderDynamicTextureTargetRequestRegistryResource,
+    RenderGpuFlowStepStreams, SurfaceFrameSubmissionRegistryResource, render_integration_is_active,
 };
 use super::{RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::plugins::ui::retirement::{
@@ -27,6 +27,7 @@ pub(crate) enum PrimaryRenderRetirementDeferral {
     RetainedRenderSession,
     SemanticGpuProducer,
     ActiveSurfaceLease,
+    PreparedPrimaryFrame,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,6 +35,7 @@ pub(crate) enum PrimaryRenderRetirementOutcome {
     NoRender,
     AlreadyRetired,
     Deferred(PrimaryRenderRetirementDeferral),
+    ReadyToRetire,
     Retired,
 }
 
@@ -53,8 +55,14 @@ pub(crate) enum PrimaryRenderRetirementError {
     MissingGpuSurface,
     #[error("selected Render integration has no dynamic target registry")]
     MissingTargetRegistry,
+    #[error("selected Render integration has no prepared frame resource")]
+    MissingPreparedFrameRegistry,
+    #[error("selected Render integration has no surface frame submission registry")]
+    MissingFrameSubmissionRegistry,
     #[error("primary still has registered dynamic texture target intent")]
     RegisteredPrimaryTargetIntent,
+    #[error("primary still has registered surface frame submission intent")]
+    RegisteredPrimaryFrameIntent,
     #[error("RunenUI cannot certify the primary: {0}")]
     Ui(#[from] UiSurfaceRetirementError),
     #[error("conditional physical primary detach refused: {0}")]
@@ -125,6 +133,28 @@ pub(crate) fn inspect_primary_render_retirement(
         }
     }
 
+    let prepared = world
+        .resource::<PreparedRenderFrameResource>()
+        .map_err(|_| PrimaryRenderRetirementError::MissingPreparedFrameRegistry)?;
+    if prepared
+        .frames()
+        .any(|frame| frame.surface.render_surface_id == primary)
+    {
+        return Ok(PrimaryRenderRetirementOutcome::Deferred(
+            PrimaryRenderRetirementDeferral::PreparedPrimaryFrame,
+        ));
+    }
+
+    let surface_submissions = world
+        .resource::<SurfaceFrameSubmissionRegistryResource>()
+        .map_err(|_| PrimaryRenderRetirementError::MissingFrameSubmissionRegistry)?;
+    if !surface_submissions
+        .ordered_submissions_for_surface(primary)
+        .is_empty()
+    {
+        return Err(PrimaryRenderRetirementError::RegisteredPrimaryFrameIntent);
+    }
+
     let targets = world
         .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
         .map_err(|_| PrimaryRenderRetirementError::MissingTargetRegistry)?;
@@ -168,7 +198,7 @@ pub(crate) fn inspect_primary_render_retirement(
             PrimaryRenderRetirementDeferral::PendingReadbacks,
         ));
     }
-    Ok(PrimaryRenderRetirementOutcome::Retired)
+    Ok(PrimaryRenderRetirementOutcome::ReadyToRetire)
 }
 
 /// The sole physical commit follows a fresh synchronous preflight. The G7
@@ -178,7 +208,7 @@ pub(crate) fn try_retire_primary_render_surface(
     world: &mut World,
 ) -> Result<PrimaryRenderRetirementOutcome, PrimaryRenderRetirementError> {
     let outcome = inspect_primary_render_retirement(world)?;
-    if outcome != PrimaryRenderRetirementOutcome::Retired {
+    if outcome != PrimaryRenderRetirementOutcome::ReadyToRetire {
         return Ok(outcome);
     }
     let primary = RenderSurfaceId::primary();
