@@ -41,10 +41,10 @@ fn runenwerk_consumes_only_the_accepted_runengpu_revision() {
     let lockfile = read(&workspace.join("Cargo.lock"));
 
     assert!(root_manifest.contains(
-        "runen-gpu = { git = \"https://github.com/dornglut/runen-gpu\", rev = \"f2256e53a907c1881c18b2c2d1315b249ce33a5b\" }"
+        "runen-gpu = { git = \"https://github.com/dornglut/runen-gpu\", rev = \"5044437a2edf2d56dcb9e5cd47785539b61b82f0\" }"
     ));
     assert!(root_manifest.contains(
-        "runen-render = { git = \"https://github.com/dornglut/runen-render\", rev = \"55c4f0a3f77427242e93c725b6f35fd668639a4c\" }"
+        "runen-render = { git = \"https://github.com/dornglut/runen-render\", rev = \"49e39ecc89911176b950debd1ee653025a4c938b\" }"
     ));
     assert!(engine_manifest.contains("runen-gpu.workspace = true"));
     assert!(engine_manifest.contains("naga ="));
@@ -58,10 +58,10 @@ fn runenwerk_consumes_only_the_accepted_runengpu_revision() {
         );
     }
     assert!(lockfile.contains(
-        "source = \"git+https://github.com/dornglut/runen-gpu?rev=f2256e53a907c1881c18b2c2d1315b249ce33a5b#f2256e53a907c1881c18b2c2d1315b249ce33a5b\""
+        "source = \"git+https://github.com/dornglut/runen-gpu?rev=5044437a2edf2d56dcb9e5cd47785539b61b82f0#5044437a2edf2d56dcb9e5cd47785539b61b82f0\""
     ));
     assert!(lockfile.contains(
-        "source = \"git+https://github.com/dornglut/runen-render?rev=55c4f0a3f77427242e93c725b6f35fd668639a4c#55c4f0a3f77427242e93c725b6f35fd668639a4c\""
+        "source = \"git+https://github.com/dornglut/runen-render?rev=49e39ecc89911176b950debd1ee653025a4c938b#49e39ecc89911176b950debd1ee653025a4c938b\""
     ));
     assert_eq!(
         lockfile.matches("\nname = \"runen-gpu\"\n").count(),
