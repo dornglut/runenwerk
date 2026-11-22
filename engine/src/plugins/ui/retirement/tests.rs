@@ -84,6 +84,14 @@ fn no_ui_is_distinct_from_incomplete_ui_owner() {
         Ok(UiSurfaceRetirementStatus::NoUiCapability)
     );
 
+    let mut render_only = App::headless();
+    render_only.add_plugin(RenderPlugin);
+    assert_eq!(
+        inspect_native_surface_ui_retirement(render_only.world(), primary, surface),
+        Ok(UiSurfaceRetirementStatus::NoUiCapability),
+        "Render without RunenUI is not a UI lifetime owner"
+    );
+
     let mut app = app(false);
     assert_eq!(
         inspect_native_surface_ui_retirement(app.world(), primary, surface),
@@ -421,5 +429,42 @@ fn real_prepared_paint_is_withdrawn_only_for_primary_without_another_frame() {
     assert!(
         !associations.has_withdrawal_for_surface(second),
         "surviving secondary UI must not be withdrawn"
+    );
+}
+
+#[test]
+fn stale_source_mapping_refuses_even_without_a_live_binding() {
+    use crate::plugins::ui::UiRuntimeNativeMapping;
+
+    let mut app = app(true);
+    let slot = mount(&mut app);
+    let native = NativeWindowId::primary();
+    let surface = RenderSurfaceId::primary();
+    let mapping = UiRuntimeNativeMapping::new(native, surface, (640, 480), 1.0).unwrap();
+    assert!(
+        app.world_mut()
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()
+            .unwrap()
+            .update_mapping(slot, mapping)
+    );
+    assert_eq!(
+        inspect_native_surface_ui_retirement(app.world(), native, surface),
+        Ok(UiSurfaceRetirementStatus::Blocked(
+            UiSurfaceRetirementBlocker::UnsettledPublication
+        ))
+    );
+}
+
+#[test]
+fn incomplete_selected_render_owner_fails_closed_before_withdrawal() {
+    let mut app = app(true);
+    let native = NativeWindowId::primary();
+    let surface = RenderSurfaceId::primary();
+    let _ = app.world_mut().remove_resource::<ManagedRenderProducerIds>();
+    assert_eq!(
+        inspect_native_surface_ui_retirement(app.world(), native, surface),
+        Err(UiSurfaceRetirementError::IncompleteRenderOwner(
+            "managed producer leases"
+        ))
     );
 }
