@@ -25,7 +25,10 @@ use crate::plugins::{RenderPlugin, UiPlugin, default_plugins};
 use crate::runtime::system::SystemMobilityExt;
 use crate::runtime::{Startup, Update, WorldMut};
 use anyhow::{Result, anyhow, ensure};
-use runenui_core::{NoHostProtocol, ProducerBudget, StyleEnvironment, UiApp, View, button};
+use runenui_core::{
+    Color, LayoutBound, LayoutDimension, LayoutStyle, LogicalLength, NoHostProtocol,
+    ProducerBudget, StyleEnvironment, UiApp, View, button,
+};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -57,7 +60,18 @@ impl UiApp for RetainedSecondaryUi {
     }
 
     fn root(_: &Self::State) -> impl View<Self::Action> {
-        button("retained secondary input").on_activate(|| ())
+        // A real nonempty F2 paint contribution is mandatory before any
+        // terminal Render Present can qualify displayed M13 input authority.
+        // Match the native UI qualification's explicit painted button idiom.
+        button("retained secondary input")
+            .on_activate(|| ())
+            .with_layout(
+                LayoutStyle::default()
+                    .with_width(LayoutDimension::Fill)
+                    .with_min_height(LayoutBound::length(LogicalLength::from(52_u16))),
+            )
+            .foreground(Color::WHITE)
+            .background(Color::rgb(55, 111, 208))
     }
 
     fn update(
@@ -438,22 +452,27 @@ impl NativeSecondaryUiProof {
                     let any_display = associations
                         .displayed_for_native_recipient(self.slot, secondary)
                         .is_some();
-                    let paint = self
+                    let paints = self
                         .runner
                         .state
                         .world
                         .resource::<RunenUiPaintSubmissionRegistryResource>()?
-                        .ordered_submissions_for_surface(surface)
-                        .len();
+                        .ordered_submissions_for_surface(surface);
+                    let paint = paints.len();
+                    let paint_items = paints
+                        .iter()
+                        .map(|submission| submission.publication.scene().items().len())
+                        .sum::<usize>();
                     ensure!(
                         self.ui_redraw_attempts < 8,
-                        "secondary RunenUI did not terminally display after {} real post-close redraws: binding={} pending={} in_flight={} displayed_for_native={} paint_submissions={} native_frames={} terminal_g5={}",
+                        "secondary RunenUI did not terminally display after {} real post-close redraws: binding={} pending={} in_flight={} displayed_for_native={} paint_submissions={} painted_scene_items={} native_frames={} terminal_g5={}",
                         self.ui_redraw_attempts,
                         binding,
                         pending,
                         in_flight,
                         any_display,
                         paint,
+                        paint_items,
                         self.runner.ordinary_frames,
                         self.terminal_ids.len(),
                     );
@@ -619,6 +638,12 @@ fn native_keep_alive_ui_os_proof() -> Result<()> {
     if std::env::var_os("RUNENWERK_NATIVE_KEEP_ALIVE_UI_OS_SMOKE").is_none() {
         return Ok(());
     }
+    // Test-only diagnostic subscriber: print exact renderer-owned rejection
+    // reasons without consuming or substituting any G5/UiPlugin receipts.
+    let _ = tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::WARN)
+        .with_ansi(false)
+        .try_init();
     let mut app = App::new();
     app.keep_alive()?;
     app.with_frame_pacing(FramePacingPolicyResource::on_demand());
