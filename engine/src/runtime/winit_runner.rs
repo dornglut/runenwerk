@@ -5627,6 +5627,10 @@ mod retirement_tests;
 #[path = "winit_runner_keep_alive_tests.rs"]
 mod keep_alive_tests;
 
+#[cfg(all(test, target_os = "linux"))]
+#[path = "winit_runner_n2_render_tests.rs"]
+mod n2_render_tests;
+
 #[cfg(test)]
 #[path = "winit_runner_windowless_tests.rs"]
 mod windowless_tests;
