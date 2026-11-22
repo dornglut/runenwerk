@@ -98,11 +98,9 @@ pub(crate) fn inspect_native_surface_ui_retirement(
         world
             .resource::<RunenUiPaintSubmissionRegistryResource>()
             .map_err(|_| UiSurfaceRetirementError::IncompleteRenderOwner("paint registry"))?;
-        world
-            .resource::<ManagedRenderProducerIds>()
-            .map_err(|_| {
-                UiSurfaceRetirementError::IncompleteRenderOwner("managed producer leases")
-            })?;
+        world.resource::<ManagedRenderProducerIds>().map_err(|_| {
+            UiSurfaceRetirementError::IncompleteRenderOwner("managed producer leases")
+        })?;
     }
 
     if associations.has_live_surface_binding(surface) {
@@ -158,9 +156,7 @@ pub(crate) fn settle_native_surface_ui_withdrawals_without_frame(
     surface: RenderSurfaceId,
 ) -> Result<UiSurfaceRetirementStatus, UiSurfaceRetirementError> {
     let status = inspect_native_surface_ui_retirement(world, native, surface)?;
-    if status
-        != UiSurfaceRetirementStatus::Blocked(UiSurfaceRetirementBlocker::PendingWithdrawal)
-    {
+    if status != UiSurfaceRetirementStatus::Blocked(UiSurfaceRetirementBlocker::PendingWithdrawal) {
         return Ok(status);
     }
     // All fallible resource preflight is before consuming any obligation.
@@ -169,9 +165,7 @@ pub(crate) fn settle_native_surface_ui_withdrawals_without_frame(
         .map_err(|_| UiSurfaceRetirementError::IncompleteRenderOwner("paint registry"))?;
     world
         .resource::<ManagedRenderProducerIds>()
-        .map_err(|_| {
-                UiSurfaceRetirementError::IncompleteRenderOwner("managed producer leases")
-            })?;
+        .map_err(|_| UiSurfaceRetirementError::IncompleteRenderOwner("managed producer leases"))?;
 
     let withdrawals = world
         .resource_mut::<UiRuntimePresentationAssociationsResource>()

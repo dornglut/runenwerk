@@ -1,16 +1,14 @@
 use std::collections::BTreeSet;
 
-use runenui_core::{
-    Effects, NoHostProtocol, ProducerBudget, StyleEnvironment, UiApp, View, text,
-};
+use runenui_core::{Effects, NoHostProtocol, ProducerBudget, StyleEnvironment, UiApp, View, text};
 
 use super::*;
 use crate::app::App;
 use crate::plugins::TimePlugin;
 use crate::plugins::render::{RenderFrameProducerId, RenderPlugin};
 use crate::plugins::ui::{
-    AppUiExt, UiPlugin, UiRuntimeFontConfiguration, UiRuntimePresentationBinding,
-    UiRuntimeSlotId, UiTypedScreenId,
+    AppUiExt, UiPlugin, UiRuntimeFontConfiguration, UiRuntimePresentationBinding, UiRuntimeSlotId,
+    UiTypedScreenId,
 };
 
 struct SimpleUi;
@@ -133,7 +131,9 @@ fn bound_primary_refuses_without_mutation_and_missing_paint_preserves_withdrawal
         .unbind(slot);
     assert_eq!(
         settle_native_surface_ui_withdrawals_without_frame(app.world_mut(), primary, surface),
-        Err(UiSurfaceRetirementError::IncompleteRenderOwner("paint registry"))
+        Err(UiSurfaceRetirementError::IncompleteRenderOwner(
+            "paint registry"
+        ))
     );
     assert!(
         app.world()
@@ -213,7 +213,9 @@ fn target_mismatch_rejects_without_consuming_withdrawal() {
         .world_mut()
         .resource_mut::<UiRuntimePresentationAssociationsResource>()
         .unwrap();
-    associations.bind(binding(slot, producer(33), first)).unwrap();
+    associations
+        .bind(binding(slot, producer(33), first))
+        .unwrap();
     associations.unbind(slot);
     app.world_mut()
         .resource_mut::<RenderSurfaceRegistryResource>()
@@ -221,11 +223,7 @@ fn target_mismatch_rejects_without_consuming_withdrawal() {
         .confirm_surface_attachment(first, primary, (320, 160))
         .unwrap();
     assert_eq!(
-        settle_native_surface_ui_withdrawals_without_frame(
-            app.world_mut(),
-            second_native,
-            first,
-        ),
+        settle_native_surface_ui_withdrawals_without_frame(app.world_mut(), second_native, first),
         Err(UiSurfaceRetirementError::MismatchedTarget)
     );
     assert!(
@@ -352,8 +350,16 @@ fn real_prepared_paint_is_withdrawn_only_for_primary_without_another_frame() {
     app.add_plugin(TimePlugin);
     app.add_plugin(UiPlugin);
     app.add_plugin(RenderPlugin);
-    let a = app.ui().mount_with_fonts(PaintScreen, &fonts).slot_id().unwrap();
-    let b = app.ui().mount_with_fonts(PaintScreen, &fonts).slot_id().unwrap();
+    let a = app
+        .ui()
+        .mount_with_fonts(PaintScreen, &fonts)
+        .slot_id()
+        .unwrap();
+    let b = app
+        .ui()
+        .mount_with_fonts(PaintScreen, &fonts)
+        .slot_id()
+        .unwrap();
 
     let mut windows = WindowStateRegistryResource::default();
     windows.register_primary_window("Primary", (320, 160), 1.0, true);
@@ -379,7 +385,9 @@ fn real_prepared_paint_is_withdrawn_only_for_primary_without_another_frame() {
     associations.bind(binding(a, a_producer, first)).unwrap();
     associations.bind(binding(b, b_producer, second)).unwrap();
 
-    let mut app = app.run_for_frames(1).expect("real RenderPrepare must publish paint");
+    let mut app = app
+        .run_for_frames(1)
+        .expect("real RenderPrepare must publish paint");
     let paints = app
         .world()
         .resource::<RunenUiPaintSubmissionRegistryResource>()
