@@ -976,7 +976,7 @@ jobs:
 
       - name: Preserve research-only raw Boids G3 phase trace
         if: always() && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:
           name: research-boids-g3-exclusive-phases
           path: ${{ runner.temp }}/boids-native-g3-exclusive-phases.log
