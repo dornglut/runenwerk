@@ -41,6 +41,8 @@ docs-site/   canonical documentation
 - [Dependency rules](docs-site/src/content/docs/guidelines/dependency-rules.md)
 - [Crate inventory](docs-site/src/content/docs/workspace/crate-inventory.md)
 
+Documentation-only pull requests use the documentation check on their feature heads; protected merge-queue integration still requires the complete Rust and native GPU validation suites. See [Testing and validation](TESTING.md) for the exact policy.
+
 ## Contributions
 
 Runenwerk is currently a solo-maintained research and development project.
