@@ -464,4 +464,111 @@ mod tests {
             Ok(UiSurfaceRetirementStatus::Cleared)
         );
     }
+    /// A real RenderPrepare publishes both paints. The following cleanup does
+    /// not run another Update, RenderPrepare, RenderSubmit or Present.
+    #[test]
+    fn real_prepared_paint_is_withdrawn_only_for_primary_without_another_frame() {
+        use crate::plugins::render::RunenUiPaintSubmissionRegistryResource;
+        use crate::plugins::ui::{UiScreen, UiTypedSource};
+        use crate::runtime::WindowStateRegistryResource;
+
+        #[derive(Clone, Copy, Debug)]
+        struct PaintScreen;
+
+        impl UiScreen for PaintScreen {
+            fn screen_id(&self) -> UiTypedScreenId {
+                UiTypedScreenId::new("retirement.paint")
+            }
+
+            fn build_source(&self) -> UiTypedSource {
+                UiTypedSource::new(
+                    self.screen_id(),
+                    ui_program::UiProgramSourceId::new("retirement.paint.source"),
+                    ui_definition::UiNodeDefinition::Column {
+                        id: ui_definition::AuthoredId::new("retirement.root"),
+                        children: vec![ui_definition::UiNodeDefinition::Label {
+                            id: ui_definition::AuthoredId::new("retirement.title"),
+                            label: ui_definition::UiValueBinding::static_text("Retirement"),
+                            availability: None,
+                        }],
+                    },
+                )
+            }
+        }
+
+        let font = include_bytes!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../assets/fonts/JetBrainsMono-Regular.ttf"
+        ));
+        let fonts = UiRuntimeFontConfiguration::new(vec![font.to_vec()]).with_generic_mapping(
+            runenui_core::GenericFontFamily::SansSerif,
+            vec![runenui_core::FontFamilyName::new("JetBrains Mono").unwrap()],
+        );
+        let primary = NativeWindowId::primary();
+        let secondary = NativeWindowId::try_from_raw(2).unwrap();
+        let first = RenderSurfaceId::primary();
+        let mut app = App::headless();
+        app.add_plugin(TimePlugin);
+        app.add_plugin(UiPlugin);
+        app.add_plugin(RenderPlugin);
+        let a = app.ui().mount_with_fonts(PaintScreen, &fonts).slot_id().unwrap();
+        let b = app.ui().mount_with_fonts(PaintScreen, &fonts).slot_id().unwrap();
+
+        let mut windows = WindowStateRegistryResource::default();
+        windows.register_primary_window("Primary", (320, 160), 1.0, true);
+        windows.register_created_window(secondary, "Secondary", (320, 160), 1.0, false);
+        app.insert_resource(windows);
+        let surfaces = app
+            .world_mut()
+            .resource_mut::<RenderSurfaceRegistryResource>()
+            .unwrap();
+        let second = surfaces.reserve_surface_for_native_window(secondary, (320, 160));
+        surfaces
+            .confirm_surface_attachment(first, primary, (320, 160))
+            .unwrap();
+        surfaces
+            .confirm_surface_attachment(second, secondary, (320, 160))
+            .unwrap();
+        let a_producer = producer(71);
+        let b_producer = producer(72);
+        let associations = app
+            .world_mut()
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()
+            .unwrap();
+        associations.bind(binding(a, a_producer, first)).unwrap();
+        associations.bind(binding(b, b_producer, second)).unwrap();
+
+        let mut app = app.run_for_frames(1).expect("real RenderPrepare must publish paint");
+        let paints = app
+            .world()
+            .resource::<RunenUiPaintSubmissionRegistryResource>()
+            .unwrap();
+        assert!(paints.get_for_surface(&a_producer, first).is_some());
+        assert!(paints.get_for_surface(&b_producer, second).is_some());
+
+        let associations = app
+            .world_mut()
+            .resource_mut::<UiRuntimePresentationAssociationsResource>()
+            .unwrap();
+        associations.unbind(a);
+        associations.unbind(b);
+        assert_eq!(
+            settle_native_surface_ui_withdrawals_without_frame(app.world_mut(), primary, first),
+            Ok(UiSurfaceRetirementStatus::Cleared)
+        );
+        let paints = app
+            .world()
+            .resource::<RunenUiPaintSubmissionRegistryResource>()
+            .unwrap();
+        assert!(paints.get_for_surface(&a_producer, first).is_none());
+        assert!(paints.get_for_surface(&b_producer, second).is_some());
+        assert!(
+            app.world()
+                .resource::<UiRuntimePresentationAssociationsResource>()
+                .unwrap()
+                .has_withdrawal_for_surface(second),
+            "secondary's existing withdrawal must remain pending"
+        );
+    }
+
 }
