@@ -45,11 +45,8 @@ fn secondary_present_graph(image: &GpuAcquiredSurfaceImage) -> GpuPreparedWorkGr
         None,
     )
     .expect("valid secondary GPU render operation");
-    let present = GpuPresentOperation::new(
-        view.clone().into(),
-        view.descriptor().subresources(),
-    )
-    .expect("valid secondary GPU Present operation");
+    let present = GpuPresentOperation::new(view.clone().into(), view.descriptor().subresources())
+        .expect("valid secondary GPU Present operation");
 
     let name = "Runenwerk surviving secondary clear Present";
     let mut builder = GpuWorkFragmentBuilder::new(label(name), provenance(name));
@@ -85,11 +82,13 @@ fn physical_probe(event_loop: &ActiveEventLoop) -> Result<()> {
     let primary_surface = RenderSurfaceId::primary();
 
     let window = |title| -> Result<Arc<Window>> {
-        Ok(Arc::new(event_loop.create_window(
-            Window::default_attributes()
-                .with_title(title)
-                .with_inner_size(PhysicalSize::new(320, 240)),
-        )?))
+        Ok(Arc::new(
+            event_loop.create_window(
+                Window::default_attributes()
+                    .with_title(title)
+                    .with_inner_size(PhysicalSize::new(320, 240)),
+            )?,
+        ))
     };
     let primary_window = window("Runenwerk retire primary")?;
     let secondary_window = window("Runenwerk surviving secondary")?;
@@ -159,9 +158,7 @@ fn physical_probe(event_loop: &ActiveEventLoop) -> Result<()> {
         "native continuation must execute Vulkan, not a simulated backend"
     );
     let image = gpu.acquire_surface_image(secondary_handle)?;
-    let prepared = pollster::block_on(
-        gpu.prepare_submission(secondary_present_graph(&image)),
-    )?;
+    let prepared = pollster::block_on(gpu.prepare_submission(secondary_present_graph(&image)))?;
     let submitted = gpu.submit_prepared(prepared)?;
     let deadline = Instant::now() + Duration::from_secs(15);
     loop {
@@ -173,7 +170,10 @@ fn physical_probe(event_loop: &ActiveEventLoop) -> Result<()> {
             }
             GpuSubmissionStatus::Accepted => {}
         }
-        ensure!(Instant::now() < deadline, "surviving secondary G5 did not complete");
+        ensure!(
+            Instant::now() < deadline,
+            "surviving secondary G5 did not complete"
+        );
         std::thread::yield_now();
     }
     let next = gpu.acquire_surface_image(secondary_handle)?;
@@ -200,13 +200,7 @@ impl ApplicationHandler for PhysicalProof {
         event_loop.exit();
     }
 
-    fn window_event(
-        &mut self,
-        _event_loop: &ActiveEventLoop,
-        _id: WindowId,
-        _event: WindowEvent,
-    ) {
-    }
+    fn window_event(&mut self, _event_loop: &ActiveEventLoop, _id: WindowId, _event: WindowEvent) {}
 }
 
 #[test]
@@ -219,7 +213,10 @@ fn physical_primary_render_retirement_os_proof() -> Result<()> {
     let event_loop = builder.build()?;
     let mut probe = PhysicalProof::default();
     event_loop.run_app(&mut probe)?;
-    ensure!(probe.attempted, "X11 must invoke one real Winit resumed callback");
+    ensure!(
+        probe.attempted,
+        "X11 must invoke one real Winit resumed callback"
+    );
     probe
         .outcome
         .take()
