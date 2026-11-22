@@ -145,7 +145,14 @@ impl NativeSecondaryUiProof {
     fn inspect(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
         ensure!(
             Instant::now() < self.deadline,
-            "N2 real secondary RenderFlow proof exceeded deadline"
+            "N2-B0 watchdog: stage={} primary_realized={} secondary={:?} secondary_surface={:?} postclose_publications={} terminal_g5_receipts={} ordinary_frames={}",
+            self.stage,
+            self.runner.window_realizer.has_primary_window(),
+            self.secondary,
+            self.secondary_surface,
+            self.published.load(Ordering::SeqCst),
+            self.terminal_ids.len(),
+            self.runner.ordinary_frames,
         );
         match self.stage {
             0 => {
@@ -555,6 +562,15 @@ impl ApplicationHandler<NativeHostEvent> for NativeSecondaryUiProof {
         }
         if !event_loop.exiting() {
             self.runner.about_to_wait(event_loop);
+            if !event_loop.exiting() {
+                // A diagnostic OS wake, not a synthetic App/Render/Present.
+                // Without a bounded Winit opportunity, a failed M13/display
+                // producer can sleep forever in ControlFlow::Wait before
+                // the proof's own deadline is observed.
+                event_loop.set_control_flow(ControlFlow::WaitUntil(
+                    Instant::now() + Duration::from_millis(20),
+                ));
+            }
         }
     }
 
