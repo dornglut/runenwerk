@@ -7,7 +7,8 @@
 use super::super::renderer::Gfx;
 use super::super::{
     PreparedRenderFrameResource, RenderDynamicTextureTargetRequestRegistryResource,
-    RenderGpuFlowStepStreams, SurfaceFrameSubmissionRegistryResource, render_integration_is_active,
+    RenderGpuFlowStepStreams, RunenUiPaintSubmissionRegistryResource,
+    SurfaceFrameSubmissionRegistryResource, render_integration_is_active,
 };
 use super::{RenderSurfaceId, RenderSurfaceLifecycleState, RenderSurfaceRegistryResource};
 use crate::plugins::ui::retirement::{
@@ -28,6 +29,7 @@ pub(crate) enum PrimaryRenderRetirementDeferral {
     SemanticGpuProducer,
     ActiveSurfaceLease,
     PreparedPrimaryFrame,
+    UndeliveredGpuObservation,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,6 +65,10 @@ pub(crate) enum PrimaryRenderRetirementError {
     RegisteredPrimaryTargetIntent,
     #[error("primary still has registered surface frame submission intent")]
     RegisteredPrimaryFrameIntent,
+    #[error("selected Render integration has no RunenUI paint registry")]
+    MissingPaintRegistry,
+    #[error("primary still has unwithdrawn RunenUI Render paint")]
+    ResidualRunenUiPaint,
     #[error("RunenUI cannot certify the primary: {0}")]
     Ui(#[from] UiSurfaceRetirementError),
     #[error("conditional physical primary detach refused: {0}")]
@@ -155,6 +161,15 @@ pub(crate) fn inspect_primary_render_retirement(
         return Err(PrimaryRenderRetirementError::RegisteredPrimaryFrameIntent);
     }
 
+    // RunenUI paint is Render-owned even when UiPlugin is not installed.
+    // Do not infer a paint-free surface solely from absent UI capability.
+    let paint = world
+        .resource::<RunenUiPaintSubmissionRegistryResource>()
+        .map_err(|_| PrimaryRenderRetirementError::MissingPaintRegistry)?;
+    if !paint.ordered_submissions_for_surface(primary).is_empty() {
+        return Err(PrimaryRenderRetirementError::ResidualRunenUiPaint);
+    }
+
     let targets = world
         .resource::<RenderDynamicTextureTargetRequestRegistryResource>()
         .map_err(|_| PrimaryRenderRetirementError::MissingTargetRegistry)?;
@@ -169,6 +184,11 @@ pub(crate) fn inspect_primary_render_retirement(
     {
         return Ok(PrimaryRenderRetirementOutcome::Deferred(
             PrimaryRenderRetirementDeferral::AcceptedPrimaryFrames,
+        ));
+    }
+    if gfx.native_gpu_progress_pending() {
+        return Ok(PrimaryRenderRetirementOutcome::Deferred(
+            PrimaryRenderRetirementDeferral::UndeliveredGpuObservation,
         ));
     }
     if gfx.has_unsettled_retained_surface(primary) {
