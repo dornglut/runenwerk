@@ -942,6 +942,85 @@ jobs:
           grep -F "native_boids_gpu_smoke=pass" "$species_log"
           grep -F "visual_readback=false" "$species_log"
 
+      # One-time R7 research branch ONLY: this step and artifact are not part
+      # of the accepted CI contract and must not be merged into main.
+      - name: Research-only real native Boids G3 exclusive phase capture
+        if: github.event_name == 'pull_request'
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
+          RUNENWERK_BOIDS_NATIVE_NO_READBACK: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+          RUNENWERK_G3_PHASE_PROFILE: '1'
+        run: |
+          set -euo pipefail
+          trace_file="${RUNNER_TEMP}/boids-native-g3-exclusive-phases.log"
+          echo "G3 research source revision: $(git rev-parse HEAD)"
+          echo "G3 research target: runen_gpu::graph"
+          echo "G3 accepted RunenGPU: 94b8588637eeb4c638f700b1ebb863b46243a743"
+          echo "G3 accepted RunenRender: 282e0aae6cf3343e028c8668cb712f2e829805b4"
+          echo "G3 research profile: Cargo debug, no-image-readback, native Boids flocking, 120 submitted Presents"
+          if ! xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable run -p engine --example boids_render_flow --locked >"$trace_file" 2>&1; then
+            tail -n 120 "$trace_file"
+            echo "Profiled Boids execution failed" >&2
+            exit 1
+          fi
+          grep -F "native_boids_gpu_smoke=pass" "$trace_file"
+          grep -F "visual_readback=false" "$trace_file"
+          if ! grep -Fq "g3.dynamic_initialization_simulation" "$trace_file"; then
+            tail -n 100 "$trace_file"
+            echo "Required RunenGPU exclusive phase spans were not captured" >&2
+            exit 1
+          fi
+          echo "G3 profiling spans captured with original successful native GPU receipts."
+          echo "Raw trace retained as separately downloadable evidence for per-frame p50/p95 calculations."
+
+      - name: Preserve research-only raw Boids G3 phase trace
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: research-boids-g3-exclusive-phases
+          path: ${{ runner.temp }}/boids-native-g3-exclusive-phases.log
+          if-no-files-found: error
+          retention-days: 7
+
+      # Research-only pacing control. A slower submit cadence may stabilize
+      # the selected G3 node count; report the observed shape, do not assume.
+      - name: Research-only capped Boids G3 workload-shape control
+        if: github.event_name == 'pull_request'
+        env:
+          RUST_BACKTRACE: '1'
+          RUNENWERK_BOIDS_NATIVE_SMOKE: '1'
+          RUNENWERK_BOIDS_NATIVE_NO_READBACK: '1'
+          RUNENWERK_G5_REQUIRE_GPU: '1'
+          RUNENWERK_G3_PHASE_PROFILE: '1'
+        run: |
+          set -euo pipefail
+          capped_trace="${RUNNER_TEMP}/boids-native-g3-capped10-phases.log"
+          echo "G3 research capped control: source $(git rev-parse HEAD), host pacing 10 FPS, Cargo debug"
+          if ! xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
+               cargo +stable run -p engine --example boids_render_flow --locked -- --host-pacing=capped:10 >"$capped_trace" 2>&1; then
+            tail -n 120 "$capped_trace"
+            echo "Research-only capped Boids frame proof failed" >&2
+            exit 1
+          fi
+          grep -F "native_boids_gpu_smoke=pass" "$capped_trace"
+          grep -F "visual_readback=false" "$capped_trace"
+          grep -F "native_boids_graph_shape=observed" "$capped_trace"
+          if ! grep -Fq "g3.dynamic_initialization_simulation" "$capped_trace"; then
+            echo "No G3 capped control phases captured" >&2
+            exit 1
+          fi
+
+      - name: Preserve research-only capped Boids G3 phase trace
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: research-boids-g3-capped10-phases
+          path: ${{ runner.temp }}/boids-native-g3-capped10-phases.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Report Rust compiler cache stats
         if: always() && steps.sccache_setup.outcome == 'success'
         shell: bash
