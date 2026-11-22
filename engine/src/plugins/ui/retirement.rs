@@ -184,5 +184,19 @@ pub(crate) fn settle_native_surface_ui_withdrawals_without_frame(
     inspect_native_surface_ui_retirement(world, native, surface)
 }
 
+/// Canonical native-original-primary UI source seam. Winit is the owner of
+/// the original *window*, not RenderSurfaceId or physical paint mappings;
+/// the UI owner supplies its exact Native/Render pair and delegates to the
+/// same fail-closed target-scoped withdrawal contract as all other windows.
+pub(crate) fn settle_original_primary_ui_withdrawals_without_frame(
+    world: &mut World,
+) -> Result<UiSurfaceRetirementStatus, UiSurfaceRetirementError> {
+    settle_native_surface_ui_withdrawals_without_frame(
+        world,
+        NativeWindowId::primary(),
+        RenderSurfaceId::primary(),
+    )
+}
+
 #[cfg(test)]
 mod tests;

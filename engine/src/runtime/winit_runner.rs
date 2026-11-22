@@ -4227,10 +4227,8 @@ impl WinitRunner {
         }
 
         let ui =
-            crate::plugins::ui::retirement::settle_native_surface_ui_withdrawals_without_frame(
+            crate::plugins::ui::retirement::settle_original_primary_ui_withdrawals_without_frame(
                 &mut self.state.world,
-                native_window_id,
-                crate::plugins::render::host::RenderSurfaceId::primary(),
             )?;
         if let crate::plugins::ui::retirement::UiSurfaceRetirementStatus::Blocked(blocker) = ui {
             tracing::debug!(
