@@ -4207,9 +4207,7 @@ impl WinitRunner {
                 .state
                 .world
                 .resource::<UiNativeInputRecipientsResource>()
-                .is_ok_and(|recipients| {
-                    recipients.host_cancellation_pending(native_window_id)
-                })
+                .is_ok_and(|recipients| recipients.host_cancellation_pending(native_window_id))
         {
             self.request_ordinary_frame("pending original M13 cancellation");
             return Ok(false);
@@ -4228,11 +4226,12 @@ impl WinitRunner {
             return Err(error);
         }
 
-        let ui = crate::plugins::ui::retirement::settle_native_surface_ui_withdrawals_without_frame(
-            &mut self.state.world,
-            native_window_id,
-            crate::plugins::render::host::RenderSurfaceId::primary(),
-        )?;
+        let ui =
+            crate::plugins::ui::retirement::settle_native_surface_ui_withdrawals_without_frame(
+                &mut self.state.world,
+                native_window_id,
+                crate::plugins::render::host::RenderSurfaceId::primary(),
+            )?;
         if let crate::plugins::ui::retirement::UiSurfaceRetirementStatus::Blocked(blocker) = ui {
             tracing::debug!(
                 target: "engine.runtime.primary_retirement",
@@ -4256,7 +4255,7 @@ impl WinitRunner {
                 // Native window disappearance.
                 self.retire_window_input_source(native_window_id)?;
                 Ok(true)
-            },
+            }
             PrimaryRenderRetirementOutcome::Deferred(reason) => {
                 tracing::debug!(
                     target: "engine.runtime.primary_retirement",
@@ -5004,10 +5003,9 @@ impl ApplicationHandler<NativeHostEvent> for WinitRunner {
                 // surviving, actually realized native windows instead.
                 let surviving = self.window_realizer.realized_windows();
                 for (_, native_window_id, window) in &surviving {
-                    if let Err(error) = self.apply_event_for_native_window(
-                        *native_window_id,
-                        PlatformEvent::Resumed,
-                    ) {
+                    if let Err(error) = self
+                        .apply_event_for_native_window(*native_window_id, PlatformEvent::Resumed)
+                    {
                         self.exit_with_error(event_loop, error);
                         return;
                     }

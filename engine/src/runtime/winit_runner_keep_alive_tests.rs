@@ -50,7 +50,10 @@ struct NativeKeepAliveProof {
 
 impl NativeKeepAliveProof {
     fn inspect(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
-        ensure!(Instant::now() < self.deadline, "primary close proof exceeded its deadline");
+        ensure!(
+            Instant::now() < self.deadline,
+            "primary close proof exceeded its deadline"
+        );
         match self.stage {
             0 => {
                 let realized = self.runner.window_realizer.realized_windows();
@@ -85,7 +88,8 @@ impl NativeKeepAliveProof {
                 self.runner.apply_window_effects(event_loop)?;
                 ensure!(
                     self.runner.window_realizer.has_primary_window()
-                        && self.runner
+                        && self
+                            .runner
                             .native_input()
                             .window_source_context(primary)
                             .is_some_and(|context| context.source == original.source),
@@ -145,8 +149,7 @@ impl NativeKeepAliveProof {
                 // The real OS resume callback may never recreate fixed ID 1.
                 self.runner.resumed(event_loop);
                 ensure!(
-                    !self.runner.window_realizer.has_primary_window()
-                        && !event_loop.exiting(),
+                    !self.runner.window_realizer.has_primary_window() && !event_loop.exiting(),
                     "resume must preserve the retired original identity and App"
                 );
                 self.secondary = Some(secondary);
@@ -265,10 +268,22 @@ fn native_keep_alive_primary_close_os_proof() -> Result<()> {
     if let Some(error) = proof.failure {
         return Err(error);
     }
-    ensure!(proof.observed, "physical primary close never preserved secondary App execution");
-    ensure!(proof.runner.fatal_error.is_none(), "Native Host reported a fatal error");
-    ensure!(startup.load(Ordering::SeqCst) == 1, "Startup must run exactly once");
-    ensure!(updates.load(Ordering::SeqCst) >= 2, "no ordinary secondary App update");
+    ensure!(
+        proof.observed,
+        "physical primary close never preserved secondary App execution"
+    );
+    ensure!(
+        proof.runner.fatal_error.is_none(),
+        "Native Host reported a fatal error"
+    );
+    ensure!(
+        startup.load(Ordering::SeqCst) == 1,
+        "Startup must run exactly once"
+    );
+    ensure!(
+        updates.load(Ordering::SeqCst) >= 2,
+        "no ordinary secondary App update"
+    );
     println!(
         "native_keep_alive_primary=pass physical_x11=true first_primary_retired=true secondary_survived=true resumed_without_recreation=true app_updates_after_retirement=true"
     );

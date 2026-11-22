@@ -796,5 +796,4 @@ mod tests {
         assert!(!app.world().has_resource::<NativeKeepAlive>());
         assert!(app.world().has_resource::<NativeQuitOnLastWindowClose>());
     }
-
 }
