@@ -467,14 +467,8 @@ impl NativeSecondaryUiProof {
                         ),
                     },
                 )?;
-                self.runner.route_ui_cursor_moved(
-                    secondary,
-                    self.slot,
-                    epoch,
-                    device,
-                    context,
-                    point,
-                )?;
+                self.runner
+                    .route_ui_cursor_moved(secondary, self.slot, epoch, device, context, point)?;
                 for state in [ElementState::Pressed, ElementState::Released] {
                     let (input, disposition) = self.runner.admit_native_mouse_button(
                         secondary,
@@ -506,7 +500,9 @@ impl NativeSecondaryUiProof {
                     .world
                     .resource::<UiRuntimeSlotsResource>()?
                     .observe_app::<RetainedSecondaryUi, _>(self.slot, |app| *app.state())
-                    .map_err(|error| anyhow!("selected secondary M13 observation failed: {error:?}"))?;
+                    .map_err(|error| {
+                        anyhow!("selected secondary M13 observation failed: {error:?}")
+                    })?;
                 if activations == 0 {
                     let secondary = self
                         .secondary
