@@ -337,6 +337,78 @@ fn mixed_ui_without_executable_work(
         })
 }
 
+/// Strict composition orders preserve their existing typed error contract;
+/// required render controls may already be implied by G3 data causality.
+enum RenderGpuOrderRequest {
+    Strict(Vec<GpuGraphExplicitOrder>),
+    Required(Vec<GpuGraphRequiredOrder>),
+}
+
+fn prepare_context_graph(
+    context: &GpuContext,
+    label: GpuResourceLabel,
+    fragments: Vec<GpuWorkFragment>,
+    orders: RenderGpuOrderRequest,
+) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
+    let result = match orders {
+        RenderGpuOrderRequest::Strict(orders) => {
+            context.prepare_work_graph_with_orders(label, fragments, orders)
+        }
+        RenderGpuOrderRequest::Required(orders) => {
+            context.prepare_work_graph_with_required_orders(label, fragments, orders)
+        }
+    };
+    result.map_err(RenderGpuWorkAdapterError::from)
+}
+
+#[cfg(test)]
+fn prepare_graph_for_test(
+    label: GpuResourceLabel,
+    fragments: Vec<GpuWorkFragment>,
+    orders: RenderGpuOrderRequest,
+) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError> {
+    let result = match orders {
+        RenderGpuOrderRequest::Strict(orders) => {
+            GpuPreparedWorkGraph::prepare_with_orders(label, fragments, orders)
+        }
+        RenderGpuOrderRequest::Required(orders) => {
+            GpuPreparedWorkGraph::prepare_with_required_orders(label, fragments, orders)
+        }
+    };
+    result.map_err(RenderGpuWorkAdapterError::from)
+}
+
+/// Mixed UI controls target its first painter on entry and leave its last
+/// node on exit. G3 owns the resulting hazards and dependency admission.
+fn required_render_control_orders(
+    desired: &[(RenderGpuWorkOccurrenceId, RenderGpuWorkOccurrenceId)],
+    occurrence_nodes: &BTreeMap<RenderGpuWorkOccurrenceId, GpuWorkNodeId>,
+    mixed_first: Option<(RenderGpuWorkOccurrenceId, &GpuWorkNodeId)>,
+) -> Result<Vec<GpuGraphRequiredOrder>, RenderGpuWorkAdapterError> {
+    desired
+        .iter()
+        .map(|&(before_occurrence, after_occurrence)| {
+            let before = occurrence_nodes.get(&before_occurrence).ok_or(
+                RenderGpuWorkAdapterError::MissingOrderedOccurrence {
+                    occurrence: before_occurrence,
+                },
+            )?;
+            let after = match mixed_first {
+                Some((ui_occurrence, first)) if after_occurrence == ui_occurrence => Some(first),
+                _ => occurrence_nodes.get(&after_occurrence),
+            }
+            .ok_or(RenderGpuWorkAdapterError::MissingOrderedOccurrence {
+                occurrence: after_occurrence,
+            })?;
+            Ok(GpuGraphRequiredOrder::new(
+                before,
+                after,
+                "render-owned occurrence control order",
+            )?)
+        })
+        .collect()
+}
+
 /// Owns only the exact mixed UI node authoring seam in the existing canonical
 /// graph. The source-neutral F2 contribution is consumed once in the *final*
 /// fragment; provisional G3 hazard/control discovery never mints its token.
@@ -404,11 +476,7 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
             timing_bracket,
             None,
             Some(present_occurrence),
-            |label, fragments, graph_orders| {
-                context
-                    .prepare_work_graph_with_orders(label, fragments, graph_orders)
-                    .map_err(RenderGpuWorkAdapterError::from)
-            },
+            |label, fragments, orders| prepare_context_graph(context, label, fragments, orders),
         )?;
         let present_node =
             prepared
@@ -434,11 +502,7 @@ pub(crate) fn prepare_render_gpu_frame_work_with_mixed_ui(
         timing_bracket,
         Some(mixed),
         Some(present_occurrence),
-        |label, fragments, graph_orders| {
-            context
-                .prepare_work_graph_with_orders(label, fragments, graph_orders)
-                .map_err(RenderGpuWorkAdapterError::from)
-        },
+        |label, fragments, orders| prepare_context_graph(context, label, fragments, orders),
     )?;
     let present_node =
         prepared
@@ -475,11 +539,7 @@ pub(crate) fn prepare_render_gpu_frame_work_with_stats(
         timing_bracket,
         None,
         None,
-        |label, fragments, graph_orders| {
-            context
-                .prepare_work_graph_with_orders(label, fragments, graph_orders)
-                .map_err(RenderGpuWorkAdapterError::from)
-        },
+        |label, fragments, orders| prepare_context_graph(context, label, fragments, orders),
     )
 }
 
@@ -518,10 +578,7 @@ fn prepare_render_gpu_frame_work_for_test(
         None,
         None,
         None,
-        |label, fragments, graph_orders| {
-            GpuPreparedWorkGraph::prepare_with_orders(label, fragments, graph_orders)
-                .map_err(RenderGpuWorkAdapterError::from)
-        },
+        prepare_graph_for_test,
     )
     .map(|prepared| prepared.graph)
 }
@@ -543,10 +600,7 @@ pub(crate) fn prepare_render_gpu_frame_work_with_composition_for_test(
         None,
         None,
         None,
-        |label, fragments, graph_orders| {
-            GpuPreparedWorkGraph::prepare_with_orders(label, fragments, graph_orders)
-                .map_err(RenderGpuWorkAdapterError::from)
-        },
+        prepare_graph_for_test,
     )
     .map(|prepared| prepared.graph)
 }
@@ -569,10 +623,7 @@ fn prepare_render_gpu_frame_work_with_timing_for_test(
         Some(timing_bracket),
         None,
         None,
-        |label, fragments, graph_orders| {
-            GpuPreparedWorkGraph::prepare_with_orders(label, fragments, graph_orders)
-                .map_err(RenderGpuWorkAdapterError::from)
-        },
+        prepare_graph_for_test,
     )
     .map(|prepared| prepared.graph)
 }
@@ -585,10 +636,10 @@ fn prepare_render_gpu_frame_work_with_timing_for_test(
 /// coverage already owned by RunenGPU. Caller-declared duplicate access truth is intentionally
 /// absent.
 ///
-/// G3 intentionally rejects explicit order already guaranteed by typed data dependencies. The
-/// adapter therefore performs one provisional preparation without control edges, consumes G3's
-/// own dependency result, and retains only unsatisfied render-control requirements for the final
-/// preparation. No access intersection or hazard rule is duplicated in RunenRender.
+/// Untimed frames use one G3 preparation with required orders; G3 itself
+/// resolves typed data causality without renderer-owned hazard inference.
+/// Composed timing still derives its frontiers from provisional G3 dependencies
+/// until that separate instrumentation boundary is optimized.
 fn prepare_resolved_render_gpu_work(
     graph_label: GpuResourceLabel,
     nodes: impl IntoIterator<Item = ResolvedRenderGpuWorkNode>,
@@ -599,7 +650,7 @@ fn prepare_resolved_render_gpu_work(
     mut prepare_graph: impl FnMut(
         GpuResourceLabel,
         Vec<GpuWorkFragment>,
-        Vec<GpuGraphExplicitOrder>,
+        RenderGpuOrderRequest,
     ) -> Result<GpuPreparedWorkGraph, RenderGpuWorkAdapterError>,
 ) -> Result<PreparedRenderGpuWorkFrame, RenderGpuWorkAdapterError> {
     // The last graph-preparation call produces the selected submission graph.
@@ -641,6 +692,75 @@ fn prepare_resolved_render_gpu_work(
         .collect::<Result<Vec<_>, RenderGpuWorkAdapterError>>()?;
     let desired_control_orders = collect_desired_control_orders(&nodes);
 
+    // Untimed work needs exactly one full G3 preparation. Required controls
+    // are checked against typed hazards by G3 itself, not by a provisional
+    // renderer graph. A mixed UI occurrence maps to its first/last work nodes
+    // to maintain paint ordering across both sides of the compositor.
+    if timing_bracket.is_none() {
+        if let Some(mixed_work) = mixed.take() {
+            let mixed_occurrence = mixed_work.ui_occurrence;
+            let authored = author_render_fragment_mixed(
+                &nodes,
+                &resources,
+                &inputs,
+                &graph_label,
+                &graph_provenance,
+                imports,
+                mixed_work,
+            )?;
+            let required_orders = required_render_control_orders(
+                &desired_control_orders,
+                &authored.occurrence_nodes,
+                authored
+                    .mixed_first_node
+                    .as_ref()
+                    .map(|first| (mixed_occurrence, first)),
+            )?;
+            let fragments = compose_frame_fragments(producer_fragments, &authored.fragment, None);
+            let graph = prepare_counted_graph(
+                graph_label,
+                fragments,
+                RenderGpuOrderRequest::Required(required_orders),
+            )?;
+            let present_node = present_occurrence
+                .and_then(|occurrence| authored.occurrence_nodes.get(&occurrence).cloned());
+            return Ok(PreparedRenderGpuWorkFrame {
+                fragment_count: selected_fragment_count.get(),
+                graph,
+                mixed_tokens: authored.mixed_tokens,
+                present_node,
+            });
+        }
+
+        let authored = author_render_fragment(
+            &nodes,
+            &resources,
+            &inputs,
+            &graph_label,
+            &graph_provenance,
+            &BTreeSet::new(),
+            imports,
+        )?;
+        let required_orders = required_render_control_orders(
+            &desired_control_orders,
+            &authored.occurrence_nodes,
+            None,
+        )?;
+        let fragments = compose_frame_fragments(producer_fragments, &authored.fragment, None);
+        let graph = prepare_counted_graph(
+            graph_label,
+            fragments,
+            RenderGpuOrderRequest::Required(required_orders),
+        )?;
+        return Ok(PreparedRenderGpuWorkFrame {
+            fragment_count: selected_fragment_count.get(),
+            graph,
+            mixed_tokens: authored.mixed_tokens,
+            present_node: present_occurrence
+                .and_then(|occurrence| authored.occurrence_nodes.get(&occurrence).cloned()),
+        });
+    }
+
     if let Some(mixed_work) = mixed.take() {
         let mixed_ui_occurrence = mixed_work.ui_occurrence;
         // Author RunenRender's single-use F2 contributions exactly once, in the
@@ -656,7 +776,11 @@ fn prepare_resolved_render_gpu_work(
         )?;
         let fragments =
             compose_frame_fragments(producer_fragments, &authored.fragment, timing_bracket);
-        let provisional_graph = prepare_counted_graph(graph_label.clone(), fragments, Vec::new())?;
+        let provisional_graph = prepare_counted_graph(
+            graph_label.clone(),
+            fragments,
+            RenderGpuOrderRequest::Strict(Vec::new()),
+        )?;
         // One logical UiComposite may lower to multiple GPU nodes. Incoming
         // pass/capture controls MUST precede its first work node; outgoing
         // controls MUST follow its last work node. Using one occurrence as both
@@ -726,7 +850,7 @@ fn prepare_resolved_render_gpu_work(
             prepare_counted_graph(
                 graph_label,
                 compose_frame_fragments(producer_fragments, &authored.fragment, timing_bracket),
-                graph_orders,
+                RenderGpuOrderRequest::Strict(graph_orders),
             )?
         };
         let present_node = present_occurrence
@@ -751,7 +875,11 @@ fn prepare_resolved_render_gpu_work(
     let provisional_fragments =
         compose_frame_fragments(producer_fragments, &provisional.fragment, timing_bracket);
     let provisional_graph =
-        prepare_counted_graph(graph_label.clone(), provisional_fragments, Vec::new())?;
+        prepare_counted_graph(
+            graph_label.clone(),
+            provisional_fragments,
+            RenderGpuOrderRequest::Strict(Vec::new()),
+        )?;
     let provisional_occurrences =
         map_prepared_occurrences(&provisional_graph, &provisional.occurrence_nodes)?;
     let required_explicit_orders = normalize_control_orders(
@@ -779,7 +907,7 @@ fn prepare_resolved_render_gpu_work(
         let graph = prepare_counted_graph(
             graph_label,
             compose_frame_fragments(producer_fragments, &provisional.fragment, Some(bracket)),
-            timing_orders,
+            RenderGpuOrderRequest::Strict(timing_orders),
         )?;
         return Ok(PreparedRenderGpuWorkFrame {
             fragment_count: selected_fragment_count.get(),
@@ -804,7 +932,7 @@ fn prepare_resolved_render_gpu_work(
     let boundary_graph = prepare_counted_graph(
         graph_label.clone(),
         compose_frame_fragments(producer_fragments, &final_fragment.fragment, timing_bracket),
-        Vec::new(),
+        RenderGpuOrderRequest::Strict(Vec::new()),
     )?;
     let Some(bracket) = timing_bracket else {
         return Ok(PreparedRenderGpuWorkFrame {
@@ -823,7 +951,7 @@ fn prepare_resolved_render_gpu_work(
     let graph = prepare_counted_graph(
         graph_label,
         compose_frame_fragments(producer_fragments, &final_fragment.fragment, Some(bracket)),
-        timing_orders,
+        RenderGpuOrderRequest::Strict(timing_orders),
     )?;
     Ok(PreparedRenderGpuWorkFrame {
         fragment_count: selected_fragment_count.get(),
@@ -1497,7 +1625,7 @@ mod tests {
     }
 
     #[test]
-    fn selected_final_graph_counts_empty_producer_and_explicit_order_rebuild() {
+    fn selected_final_graph_counts_empty_producer_and_single_required_preparation() {
         // Empty authored fragments must count even though node ordinals cannot reveal them.
         let empty_producer = GpuWorkFragment::build("empty producer", |_| Ok(()))
             .expect("empty producer fragment is valid");
@@ -1506,6 +1634,8 @@ mod tests {
         let second = buffer(&mut resources, "second upload", 16);
         let first_occurrence = RenderGpuWorkOccurrenceId::new(1);
         let second_occurrence = RenderGpuWorkOccurrenceId::new(2);
+        let strict_preparations = std::cell::Cell::new(0_u32);
+        let required_preparations = std::cell::Cell::new(0_u32);
         let prepared = prepare_resolved_render_gpu_work(
             label("final graph count with control order"),
             [
@@ -1538,15 +1668,76 @@ mod tests {
             None,
             None,
             |label, fragments, orders| {
-                GpuPreparedWorkGraph::prepare_with_orders(label, fragments, orders)
-                    .map_err(RenderGpuWorkAdapterError::from)
+                match &orders {
+                    RenderGpuOrderRequest::Strict(_) => {
+                        strict_preparations.set(strict_preparations.get() + 1);
+                    }
+                    RenderGpuOrderRequest::Required(_) => {
+                        required_preparations.set(required_preparations.get() + 1);
+                    }
+                }
+                prepare_graph_for_test(label, fragments, orders)
             },
         )
-        .expect("final graph must prepare after explicit control ordering");
+        .expect("final graph must prepare and admit the required control");
+        assert_eq!(strict_preparations.get(), 0, "no provisional graph is permitted");
+        assert_eq!(required_preparations.get(), 1, "exactly one complete G3 preparation");
         assert_eq!(prepared.fragment_count, 2);
         assert_eq!(prepared.graph.nodes().len(), 2);
         assert_eq!(prepared.graph.topological_order().len(), 2);
         assert_eq!(prepared.graph.dependencies().len(), 1);
+    }
+
+    #[test]
+    fn untimed_required_order_already_implied_by_typed_write_is_not_duplicated() {
+        let mut allocator = GpuWorkResourceIdAllocator::new();
+        let shared = buffer(&mut allocator, "two writes shared", 16);
+        let before = RenderGpuWorkOccurrenceId::new(41);
+        let after = RenderGpuWorkOccurrenceId::new(42);
+        let prepared = prepare_resolved_render_gpu_work(
+            label("single preparation with redundant typed order"),
+            [
+                ResolvedRenderGpuWorkNode::upload(
+                    before,
+                    label("shared first write"),
+                    GpuUploadOperation::new(
+                        whole_region(&shared, 16).into(),
+                        transfer_payload("first shared bytes", 16),
+                    )
+                    .unwrap(),
+                    [],
+                ),
+                ResolvedRenderGpuWorkNode::upload(
+                    after,
+                    label("shared second write"),
+                    GpuUploadOperation::new(
+                        whole_region(&shared, 16).into(),
+                        transfer_payload("second shared bytes", 16),
+                    )
+                    .unwrap(),
+                    [before],
+                ),
+            ],
+            RenderGpuExternalWork {
+                producer_fragments: &[],
+                imports: &[],
+            },
+            None,
+            None,
+            None,
+            prepare_graph_for_test,
+        )
+        .expect("RunenGPU must recognize already satisfied typed causality");
+        assert_eq!(prepared.graph.nodes().len(), 2);
+        assert_eq!(prepared.graph.dependencies().len(), 1);
+        assert!(prepared.graph.dependencies()[0]
+            .reasons()
+            .iter()
+            .any(|reason| reason.resource().is_some()));
+        assert!(prepared.graph.dependencies()[0]
+            .reasons()
+            .iter()
+            .all(|reason| !matches!(reason, GpuDependencyReason::ExplicitNonData { .. })));
     }
 
     fn color_target_view(allocator: &mut GpuWorkResourceIdAllocator) -> GpuTextureViewHandle {
@@ -2694,10 +2885,7 @@ mod tests {
             Some(&bracket),
             None,
             None,
-            |label, fragments, orders| {
-                GpuPreparedWorkGraph::prepare_with_orders(label, fragments, orders)
-                    .map_err(RenderGpuWorkAdapterError::from)
-            },
+            prepare_graph_for_test,
         )
         .unwrap();
         // The final graph includes the producer, renderer and timing-bracket
