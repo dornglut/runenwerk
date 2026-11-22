@@ -10,7 +10,7 @@ use crate::plugins::render::inspect::{
 };
 use crate::plugins::render::renderer::RenderGpuFrameTerminalDisposition;
 use crate::plugins::render::{
-    Gfx, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource, RenderFlow,
+    AppRenderExt, Gfx, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource, RenderFlow,
     RenderFlowId, RenderFrameProducerId, RenderSurfaceId, RenderSurfaceRegistryResource,
 };
 use crate::plugins::{RenderPlugin, default_plugins};
