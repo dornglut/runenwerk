@@ -7,7 +7,7 @@ use super::*;
 use crate::app::{App, AppNativeHostExt, NativePrimaryClosePolicy};
 use crate::plugins::render::host::{RenderSurfaceId, RenderSurfaceRegistryResource};
 use crate::plugins::render::inspect::{
-    RenderFrameHistoryState, RenderFrameObservationPolicyResource,
+    RenderFrameHistoryState, RenderFrameObservationKey, RenderFrameObservationPolicyResource,
 };
 use crate::plugins::render::renderer::RenderGpuFrameTerminalDisposition;
 use crate::plugins::render::{
@@ -91,6 +91,7 @@ struct NativeSecondaryRenderProof {
     secondary: Option<NativeWindowId>,
     secondary_surface: Option<RenderSurfaceId>,
     frames_at_close: u64,
+    terminal_ids: std::collections::BTreeSet<u64>,
     observed: bool,
     failure: Option<anyhow::Error>,
     deadline: Instant,
@@ -272,49 +273,61 @@ impl NativeSecondaryRenderProof {
                     batch.delivery_enabled() && !batch.has_delivery_gap(),
                     "secondary G5 terminal evidence has a delivery gap"
                 );
-                let completed = batch
-                    .outcomes()
-                    .iter()
-                    .filter(|outcome| {
-                        outcome.surface() == surface.raw()
-                            && outcome
-                                .invocations()
-                                .iter()
-                                .any(|invocation| invocation.flow_id() == self.flow)
-                    })
-                    .collect::<Vec<_>>();
-                if completed.is_empty() {
-                    return Ok(());
-                }
-                ensure!(
-                    completed.len() == 1
-                        && completed[0]
+                let history = self
+                    .runner
+                    .state
+                    .world
+                    .resource::<RenderFrameHistoryState>()?;
+                for outcome in batch.outcomes().iter().filter(|outcome| {
+                    outcome.surface() == surface.raw()
+                        && outcome
+                            .invocations()
+                            .iter()
+                            .any(|invocation| invocation.flow_id() == self.flow)
+                }) {
+                    ensure!(
+                        matches!(
+                            outcome.disposition(),
+                            RenderGpuFrameTerminalDisposition::Completed
+                        ) && outcome
                             .invocations()
                             .iter()
                             .filter(|invocation| invocation.flow_id() == self.flow)
                             .count()
-                            == 1
-                        && matches!(
-                            completed[0].disposition(),
-                            RenderGpuFrameTerminalDisposition::Completed
-                        ),
-                    "secondary post-close G5 Present was duplicated or failed"
-                );
+                            == 1,
+                        "post-close secondary flow must be one successfully completed invocation per frame"
+                    );
+                    ensure!(
+                        history
+                            .observation(RenderFrameObservationKey::new(
+                                outcome.frame(),
+                                surface.raw(),
+                            ))
+                            .is_some_and(|observation| {
+                                observation.presentation.present_operation_submitted
+                            }),
+                        "exact completed secondary G5 frame has no correlated Present record"
+                    );
+                    ensure!(
+                        self.terminal_ids.insert(outcome.submission_id().get()),
+                        "duplicate secondary G5 terminal receipt"
+                    );
+                }
+                if self.terminal_ids.is_empty()
+                    || self
+                        .runner
+                        .state
+                        .world
+                        .resource::<Gfx>()?
+                        .pending_gpu_frame_submissions()
+                        .iter()
+                        .any(|receipt| receipt.surface() == surface.raw())
+                {
+                    return Ok(());
+                }
                 ensure!(
                     self.runner.ordinary_frames > self.frames_at_close,
                     "terminal secondary flow did not follow a genuine post-close App Update"
-                );
-                ensure!(
-                    self.runner
-                        .state
-                        .world
-                        .resource::<RenderFrameHistoryState>()?
-                        .observations()
-                        .any(|observation| {
-                            observation.key.render_surface_id == surface.raw()
-                                && observation.presentation.present_operation_submitted
-                        }),
-                    "actual secondary Present was not recorded on its Render surface"
                 );
                 let next = {
                     let gfx = self.runner.state.world.resource::<Gfx>()?;
@@ -435,6 +448,7 @@ fn native_keep_alive_render_os_proof() -> Result<()> {
         secondary: None,
         secondary_surface: None,
         frames_at_close: 0,
+        terminal_ids: std::collections::BTreeSet::new(),
         observed: false,
         failure: None,
         deadline: Instant::now() + Duration::from_secs(75),
