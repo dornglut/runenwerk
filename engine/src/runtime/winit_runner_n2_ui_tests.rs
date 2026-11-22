@@ -134,13 +134,12 @@ fn bind_and_publish_secondary_ui(mut world: WorldMut) -> Result<()> {
         .resource::<RenderSurfaceRegistryResource>()?
         .surface_for_native_window(native)
         .ok_or_else(|| anyhow!("selected secondary Render attachment missing"))?;
-    ensure!(surface != RenderSurfaceId::primary(), "primary Render ID was reused");
+    ensure!(
+        surface != RenderSurfaceId::primary(),
+        "primary Render ID was reused"
+    );
 
-    bind_native_input_recipient(
-        &mut world,
-        native,
-        NativeInputRecipient::RunenUiSlot(slot),
-    )?;
+    bind_native_input_recipient(&mut world, native, NativeInputRecipient::RunenUiSlot(slot))?;
     let selected = world
         .resource::<UiNativeInputRecipientsResource>()?
         .selected_slot_binding(slot);
