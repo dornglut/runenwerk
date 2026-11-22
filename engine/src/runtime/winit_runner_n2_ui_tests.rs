@@ -13,7 +13,7 @@ use crate::plugins::render::inspect::{
 use crate::plugins::render::renderer::RenderGpuFrameTerminalDisposition;
 use crate::plugins::render::{
     AppRenderExt, Gfx, PreparedFlowInvocationRequest, PreparedRenderFrameRequestResource,
-    RenderFlow, RenderFlowId, RenderFrameProducerId,
+    RenderFlow, RenderFlowId, RenderFrameProducerId, RunenUiPaintSubmissionRegistryResource,
 };
 use crate::plugins::ui::{
     AppUiExt, NativeInputRecipient, UiNativeInputRecipientsResource, UiRuntimeFontConfiguration,
@@ -135,6 +135,8 @@ struct NativeSecondaryUiProof {
     secondary: Option<NativeWindowId>,
     secondary_surface: Option<RenderSurfaceId>,
     frames_at_close: u64,
+    ui_redraw_attempts: usize,
+    ui_last_requested_frame: u64,
     terminal_ids: std::collections::BTreeSet<u64>,
     observed: bool,
     failure: Option<anyhow::Error>,
@@ -426,8 +428,41 @@ impl NativeSecondaryUiProof {
                     .displayed_for_mapping(self.slot, mapping)
                     .is_none()
                 {
-                    // A terminal flow completion without a terminal UI display
-                    // receipt cannot grant input or pass this proof.
+                    // This is a real OnDemand App: the first post-close GPU
+                    // Present does not settle RunenUI automatically. Explicitly
+                    // request a bounded number of ordinary native redraws,
+                    // without manually running ECS or fabricating G5 receipts.
+                    let binding = associations.binding(self.slot).is_some();
+                    let pending = associations.pending(self.slot).is_some();
+                    let in_flight = associations.in_flight_count();
+                    let any_display = associations
+                        .displayed_for_native_recipient(self.slot, secondary)
+                        .is_some();
+                    let paint = self
+                        .runner
+                        .state
+                        .world
+                        .resource::<RunenUiPaintSubmissionRegistryResource>()?
+                        .ordered_submissions_for_surface(surface)
+                        .len();
+                    ensure!(
+                        self.ui_redraw_attempts < 8,
+                        "secondary RunenUI did not terminally display after {} real post-close redraws: binding={} pending={} in_flight={} displayed_for_native={} paint_submissions={} native_frames={} terminal_g5={}",
+                        self.ui_redraw_attempts,
+                        binding,
+                        pending,
+                        in_flight,
+                        any_display,
+                        paint,
+                        self.runner.ordinary_frames,
+                        self.terminal_ids.len(),
+                    );
+                    if self.runner.ordinary_frames > self.ui_last_requested_frame {
+                        self.ui_last_requested_frame = self.runner.ordinary_frames;
+                        self.ui_redraw_attempts += 1;
+                        self.runner.request_redraw_for_native_window(secondary);
+                        self.runner.pace_or_exit(event_loop);
+                    }
                     return Ok(());
                 }
                 let recipients = self
@@ -655,6 +690,8 @@ fn native_keep_alive_ui_os_proof() -> Result<()> {
         secondary: None,
         secondary_surface: None,
         frames_at_close: 0,
+        ui_redraw_attempts: 0,
+        ui_last_requested_frame: 0,
         terminal_ids: std::collections::BTreeSet::new(),
         observed: false,
         failure: None,
