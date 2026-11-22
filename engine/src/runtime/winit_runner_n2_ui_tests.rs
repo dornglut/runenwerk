@@ -16,9 +16,10 @@ use crate::plugins::render::{
     RenderFlow, RenderFlowId, RenderFrameProducerId,
 };
 use crate::plugins::ui::{
-    AppUiExt, NativeInputRecipient, UiRuntimeFontConfiguration, UiRuntimeNativeMapping,
-    UiRuntimePresentationAssociationsResource, UiRuntimePresentationBinding, UiRuntimeSlotId,
-    UiRuntimeSlotsResource, UiTypedScreenId, bind_native_input_recipient,
+    AppUiExt, NativeInputRecipient, UiNativeInputRecipientsResource, UiRuntimeFontConfiguration,
+    UiRuntimeNativeMapping, UiRuntimePresentationAssociationsResource,
+    UiRuntimePresentationBinding, UiRuntimeSlotId, UiRuntimeSlotsResource, UiTypedScreenId,
+    bind_native_input_recipient,
 };
 use crate::plugins::{RenderPlugin, UiPlugin, default_plugins};
 use runenui_core::{NoHostProtocol, ProducerBudget, StyleEnvironment, UiApp, View, button};
