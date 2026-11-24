@@ -785,17 +785,18 @@ fn prepare_resolved_render_gpu_work(
         // pass/capture controls MUST precede its first work node; outgoing
         // controls MUST follow its last work node. Using one occurrence as both
         // endpoints would allow source paint to race before a preceding pass.
-        let satisfied_edges = provisional_graph
-            .dependencies()
-            .iter()
-            .filter(|dependency| {
-                dependency
-                    .reasons()
-                    .iter()
-                    .any(|reason| reason.resource().is_some())
-            })
-            .map(|dependency| (dependency.before(), dependency.after()))
-            .collect::<BTreeSet<_>>();
+        let data_paths = DependencyPaths::from_edges(
+            provisional_graph
+                .dependencies()
+                .iter()
+                .filter(|dependency| {
+                    dependency
+                        .reasons()
+                        .iter()
+                        .any(|reason| reason.resource().is_some())
+                })
+                .map(|dependency| (dependency.before(), dependency.after())),
+        );
         let prepared_id =
             |node: &GpuWorkNodeId| -> Result<GpuPreparedWorkNodeId, RenderGpuWorkAdapterError> {
                 provisional_graph
@@ -824,7 +825,7 @@ fn prepare_resolved_render_gpu_work(
             })?;
             let from = prepared_id(before)?;
             let to = prepared_id(after)?;
-            if !dependency_path_exists(&satisfied_edges, from, to) {
+            if !data_paths.path_exists(from, to) {
                 // G3 owns control ordering as well as typed hazards. F2 was
                 // authored exactly once into the immutable fragment, so add
                 // unsatisfied control edges at graph composition time using
@@ -1214,12 +1215,12 @@ fn compose_timing_graph_orders(
                 })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let dependency_edges = boundary_graph
-        .dependencies()
-        .iter()
-        .map(|dependency| (dependency.before(), dependency.after()))
-        .collect::<BTreeSet<_>>();
-
+    let dependency_paths = DependencyPaths::from_edges(
+        boundary_graph
+            .dependencies()
+            .iter()
+            .map(|dependency| (dependency.before(), dependency.after())),
+    );
     let measured = prepared_nodes
         .iter()
         .filter(|(_, node)| {
@@ -1241,25 +1242,18 @@ fn compose_timing_graph_orders(
         .map(|(prepared, _)| *prepared)
         .collect::<BTreeSet<_>>();
 
-    let is_root = |node: GpuPreparedWorkNodeId, set: &BTreeSet<GpuPreparedWorkNodeId>| {
-        !set.iter().copied().any(|candidate| {
-            candidate != node && dependency_path_exists(&dependency_edges, candidate, node)
-        })
-    };
-    let is_sink = |node: GpuPreparedWorkNodeId, set: &BTreeSet<GpuPreparedWorkNodeId>| {
-        !set.iter().copied().any(|candidate| {
-            candidate != node && dependency_path_exists(&dependency_edges, node, candidate)
-        })
-    };
+    // A prepared graph is already acyclic and topologically ordered by G3.
+    // Propagate source-set membership once in each direction, rather than
+    // checking all candidate pairs or materializing a quadratic closure.
+    let order = boundary_graph.topological_order();
+    let measured_before = dependency_paths.has_preceding_source(order, &measured);
+    let measured_after = dependency_paths.has_following_source(order, &measured);
+    let observation_before = dependency_paths.has_preceding_source(order, &observation);
 
-    if observation.iter().copied().any(|observation_node| {
-        measured.iter().copied().any(|measured_before| {
-            dependency_path_exists(&dependency_edges, measured_before, observation_node)
-                && measured.iter().copied().any(|measured_after| {
-                    dependency_path_exists(&dependency_edges, observation_node, measured_after)
-                })
-        })
-    }) {
+    if observation
+        .iter()
+        .any(|node| measured_before.contains(node) && measured_after.contains(node))
+    {
         return Err(RenderGpuWorkAdapterError::InterleavedTimingObservation);
     }
 
@@ -1272,14 +1266,20 @@ fn compose_timing_graph_orders(
     };
 
     let mut graph_orders = Vec::new();
-    for &root in measured.iter().filter(|&&node| is_root(node, &measured)) {
+    for &root in measured
+        .iter()
+        .filter(|&&node| !measured_before.contains(&node))
+    {
         graph_orders.push(GpuGraphExplicitOrder::new(
             bracket.start(),
             authored_id(root),
             "renderer composed timing starts before measured dependency frontier",
         )?);
     }
-    for &sink in measured.iter().filter(|&&node| is_sink(node, &measured)) {
+    for &sink in measured
+        .iter()
+        .filter(|&&node| !measured_after.contains(&node))
+    {
         graph_orders.push(GpuGraphExplicitOrder::new(
             authored_id(sink),
             bracket.end(),
@@ -1288,7 +1288,7 @@ fn compose_timing_graph_orders(
     }
     for &root in observation
         .iter()
-        .filter(|&&node| is_root(node, &observation))
+        .filter(|&&node| !observation_before.contains(&node))
     {
         graph_orders.push(GpuGraphExplicitOrder::new(
             bracket.end(),
@@ -1449,54 +1449,136 @@ fn normalize_control_orders(
     // Only typed G3 data dependencies may suppress a renderer-owned control order. The
     // provisional graph can also contain composed-timing graph orders; those are instrumentation
     // constraints and must never become authority for renderer control semantics.
-    let mut satisfied_edges = provisional_graph
-        .dependencies()
-        .iter()
-        .filter(|dependency| {
-            dependency
-                .reasons()
-                .iter()
-                .any(|reason| reason.resource().is_some())
-        })
-        .map(|dependency| (dependency.before(), dependency.after()))
-        .collect::<BTreeSet<_>>();
+    let mut data_paths = DependencyPaths::from_edges(
+        provisional_graph
+            .dependencies()
+            .iter()
+            .filter(|dependency| {
+                dependency
+                    .reasons()
+                    .iter()
+                    .any(|reason| reason.resource().is_some())
+            })
+            .map(|dependency| (dependency.before(), dependency.after())),
+    );
     let mut retained = BTreeSet::new();
 
     for &(before_occurrence, after_occurrence) in desired {
         let before = occurrence_nodes[&before_occurrence];
         let after = occurrence_nodes[&after_occurrence];
-        if dependency_path_exists(&satisfied_edges, before, after) {
+        if data_paths.path_exists(before, after) {
             continue;
         }
         retained.insert((before_occurrence, after_occurrence));
-        satisfied_edges.insert((before, after));
+        // Later control checks must observe every newly admitted constraint.
+        data_paths.insert(before, after);
     }
 
     retained
 }
 
-fn dependency_path_exists(
-    edges: &BTreeSet<(GpuPreparedWorkNodeId, GpuPreparedWorkNodeId)>,
-    start: GpuPreparedWorkNodeId,
-    target: GpuPreparedWorkNodeId,
-) -> bool {
-    let mut ready = vec![start];
-    let mut visited = BTreeSet::new();
-    while let Some(node) = ready.pop() {
-        if !visited.insert(node) {
-            continue;
+/// Directed edge index for reachability queries. RunenGPU remains the owner
+/// of resource hazard inference and the canonical accepted work order.
+struct DependencyPaths {
+    outgoing: BTreeMap<GpuPreparedWorkNodeId, Vec<GpuPreparedWorkNodeId>>,
+    incoming: BTreeMap<GpuPreparedWorkNodeId, Vec<GpuPreparedWorkNodeId>>,
+}
+
+impl DependencyPaths {
+    fn from_edges(
+        edges: impl IntoIterator<Item = (GpuPreparedWorkNodeId, GpuPreparedWorkNodeId)>,
+    ) -> Self {
+        let mut paths = Self {
+            outgoing: BTreeMap::new(),
+            incoming: BTreeMap::new(),
+        };
+        for (before, after) in edges {
+            paths.insert(before, after);
         }
-        for &(before, after) in edges {
-            if before != node {
+        paths
+    }
+
+    fn insert(&mut self, before: GpuPreparedWorkNodeId, after: GpuPreparedWorkNodeId) {
+        self.outgoing.entry(before).or_default().push(after);
+        self.incoming.entry(after).or_default().push(before);
+    }
+
+    // Returns nodes with a strict (one-or-more-edge) path from a source.
+    // The order is the accepted RunenGPU topological order, not a guessed
+    // renderer ordering. Storage is proportional to nodes and edges.
+    fn has_preceding_source(
+        &self,
+        order: &[GpuPreparedWorkNodeId],
+        sources: &BTreeSet<GpuPreparedWorkNodeId>,
+    ) -> BTreeSet<GpuPreparedWorkNodeId> {
+        let mut reached = BTreeSet::new();
+        for &node in order {
+            if self.incoming.get(&node).is_some_and(|predecessors| {
+                predecessors
+                    .iter()
+                    .any(|pred| sources.contains(pred) || reached.contains(pred))
+            }) {
+                reached.insert(node);
+            }
+        }
+        reached
+    }
+
+    fn has_following_source(
+        &self,
+        order: &[GpuPreparedWorkNodeId],
+        sources: &BTreeSet<GpuPreparedWorkNodeId>,
+    ) -> BTreeSet<GpuPreparedWorkNodeId> {
+        let mut reached = BTreeSet::new();
+        for &node in order.iter().rev() {
+            if self.outgoing.get(&node).is_some_and(|successors| {
+                successors
+                    .iter()
+                    .any(|next| sources.contains(next) || reached.contains(next))
+            }) {
+                reached.insert(node);
+            }
+        }
+        reached
+    }
+
+    #[cfg(test)]
+    fn reachable_from(&self, start: GpuPreparedWorkNodeId) -> BTreeSet<GpuPreparedWorkNodeId> {
+        let mut ready = vec![start];
+        let mut visited = BTreeSet::new();
+        let mut reachable = BTreeSet::new();
+        while let Some(node) = ready.pop() {
+            if !visited.insert(node) {
                 continue;
             }
-            if after == target {
-                return true;
+            if let Some(successors) = self.outgoing.get(&node) {
+                for &after in successors {
+                    reachable.insert(after);
+                    ready.push(after);
+                }
             }
-            ready.push(after);
         }
+        reachable
     }
-    false
+
+    fn path_exists(&self, start: GpuPreparedWorkNodeId, target: GpuPreparedWorkNodeId) -> bool {
+        let mut ready = vec![start];
+        let mut visited = BTreeSet::new();
+        while let Some(node) = ready.pop() {
+            if !visited.insert(node) {
+                continue;
+            }
+            if let Some(successors) = self.outgoing.get(&node) {
+                for &after in successors {
+                    if after == target {
+                        return true;
+                    }
+                    ready.push(after);
+                }
+            }
+        }
+        false
+    }
 }
 
 fn collect_operation_resources(
@@ -1543,6 +1625,121 @@ fn declared_resource_for_access(access: &GpuResourceAccess) -> GpuResourceRef {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn indexed_dependency_paths_match_reference_for_dense_sparse_and_incremental_edges() {
+        let mut resources = GpuWorkResourceIdAllocator::new();
+        let buffers = (0..12)
+            .map(|index| zeroed_buffer(&mut resources, &format!("path {index}"), 16))
+            .collect::<Vec<_>>();
+        let fragment = GpuWorkFragment::build("dependency path identities", |work| {
+            for (index, buffer) in buffers.iter().enumerate() {
+                work.operation(
+                    format!("clear path {index}"),
+                    GpuClearOperation::buffer_zero(whole_region(buffer, 16))
+                        .expect("clear operation"),
+                )?;
+            }
+            Ok(())
+        })
+        .expect("valid graph fragment");
+        let prepared = GpuPreparedWorkGraph::prepare(label("dependency path fixture"), [fragment])
+            .expect("fixture graph must prepare");
+        let ids = prepared
+            .nodes()
+            .iter()
+            .map(|node| node.id())
+            .collect::<Vec<_>>();
+        assert_eq!(ids.len(), 12);
+
+        // Reference implementation: visit every edge for every reached node.
+        fn reference_path_exists(
+            edges: &BTreeSet<(GpuPreparedWorkNodeId, GpuPreparedWorkNodeId)>,
+            start: GpuPreparedWorkNodeId,
+            target: GpuPreparedWorkNodeId,
+        ) -> bool {
+            let mut ready = vec![start];
+            let mut visited = BTreeSet::new();
+            while let Some(node) = ready.pop() {
+                if !visited.insert(node) {
+                    continue;
+                }
+                for &(before, after) in edges {
+                    if before == node {
+                        if after == target {
+                            return true;
+                        }
+                        ready.push(after);
+                    }
+                }
+            }
+            false
+        }
+
+        fn assert_equivalent(
+            index: &DependencyPaths,
+            reference: &BTreeSet<(GpuPreparedWorkNodeId, GpuPreparedWorkNodeId)>,
+            ids: &[GpuPreparedWorkNodeId],
+        ) {
+            for &from in ids {
+                let descendants = index.reachable_from(from);
+                for &to in ids {
+                    let expected = reference_path_exists(reference, from, to);
+                    assert_eq!(index.path_exists(from, to), expected, "path {from} -> {to}");
+                    assert_eq!(
+                        descendants.contains(&to),
+                        expected,
+                        "closure {from} -> {to}"
+                    );
+                }
+            }
+        }
+
+        let mut edges = BTreeSet::new();
+        for before in 0..8 {
+            for after in (before + 1)..8 {
+                edges.insert((ids[before], ids[after]));
+            }
+        }
+        // Nontrivial cycle and disconnected nodes exercise the old semantics.
+        edges.extend([(ids[8], ids[9]), (ids[9], ids[10]), (ids[10], ids[8])]);
+        let mut indexed = DependencyPaths::from_edges(edges.iter().copied());
+        assert_equivalent(&indexed, &edges, &ids);
+
+        // The renderer adds control edges between successive queries.
+        for (from, to) in [(7, 8), (10, 11), (11, 1)] {
+            edges.insert((ids[from], ids[to]));
+            indexed.insert(ids[from], ids[to]);
+            assert_equivalent(&indexed, &edges, &ids);
+        }
+
+        // Frontiers require only a linear topological sweep, even for
+        // disconnected regions and source nodes reached by other sources.
+        let dag_edges = BTreeSet::from([
+            (ids[0], ids[1]),
+            (ids[1], ids[2]),
+            (ids[2], ids[3]),
+            (ids[0], ids[4]),
+            (ids[4], ids[5]),
+            (ids[6], ids[7]),
+            (ids[8], ids[9]),
+            (ids[9], ids[10]),
+        ]);
+        let dag = DependencyPaths::from_edges(dag_edges.iter().copied());
+        let sources = BTreeSet::from([ids[1], ids[5], ids[7], ids[10]]);
+        let predecessors = dag.has_preceding_source(&ids, &sources);
+        let successors = dag.has_following_source(&ids, &sources);
+        for &node in &ids {
+            let expected_before = sources
+                .iter()
+                .any(|&source| source != node && reference_path_exists(&dag_edges, source, node));
+            let expected_after = sources
+                .iter()
+                .any(|&source| source != node && reference_path_exists(&dag_edges, node, source));
+            assert_eq!(predecessors.contains(&node), expected_before);
+            assert_eq!(successors.contains(&node), expected_after);
+        }
+    }
 
     fn label(value: &str) -> GpuResourceLabel {
         GpuResourceLabel::new(value).expect("test label should be valid")
